@@ -1,0 +1,79 @@
+{
+  "subsystem": "SelfCheck",
+  "title": "Regression Suite",
+  "targets": { "json": "ckf.hardmode.json", "section": "selfcheck", "legacyJson": null },
+  "enable": { "json": "enabled" },
+
+  "doc": [
+    "CKF Hard Mode - regression suite.",
+    "",
+    "Reads a list of rows by id at startup and checks their columns against",
+    "values written down in advance, reporting PASS/FAIL per column. This is how",
+    "the retuning arithmetic gets re-checked without a CKF Data Dump sweep - a",
+    "sweep and row cloning cannot be used together (Run 42).",
+    "",
+    "THE EXPECTATIONS FILE IS NOT A SCHEMA INPUT. Columns are",
+    "Table,Id,Column,Expect,Note, one row per assertion, and it is bulk table",
+    "authoring in the same sense as ckf.hardmode.rules.json - it belongs to the",
+    "spreadsheet, not to a generator. Leave Expect blank to report a value",
+    "without judging it.",
+    "",
+    "IT IS ONLY AS GOOD AS ITS BASELINE, and it is OFF by default because of",
+    "that - the one feature switch in the mod that is. Turn it on for a",
+    "verification launch after a retune, regenerate the expectations, read the",
+    "block, turn it back off.",
+    "",
+    "Run56 reported 58 of 102 failing. Two different causes, and separating them",
+    "took reading all 102 rather than sampling: [measured]",
+    "",
+    "  Section R/E, 79 rows - a STALE BASELINE. selfcheck.csv was written 27",
+    "  hours before ckf.hardmode.d/*.csv and never refreshed. The mod matched the",
+    "  overlay CSVs on all 65 rows an overlay covers, with zero disagreements.",
+    "  Re-baselined 2026-08-31.",
+    "",
+    "  Section V, 23 rows - ORPHANED TESTS, not drift. They assert against",
+    "  rule-engine operator scaffolding (ids 22201-22206, 22301, 990000, 990001)",
+    "  that appears ZERO times in ckf.hardmode.rules.json, with no .tsv overlay",
+    "  on disk. Eight read 0, which is SelfCheck saying 'no such row'. Parked as",
+    "  comments, not deleted: they cover the ENGINE - set, multiply, add,",
+    "  clampMin, clampMax, operator order, later-file-wins, inheritance on insert",
+    "  - and that coverage exists nowhere else. Restoring it means re-creating",
+    "  the test rules."
+  ],
+
+  "uiDoc": [
+    "A startup check. It reads a list of rows by id and compares their columns against values written down in advance, reporting pass or fail for each one. It is how you confirm a retune landed without running a full data sweep.",
+    "",
+    "To use it, turn it on for one launch after a retune, read the block it prints, then turn it back off.",
+    "",
+    "The expectations are a plain table - table, id, column, expected value, note - one row per check, edited in a spreadsheet. Leave the expected value blank and it reports what it found without judging it, which is a quick way to read a column you are unsure about.",
+    "",
+    "It is only as good as the values you wrote down. An expectations file that has not been refreshed since your last retune reports failures that are only the file being out of date."
+  ],
+
+  "fields": [
+    {
+      "path": "enabled", "in": "json", "type": "bool",
+      "default": false, "ui": "form",
+      "label": "Enabled",
+      "uiDoc": "Read a list of rows by id at startup and check their columns against values written down in advance, then report pass or fail per column.",
+      "doc": "Read a list of rows by id at startup and check their columns against values written down in advance, then report PASS/FAIL per column. It reads rows the game did not ask for, so it is a diagnostic rather than part of play, and one of those reads builds a clone earlier than the game would have. OFF by default - the one feature switch that is. Turn it on for a verification launch after a retune, regenerate the expectations file, read the block, turn it back off. 3.0 moved these three keys out of the [SelfCheck] section of ckf.hardmode.cfg and into the \"selfcheck\" section of ckf.hardmode.json; the section is new in 3.0 and has no 2.x sidecar behind it, which is what targets.legacyJson: null records."
+    },
+    {
+      "path": "file", "in": "json", "type": "string",
+      "default": "", "ui": "form",
+      "enabledBy": "enabled",
+      "absent": "Blank means ckf.hardmode.selfcheck.csv beside the config file.",
+      "label": "Expectations file",
+      "doc": "The expectations file. Blank means ckf.hardmode.selfcheck.csv beside this config. Columns: Table,Id,Column,Expect,Note. Leave Expect blank to report the value without judging it."
+    },
+    {
+      "path": "output", "in": "json", "type": "string",
+      "default": "", "ui": "form",
+      "enabledBy": "enabled",
+      "absent": "Blank means BepInEx/ckf-hardmode/selfcheck.csv.",
+      "label": "Result table path",
+      "doc": "Where to write the result table. Blank means BepInEx/ckf-hardmode/selfcheck.csv. The log carries the same lines."
+    }
+  ]
+}

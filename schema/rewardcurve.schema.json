@@ -1,0 +1,89 @@
+{
+  "subsystem": "RewardCurve",
+  "title": "Baseline Reward Curve",
+  "targets": { "json": "ckf.hardmode.json", "section": "rewardcurve", "legacyJson": "ckf.hardmode.rewardcurve.json" },
+  "enable": { "json": "enabled" },
+
+  "doc": [
+    "CKF Hard Mode - the baseline reward tiers, keyed on PowerLevelUnscaled.",
+    "",
+    "The game's baseline is a hardcoded step table, not a formula, in three",
+    "functions on RPG.Combat.RulesUtil:",
+    "",
+    "  Payment    credits for the mission's primary objectives",
+    "  Experience XP per deployed merc",
+    "  Bonus      the unit secondary objectives are denominated in",
+    "",
+    "Every other reward multiplier in the game - the contact term, the",
+    "per-objective percentages, the mission type bonuses - is applied to these",
+    "three numbers, so this is the one lever that moves the whole floor.",
+    "",
+    "The table climbs to PL 10 and then goes flat, and rewards key on",
+    "PowerLevelUnscaled, so lifting the Power Level cap without filling in rows",
+    "11-25 sends the crew against PL 12-20 enemies for PL 10 money.",
+    "",
+    "Edit a cell to replace it. Set a cell to -1, or leave the column out, to",
+    "keep the game's own number for that power level.",
+    "",
+    "TO VERIFY, READ THE PLUGIN'S OWN LOG, NOT _reward_curve.csv. CKF Data Dump",
+    "loads first - 'ckf.datadump' sorts before 'ckf.hardmode' - and its sweep",
+    "runs during that load, so the CSV records the stock curve whether this",
+    "subsystem patched or not (measured: sweep at log line 4081, patch at 4548).",
+    "LogEffectiveCurve calls the three functions back through the patch instead.",
+    "",
+    "KNOWN DISAGREEMENT IN THE SHIPPED ROWS. RewardCurve.cs:9-10 describes the",
+    "stock table as 2800 credits and 500 XP at PL 10 and the same at PL 25, while",
+    "row PL 10 of this file carries 1250 / 515 / 70 and rows 11-25 carry",
+    "2800 / 500 / 70. The two cannot both be the game's value for PL 10. Neither",
+    "has been re-measured; treat the shipped rows as unverified until a dump of",
+    "RulesUtil settles it.",
+    "",
+    "Generated from schema/rewardcurve.schema.json."
+  ],
+
+  "uiDoc": [
+    "What a mission pays before anything else is applied. Every other reward multiplier in the game - the contact term, the per-objective percentages, the mission type bonuses - is worked out from these three numbers.",
+    "",
+    "Bonus is probably Hype Booster's bonus XP but I'm not certain. Feel free to mess around.",
+    "",
+    "The game's defaults climbs to power level 10 and then goes flat. Feel free to add additional scaling as you desire.",
+    "",
+    "Edit a cell to replace it. Set a cell to -1, or leave it empty, to keep the game's own number at that power level.",
+    "",
+    "To check it took, turn on the effective-curve log and read the plugin's log after a launch."
+  ],
+
+  "fields": [
+    {
+      "path": "enabled", "in": "json", "type": "bool",
+      "default": true, "ui": "form",
+      "label": "Enabled",
+      "uiDoc": "Overwrite the baseline rewards that every other reward multiplier is applied to.",
+      "doc": "Overwrite the baseline reward tiers that every other reward multiplier is applied to. The table is the \"rewardcurve\" section of BepInEx/config/ckf.hardmode.json, one row per PowerLevelUnscaled. This is the only way to fix the flatline above PL 10, where the game pays the PL 10 tier no matter how hard the fight is. The three functions are patched on load once this is true, and logEffectiveCurve is the verification. 3.0 moved this switch out of the cfg key [RewardCurve] Enabled and into this section; it is the whole enable chain for this subsystem."
+    },
+    {
+      "path": "logEffectiveCurve", "in": "json", "type": "bool",
+      "default": false, "ui": "form",
+      "label": "Log the effective curve",
+      "uiDoc": "After patching, call the three reward functions and log what they now return.",
+      "doc": "After patching, call the three functions and log what they now return. This is the verification: CKF Data Dump's _reward_curve.csv cannot show it, because that plugin loads first and sweeps the curve before this one patches it."
+    },
+
+    {
+      "path": "curve", "in": "json", "type": "table", "ui": "curve",
+      "label": "Reward tiers by power level",
+      "uiDoc": "One row per power level. Each column replaces one of the three baseline numbers at that level, rounded to a whole number. Only the levels named here are touched; a level with no row keeps the game's own values. Nothing is patched at all if every cell is left empty or negative.",
+      "doc": "One row per PowerLevelUnscaled. Each column replaces the return value of one RulesUtil function at that level, rounded to a whole number. Only the levels named here are touched; a level with no row keeps the game's own three values. Nothing is patched at all if every cell is left absent or negative.",
+      "absent": "A column set to -1 or any negative value, or left out of the row, keeps the game's own number for that function at that power level; the plugin's own initialiser is -1.",
+      "row": [
+        { "name": "PowerLevel", "type": "int",   "range": [0, 25] },
+        { "name": "Payment",    "type": "float", "format": "keep" },
+        { "name": "Experience", "type": "float", "format": "keep" },
+        { "name": "Bonus",      "type": "float", "format": "keep" }
+      ],
+      "sortBy": "PowerLevel"
+    }
+  ],
+
+  "invariants": []
+}

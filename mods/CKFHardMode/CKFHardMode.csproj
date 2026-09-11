@@ -1,0 +1,78 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <AssemblyName>CKFHardMode</AssemblyName>
+    <Version>3.0.0</Version>
+    <LangVersion>latest</LangVersion>
+    <!-- BepInEx loads plugins by reflection; no entry point needed -->
+    <OutputType>Library</OutputType>
+  </PropertyGroup>
+
+  <!--
+    Point this at your game install. Everything else resolves from it.
+    Example:
+      <GameDir>C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint</GameDir>
+  -->
+  <PropertyGroup>
+    <GameDir Condition="'$(GameDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint</GameDir>
+    <BepInExDir>$(GameDir)\BepInEx</BepInExDir>
+    <CoreDir>$(BepInExDir)\core</CoreDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- BepInEx 6 IL2CPP core -->
+    <Reference Include="BepInEx.Core">
+      <HintPath>$(CoreDir)\BepInEx.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="BepInEx.Unity.IL2CPP">
+      <HintPath>$(CoreDir)\BepInEx.Unity.IL2CPP.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(CoreDir)\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!--
+    THE SHIPPED DEFAULTS ARE NOT IN THIS ASSEMBLY. This project embeds no
+    resources at all: the DLL is the engine and nothing else.
+
+    The eight config files a player needs travel as loose files in the release
+    zip, under BepInEx\config\, and extracting the zip is what puts them on
+    disk. scripts/make_release.py collects them: its CONFIG_FILES table maps
+    each source in this repo to its path in the zip, and it refuses to build a
+    release if any source is missing.
+
+    They come from three places:
+
+      mods/CKFHardMode/defaults/   the config document, the self-check input
+                                   and MissionPowerLevelModel.generated.json.
+                                   Shaped like a BepInEx/config directory so
+                                   check_schema.py and gen_teampl_labels.py can
+                                   be pointed straight at it; the command lines
+                                   are in defaults/README.md.
+      overlays/                    the rule set and the three table overlays,
+                                   which scripts/merge_overlays.py and
+                                   scripts/validate_rules.py already compile.
+      release/ckf.hardmode.cfg.in  the one-key master switch, rendered by
+                                   make_release.py with the version filled in.
+
+    What this buys: retuning the mod is editing a cfg, csv or json and re-running
+    make_release.py. No dotnet build in the loop unless the C# changed.
+
+    Defaults.cs no longer writes anything. It checks that the eight files are on
+    disk and reports what is missing, which is the only thing left to say once
+    the zip carries them.
+  -->
+
+  <!-- Copy the built plugin straight into the game on build -->
+  <Target Name="DeployToGame" AfterTargets="Build"
+          Condition="Exists('$(BepInExDir)\plugins')">
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(BepInExDir)\plugins" />
+    <Message Importance="high" Text="Deployed $(TargetFileName) -> $(BepInExDir)\plugins" />
+  </Target>
+
+</Project>

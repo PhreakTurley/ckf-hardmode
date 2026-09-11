@@ -1,0 +1,1690 @@
+{
+  "_version": "3.0.0",
+  "elapse": {
+    "enabled": true,
+    "logFirst": 0,
+    "tiers": {
+      "soloHack": {
+        "patterns": [
+          "HackOnly",
+          "HackLoot",
+          "HackCPU",
+          "HackFile"
+        ],
+        "multiplier": 0.5
+      },
+      "story": {
+        "patterns": [
+          "M_Era",
+          "M_PGenPower",
+          "PowerPlay"
+        ],
+        "multiplier": 1.5
+      },
+      "standard": {
+        "multiplier": 1
+      }
+    },
+    "credits": {
+      "enabled": true,
+      "percentOfBalance": 0.0,
+      "byPowerLevel": [
+        {
+          "minPowerLevel": 1,
+          "amount": 45
+        },
+        {
+          "minPowerLevel": 2,
+          "amount": 70
+        },
+        {
+          "minPowerLevel": 3,
+          "amount": 120
+        },
+        {
+          "minPowerLevel": 4,
+          "amount": 180
+        },
+        {
+          "minPowerLevel": 5,
+          "amount": 245
+        },
+        {
+          "minPowerLevel": 6,
+          "amount": 320
+        },
+        {
+          "minPowerLevel": 7,
+          "amount": 420
+        },
+        {
+          "minPowerLevel": 8,
+          "amount": 660
+        },
+        {
+          "minPowerLevel": 9,
+          "amount": 920
+        },
+        {
+          "minPowerLevel": 10,
+          "amount": 1345
+        }
+      ]
+    },
+    "stress": {
+      "enabled": true,
+      "cap": 10,
+      "fallbackToRandom": false,
+      "applyTierMultiplier": false,
+      "safehouseOnly": true,
+      "byPowerLevel": [
+        {
+          "minPowerLevel": 1,
+          "mercCount": 1,
+          "stressAmount": 1
+        },
+        {
+          "minPowerLevel": 2,
+          "mercCount": 1,
+          "stressAmount": 1
+        },
+        {
+          "minPowerLevel": 3,
+          "mercCount": 1,
+          "stressAmount": 2
+        },
+        {
+          "minPowerLevel": 4,
+          "mercCount": 1,
+          "stressAmount": 2
+        },
+        {
+          "minPowerLevel": 5,
+          "mercCount": 1,
+          "stressAmount": 3
+        },
+        {
+          "minPowerLevel": 6,
+          "mercCount": 1,
+          "stressAmount": 3
+        },
+        {
+          "minPowerLevel": 7,
+          "mercCount": 1,
+          "stressAmount": 4
+        },
+        {
+          "minPowerLevel": 8,
+          "mercCount": 1,
+          "stressAmount": 4
+        },
+        {
+          "minPowerLevel": 9,
+          "mercCount": 1,
+          "stressAmount": 5
+        },
+        {
+          "minPowerLevel": 10,
+          "mercCount": 1,
+          "stressAmount": 5
+        }
+      ]
+    },
+    "seedSalt": 1163084112
+  },
+  "fatigue": {
+    "enabled": true,
+    "runningEmpty": {
+      "traitId": 2009,
+      "byPowerLevel": {
+        "1": {
+          "chancePercent": 15,
+          "durationDays": 20,
+          "minAffected": 1,
+          "maxAffected": 5
+        },
+        "2": {
+          "chancePercent": 18,
+          "durationDays": 20,
+          "minAffected": 1,
+          "maxAffected": 5
+        },
+        "3": {
+          "chancePercent": 21,
+          "durationDays": 20,
+          "minAffected": 1,
+          "maxAffected": 5
+        },
+        "4": {
+          "chancePercent": 24,
+          "durationDays": 20,
+          "minAffected": 1,
+          "maxAffected": 5
+        },
+        "5": {
+          "chancePercent": 27,
+          "durationDays": 20,
+          "minAffected": 1,
+          "maxAffected": 5
+        },
+        "6": {
+          "chancePercent": 30,
+          "durationDays": 20,
+          "minAffected": 1,
+          "maxAffected": 5
+        },
+        "7": {
+          "chancePercent": 33,
+          "durationDays": 20,
+          "minAffected": 1,
+          "maxAffected": 5
+        },
+        "8": {
+          "chancePercent": 36,
+          "durationDays": 20,
+          "minAffected": 1,
+          "maxAffected": 5
+        },
+        "9": {
+          "chancePercent": 39,
+          "durationDays": 20,
+          "minAffected": 1,
+          "maxAffected": 5
+        },
+        "10": {
+          "chancePercent": 42,
+          "durationDays": 20,
+          "minAffected": 1,
+          "maxAffected": 5
+        },
+        "11": {
+          "chancePercent": 45,
+          "durationDays": 21,
+          "minAffected": 1,
+          "maxAffected": 5
+        },
+        "12": {
+          "chancePercent": 48,
+          "durationDays": 22,
+          "minAffected": 1,
+          "maxAffected": 5
+        },
+        "13": {
+          "chancePercent": 51,
+          "durationDays": 23,
+          "minAffected": 1,
+          "maxAffected": 5
+        },
+        "14": {
+          "chancePercent": 54,
+          "durationDays": 24,
+          "minAffected": 1,
+          "maxAffected": 5
+        },
+        "15": {
+          "chancePercent": 57,
+          "durationDays": 25,
+          "minAffected": 1,
+          "maxAffected": 5
+        },
+        "16": {
+          "chancePercent": 60,
+          "durationDays": 26,
+          "minAffected": 1,
+          "maxAffected": 5
+        },
+        "17": {
+          "chancePercent": 63,
+          "durationDays": 27,
+          "minAffected": 1,
+          "maxAffected": 5
+        },
+        "18": {
+          "chancePercent": 66,
+          "durationDays": 28,
+          "minAffected": 1,
+          "maxAffected": 5
+        },
+        "19": {
+          "chancePercent": 69,
+          "durationDays": 29,
+          "minAffected": 1,
+          "maxAffected": 5
+        },
+        "20": {
+          "chancePercent": 72,
+          "durationDays": 30,
+          "minAffected": 1,
+          "maxAffected": 5
+        }
+      },
+      "knight": {
+        "byPowerLevel": {
+          "1": {
+            "chancePercent": 9,
+            "durationDays": 14
+          },
+          "2": {
+            "chancePercent": 10,
+            "durationDays": 14
+          },
+          "3": {
+            "chancePercent": 11,
+            "durationDays": 14
+          },
+          "4": {
+            "chancePercent": 12,
+            "durationDays": 14
+          },
+          "5": {
+            "chancePercent": 13,
+            "durationDays": 14
+          },
+          "6": {
+            "chancePercent": 14,
+            "durationDays": 14
+          },
+          "7": {
+            "chancePercent": 15,
+            "durationDays": 14
+          },
+          "8": {
+            "chancePercent": 16,
+            "durationDays": 14
+          },
+          "9": {
+            "chancePercent": 17,
+            "durationDays": 14
+          },
+          "10": {
+            "chancePercent": 18,
+            "durationDays": 14
+          },
+          "11": {
+            "chancePercent": 19,
+            "durationDays": 15
+          },
+          "12": {
+            "chancePercent": 20,
+            "durationDays": 16
+          },
+          "13": {
+            "chancePercent": 21,
+            "durationDays": 17
+          },
+          "14": {
+            "chancePercent": 22,
+            "durationDays": 18
+          },
+          "15": {
+            "chancePercent": 23,
+            "durationDays": 19
+          },
+          "16": {
+            "chancePercent": 24,
+            "durationDays": 20
+          },
+          "17": {
+            "chancePercent": 25,
+            "durationDays": 21
+          },
+          "18": {
+            "chancePercent": 26,
+            "durationDays": 22
+          },
+          "19": {
+            "chancePercent": 27,
+            "durationDays": 23
+          },
+          "20": {
+            "chancePercent": 28,
+            "durationDays": 24
+          }
+        }
+      }
+    },
+    "offDuty": {
+      "traitId": 2014,
+      "clearsRunningEmpty": true,
+      "knight": {
+        "byPowerLevel": {
+          "1": {
+            "durationDays": 6
+          },
+          "2": {
+            "durationDays": 7
+          },
+          "3": {
+            "durationDays": 8
+          },
+          "4": {
+            "durationDays": 9
+          },
+          "5": {
+            "durationDays": 10
+          },
+          "6": {
+            "durationDays": 11
+          },
+          "7": {
+            "durationDays": 12
+          },
+          "8": {
+            "durationDays": 13
+          },
+          "9": {
+            "durationDays": 14
+          },
+          "10": {
+            "durationDays": 15
+          },
+          "11": {
+            "durationDays": 16
+          },
+          "12": {
+            "durationDays": 17
+          },
+          "13": {
+            "durationDays": 18
+          },
+          "14": {
+            "durationDays": 19
+          },
+          "15": {
+            "durationDays": 20
+          },
+          "16": {
+            "durationDays": 21
+          },
+          "17": {
+            "durationDays": 22
+          },
+          "18": {
+            "durationDays": 23
+          },
+          "19": {
+            "durationDays": 24
+          },
+          "20": {
+            "durationDays": 25
+          }
+        }
+      },
+      "byPowerLevel": {
+        "1": {
+          "durationDays": 20
+        },
+        "2": {
+          "durationDays": 20
+        },
+        "3": {
+          "durationDays": 20
+        },
+        "4": {
+          "durationDays": 20
+        },
+        "5": {
+          "durationDays": 20
+        },
+        "6": {
+          "durationDays": 20
+        },
+        "7": {
+          "durationDays": 20
+        },
+        "8": {
+          "durationDays": 20
+        },
+        "9": {
+          "durationDays": 20
+        },
+        "10": {
+          "durationDays": 20
+        },
+        "11": {
+          "durationDays": 21
+        },
+        "12": {
+          "durationDays": 22
+        },
+        "13": {
+          "durationDays": 23
+        },
+        "14": {
+          "durationDays": 24
+        },
+        "15": {
+          "durationDays": 25
+        },
+        "16": {
+          "durationDays": 26
+        },
+        "17": {
+          "durationDays": 27
+        },
+        "18": {
+          "durationDays": 28
+        },
+        "19": {
+          "durationDays": 29
+        },
+        "20": {
+          "durationDays": 30
+        }
+      }
+    },
+    "woundResist": {
+      "enabled": true,
+      "minChancePercent": 5
+    },
+    "deterministicRolls": true,
+    "logGrants": true
+  },
+  "missions": {
+    "enabled": true,
+    "missions": [
+      {
+        "type": "M_BoostedScientist_M2",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_BoostedScientist_M4",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_BroDear_M1",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_Carnivore",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_CarnivoreHH_Hack",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_Era_Treaty31_Scourge",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_Era_Treaty31_UNABreakup",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_HerrPiggy_LiveWire",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenPower_BroDear_M1_HackCPU",
+        "note": "MissionModel table",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenPower_BroDear_M2_LockedExit",
+        "note": "MissionModel table",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenPower_BroDear_M3_HackCPU",
+        "note": "MissionModel table",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenPower_BroDear_M4_LockedExit",
+        "note": "MissionModel table",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenPower_NeuroRot3_M1_Scav",
+        "note": "MissionModel table",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenPower_NeuroRot3_M2_HackCPU",
+        "note": "MissionModel table",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenPower_NeuroRot_M3_Prisoner",
+        "note": "MissionModel table",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenPower_NeuroRot_M4_HackFile",
+        "note": "MissionModel table",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenPower_NeuroRot_M5_AssassinVIP",
+        "note": "MissionModel table",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenPower_SynDebts_M4Ghoul_AssassinVIP",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_RetroHeist_M1",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_RetroHeist_M2",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_SiblingSalvage",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_SnitchFlush",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_SynDebts_M3",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_SynDebts_M3Ghoul",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_SynDebts_StartRaid",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenPower_PowerPlayCyberBrain_M1_HackCPU",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenPower_PowerPlayCyberMatrix_M1_HackCPU",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenPower_PowerPlayCyberNeural_M1_HackCPU",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenPower_PowerPlayCyberTank_M1_HackCPU",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenPower_PowerPlaySimple_M1_HackCPU",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenPower_PowerPlaySyn_M1_BlackmailMsg",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenPower_PowerPlaySyn_M3_AssassinVIP",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenTreatyRip_HackCPU",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenTreatyRip_HackOnly",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenTreaty_HackCPU",
+        "note": "measured + builder",
+        "BonusPayment": "=-55",
+        "BonusExperience": "=-50",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenTreaty_HackFile",
+        "note": "measured + builder",
+        "BonusPayment": "",
+        "BonusExperience": "=-50",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "x.75",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGen_HackingStation_Loot1_HackLoot",
+        "note": "measured",
+        "BonusPayment": "",
+        "BonusExperience": "=-50",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGen_HackingStation_Loot2_HackLoot",
+        "note": "measured",
+        "BonusPayment": "",
+        "BonusExperience": "=-50",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGen_HackingStation_Loot3_HackLoot",
+        "note": "measured",
+        "BonusPayment": "",
+        "BonusExperience": "=-50",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenPower_AlphaStrike_BS_KillBossBattle",
+        "note": "measured + builder",
+        "BonusPayment": "",
+        "BonusExperience": "=0",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenPower_AlphaStrike_LZ_Battle_ReloadHovers",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenPower_AlphaStrike_LZ_KillBossBattle",
+        "note": "measured + builder",
+        "BonusPayment": "",
+        "BonusExperience": "=0",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenTreaty_Battle",
+        "note": "measured + builder",
+        "BonusPayment": "=100",
+        "BonusExperience": "=0",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenTreaty_KillBossBattle",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenTreaty_SiegeBattle",
+        "note": "measured + builder",
+        "BonusPayment": "=100",
+        "BonusExperience": "=0",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenWardWar_Battle_EscortVIP",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenWardWar_HoverBoss_Battle",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenWardWar_SiegeBattle",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenTreatyRip_AssassinVIP",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenTreatyRip_EscortVIP",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenTreatyRip_Gang_Scav",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenTreatyRip_Kill3",
+        "note": "measured + builder",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenTreatyRip_Scav",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenTreatyRip_StealFiles",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenTreaty_AssassinVIP",
+        "note": "measured + builder",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenTreaty_BlackmailMsg",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenTreaty_BlackmailVIP",
+        "note": "measured + builder",
+        "BonusPayment": "=0",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenTreaty_EscortVIP",
+        "note": "measured + builder",
+        "BonusPayment": "=0",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenTreaty_ExposedVIP",
+        "note": "measured + builder",
+        "BonusPayment": "=0",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenTreaty_Gang_Scav",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenTreaty_HeistCPU",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenTreaty_HeistFiles",
+        "note": "measured + builder",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenTreaty_KillBoss",
+        "note": "measured + builder",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenTreaty_MultiSkyrise",
+        "note": "measured + builder",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenTreaty_Passage",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenTreaty_Prisoner",
+        "note": "measured + builder",
+        "BonusPayment": "=0",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenTreaty_StealFiles",
+        "note": "measured + builder",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenTreaty_WB_Kill3",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenTreaty_WB_Scav",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      },
+      {
+        "type": "M_PGenWardWar_ExposedVIP",
+        "note": "key only — not yet generated",
+        "BonusPayment": "",
+        "BonusExperience": "",
+        "PowerLevelBonus": "",
+        "ObjectivePayment": "",
+        "SecondaryPayment": ""
+      }
+    ]
+  },
+  "rewardcurve": {
+    "enabled": true,
+    "logEffectiveCurve": true,
+    "curve": [
+      {
+        "PowerLevel": 0,
+        "Payment": 150,
+        "Experience": 100,
+        "Bonus": 10
+      },
+      {
+        "PowerLevel": 1,
+        "Payment": 150,
+        "Experience": 100,
+        "Bonus": 25
+      },
+      {
+        "PowerLevel": 2,
+        "Payment": 225,
+        "Experience": 120,
+        "Bonus": 30
+      },
+      {
+        "PowerLevel": 3,
+        "Payment": 350,
+        "Experience": 145,
+        "Bonus": 35
+      },
+      {
+        "PowerLevel": 4,
+        "Payment": 500,
+        "Experience": 175,
+        "Bonus": 40
+      },
+      {
+        "PowerLevel": 5,
+        "Payment": 650,
+        "Experience": 210,
+        "Bonus": 45
+      },
+      {
+        "PowerLevel": 6,
+        "Payment": 800,
+        "Experience": 250,
+        "Bonus": 50
+      },
+      {
+        "PowerLevel": 7,
+        "Payment": 1000,
+        "Experience": 300,
+        "Bonus": 55
+      },
+      {
+        "PowerLevel": 8,
+        "Payment": 1500,
+        "Experience": 360,
+        "Bonus": 60
+      },
+      {
+        "PowerLevel": 9,
+        "Payment": 2000,
+        "Experience": 430,
+        "Bonus": 65
+      },
+      {
+        "PowerLevel": 10,
+        "Payment": 2800,
+        "Experience": 515,
+        "Bonus": 70
+      },
+      {
+        "PowerLevel": 11,
+        "Payment": 2800,
+        "Experience": 500,
+        "Bonus": 70
+      }
+    ]
+  },
+  "teampl": {
+    "enabled": true,
+    "table": [
+      {
+        "ActionClass": 1,
+        "MissionPowerLevel": 0,
+        "PowerLevelFraction": 0.08
+      },
+      {
+        "ActionClass": 1,
+        "MissionPowerLevel": 1,
+        "PowerLevelFraction": 0.34
+      },
+      {
+        "ActionClass": 1,
+        "MissionPowerLevel": 2,
+        "PowerLevelFraction": 0.25
+      },
+      {
+        "ActionClass": 1,
+        "MissionPowerLevel": 3,
+        "PowerLevelFraction": 0.16
+      },
+      {
+        "ActionClass": 1,
+        "MissionPowerLevel": 4,
+        "PowerLevelFraction": 0.14
+      },
+      {
+        "ActionClass": 1,
+        "MissionPowerLevel": 5,
+        "PowerLevelFraction": 0.1
+      },
+      {
+        "ActionClass": 1,
+        "MissionPowerLevel": 6,
+        "PowerLevelFraction": 0.08
+      },
+      {
+        "ActionClass": 1,
+        "MissionPowerLevel": 7,
+        "PowerLevelFraction": 0.06
+      },
+      {
+        "ActionClass": 1,
+        "MissionPowerLevel": 8,
+        "PowerLevelFraction": 0.05
+      },
+      {
+        "ActionClass": 1,
+        "MissionPowerLevel": 9,
+        "PowerLevelFraction": 0.04
+      },
+      {
+        "ActionClass": 1,
+        "MissionPowerLevel": 10,
+        "PowerLevelFraction": 0.03
+      },
+      {
+        "ActionClass": 1,
+        "MissionPowerLevel": -1,
+        "PowerLevelFraction": -0.25
+      },
+      {
+        "ActionClass": 1,
+        "MissionPowerLevel": -2,
+        "PowerLevelFraction": -0.25
+      },
+      {
+        "ActionClass": 1,
+        "MissionPowerLevel": -3,
+        "PowerLevelFraction": -0.16
+      },
+      {
+        "ActionClass": 1,
+        "MissionPowerLevel": -4,
+        "PowerLevelFraction": -0.12
+      },
+      {
+        "ActionClass": 1,
+        "MissionPowerLevel": -5,
+        "PowerLevelFraction": -0.08
+      },
+      {
+        "ActionClass": 1,
+        "MissionPowerLevel": -6,
+        "PowerLevelFraction": -0.07
+      },
+      {
+        "ActionClass": 1,
+        "MissionPowerLevel": -7,
+        "PowerLevelFraction": -0.06
+      },
+      {
+        "ActionClass": 1,
+        "MissionPowerLevel": -8,
+        "PowerLevelFraction": -0.05
+      },
+      {
+        "ActionClass": 1,
+        "MissionPowerLevel": -9,
+        "PowerLevelFraction": -0.04
+      },
+      {
+        "ActionClass": 1,
+        "MissionPowerLevel": -10,
+        "PowerLevelFraction": -0.03
+      },
+      {
+        "ActionClass": 2,
+        "MissionPowerLevel": 0,
+        "PowerLevelFraction": 0.04
+      },
+      {
+        "ActionClass": 2,
+        "MissionPowerLevel": 1,
+        "PowerLevelFraction": 0.17
+      },
+      {
+        "ActionClass": 2,
+        "MissionPowerLevel": 2,
+        "PowerLevelFraction": 0.125
+      },
+      {
+        "ActionClass": 2,
+        "MissionPowerLevel": 3,
+        "PowerLevelFraction": 0.08
+      },
+      {
+        "ActionClass": 2,
+        "MissionPowerLevel": 4,
+        "PowerLevelFraction": 0.07
+      },
+      {
+        "ActionClass": 2,
+        "MissionPowerLevel": 5,
+        "PowerLevelFraction": 0.05
+      },
+      {
+        "ActionClass": 2,
+        "MissionPowerLevel": 6,
+        "PowerLevelFraction": 0.04
+      },
+      {
+        "ActionClass": 2,
+        "MissionPowerLevel": 7,
+        "PowerLevelFraction": 0.03
+      },
+      {
+        "ActionClass": 2,
+        "MissionPowerLevel": 8,
+        "PowerLevelFraction": 0.025
+      },
+      {
+        "ActionClass": 2,
+        "MissionPowerLevel": 9,
+        "PowerLevelFraction": 0.02
+      },
+      {
+        "ActionClass": 2,
+        "MissionPowerLevel": 10,
+        "PowerLevelFraction": 0.015
+      },
+      {
+        "ActionClass": 2,
+        "MissionPowerLevel": -1,
+        "PowerLevelFraction": -0.125
+      },
+      {
+        "ActionClass": 2,
+        "MissionPowerLevel": -2,
+        "PowerLevelFraction": -0.125
+      },
+      {
+        "ActionClass": 2,
+        "MissionPowerLevel": -3,
+        "PowerLevelFraction": -0.08
+      },
+      {
+        "ActionClass": 2,
+        "MissionPowerLevel": -4,
+        "PowerLevelFraction": -0.06
+      },
+      {
+        "ActionClass": 2,
+        "MissionPowerLevel": -5,
+        "PowerLevelFraction": -0.04
+      },
+      {
+        "ActionClass": 2,
+        "MissionPowerLevel": -6,
+        "PowerLevelFraction": -0.035
+      },
+      {
+        "ActionClass": 2,
+        "MissionPowerLevel": -7,
+        "PowerLevelFraction": -0.03
+      },
+      {
+        "ActionClass": 2,
+        "MissionPowerLevel": -8,
+        "PowerLevelFraction": -0.025
+      },
+      {
+        "ActionClass": 2,
+        "MissionPowerLevel": -9,
+        "PowerLevelFraction": -0.02
+      },
+      {
+        "ActionClass": 2,
+        "MissionPowerLevel": -10,
+        "PowerLevelFraction": -0.015
+      },
+      {
+        "ActionClass": 3,
+        "MissionPowerLevel": 0,
+        "PowerLevelFraction": 0.02
+      },
+      {
+        "ActionClass": 3,
+        "MissionPowerLevel": 1,
+        "PowerLevelFraction": 0.085
+      },
+      {
+        "ActionClass": 3,
+        "MissionPowerLevel": 2,
+        "PowerLevelFraction": 0.0625
+      },
+      {
+        "ActionClass": 3,
+        "MissionPowerLevel": 3,
+        "PowerLevelFraction": 0.04
+      },
+      {
+        "ActionClass": 3,
+        "MissionPowerLevel": 4,
+        "PowerLevelFraction": 0.035
+      },
+      {
+        "ActionClass": 3,
+        "MissionPowerLevel": 5,
+        "PowerLevelFraction": 0.025
+      },
+      {
+        "ActionClass": 3,
+        "MissionPowerLevel": 6,
+        "PowerLevelFraction": 0.02
+      },
+      {
+        "ActionClass": 3,
+        "MissionPowerLevel": 7,
+        "PowerLevelFraction": 0.015
+      },
+      {
+        "ActionClass": 3,
+        "MissionPowerLevel": 8,
+        "PowerLevelFraction": 0.0125
+      },
+      {
+        "ActionClass": 3,
+        "MissionPowerLevel": 9,
+        "PowerLevelFraction": 0.01
+      },
+      {
+        "ActionClass": 3,
+        "MissionPowerLevel": 10,
+        "PowerLevelFraction": 0.0075
+      },
+      {
+        "ActionClass": 3,
+        "MissionPowerLevel": -1,
+        "PowerLevelFraction": -0.0625
+      },
+      {
+        "ActionClass": 3,
+        "MissionPowerLevel": -2,
+        "PowerLevelFraction": -0.0625
+      },
+      {
+        "ActionClass": 3,
+        "MissionPowerLevel": -3,
+        "PowerLevelFraction": -0.04
+      },
+      {
+        "ActionClass": 3,
+        "MissionPowerLevel": -4,
+        "PowerLevelFraction": -0.03
+      },
+      {
+        "ActionClass": 3,
+        "MissionPowerLevel": -5,
+        "PowerLevelFraction": -0.02
+      },
+      {
+        "ActionClass": 3,
+        "MissionPowerLevel": -6,
+        "PowerLevelFraction": -0.0175
+      },
+      {
+        "ActionClass": 3,
+        "MissionPowerLevel": -7,
+        "PowerLevelFraction": -0.015
+      },
+      {
+        "ActionClass": 3,
+        "MissionPowerLevel": -8,
+        "PowerLevelFraction": -0.0125
+      },
+      {
+        "ActionClass": 3,
+        "MissionPowerLevel": -9,
+        "PowerLevelFraction": -0.01
+      },
+      {
+        "ActionClass": 3,
+        "MissionPowerLevel": -10,
+        "PowerLevelFraction": -0.0075
+      }
+    ],
+    "override": [
+      {
+        "ActionClass": 1,
+        "MissionPowerLevel": 1,
+        "PowerLevelFraction": 0.25
+      },
+      {
+        "ActionClass": 1,
+        "MissionPowerLevel": 2,
+        "PowerLevelFraction": 0.12
+      },
+      {
+        "ActionClass": 1,
+        "MissionPowerLevel": 3,
+        "PowerLevelFraction": 0.12
+      },
+      {
+        "ActionClass": 1,
+        "MissionPowerLevel": 4,
+        "PowerLevelFraction": 0.12
+      },
+      {
+        "ActionClass": 1,
+        "MissionPowerLevel": 5,
+        "PowerLevelFraction": 0.12
+      },
+      {
+        "ActionClass": 1,
+        "MissionPowerLevel": 6,
+        "PowerLevelFraction": 0.12
+      },
+      {
+        "ActionClass": 1,
+        "MissionPowerLevel": 7,
+        "PowerLevelFraction": 0.12
+      },
+      {
+        "ActionClass": 1,
+        "MissionPowerLevel": 8,
+        "PowerLevelFraction": 0.12
+      },
+      {
+        "ActionClass": 1,
+        "MissionPowerLevel": 9,
+        "PowerLevelFraction": 0.12
+      },
+      {
+        "ActionClass": 1,
+        "MissionPowerLevel": 10,
+        "PowerLevelFraction": 0.12
+      },
+      {
+        "ActionClass": 2,
+        "MissionPowerLevel": 1,
+        "PowerLevelFraction": 0.25
+      },
+      {
+        "ActionClass": 2,
+        "MissionPowerLevel": 2,
+        "PowerLevelFraction": 0.12
+      },
+      {
+        "ActionClass": 2,
+        "MissionPowerLevel": 3,
+        "PowerLevelFraction": 0.12
+      },
+      {
+        "ActionClass": 2,
+        "MissionPowerLevel": 4,
+        "PowerLevelFraction": 0.12
+      },
+      {
+        "ActionClass": 2,
+        "MissionPowerLevel": 5,
+        "PowerLevelFraction": 0.12
+      },
+      {
+        "ActionClass": 2,
+        "MissionPowerLevel": 6,
+        "PowerLevelFraction": 0.12
+      },
+      {
+        "ActionClass": 2,
+        "MissionPowerLevel": 7,
+        "PowerLevelFraction": 0.12
+      },
+      {
+        "ActionClass": 2,
+        "MissionPowerLevel": 8,
+        "PowerLevelFraction": 0.12
+      },
+      {
+        "ActionClass": 2,
+        "MissionPowerLevel": 9,
+        "PowerLevelFraction": 0.12
+      },
+      {
+        "ActionClass": 2,
+        "MissionPowerLevel": 10,
+        "PowerLevelFraction": 0.12
+      },
+      {
+        "ActionClass": 3,
+        "MissionPowerLevel": 1,
+        "PowerLevelFraction": 0.06
+      },
+      {
+        "ActionClass": 3,
+        "MissionPowerLevel": 2,
+        "PowerLevelFraction": 0.03
+      },
+      {
+        "ActionClass": 3,
+        "MissionPowerLevel": 3,
+        "PowerLevelFraction": 0.03
+      },
+      {
+        "ActionClass": 3,
+        "MissionPowerLevel": 4,
+        "PowerLevelFraction": 0.03
+      },
+      {
+        "ActionClass": 3,
+        "MissionPowerLevel": 5,
+        "PowerLevelFraction": 0.03
+      },
+      {
+        "ActionClass": 3,
+        "MissionPowerLevel": 6,
+        "PowerLevelFraction": 0.03
+      },
+      {
+        "ActionClass": 3,
+        "MissionPowerLevel": 7,
+        "PowerLevelFraction": 0.03
+      },
+      {
+        "ActionClass": 3,
+        "MissionPowerLevel": 8,
+        "PowerLevelFraction": 0.03
+      },
+      {
+        "ActionClass": 3,
+        "MissionPowerLevel": 9,
+        "PowerLevelFraction": 0.03
+      },
+      {
+        "ActionClass": 3,
+        "MissionPowerLevel": 10,
+        "PowerLevelFraction": 0.03
+      }
+    ]
+  },
+  "modelrules": {
+    "enabled": true,
+    "traceRules": 0,
+    "probeWritableColumns": false,
+    "probeTables": [],
+    "probeOutput": ""
+  },
+  "powerlevel": {
+    "enabled": true,
+    "minCap": 1,
+    "maxCap": 20,
+    "matrixMaxCap": 10,
+    "logFirst": 40
+  },
+  "selfcheck": {
+    "enabled": false,
+    "file": "",
+    "output": ""
+  },
+  "difficulty": {
+    "sliderRangeMultiplier": 3.0
+  }
+}

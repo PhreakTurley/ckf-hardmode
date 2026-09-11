@@ -1,0 +1,43 @@
+{
+  "subsystem": "Difficulty",
+  "title": "Custom Difficulty Slider Range",
+  "targets": { "json": "ckf.hardmode.json", "section": "difficulty", "legacyJson": null },
+
+  "doc": [
+    "CKF Hard Mode - custom-difficulty slider range.",
+    "",
+    "One key, and it is the whole section - in 3.0 it is the \"difficulty\" section",
+    "of ckf.hardmode.json rather than the [Difficulty] section of the cfg. The 20 knobs that used to live here -",
+    "MonsterHitPointScalar, PowerLevelScalar, MissionEconomy and the rest - were",
+    "removed in 2.11.0. They were a second",
+    "place to set values the game already exposes on its own custom-difficulty",
+    "sliders, under its own names, and they had already produced a bug: two of",
+    "them shipped non-NaN, so a fresh install silently doubled enemy HP.",
+    "",
+    "This section's whole job is now to widen the game's own Min/Max bounds so",
+    "those sliders reach further. Set difficulty in the game's window.",
+    "",
+    "GameDifficultyModel's bound properties are STATIC, which took two failed",
+    "runs to establish: Run28 dumped a materialized row and found 66 instance",
+    "properties with not one bound among them. So widening is a one-shot on the",
+    "type at load, not per row.",
+    "",
+    "[PowerLevel] is unaffected by this section. It reads the model properties",
+    "the sliders write, so it picks up whatever was set in-game."
+  ],
+
+  "uiDoc": [
+    "This does not set difficulty. It widens how far the game's own custom difficulty sliders can be pushed. You then set the difficulty itself in the game's own window.",
+	"A ceiling is multiplied outward. A floor above zero is pulled closer to zero. A floor already below zero is pushed further down. A limit of exactly zero is left where it is."
+  ],
+
+  "fields": [
+    {
+      "path": "sliderRangeMultiplier", "in": "json", "type": "float",
+      "default": 3.0, "range": [1.0, 100.0], "ui": "form",
+      "label": "Slider range multiplier",
+      "uiDoc": "1 = leave the stock ranges alone.",
+      "doc": "How far past stock the game's own custom-difficulty sliders may be pushed. GameDifficultyModel pairs each setting with Min/Max properties and they are writable, so this stretches them: a positive ceiling is multiplied, a negative floor is multiplied (further down), a positive floor is divided (closer to zero), and a bound of exactly zero is left alone. 1 = leave the stock ranges alone. 3.0 moved this key out of the [Difficulty] section of ckf.hardmode.cfg and into the \"difficulty\" section of ckf.hardmode.json; the section is new in 3.0 and has no 2.x sidecar behind it, which is what targets.legacyJson: null records."
+    }
+  ]
+}

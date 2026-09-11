@@ -1,0 +1,16 @@
+# .NET build output
+mods/CKFHardMode/bin/
+mods/CKFHardMode/obj/
+
+# Python
+__pycache__/
+*.pyc
+
+# gui/serve.py writes this next to itself on first run; it holds a local
+# game-folder path and nothing else
+gui/settings.json
+
+# scripts/make_release.py output — built locally, attached to GitHub Releases,
+# never committed
+dist/
+build/

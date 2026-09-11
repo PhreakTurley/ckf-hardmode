@@ -1,0 +1,168 @@
+{
+  "subsystem": "Progression",
+  "title": "Team Power Level Award",
+  "targets": {
+    "json": "ckf.hardmode.json", "section": "teampl", "legacyJson": "ckf.hardmode.teampl.json"
+  },
+  "enable": {
+    "json": "enabled"
+  },
+  "doc": [
+    "CKF Hard Mode - Team Power Level award.",
+    "",
+    "Team PL is a SUM over GameMissionScoreModel joined to MissionPowerLevelModel",
+    "on (ActionClass, MissionPowerLevel). 'table' below is the game's own values,",
+    "REFERENCE ONLY - the mod reconciles against it before it substitutes anything,",
+    "and editing it changes no award. 'override' is what you edit.",
+    "",
+    "It is a sum, not a counter, and that was verified exactly rather than",
+    "approximately: the reference save's 127 mission rows sum to 7.7075 and its",
+    "first 126 to 7.6925, which are the two numbers the trace printed either side",
+    "of the insert that finished a PL 7 solo hack (Progression.cs:12-20).",
+    "",
+    "The row itself carries no number. GameMissionScoreModel has six columns and",
+    "no fraction among them - Id, MissionTypeId, MissionPowerLevel, ActionClass,",
+    "GameTurn, MissionSuccessful - so the award is entirely a function of the two",
+    "join keys (Progression.cs:26-32).",
+    "",
+    "ACTIONCLASS - settled by the save, not inferred. Every one of the reference",
+    "save's 127 completed missions was classed by the game itself",
+    "(Progression.cs:70-81):",
+    "",
+    "  0  LEGWORK only, always PL 0, always worth nothing",
+    "  1  story missions and Power Play missions",
+    "  2  Treaty contracts - the standard proc-gen board",
+    "  3  solo hacks - every HackCPU / HackFile / HackLoot, whatever generated it",
+    "",
+    "Class 3 wins over its source: M_PGenPower_Icarus_M1_HackCPU is class 3, not",
+    "1, and M_PGenTreaty_HackCPU is class 3, not 2.",
+    "",
+    "Class 0 is worth nothing because the game's table has no class-0 band, not",
+    "because the sum skips those rows: a row whose (ActionClass, MissionPowerLevel)",
+    "has no cell contributes zero, and the arithmetic reconciles only if the 34",
+    "LEGWORK rows at (0, 0) are worth zero (Progression.cs:22-24, 142-144).",
+    "",
+    "The victory screen reads a different path at a different time. The label rules",
+    "that make it agree are generated into ckf.hardmode.d/ from 'override' - see the",
+    "mirror invariant. Do not hand-write MissionPowerLevelModel rules in rules.json.",
+    "",
+    "REMOVED, 2026-09-01: a closing line reading 'Generated from",
+    "schema/teampl.schema.json.' It was the footer of the sidecar header",
+    "comment this doc used to be written into, and it named this file as the",
+    "place to edit instead of the comment. The sidecars are pure JSON now and",
+    "nothing writes a comment into one, so the line described an origin the",
+    "text it followed no longer has."
+  ],
+  "uiDoc": [
+    "Your Team Power Level is a running total over every mission the crew has finished. Each completed mission is worth a fraction, looked up by what class of mission it was and what level it was at, and the total is the sum of all of them. This page replaces that table.",
+    "",
+    "The new PL gains apply to missions you have already finished, which means you may see your PL spike up or down when you first load in.",
+    "",
+    "The reference table is the game's own list for comparison.",
+    "",
+    "The four mission classes are 0 for legwork, which grants nothing; 1 for story and Power Play missions; 2 for typical proc-gen missions; and 3 for solo hacks.",
+    "",
+    "To tell it is working, look for the reconcile line in the log: before substituting anything the mod adds up the game's own values over the same missions and checks that its total matches. If that line is not there, it could not reproduce the game's total and has deliberately left your Team Power Level exactly as the game computed it."
+  ],
+  "fields": [
+    {
+      "path": "enabled",
+      "in": "json",
+      "type": "bool",
+      "default": true,
+      "ui": "form",
+      "retroactive": true,
+      "label": "Enabled",
+      "uiDoc": "Recompute Team Power Level from the override grid instead of the game's table.",
+      "doc": "Recompute Team Power Level from the 'override' section instead of the game's table. 3.0 moved this switch out of the cfg key [Progression] Enabled and into this section; it is the whole enable chain for this subsystem. ALWAYS RETROACTIVE: turning it on re-prices every past mission at load, and the substituted total persists into the save, so turning it back off leaves a modded figure behind. RetroactiveTable was removed in 2.12.0 — it was this subsystem's only mode, so it had nothing left to switch, and the other three levers (GainScalar, GainOverride and a 'remap' list, all of which worked by rewriting a row's join keys so the award had to snap to one of the 63 shipped cells) went in 2.11.0 (Progression.cs:49-60). HOW TO TELL IT IS WORKING: before substituting anything the plugin sums the GAME'S values over the same rows and compares them with what the game just returned, and logs 'Progression: reconciled <total> over <n> row(s).' when they agree. If that line does not appear, the plugin could not reproduce the game's own total and has left Team PL exactly as the game computed it — on purpose, not because the subsystem is off (Progression.cs:291-322). To watch the award itself, trace RPG.Database.GameDb.SumGameMissionScore; that setting belongs to the separate CKF Data Dump plugin's [Diagnostics] section, not to any key this schema declares (Plugin.cs:57-58). The victory screen is not evidence either way — it reads a different path at a different time."
+    },
+    {
+      "path": "table",
+      "in": "json",
+      "type": "table",
+      "ui": "readonly",
+      "label": "Game's own table (reference)",
+      "uiDoc": "The game's shipped values. The mod checks its own arithmetic against these before substituting.",
+      "doc": "The game's shipped values. The mod checks its own arithmetic against these before substituting. Editing changes no award and can make the reconcile fail, which silently disables the retroactive path. It ships 63 cells: classes 1-3 across MissionPowerLevel 0-10, plus a negative-level band from -1 to -10 whose fractions are negative. Regenerate it from the CKF Data Dump plugin's ckf-dump/MissionPowerLevelModel.csv if the game updates. [unverified: ckf.hardmode.teampl.json:97-98 records that no negative level has been seen on an awarded row and that their purpose is unknown; nothing in this repository confirms or explains them.]",
+      "row": [
+        {
+          "name": "ActionClass",
+          "type": "int"
+        },
+        {
+          "name": "MissionPowerLevel",
+          "type": "int"
+        },
+        {
+          "name": "PowerLevelFraction",
+          "type": "float"
+        }
+      ]
+    },
+    {
+      "path": "override",
+      "in": "json",
+      "type": "table",
+      "ui": "matrix",
+      "retroactive": true,
+      "label": "Award override",
+      "uiDoc": "Per-cell replacement of PL gains. A cell absent here keeps its reference value. I've picked the initial numbers to roughly have completionist playthroughs end around PL 10 and keep PL gains flat in order to have enemies continue scaling at a similar pace in the late game.",
+      "doc": "Per-cell replacement for the award. A cell absent here keeps its 'table' value, and a cell present here replaces it outright - the value is used verbatim, with no snapping to a shipped cell and no clamp of any kind in the code (Progression.cs:150-152, 340-342). A cell with no 'table' value works too: it simply contributes its own figure to the sum, and gen_teampl_labels.py emits its label rule marked '(no stock cell)'. THE RANGES BELOW ARE GUARD RAILS FOR THE EDITOR, NOT ENGINE LIMITS. ActionClass runs 0-3 because that is what the save files rows under; the shipped table has no class-0 band, so a class-0 override has no stock value behind it and re-prices every LEGWORK row from zero. PowerLevelFraction is allowed to go negative because the game's own table does. A worked example: an override cell of ActionClass 2, MissionPowerLevel 7, PowerLevelFraction 0.015 makes Treaty contracts at PL 7 pay a solo hack's rate, 0.03 down to 0.015, and setting the same cell to 0 stops that class and level advancing the team at all.",
+      "axes": {
+        "row": "ActionClass",
+        "col": "MissionPowerLevel",
+        "value": "PowerLevelFraction"
+      },
+      "over": "table",
+      "row": [
+        {
+          "name": "ActionClass",
+          "type": "int",
+          "range": [
+            0,
+            3
+          ]
+        },
+        {
+          "name": "MissionPowerLevel",
+          "type": "int",
+          "range": [
+            -10,
+            25
+          ]
+        },
+        {
+          "name": "PowerLevelFraction",
+          "type": "float",
+          "range": [
+            -5.0,
+            5.0
+          ]
+        }
+      ]
+    }
+  ],
+  "invariants": [
+    {
+      "kind": "mirror",
+      "source": "ckf.hardmode.json#teampl.override[]",
+      "target": "ckf.hardmode.d/MissionPowerLevelModel.generated.json",
+      "match": [
+        "ActionClass",
+        "MissionPowerLevel"
+      ],
+      "value": "PowerLevelFraction",
+      "mergeWith": "ckf.hardmode.json#teampl.table[]",
+      "generated": true,
+      "reason": "The award is a SQL aggregate that materialises no row; the victory screen re-reads the materialiser. Two layers, one number. The drift was measured: a rule set to 3.0 printed 'Team gained 3 PL' while the sum moved 0.015. scripts/gen_teampl_labels.py is what writes the target: regenerate it after editing 'override' and never hand-edit it. It emits a rule only for cells whose merged value differs from the game's own, so an unchanged run reproduces the file byte for byte."
+    },
+    {
+      "kind": "linkedEnable",
+      "keys": [
+        "ckf.hardmode.json#teampl.enabled",
+        "ckf.hardmode.json#modelrules.enabled"
+      ],
+      "reason": "Progression alone gives a correct award with a stock label; ModelRules alone gives a stock award with a lying label. Neither direction logs anything. 3.0 moved both switches out of the cfg and into the merged document, so the keys are file#path rather than Section.Key."
+    }
+  ]
+}

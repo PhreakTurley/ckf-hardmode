@@ -1,0 +1,1500 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CKF Hard Mode — config</title>
+<style>
+:root{
+  --bg:#14161a; --panel:#1c1f25; --panel2:#22262e; --line:#31363f;
+  --ink:#e6e8ec; --dim:#9aa1ad; --faint:#6b7280;
+  --on:#3ea76a; --off:#7b8494; --unknown:#c9973f; --danger:#d0564a;
+  --accent:#5b8dd6; --unsetbg:#20242c;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);
+  font:16.25px/1.5 ui-sans-serif,system-ui,"Segoe UI",Roboto,sans-serif}
+code,.mono{font-family:ui-monospace,"Cascadia Mono",Consolas,monospace}
+a{color:var(--accent)}
+header{position:sticky;top:0;z-index:20;background:var(--panel);
+  border-bottom:1px solid var(--line);padding:10px 18px;display:flex;gap:13px;
+  align-items:center;flex-wrap:wrap}
+header h1{font-size:17.5px;margin:0 13px 0 0;font-weight:600;letter-spacing:.2px}
+header input[type=text]{width:min(48ch,40vw)}
+input,select,button,textarea{font:inherit;color:var(--ink);background:var(--panel2);
+  border:1px solid var(--line);border-radius:5px;padding:4px 8px}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:-1px}
+button{cursor:pointer}
+button:hover:not(:disabled){border-color:var(--accent)}
+button:disabled{opacity:.45;cursor:default}
+button.primary{background:#2c4c78;border-color:#3d6396}
+button.warn{background:#4a2320;border-color:#7d3a34}
+main{display:flex;align-items:flex-start;gap:0;min-height:calc(100% - 58px)}
+nav{width:338px;flex:0 0 338px;border-right:1px solid var(--line);
+  padding:13px 0;position:sticky;top:58px;max-height:calc(100vh - 58px);overflow:auto}
+nav .navitem{display:flex;gap:10px;align-items:center;padding:8px 15px;cursor:pointer;
+  border-left:3px solid transparent}
+nav .navitem:hover{background:var(--panel)}
+nav .navitem.sel{background:var(--panel);border-left-color:var(--accent)}
+nav .navitem .nm{flex:1;min-width:0}
+nav .navitem .nm b{display:block;font-weight:600}
+section#panel{flex:1;min-width:0;padding:18px 23px 100px}
+.pill{font-size:13.13px;padding:2px 9px;border-radius:11px;border:1px solid;
+  white-space:nowrap;letter-spacing:.3px;text-transform:uppercase}
+.pill.on{color:var(--on);border-color:var(--on)}
+.pill.off{color:var(--off);border-color:var(--off)}
+.pill.unknown{color:var(--unknown);border-color:var(--unknown)}
+.pill.na{color:var(--faint);border-color:var(--faint)}
+.pill.retro{color:var(--danger);border-color:var(--danger)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:7px;
+  padding:15px 18px;margin:0 0 15px}
+.card>h3{margin:0 0 5px;font-size:16.25px}
+.doc{color:var(--dim);margin:8px 0 0;font-size:15px}
+p.doc{margin:8px 0 0}
+p.doc+p.doc{margin-top:10px}
+.meta{color:var(--faint);font-size:13.75px;margin-top:5px}
+.field{display:grid;grid-template-columns:22ch 1fr;gap:13px;padding:10px 0;
+  border-top:1px solid var(--line)}
+.field:first-of-type{border-top:0}
+.field.disabled{opacity:.5}
+.field label.lab{font-weight:600}
+.field label.lab code{display:block;color:var(--faint);font-weight:400;font-size:13.75px}
+code.loc span{display:block}
+.ctl{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.banner{border-radius:7px;padding:11px 15px;margin:0 0 15px;border:1px solid}
+.banner.err{background:#2a1614;border-color:#7d3a34}
+.banner.warn{background:#2b2415;border-color:#7d6534}
+.banner.ok{background:#152418;border-color:#2f6b46}
+.banner.info{background:#161d29;border-color:#33507d}
+.banner h4{margin:0 0 5px;font-size:15.63px}
+.banner ul{margin:5px 0 0;padding-left:23px}
+.retrobox{border:2px solid var(--danger);border-radius:7px;padding:13px 15px;
+  background:#241715;margin:10px 0}
+.retrobox h4{margin:0 0 5px;color:#f0a196;font-size:15.63px}
+.grid-wrap{overflow:auto;max-height:62vh;border:1px solid var(--line);border-radius:6px}
+table.grid{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%}
+table.grid th,table.grid td{border-bottom:1px solid var(--line);
+  border-right:1px solid var(--line);padding:0;white-space:nowrap}
+table.grid th{position:sticky;top:0;background:var(--panel2);z-index:2;
+  padding:7px 10px;text-align:left;font-size:14.38px;font-weight:600;
+  white-space:normal;overflow-wrap:anywhere;line-height:1.25;vertical-align:bottom}
+table.grid th.axis{left:0;z-index:3}
+table.grid td.axis{position:sticky;left:0;background:var(--panel2);
+  padding:5px 10px;font-weight:600;z-index:1}
+table.grid td input{border:0;border-radius:0;background:transparent;width:11ch;
+  padding:6px 9px}
+table.grid td.unset input{background:var(--unsetbg)}
+table.grid td.unset{background:
+  repeating-linear-gradient(135deg,transparent,transparent 5px,#282d36 5px,#282d36 6px)}
+table.grid td.bad input{background:#3a1d1a;color:#ffb4aa}
+table.grid td.inherit input{color:var(--faint);font-style:italic}
+table.grid td.setcell input{color:#8fd1a5;font-weight:600}
+table.grid tr:hover td{background-color:#1f232a}
+.rowbtn{border:0;background:transparent;color:var(--dim);padding:3px 8px}
+.rowbtn:hover{color:var(--danger)}
+.legend{color:var(--faint);font-size:13.75px;margin:8px 0 0}
+.legend .sw{display:inline-block;width:14px;height:14px;vertical-align:-1px;
+  margin-right:5px;border:1px solid var(--line)}
+.legend .sw.unset{background:
+  repeating-linear-gradient(135deg,transparent,transparent 5px,#282d36 5px,#282d36 6px)}
+.chart{background:var(--panel2);border:1px solid var(--line);border-radius:6px;
+  margin:10px 0}
+.chart svg{display:block;width:100%;height:325px;touch-action:none}
+.series{display:flex;gap:15px;flex-wrap:wrap;padding:8px 13px;font-size:14.38px}
+.series label{display:flex;gap:5px;align-items:center;cursor:pointer}
+.problem{font-size:15px;margin:3px 0}
+.problem b{display:inline-block;width:9ch}
+.spacer{flex:1}
+.tools{display:flex;gap:8px;align-items:center}
+.chk{display:flex;gap:6px;align-items:center}
+.hidden{display:none}
+.small{font-size:14.38px;color:var(--dim)}
+.kbd{border:1px solid var(--line);border-radius:4px;padding:0 5px;font-size:13.75px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>CKF Hard Mode — config</h1>
+  <label class="small" for="gamedir">Game directory</label>
+  <input type="text" id="gamedir" spellcheck="false">
+  <button id="applydir">Apply</button>
+  <span id="probe"></span>
+  <span class="spacer"></span>
+  <span id="dirty" class="small"></span>
+  <button id="revalidate">Validate</button>
+  <button id="save" class="primary">Save</button>
+</header>
+
+<div id="banners" style="padding:15px 23px 0"></div>
+
+<main>
+  <nav id="index"></nav>
+  <section id="panel"></section>
+</main>
+
+<script>
+/*==CKF-PURE-BEGIN==*/
+/* Pure functions: no DOM, no network, no globals beyond CKF.
+   serve.py --selftest-js extracts exactly this region and runs it under node.
+   Keep anything that touches document/fetch OUTSIDE the sentinels. */
+
+const CKF = (function () {
+
+  // A transcription of MissionRewards.cs:391-414 (Adjust.Parse).
+  //   ""  none | "=N" / "N" set | "+N" add | "-N" add, sign kept
+  //   "xN" / "XN" / "*N" multiply
+  // The body is parsed as NumberStyles.Float, InvariantCulture: leading sign,
+  // decimal point and exponent allowed; group separators are not. An
+  // unparseable spec is logged and ignored by the plugin -- a silent no-op --
+  // so the GUI treats it as an error rather than letting it through.
+  const NUM = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+
+  function parseAdjust(spec) {
+    const s = (spec == null ? '' : String(spec)).trim();
+    if (s === '') return { kind: 'none', value: null, ok: true };
+    let kind = 'set', body = s;
+    const c = s[0];
+    if (c === '=') { kind = 'set'; body = s.slice(1); }
+    else if (c === 'x' || c === 'X' || c === '*') { kind = 'multiply'; body = s.slice(1); }
+    else if (c === '+') { kind = 'add'; body = s.slice(1); }
+    else if (c === '-') { kind = 'add'; body = s; }
+    body = body.trim();
+    if (!NUM.test(body)) return { kind: 'none', value: null, ok: false };
+    const v = Number(body);
+    if (!isFinite(v)) return { kind: 'none', value: null, ok: false };
+    return { kind: kind, value: v, ok: true };
+  }
+
+  function describeAdjust(spec) {
+    const r = parseAdjust(spec);
+    if (!r.ok) return 'unparseable — the plugin logs a warning and ignores it';
+    if (r.kind === 'none') return 'no change';
+    if (r.kind === 'set') return 'set to ' + r.value;
+    if (r.kind === 'add') return (r.value < 0 ? 'subtract ' + (-r.value) : 'add ' + r.value);
+    return 'multiply by ' + r.value;
+  }
+
+  // The string that goes on the right of '=' in the .cfg. Never a comment.
+  function renderCfgValue(type, value) {
+    if (type === 'bool') return value ? 'true' : 'false';
+    if (type === 'int') return String(Math.trunc(Number(value)));
+    if (type === 'float' || type === 'floatOrNaN') {
+      if (value === 'NaN' || (typeof value === 'number' && isNaN(value))) return 'NaN';
+      const f = Number(value);
+      if (f === Math.trunc(f) && Math.abs(f) < 1e15) return String(Math.trunc(f));
+      return String(f);
+    }
+    if (type === 'stringList') {
+      const items = Array.isArray(value)
+        ? value.map(function (s) { return String(s).trim(); })
+        : String(value == null ? '' : value).split(',').map(function (s) { return s.trim(); });
+      return items.filter(function (s) { return s !== ''; }).join(', ');
+    }
+    return value == null ? '' : String(value);
+  }
+
+  // A cell's text -> {present, value, ok}. UNSET IS NOT ZERO: for a numeric
+  // cell an empty box means the key is absent on disk, and "0" means the key
+  // is there with the value zero. For a string cell an empty box is a real
+  // empty string -- "" is a meaningful adjustment spec -- so a string is only
+  // unset through the explicit unset button, which sends null.
+  function coerceCell(type, text) {
+    if (text === null) return { present: false, value: null, ok: true };
+    const s = String(text);
+    if (type === 'string' || type === 'stringList') {
+      return { present: true, value: s, ok: true };
+    }
+    if (type === 'bool') {
+      if (s.trim() === '') return { present: false, value: null, ok: true };
+      return { present: true, value: (s === 'true' || s === true), ok: true };
+    }
+    if (s.trim() === '') return { present: false, value: null, ok: true };
+    if (!NUM.test(s.trim())) return { present: true, value: null, ok: false };
+    const n = Number(s.trim());
+    if (type === 'int' && n !== Math.trunc(n)) return { present: true, value: null, ok: false };
+    return { present: true, value: (type === 'int' ? Math.trunc(n) : n), ok: true };
+  }
+
+  function inRange(value, range) {
+    if (!range || value == null) return true;      // unset is never out of range
+    if (typeof value !== 'number' || isNaN(value)) return true;
+    return value >= range[0] && value <= range[1];
+  }
+
+  // The AND-chain. A gate that could not be read is 'unknown', never 'off':
+  // an instrument's silence is not evidence (AGENTS.md section 3).
+  function effective(states) {
+    if (!states.length) return 'n/a';
+    if (states.some(function (s) { return s === false; })) return 'off';
+    if (states.some(function (s) { return s == null; })) return 'unknown';
+    return 'on';
+  }
+
+  // Points for the curve chart. A cell that is unset is not plotted -- the
+  // line breaks -- which is how an absent key stays visibly different from a
+  // zero sitting on the axis.
+  function curvePoints(rows, xcol, ycol) {
+    const out = [];
+    for (const r of rows) {
+      const x = r.cells[xcol], y = r.cells[ycol];
+      if (typeof x !== 'number' || typeof y !== 'number') continue;
+      out.push({ id: r.id, x: x, y: y });
+    }
+    out.sort(function (a, b) { return a.x - b.x; });
+    return out;
+  }
+
+  // The row and column domains of a matrix: the union of what the override
+  // holds and what the underlying stock table holds.
+  function matrixDomain(overrideRows, stockRows, axes) {
+    const rs = new Set(), cs = new Set();
+    for (const src of [stockRows || [], overrideRows || []]) {
+      for (const r of src) {
+        const a = r.cells[axes.row], b = r.cells[axes.col];
+        if (a != null) rs.add(Number(a));
+        if (b != null) cs.add(Number(b));
+      }
+    }
+    const num = function (a, b) { return a - b; };
+    return { rows: Array.from(rs).sort(num), cols: Array.from(cs).sort(num) };
+  }
+
+  // RewardCurve.cs:249-251 -- `if (tier.X >= 0)`, and the Tier initialiser is
+  // -1, so a column that is missing and a column that is negative both mean
+  // "keep the game's number". Zero does not: zero is a real zero.
+  function isKeepValue(v) {
+    if (v == null) return true;
+    return typeof v === 'number' && v < 0;
+  }
+
+  // The cells of a row the matrix editor adds for a brand new row or column.
+  // Every column starts UNSET -- null, the same state clearing a cell leaves
+  // behind -- and only the two axis coordinates are filled in.
+  //
+  // It must not be 0. `X && 0` used to put a real zero in the value column,
+  // and teampl.override is one of the two retroactive fields in the mod:
+  // Progression.Merged() consults Overrides before Cells, so a 0 there is an
+  // award of zero rather than an inherit, and enabling Progression re-prices
+  // every past mission at load with the substituted total persisting into the
+  // save. Neither guard catches it -- 0 is inside the declared range and the
+  // mirror faithfully agrees with its source -- so check_schema reports a
+  // clean file.
+  function newMatrixCells(rowCols, axes, which, value, firstRow, firstCol) {
+    const cells = {};
+    for (const col of (rowCols || [])) cells[col.name] = null;
+    if (which === axes.row) { cells[axes.row] = value; cells[axes.col] = firstCol; }
+    else { cells[axes.row] = firstRow; cells[axes.col] = value; }
+    cells[axes.value] = null;
+    return cells;
+  }
+
+  // REMOVED IN 3.0: pairState. Elapse and Fatigue used to be gated twice -- a
+  // cfg key read before the sidecar was opened, the sidecar's own flag after it
+  // loaded -- and one checkbox stood for both, with a 'mixed' state for the one
+  // thing a single box cannot honestly render. Phase 3 deleted the outer cfg
+  // gate, so no subsystem has two gates and there is no pair to collapse.
+
+  // Reference material sorts after the controls it is a reference for. Keyed
+  // off the `ui` value, which is the dispatch everywhere else in this page;
+  // no field is named.
+  function splitReference(fields) {
+    const main = [], reference = [];
+    for (const f of (fields || [])) ((f.ui === 'readonly') ? reference : main).push(f);
+    return { main: main, reference: reference };
+  }
+
+  // Which coordinates of a matrix axis are drawn. A window narrows the grid to
+  // the part anyone edits; a coordinate OUTSIDE the window is still drawn when
+  // data occupies it, because hiding a cell that carries a value is how a save
+  // silently drops it. `outside` names the ones drawn for that reason so the
+  // page can say why they are there.
+  function visibleAxis(values, win, occupied) {
+    const occ = new Set((occupied || []).map(Number));
+    const shown = [], hidden = [], outside = [];
+    for (const v of (values || [])) {
+      const inWin = !win || (v >= win[0] && v <= win[1]);
+      if (inWin) { shown.push(v); continue; }
+      if (occ.has(Number(v))) { shown.push(v); outside.push(v); }
+      else hidden.push(v);
+    }
+    return { shown: shown, hidden: hidden, outside: outside };
+  }
+
+  // REMOVED, 2026-09-07: hasUnsetControl, and the explicit unset controls it
+  // gated -- the per-cell null-set button and the document field's unset
+  // toggle. David's ruling: editing the box is the whole gesture. Clearing a
+  // numeric box still drops the key, which is what coerceCell above returns;
+  // clearing a text box now leaves an empty string, which is a value the file
+  // carries rather than a key it loses. The server side is untouched -- a null
+  // cell in an edit payload still drops the key -- so a file that already has
+  // an absent text key keeps it until someone types in that cell.
+
+  function fmtCell(v) {
+    if (v == null) return '';
+    if (typeof v === 'boolean') return v ? 'true' : 'false';
+    return String(v);
+  }
+
+  // A column heading with a break opportunity at each camelCase seam, so a
+  // three-word heading wraps a word at a time rather than being chopped
+  // mid-word. U+200B is zero width: the text a player copies out of a heading
+  // is unchanged, and String.length is not what colWidth measures.
+  const SEAM = /([a-z0-9])([A-Z])/g;
+
+  function softWrap(name) {
+    return String(name).replace(SEAM, '$1\u200b$2');
+  }
+
+  function headSegments(name) {
+    return softWrap(name).split('\u200b');
+  }
+
+  // How wide a grid column's input should be, in ch.
+  //
+  // Every column used to be 11ch, or 20ch for a string, which is the whole
+  // spacing complaint: the mission overrides' key column holds ids up to 46
+  // characters and showed 20 of them, while the adjustment slots beside it
+  // hold "x1.5" and were given 11. So the width comes from what the column
+  // actually holds:
+  //
+  //   the longest value in it, plus one so the caret has somewhere to sit;
+  //   a floor by kind, because an empty column still needs to be typed into;
+  //   the longest heading segment, uncapped -- the heading is part of what the
+  //     column has to hold, and the old 12ch cap let a heading set a width it
+  //     then had to wrap out of;
+  //   and a ceiling, because a 46-character id does not get a 47ch column.
+  //
+  // That total is the CONTENT. The column is then sized to 120% of it, so
+  // nothing sits flush against a cell border, plus 2ch for the box's own
+  // padding: `box-sizing:border-box` means a width in ch is the outside of the
+  // input, and without that term the 120% is spent on padding and the text
+  // ends up with the same room it had before.
+  //
+  // The heading is what a wrapping th contributes; the td stays nowrap, so the
+  // column ends up as wide as this number and no wider.
+  const WIDTH_MARGIN = 1.2;   // 120% of the widest thing in the column
+  const WIDTH_PADDING = 2;    // ch, the input's own left+right padding
+  function colWidth(col, values, fmt) {
+    let longest = 0;
+    for (const v of (values || [])) {
+      const t = fmtCell(v);
+      if (t.length > longest) longest = t.length;
+    }
+    const floor = fmt === 'adjust' ? 6
+                : (col.type === 'string' || col.type === 'stringList') ? 8 : 4;
+    let head = 0;
+    for (const seg of headSegments(col.name)) if (seg.length > head) head = seg.length;
+    const content = Math.max(longest + 1, floor, head);
+    const w = Math.ceil(content * WIDTH_MARGIN) + WIDTH_PADDING;
+    return Math.max(6, Math.min(w, 44));
+  }
+
+  function deepEqual(a, b) {
+    if (a === b) return true;
+    if (typeof a !== typeof b) return false;
+    if (a === null || b === null) return false;
+    if (Array.isArray(a)) {
+      if (!Array.isArray(b) || a.length !== b.length) return false;
+      for (let i = 0; i < a.length; i++) if (!deepEqual(a[i], b[i])) return false;
+      return true;
+    }
+    if (typeof a === 'object') {
+      const ka = Object.keys(a), kb = Object.keys(b);
+      if (ka.length !== kb.length) return false;
+      for (const k of ka) {
+        if (!Object.prototype.hasOwnProperty.call(b, k)) return false;
+        if (!deepEqual(a[k], b[k])) return false;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  return {
+    parseAdjust: parseAdjust, describeAdjust: describeAdjust,
+    renderCfgValue: renderCfgValue, coerceCell: coerceCell, inRange: inRange,
+    effective: effective, curvePoints: curvePoints, matrixDomain: matrixDomain,
+    isKeepValue: isKeepValue, newMatrixCells: newMatrixCells,
+    splitReference: splitReference,
+    visibleAxis: visibleAxis,
+    softWrap: softWrap, headSegments: headSegments, colWidth: colWidth,
+    fmtCell: fmtCell, deepEqual: deepEqual,
+  };
+})();
+/*==CKF-PURE-END==*/
+</script>
+
+<script>
+'use strict';
+const TOKEN = '__CKF_TOKEN__';
+const $ = function (s, r) { return (r || document).querySelector(s); };
+const el = function (tag, attrs, kids) {
+  const n = document.createElement(tag);
+  for (const k in (attrs || {})) {
+    if (k === 'class') n.className = attrs[k];
+    else if (k === 'text') n.textContent = attrs[k];
+    else if (k.slice(0, 2) === 'on') n.addEventListener(k.slice(2), attrs[k]);
+    else if (attrs[k] !== null && attrs[k] !== undefined) n.setAttribute(k, attrs[k]);
+  }
+  for (const kid of (kids || [])) if (kid) n.appendChild(kid);
+  return n;
+};
+
+let MODEL = null;      // exactly what the server read off disk
+let W = null;          // the working copy every control edits
+let SEL = null;        // selected section id (one subsystem, or a group of them)
+let LAST_SAVE = null;
+
+// ---------------------------------------------------------------------------
+// transport
+
+async function api(path, body) {
+  const opt = { headers: { 'X-CKF-Token': TOKEN } };
+  if (body !== undefined) {
+    opt.method = 'POST';
+    opt.headers['Content-Type'] = 'application/json';
+    opt.body = JSON.stringify(body);
+  }
+  const r = await fetch(path, opt);
+  const text = await r.text();
+  if (!r.ok) throw new Error(path + ': ' + r.status + ' ' + text.slice(0, 400));
+  return JSON.parse(text);
+}
+
+// ---------------------------------------------------------------------------
+// schema access. Nothing below names a field: every lookup goes through the
+// schema the server sent.
+
+function schemas() { return MODEL.schemas; }
+function schemaOf(sub) { return schemas().find(function (s) { return s.subsystem === sub; }); }
+function sidecarOf(sch) {
+  // A UNIT, not a filename: one physical file can hold several subsystems,
+  // each under its own top-level section, and the server keys every table and
+  // every edit by "file#section". A schema with no section keeps the bare
+  // filename, so a config that never merged still resolves.
+  const t = sch.targets || {};
+  if (!t.json) return null;
+  return t.section ? (t.json + '#' + t.section) : t.json;
+}
+function tableKey(name, path) { return name + '|' + path; }
+
+// WHERE A FIELD LIVES, one identifying part per line.
+//
+// This used to be a single line -- "ckf.hardmode.json#difficulty -> path" --
+// which read as one run-on token: the file, the section inside it and the key
+// are three different kinds of thing, and the separators were the only thing
+// distinguishing them. Split on the separators the server already keys by
+// ("#" between file and section, "." between the steps of a key path) and give
+// each part its own line, outermost first. Nothing here names a path; the
+// parts come from the schema's own targets, exactly as before.
+function pathParts(sch, f) {
+  const parts = [];
+  if (f.in !== 'cfg') {
+    const sidecar = sidecarOf(sch);
+    if (sidecar) for (const p of String(sidecar).split('#')) parts.push(p);
+  }
+  for (const p of String(f.path).split('.')) parts.push(p);
+  return parts.filter(function (p) { return p !== ''; });
+}
+
+function pathCode(sch, f) {
+  return el('code', { class: 'loc' }, pathParts(sch, f).map(function (p) {
+    return el('span', { text: p });
+  }));
+}
+
+// Sections are the page's unit of navigation. Usually one subsystem, sometimes
+// two presented together; the order and the grouping are decided by the server
+// (serve.py, PRESENTATION TABLES) so that nothing here has to name a subsystem.
+function sections() { return MODEL.sections; }
+function sectionOf(id) { return sections().find(function (s) { return s.id === id; }); }
+function schemasOf(sec) {
+  return (sec ? sec.subsystems : []).map(schemaOf).filter(Boolean);
+}
+function entryOf(sub) {
+  return MODEL.enableIndex.find(function (e) { return e.subsystem === sub; });
+}
+function docParas(sch) { return sch.docParagraphs || []; }
+
+// The field that a readonly table is a reference FOR: the editable field that
+// declares it as its underlay. That is what lets the reference be drawn in the
+// same shape, on the same axes, as the control beside it.
+function ownerOf(sch, f) {
+  if (f.ui !== 'readonly') return null;
+  return sch.fields.find(function (g) { return g.over === f.path && g.axes; }) || null;
+}
+
+function fieldValue(sch, f) {
+  if (f.in === 'cfg') return W.cfg[f.path];
+  return W.json[sidecarOf(sch)][f.path];
+}
+
+function linkedGroups() {
+  const out = [];
+  for (const s of schemas())
+    for (const inv of (s.invariants || []))
+      if (inv.kind === 'linkedEnable') out.push(inv);
+  return out;
+}
+// A linkedEnable key is spelled "<file>#<section>.<path>" since 3.0, the same
+// notation `mirror` has always used. Resolved against the units the model
+// actually carries rather than by splitting on a dot, so a path with dots in it
+// cannot be mis-parsed and a key naming a unit this build does not have simply
+// does not resolve.
+function linkedSlot(key) {
+  for (const unit in W.json)
+    if (key.indexOf(unit + '.') === 0) {
+      const path = key.slice(unit.length + 1);
+      if (W.json[unit][path]) return W.json[unit][path];
+    }
+  return null;
+}
+function linkedGroupFor(unit, path) {
+  const key = unit + '.' + path;
+  return linkedGroups().find(function (g) { return g.keys.indexOf(key) >= 0; }) || null;
+}
+
+// ---------------------------------------------------------------------------
+// the working copy
+
+function buildWorking() {
+  const w = { cfg: {}, json: {}, tables: {} };
+  for (const p in MODEL.values.cfg) {
+    const v = MODEL.values.cfg[p];
+    w.cfg[p] = { present: v.present, value: v.value, error: v.error || null };
+  }
+  for (const name in MODEL.values.json) {
+    w.json[name] = {};
+    for (const p in MODEL.values.json[name]) {
+      const v = MODEL.values.json[name][p];
+      w.json[name][p] = { present: v.present, value: v.value === undefined ? null : v.value,
+                          table: v.table || null, error: v.error || null };
+    }
+  }
+  for (const k in MODEL.values.tables) {
+    const t = MODEL.values.tables[k];
+    w.tables[k] = { shape: t.shape, keyColumn: t.keyColumn, formats: t.formats,
+                    present: t.present, sidecar: t.sidecar, path: t.path,
+                    rows: JSON.parse(JSON.stringify(t.rows)) };
+  }
+  return w;
+}
+
+function dirtyPaths() {
+  const out = [];
+  for (const p in W.cfg) {
+    const a = MODEL.values.cfg[p], b = W.cfg[p];
+    if (a.present !== b.present || !CKF.deepEqual(a.value, b.value)) out.push(p);
+  }
+  for (const name in W.json) for (const p in W.json[name]) {
+    const a = MODEL.values.json[name][p], b = W.json[name][p];
+    if (a.table) continue;
+    if (a.present !== b.present || !CKF.deepEqual(a.value, b.value)) out.push(name + ':' + p);
+  }
+  for (const k in W.tables) {
+    if (!CKF.deepEqual(MODEL.values.tables[k].rows, W.tables[k].rows)) out.push(k);
+  }
+  return out;
+}
+
+// The edit set. Everything present is sent; the server compares against disk
+// and writes only what actually differs, so this cannot invent a change.
+function buildEdits() {
+  const edits = { cfg: {}, json: {} };
+  for (const s of schemas()) {
+    const name = sidecarOf(s);
+    for (const f of s.fields) {
+      if (f.in === 'cfg') {
+        const v = W.cfg[f.path];
+        if (v.present && v.error == null) edits.cfg[f.path] = { value: v.value };
+        continue;
+      }
+      const blk = edits.json[name] || (edits.json[name] = { scalars: {}, tables: {} });
+      if (f.type === 'table') {
+        const t = W.tables[tableKey(name, f.path)];
+        if (!t) continue;
+        // A table the schema declares that the file does not have stays absent
+        // until it has a row. Sending an empty grid would turn an absent key
+        // into a present empty one.
+        if (!t.present && !t.rows.length) continue;
+        blk.tables[f.path] = { shape: t.shape, rows: t.rows };
+      } else {
+        const v = W.json[name][f.path];
+        if (v.error) continue;
+        blk.scalars[f.path] = { present: v.present, value: v.value };
+      }
+    }
+  }
+  for (const name in edits.json) {
+    const b = edits.json[name];
+    if (!Object.keys(b.scalars).length && !Object.keys(b.tables).length) delete edits.json[name];
+  }
+  return edits;
+}
+
+// ---------------------------------------------------------------------------
+// banners
+
+function banner(kind, title, lines) {
+  return el('div', { class: 'banner ' + kind }, [
+    el('h4', { text: title }),
+    lines && lines.length
+      ? el('ul', {}, lines.map(function (l) { return el('li', { class: 'small', text: l }); }))
+      : null,
+  ]);
+}
+
+function renderBanners() {
+  const box = $('#banners');
+  box.textContent = '';
+
+  const p = MODEL.probe.config;
+  if (p.state !== 'ok') {
+    box.appendChild(banner(p.state === 'missing' ? 'warn' : 'err',
+      'BepInEx/config is not writable (' + p.state + ')',
+      [MODEL.configDir, p.detail,
+       'Nothing has been written. That path is normally under Program Files and this '
+       + 'tool does not assume either way — the line above is the result of an actual '
+       + 'create-and-delete probe, not a guess.']));
+  }
+
+  if (MODEL.recovery && MODEL.recovery.found) {
+    const r = MODEL.recovery;
+    box.appendChild(banner(r.error ? 'err' : 'warn',
+      'A previous save was interrupted and has been completed from its journal',
+      [(r.completed.length ? 'finished: ' + r.completed.join(', ') : 'nothing left to finish'),
+       (r.missing.length ? 'already done or unavailable: ' + r.missing.join(', ') : null),
+       r.error].filter(Boolean)));
+  }
+
+  if (!MODEL.check.ran) {
+    box.appendChild(banner('err', 'check_schema could not run — validation is unavailable',
+      [MODEL.check.error || 'no detail',
+       'A save is refused while this is true. Silence from a check that did not run is '
+       + 'not a clean result.']));
+  } else if (MODEL.check.problems.length) {
+    const b = banner('warn', 'check_schema reports ' + MODEL.check.problems.length
+      + ' problem(s) with what is on disk now', []);
+    const ul = $('ul', b) || b.appendChild(el('ul', {}));
+    for (const pr of MODEL.check.problems)
+      ul.appendChild(el('li', { class: 'problem' }, [el('b', { text: pr.kind }),
+        document.createTextNode(pr.message)]));
+    box.appendChild(b);
+  }
+
+  for (const name in MODEL.sidecarErrors)
+    box.appendChild(banner('err', 'Sidecar unreadable: ' + name, [MODEL.sidecarErrors[name]]));
+  if (MODEL.cfgError)
+    box.appendChild(banner('err', 'The .cfg could not be read', [MODEL.cfgError]));
+
+  if (MODEL.missionReference.state !== 'loaded') {
+    box.appendChild(banner('info', 'docs/mission-reference.json: ' + MODEL.missionReference.state,
+      [MODEL.missionReference.detail || '',
+       'Shipped values are not shown beside the slot editor while this is missing. '
+       + 'That is an absent file, not an empty one.']));
+  }
+
+  if (LAST_SAVE) {
+    if (LAST_SAVE.ok) {
+      box.appendChild(banner('ok', 'Saved',
+        [(LAST_SAVE.written.length ? 'wrote: ' + LAST_SAVE.written.join(', ')
+                                   : 'nothing needed writing — every file already matched'),
+         LAST_SAVE.relaunch,
+         'check_schema after the save: ' + (LAST_SAVE.checkAfter.ran
+           ? LAST_SAVE.checkAfter.problems.length + ' problem(s)'
+           : 'could not run — ' + LAST_SAVE.checkAfter.error)]
+          .concat((LAST_SAVE.notes || []))
+          .filter(Boolean)));
+    } else {
+      const r = LAST_SAVE.refused || {};
+      box.appendChild(banner('err', 'Save refused — nothing was written',
+        [r.summary, r.detail].filter(Boolean)));
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// the subsystem index
+
+function renderIndex() {
+  const nav = $('#index');
+  nav.textContent = '';
+  for (const sec of sections()) {
+    const ents = sec.subsystems.map(entryOf).filter(Boolean);
+    const whys = [], pills = [];
+    for (const e of ents) {
+      const state = e.gatedByMaster ? 'off' : e.effective;
+      pills.push(el('span', { class: 'pill ' + (state === 'n/a' ? 'na' : state),
+                              title: e.title,
+                              text: state === 'n/a' ? 'always' : state }));
+      const w = e.gates.map(function (g) {
+        return g.name + ' = ' + (g.state === null ? '?' : g.state)
+          + (g.detail ? ' (' + g.detail + ')' : '');
+      }).join('  ·  ');
+      whys.push(e.gatedByMaster ? 'gated off by ' + MODEL.masterKey : (w || 'no gate'));
+    }
+    const why = whys.join('   |   ');
+    const item = el('div', {
+      class: 'navitem' + (SEL === sec.id ? ' sel' : ''),
+      title: why || 'no enable gate',
+      onclick: function () { SEL = sec.id; render(); },
+    }, [
+      el('div', { class: 'nm' }, [el('b', { text: sec.title })]),
+    ].concat(pills));
+    nav.appendChild(item);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// controls, chosen by `ui` and `type` — never by name
+
+// One line per group: the short facts read as a run, `absent means` is a
+// sentence and gets its own line rather than trailing off the end of one.
+function docBits(f) {
+  const bits = [];
+  if (f.default !== undefined) bits.push('default ' + JSON.stringify(f.default));
+  if (f.range) bits.push('range [' + f.range[0] + ', ' + f.range[1] + ']');
+  if (f.values) bits.push('one of ' + f.values.join(', '));
+  if (f.enabledBy) bits.push('gated by ' + f.enabledBy);
+  if (f.keyedBy) bits.push('keyed by ' + f.keyedBy);
+  const lines = [];
+  if (bits.length) lines.push(bits.join(' · '));
+  if (f.absent) lines.push('absent means: ' + f.absent);
+  return lines;
+}
+
+function docBitNodes(f) {
+  return docBits(f).map(function (line) {
+    return el('div', { class: 'meta', text: line });
+  });
+}
+
+function gateState(sch, f) {
+  if (!f.enabledBy) return true;
+  if (f.in === 'cfg') {
+    const v = W.cfg[f.enabledBy];
+    return v ? !!v.value : null;
+  }
+  const v = W.json[sidecarOf(sch)][f.enabledBy];
+  return v ? !!v.value : null;
+}
+
+function formControl(sch, f) {
+  const slot = fieldValue(sch, f);
+  const ctl = el('div', { class: 'ctl' });
+  const commit = function (v, present) {
+    slot.value = v;
+    if (present !== undefined) slot.present = present;
+    else slot.present = true;
+    render();
+  };
+
+  if (f.type === 'bool') {
+    const grp = f.in === 'json' ? linkedGroupFor(sidecarOf(sch), f.path) : null;
+    const cb = el('input', { type: 'checkbox' });
+    cb.checked = !!slot.value;
+    // A cfg key this tool can see but the file does not carry is not something
+    // it will create: BepInEx writes that file from the keys the plugin binds.
+    cb.disabled = !slot.present && f.in === 'cfg';
+    cb.addEventListener('change', function () {
+      if (grp) for (const k of grp.keys) {
+        const t = linkedSlot(k);
+        if (t) { t.value = cb.checked; t.present = true; }
+      }
+      commit(cb.checked);
+    });
+    ctl.appendChild(el('label', { class: 'chk' }, [cb,
+      el('span', { text: slot.value ? 'true' : 'false' })]));
+  } else if (f.type === 'enum') {
+    const sel = el('select', {});
+    for (const v of (f.values || [])) {
+      const o = el('option', { value: v, text: v });
+      if (String(slot.value) === String(v)) o.selected = true;
+      sel.appendChild(o);
+    }
+    sel.addEventListener('change', function () { commit(sel.value); });
+    ctl.appendChild(sel);
+  } else if (f.type === 'stringList') {
+    const inp = el('input', { type: 'text', size: '52' });
+    inp.value = Array.isArray(slot.value) ? slot.value.join(', ') : (slot.value || '');
+    inp.addEventListener('change', function () {
+      commit(inp.value.split(',').map(function (s) { return s.trim(); })
+        .filter(function (s) { return s !== ''; }));
+    });
+    ctl.appendChild(inp);
+    ctl.appendChild(el('span', { class: 'small',
+      text: 'comma separated, one line (README.md:88-90)' }));
+  } else {
+    const inp = el('input', { type: 'text', size: f.type === 'string' ? '40' : '14' });
+    inp.value = slot.present ? CKF.fmtCell(slot.value) : '';
+    if (!slot.present) inp.placeholder = '— unset —';
+    inp.addEventListener('change', function () {
+      if (f.in === 'json') {
+        const r = CKF.coerceCell(f.type, inp.value);
+        if (!r.ok) { inp.classList.add('bad'); return; }
+        commit(r.value, r.present);
+      } else {
+        const r = CKF.coerceCell(f.type === 'floatOrNaN' && inp.value.trim() === 'NaN'
+          ? 'string' : f.type, inp.value);
+        if (!r.ok) { inp.classList.add('bad'); return; }
+        commit(f.type === 'floatOrNaN' && inp.value.trim() === 'NaN' ? 'NaN' : r.value, true);
+      }
+    });
+    ctl.appendChild(inp);
+    if (!CKF.inRange(slot.value, f.range))
+      ctl.appendChild(el('span', { class: 'pill retro', text: 'out of range' }));
+
+    // The key's state is still reported; what is gone is the button that
+    // toggled it. An empty box is how a numeric key is dropped.
+    if (f.in === 'json') {
+      ctl.appendChild(el('span', { class: 'small',
+        text: slot.present ? 'key present' : 'key absent — ' + (f.absent || 'the mod default applies') }));
+    }
+  }
+
+  // 3.0 removed the "add to the cfg" button with the append path behind it.
+  // BepInEx writes ckf.hardmode.cfg from the keys the plugin binds, and it
+  // binds one; a key missing from that file is a broken install, and a line
+  // this tool appended would be one the plugin does not read.
+  if (f.in === 'cfg' && !slot.present) {
+    ctl.appendChild(el('span', { class: 'small',
+      text: 'not in the file — launch the game once to have BepInEx write it' }));
+  }
+  return ctl;
+}
+
+// REMOVED IN 3.0: pairRow, the one checkbox that wrote two gates. No subsystem
+// declares both a cfg gate and a document gate any more -- Phase 3 deleted the
+// outer one -- so every gate is an ordinary bool field rendered by fieldRow.
+
+function fieldRow(sch, f) {
+  const gate = gateState(sch, f);
+  const row = el('div', { class: 'field' + (gate === true ? '' : ' disabled') });
+  row.appendChild(el('label', { class: 'lab' }, [
+    document.createTextNode(f.label || f.path),
+    pathCode(sch, f),
+  ]));
+  const right = el('div', {});
+  right.appendChild(formControl(sch, f));
+  if (f.docText) right.appendChild(el('div', { class: 'doc', text: f.docText }));
+  for (const m of docBitNodes(f)) right.appendChild(m);
+  if (gate === null) right.appendChild(el('div', { class: 'meta',
+    text: 'its gate ' + f.enabledBy + ' could not be read — shown, not assumed off' }));
+  row.appendChild(right);
+  return row;
+}
+
+// ---------------------------------------------------------------------------
+// grids
+
+function cellInput(t, f, row, col, opts) {
+  opts = opts || {};
+  const fmt = t.formats[col.name] || '';
+  const v = row.cells[col.name];
+  const td = el('td', {});
+  const inp = el('input', { type: 'text', spellcheck: 'false' });
+  if (opts.width) inp.setAttribute('style', 'width:' + opts.width + 'ch');
+  inp.value = CKF.fmtCell(v);
+  inp.disabled = !!opts.readonly;
+
+  const mark = function () {
+    td.className = '';
+    const cur = row.cells[col.name];
+    if (cur === null || cur === undefined) { td.classList.add('unset'); inp.placeholder = '— unset —'; }
+    else inp.placeholder = '';
+    if (!CKF.inRange(cur, col.range)) td.classList.add('bad');
+    if (fmt === 'adjust' && typeof cur === 'string' && !CKF.parseAdjust(cur).ok) td.classList.add('bad');
+    if (fmt === 'adjust' && typeof cur === 'string')
+      inp.title = CKF.describeAdjust(cur);
+    else if (col.range) inp.title = 'range [' + col.range[0] + ', ' + col.range[1] + ']';
+    if (opts.classify) opts.classify(td, cur);
+  };
+  mark();
+
+  inp.addEventListener('input', function () {
+    const r = CKF.coerceCell(col.type, inp.value);
+    row.cells[col.name] = r.ok ? (r.present ? r.value : null) : inp.value;
+    mark();
+    updateDirty();
+    if (opts.onchange) opts.onchange();
+  });
+
+  td.appendChild(inp);
+  return td;
+}
+
+function gridFor(sch, f, opts) {
+  opts = opts || {};
+  const name = sidecarOf(sch);
+  const t = W.tables[tableKey(name, f.path)];
+  const cols = f.row || [];
+  const width = {};
+  for (const c of cols)
+    width[c.name] = CKF.colWidth(c, t.rows.map(function (r) { return r.cells[c.name]; }),
+                                 t.formats[c.name] || '');
+
+  const wrap = el('div', { class: 'grid-wrap' });
+  const tbl = el('table', { class: 'grid' });
+  const thead = el('thead', {}, [el('tr', {},
+    cols.map(function (c) {
+      return el('th', { text: CKF.softWrap(c.name) + (c.name === t.keyColumn ? ' (key)' : ''),
+                        style: 'width:' + width[c.name] + 'ch',
+                        title: c.name + ' — ' + c.type
+                               + (c.range ? ', range [' + c.range + ']' : '') });
+    }).concat(opts.readonly ? [] : [el('th', { text: '' })]))]);
+  tbl.appendChild(thead);
+  const tb = el('tbody', {});
+  const draw = function () {
+    tb.textContent = '';
+    t.rows.forEach(function (row) {
+      const tr = el('tr', {});
+      for (const c of cols) tr.appendChild(cellInput(t, f, row, c,
+        { readonly: opts.readonly, onchange: opts.onchange, width: width[c.name] }));
+      if (!opts.readonly) tr.appendChild(el('td', {}, [el('button', {
+        class: 'rowbtn', text: '✕', title: 'delete this row',
+        onclick: function () {
+          t.rows.splice(t.rows.indexOf(row), 1); draw(); updateDirty();
+          if (opts.onchange) opts.onchange();
+        },
+      })]));
+      tb.appendChild(tr);
+    });
+  };
+  draw();
+  tbl.appendChild(tb);
+  wrap.appendChild(tbl);
+
+  const box = el('div', {}, [wrap]);
+  if (!opts.readonly) {
+    box.appendChild(el('div', { class: 'ctl', style: 'margin-top:8px' }, [
+      el('button', {
+        text: '+ row',
+        onclick: function () {
+          const cells = {};
+          for (const c of cols) cells[c.name] = null;
+          t.rows.push({ id: null, cells: cells });
+          draw(); updateDirty();
+          if (opts.onchange) opts.onchange();
+        },
+      }),
+      t.keyColumn ? el('span', { class: 'small',
+        text: 'one row per ' + t.keyColumn }) : null,
+    ]));
+  }
+  const anyAdjust = cols.some(function (c) { return (t.formats[c.name] || '') === 'adjust'; });
+  box.appendChild(el('div', { class: 'legend' }, [
+    el('span', { class: 'sw unset' }), document.createTextNode(
+      'hatched = the key is absent from the file. An empty numeric box means absent; '
+      + '0 typed in is a real zero.'
+      + (anyAdjust ? ' Clear an adjustment cell to turn that slot off: an empty slot and '
+                     + 'no slot at all are the same thing to the plugin.' : '')),
+  ]));
+  return box;
+}
+
+// ---------------------------------------------------------------------------
+// curve: grid plus an editable line chart, x = the first row column
+
+function chartFor(sch, f, redrawGrid) {
+  const name = sidecarOf(sch);
+  const t = W.tables[tableKey(name, f.path)];
+  const cols = f.row || [];
+  const xcol = cols[0].name;
+  const ycols = cols.slice(1).filter(function (c) { return c.type === 'int' || c.type === 'float'; });
+  const shown = {};
+  for (const c of ycols) shown[c.name] = true;
+
+  const box = el('div', { class: 'chart' });
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('viewBox', '0 0 900 325');
+  svg.setAttribute('preserveAspectRatio', 'none');
+  box.appendChild(svg);
+
+  const legend = el('div', { class: 'series' });
+  const PAL = ['#5b8dd6', '#3ea76a', '#c9973f', '#b06fc9', '#d0564a'];
+  ycols.forEach(function (c, i) {
+    const cb = el('input', { type: 'checkbox' });
+    cb.checked = true;
+    cb.addEventListener('change', function () { shown[c.name] = cb.checked; draw(); });
+    legend.appendChild(el('label', {}, [cb,
+      el('span', { style: 'color:' + PAL[i % PAL.length], text: c.name })]));
+  });
+  legend.appendChild(el('span', { class: 'small',
+    text: 'drag a point to change it. A gap in a line is an unset cell, not a zero.' }));
+  box.appendChild(legend);
+
+  const PAD = { l: 68, r: 15, t: 15, b: 33 };
+  let scale = null;
+
+  function draw() {
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    const series = ycols.filter(function (c) { return shown[c.name]; })
+      .map(function (c, i) {
+        return { col: c, pts: CKF.curvePoints(t.rows, xcol, c.name),
+                 color: PAL[ycols.indexOf(c) % PAL.length] };
+      });
+    const xs = [], ys = [];
+    for (const s of series) for (const p of s.pts) { xs.push(p.x); ys.push(p.y); }
+    if (!xs.length) {
+      const txt = document.createElementNS(svgNS, 'text');
+      txt.setAttribute('x', 25); txt.setAttribute('y', 50);
+      txt.setAttribute('fill', '#6b7280');
+      txt.textContent = 'every point is unset — nothing to plot';
+      svg.appendChild(txt);
+      scale = null;
+      return;
+    }
+    const x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs);
+    let y0 = Math.min.apply(null, ys.concat([0])), y1 = Math.max.apply(null, ys);
+    if (y1 === y0) y1 = y0 + 1;
+    const W_ = 900, H_ = 325;
+    const sx = function (x) { return PAD.l + (x1 === x0 ? 0.5 : (x - x0) / (x1 - x0)) * (W_ - PAD.l - PAD.r); };
+    const sy = function (y) { return H_ - PAD.b - (y - y0) / (y1 - y0) * (H_ - PAD.t - PAD.b); };
+    const inv = function (py) { return y0 + (H_ - PAD.b - py) / (H_ - PAD.t - PAD.b) * (y1 - y0); };
+    scale = { sx: sx, sy: sy, inv: inv, x0: x0, x1: x1, y0: y0, y1: y1 };
+
+    const mk = function (tag, attrs) {
+      const n = document.createElementNS(svgNS, tag);
+      for (const k in attrs) n.setAttribute(k, attrs[k]);
+      return n;
+    };
+    for (let i = 0; i <= 4; i++) {
+      const y = y0 + (y1 - y0) * i / 4;
+      svg.appendChild(mk('line', { x1: PAD.l, x2: W_ - PAD.r, y1: sy(y), y2: sy(y),
+        stroke: '#31363f', 'stroke-width': 1 }));
+      const tx = mk('text', { x: 8, y: sy(y) + 5, fill: '#6b7280', 'font-size': 14 });
+      tx.textContent = (Math.round(y * 100) / 100);
+      svg.appendChild(tx);
+    }
+    const zero = sy(0);
+    if (zero > PAD.t && zero < H_ - PAD.b)
+      svg.appendChild(mk('line', { x1: PAD.l, x2: W_ - PAD.r, y1: zero, y2: zero,
+        stroke: '#4b5563', 'stroke-width': 1, 'stroke-dasharray': '4 3' }));
+
+    for (const s of series) {
+      if (s.pts.length > 1) {
+        svg.appendChild(mk('polyline', {
+          points: s.pts.map(function (p) { return sx(p.x) + ',' + sy(p.y); }).join(' '),
+          fill: 'none', stroke: s.color, 'stroke-width': 2,
+        }));
+      }
+      for (const p of s.pts) {
+        const c = mk('circle', { cx: sx(p.x), cy: sy(p.y), r: 5.5, fill: s.color,
+          stroke: '#14161a', 'stroke-width': 1.5, style: 'cursor:ns-resize' });
+        c.addEventListener('pointerdown', function (ev) {
+          ev.preventDefault();
+          c.setPointerCapture(ev.pointerId);
+          const move = function (e2) {
+            const r = svg.getBoundingClientRect();
+            const py = (e2.clientY - r.top) / r.height * H_;
+            let v = scale.inv(py);
+            v = (s.col.type === 'int') ? Math.round(v) : Math.round(v * 1000) / 1000;
+            if (s.col.range) v = Math.min(Math.max(v, s.col.range[0]), s.col.range[1]);
+            const row = t.rows.find(function (r2) { return r2.id === p.id; });
+            if (row) { row.cells[s.col.name] = v; draw(); updateDirty(); }
+          };
+          const up = function () {
+            c.removeEventListener('pointermove', move);
+            c.removeEventListener('pointerup', up);
+            redrawGrid();
+          };
+          c.addEventListener('pointermove', move);
+          c.addEventListener('pointerup', up);
+        });
+        const ttl = mk('title', {});
+        ttl.textContent = xcol + ' ' + p.x + ' → ' + s.col.name + ' ' + p.y;
+        c.appendChild(ttl);
+        svg.appendChild(c);
+      }
+    }
+    const xt0 = mk('text', { x: PAD.l, y: H_ - 10, fill: '#6b7280', 'font-size': 14 });
+    xt0.textContent = xcol + ' ' + x0;
+    svg.appendChild(xt0);
+    const xt1 = mk('text', { x: W_ - PAD.r - 75, y: H_ - 10, fill: '#6b7280', 'font-size': 14 });
+    xt1.textContent = String(x1);
+    svg.appendChild(xt1);
+  }
+  draw();
+  box.__redraw = draw;
+  return box;
+}
+
+// ---------------------------------------------------------------------------
+// matrix: a 2-D grid over `axes`, laid over the field named by `over`
+
+function matrixFor(sch, f, opts) {
+  opts = opts || {};
+  const ro = !!opts.readonly;
+  // The axes always come from the editable field. A readonly reference table
+  // declares none of its own; it is drawn on the axes of the control it is the
+  // reference for, which is what makes the two grids the same grid.
+  const owner = opts.owner || f;
+  const axes = owner.axes;
+  const name = sidecarOf(sch);
+  const t = W.tables[tableKey(name, f.path)];
+  const otherField = ro ? owner
+    : (f.over ? sch.fields.find(function (g) { return g.path === f.over; }) : null);
+  const other = otherField ? W.tables[tableKey(name, otherField.path)] : null;
+  const dom = CKF.matrixDomain(t.rows, other ? other.rows : [], axes);
+  const spec = owner.row || f.row || [];
+  const valCol = spec.find(function (c) { return c.name === axes.value; }) || { type: 'float' };
+  const rowCol = spec.find(function (c) { return c.name === axes.row; }) || {};
+  const colCol = spec.find(function (c) { return c.name === axes.col; }) || {};
+
+  // Both grids are windowed identically, on the editable table's occupancy, so
+  // that a value read off one is found in the same place in the other.
+  const win = sch.axisWindows || {};
+  const editRows = (ro ? (other ? other.rows : []) : t.rows);
+  const occupied = function (key) {
+    return editRows.map(function (r) { return r.cells[key]; })
+                   .filter(function (v) { return v != null; });
+  };
+  const vcol = CKF.visibleAxis(dom.cols, win[axes.col], occupied(axes.col));
+  const vrow = CKF.visibleAxis(dom.rows, win[axes.row], occupied(axes.row));
+
+  const at = function (tab, r, c) {
+    if (!tab) return null;
+    return tab.rows.find(function (x) {
+      return Number(x.cells[axes.row]) === r && Number(x.cells[axes.col]) === c;
+    }) || null;
+  };
+  const stockAt = function (r, c) {
+    const hit = at(other, r, c);
+    return hit ? hit.cells[axes.value] : null;
+  };
+
+  // One width for every cell in the matrix: they all hold the same column's
+  // values, so a per-column width would only make the grid ragged. Both
+  // tables' values count, so the reference grid and the one it is a reference
+  // for come out the same width and read as the same grid.
+  const cellW = CKF.colWidth(valCol,
+    t.rows.map(function (r) { return r.cells[axes.value]; })
+      .concat(other ? other.rows.map(function (r) { return r.cells[axes.value]; }) : []), '');
+
+  const wrap = el('div', { class: 'grid-wrap' });
+  const tbl = el('table', { class: 'grid' });
+  const head = el('tr', {}, [el('th', { class: 'axis',
+    text: CKF.softWrap(axes.row) + ' \\ ' + CKF.softWrap(axes.col) })]
+    .concat(vcol.shown.map(function (c) {
+      return el('th', { text: String(c),
+                        title: vcol.outside.indexOf(c) >= 0
+                          ? 'outside the range normally shown, and here because a value '
+                            + 'sits in this column' : '' });
+    })));
+  tbl.appendChild(el('thead', {}, [head]));
+  const tb = el('tbody', {});
+
+  for (const r of vrow.shown) {
+    const tr = el('tr', {}, [el('td', { class: 'axis', text: String(r) })]);
+    for (const c of vcol.shown) {
+      const row = at(t, r, c);
+      const st = ro ? null : stockAt(r, c);
+      const td = el('td', {});
+      const inp = el('input', { type: 'text' });
+      inp.setAttribute('style', 'width:' + cellW + 'ch');
+      inp.disabled = ro;
+      const paint = function () {
+        td.className = '';
+        const cur = row ? row.cells[axes.value] : null;
+        if (row && cur !== null && cur !== undefined) {
+          if (!ro) td.classList.add('setcell');
+          inp.value = CKF.fmtCell(cur);
+          inp.placeholder = '';
+          inp.title = ro ? "the game's own value here"
+            : ('set here' + (st !== null ? ' — stock ' + st : ' — no stock cell'));
+          if (!CKF.inRange(cur, valCol.range)) td.classList.add('bad');
+        } else {
+          inp.value = '';
+          if (ro) {
+            td.classList.add('unset');
+            inp.placeholder = '— none —';
+            inp.title = 'the game ships no value for this cell';
+          } else {
+            td.classList.add('inherit');
+            inp.placeholder = st === null ? '— none —' : String(st);
+            inp.title = st === null
+              ? 'no override and no stock cell here'
+              : 'inherits ' + st + ' from ' + (otherField ? otherField.path : 'the stock table');
+          }
+        }
+      };
+      paint();
+      if (!ro) inp.addEventListener('change', function () {
+        const res = CKF.coerceCell(valCol.type, inp.value);
+        if (!res.ok) { td.classList.add('bad'); return; }
+        const existing = at(t, r, c);
+        if (!res.present) {
+          if (existing) t.rows.splice(t.rows.indexOf(existing), 1);
+        } else if (existing) {
+          existing.cells[axes.value] = res.value;
+        } else {
+          const cells = {};
+          for (const col of spec) cells[col.name] = null;
+          cells[axes.row] = r; cells[axes.col] = c; cells[axes.value] = res.value;
+          t.rows.push({ id: null, cells: cells });
+        }
+        render();
+      });
+      td.appendChild(inp);
+      tr.appendChild(td);
+    }
+    tb.appendChild(tr);
+  }
+  tbl.appendChild(tb);
+  wrap.appendChild(tbl);
+
+  const addAxis = function (which, colspec) {
+    const inp = el('input', { type: 'text', size: '5' });
+    return el('span', { class: 'ctl' }, [
+      el('span', { class: 'small', text: 'add ' + which + ':' }), inp,
+      el('button', {
+        text: 'add',
+        onclick: function () {
+          const r = CKF.coerceCell(colspec.type || 'int', inp.value);
+          if (!r.ok || !r.present) return;
+          if (!CKF.inRange(r.value, colspec.range)) { inp.classList.add('bad'); return; }
+          const cells = CKF.newMatrixCells(spec, axes, which, r.value,
+                                           vrow.shown[0], vcol.shown[0]);
+          t.rows.push({ id: null, cells: cells });
+          render();
+        },
+      }),
+    ]);
+  };
+
+  const box = el('div', {}, [wrap]);
+  if (!ro) box.appendChild(el('div', { class: 'ctl', style: 'margin-top:8px' },
+    [addAxis(axes.row, rowCol), addAxis(axes.col, colCol)]));
+
+  // What the window is hiding, said out loud. Nothing here is dropped on save:
+  // the file is written from every row the table holds, not from the cells on
+  // screen, and a hidden coordinate that acquires a value stops being hidden.
+  const notes = [];
+  for (const ax of [{ n: axes.col, v: vcol }, { n: axes.row, v: vrow }]) {
+    if (ax.v.hidden.length)
+      notes.push(ax.n + ' ' + ax.v.hidden.join(', ') + ' '
+        + (ax.v.hidden.length === 1 ? 'is' : 'are') + ' not shown — nothing is set there. '
+        + 'A save leaves those cells exactly as they are.');
+    if (ax.v.outside.length)
+      notes.push(ax.n + ' ' + ax.v.outside.join(', ')
+        + ' would normally be hidden, and is shown because a value sits there.');
+  }
+  if (ro) {
+    notes.push('Reference only — the game\'s own values, on the same grid as the '
+      + 'control above. Editing them would change no award, so they are not editable here.');
+  } else {
+    notes.push('A cell left empty has no override row and inherits the value shown as a '
+      + 'placeholder. Clearing a cell removes its row — that is the unset state here, and '
+      + 'it is not zero.'
+      + (otherField ? ' Underlay: ' + otherField.path + ' (reference, not a control).' : ''));
+  }
+  box.appendChild(el('div', { class: 'legend', text: notes.join(' ') }));
+  return box;
+}
+
+// ---------------------------------------------------------------------------
+// mission reference sidecar, when the file exists
+
+function referenceFor(sch, f) {
+  const ref = MODEL.missionReference;
+  const t = W.tables[tableKey(sidecarOf(sch), f.path)];
+  if (ref.state !== 'loaded' || !t.keyColumn) return null;
+  const known = t.rows.filter(function (r) {
+    return ref.byType[String(r.cells[t.keyColumn])];
+  }).length;
+  return el('div', { class: 'small', style: 'margin-top:8px' }, [document.createTextNode(
+    'docs/mission-reference.json: shipped values available for ' + known + ' of '
+    + t.rows.length + ' rows (hover a key cell).')]);
+}
+
+// ---------------------------------------------------------------------------
+// panel
+
+// One field that is not a plain form control: a grid, a curve or a matrix.
+function fieldBlock(sch, f) {
+  const ui = f.ui || 'form';
+  const block = el('div', { class: 'field', style: 'grid-template-columns:1fr' });
+  block.appendChild(el('div', {}, [
+    el('label', { class: 'lab' }, [
+      document.createTextNode((f.label || f.path) + '  '),
+      el('span', { class: 'pill na', text: ui }),
+      pathCode(sch, f),
+    ]),
+    f.docText ? el('div', { class: 'doc', text: f.docText }) : null,
+  ].concat(docBitNodes(f))));
+
+  if (ui === 'matrix') {
+    block.appendChild(matrixFor(sch, f, {}));
+  } else if (ui === 'curve') {
+    const chart = chartFor(sch, f, function () { render(); });
+    const grid = gridFor(sch, f, { onchange: function () { chart.__redraw(); } });
+    block.appendChild(chart);
+    block.appendChild(grid);
+  } else {
+    // A readonly table that some control declares as its underlay is drawn as
+    // that control's own grid, on the same axes, so the two can be read across.
+    const owner = ownerOf(sch, f);
+    block.appendChild(owner
+      ? matrixFor(sch, f, { readonly: true, owner: owner })
+      : gridFor(sch, f, { readonly: ui === 'readonly' }));
+    const ref = referenceFor(sch, f);
+    if (ref) block.appendChild(ref);
+  }
+  return block;
+}
+
+// One subsystem's header and controls. A section holds one of these, or two.
+function renderSubsystem(p, sch, fields) {
+  const ent = entryOf(sch.subsystem);
+  const head = el('div', { class: 'card' }, [
+    el('h3', {}, [document.createTextNode(sch.title || sch.subsystem), document.createTextNode(' '),
+      el('span', { class: 'pill ' + (ent.gatedByMaster ? 'off'
+        : (ent.effective === 'n/a' ? 'na' : ent.effective)),
+        text: ent.gatedByMaster ? 'off (master)' : (ent.effective === 'n/a' ? 'always on' : ent.effective) })]),
+  ]);
+  for (const para of docParas(sch)) head.appendChild(el('p', { class: 'doc', text: para }));
+  if (ent.gates.length || ent.blocks.length) {
+    head.appendChild(el('div', { class: 'meta', text: 'enable chain: '
+      + ent.gates.concat(ent.blocks).map(function (g) {
+          return g.name + ' = ' + (g.state === null ? '?' : g.state);
+        }).join('  AND  ')
+      + (ent.gatedByMaster ? '   (and ' + MODEL.masterKey + ' = false, which returns out of '
+         + 'Plugin.Load() before any subsystem is initialised)' : '') }));
+  }
+  p.appendChild(head);
+
+  const body = el('div', { class: 'card' });
+  let any = false;
+  for (const f of fields) {
+    const ui = f.ui || 'form';
+    if (ui === 'hidden') continue;
+    any = true;
+    if (ui === 'form') { body.appendChild(fieldRow(sch, f)); continue; }
+    body.appendChild(fieldBlock(sch, f));
+  }
+  if (any) p.appendChild(body);
+}
+
+function renderPanel() {
+  const p = $('#panel');
+  p.textContent = '';
+  const sec = sectionOf(SEL);
+  if (!sec) return;
+  const schs = schemasOf(sec);
+  if (!schs.length) return;
+
+  if (schs.length > 1) {
+    p.appendChild(el('div', { class: 'card' }, [
+      el('h3', { text: sec.title }),
+      el('p', { class: 'doc', text:
+        'Two pages, shown together because they are two halves of one question. '
+        + 'They keep their own switches and are set independently.' }),
+    ]));
+  }
+
+  // Reference material goes to the end of the section, after every control it
+  // is a reference for — including the other subsystem's.
+  const reference = [];
+  for (const sch of schs) {
+    const split = CKF.splitReference(sch.fields);
+    renderSubsystem(p, sch, split.main);
+    for (const f of split.reference) reference.push({ sch: sch, field: f });
+  }
+  if (reference.length) {
+    const card = el('div', { class: 'card' }, [el('h3', { text: 'For reference' })]);
+    for (const r of reference) card.appendChild(fieldBlock(r.sch, r.field));
+    p.appendChild(card);
+  }
+}
+
+// ---------------------------------------------------------------------------
+
+function updateDirty() {
+  const d = dirtyPaths();
+  $('#dirty').textContent = d.length
+    ? d.length + ' change(s) pending'
+    : 'no changes';
+  $('#save').disabled = !d.length
+    || MODEL.probe.config.state === 'missing' || !MODEL.check.ran;
+}
+
+function render() {
+  renderBanners();
+  renderIndex();
+  renderPanel();
+  updateDirty();
+}
+
+function renderProbe() {
+  const p = MODEL.probe.config;
+  const cls = p.state === 'ok' ? 'on' : (p.state === 'missing' ? 'unknown' : 'off');
+  $('#probe').textContent = '';
+  $('#probe').appendChild(el('span', { class: 'pill ' + cls,
+    title: p.detail || '', text: 'config ' + p.state }));
+}
+
+async function load() {
+  MODEL = await api('/api/model');
+  W = buildWorking();
+  // REMOVED 2026-09-07: `RETRO_OK = {}`. It was the per-field acknowledgement
+  // map behind the retroactive confirm-before-saving gate, which 3.0 deleted --
+  // `retroactive` is data, not a warning. The write outlived both its
+  // declaration and its only reader, and under 'use strict' an assignment to an
+  // undeclared name is a ReferenceError, so load() threw here on every start.
+  if (!SEL || !sectionOf(SEL)) SEL = MODEL.sections[0].id;
+  $('#gamedir').value = MODEL.configDirOverride || MODEL.gameDir || '';
+  renderProbe();
+  render();
+}
+
+$('#applydir').addEventListener('click', async function () {
+  const v = $('#gamedir').value.trim();
+  const body = /bepinex[\\/]+config[\\/]*$/i.test(v)
+    ? { configDirOverride: v } : { gameDir: v, configDirOverride: null };
+  MODEL = await api('/api/settings', body);
+  W = buildWorking();
+  renderProbe();
+  render();
+});
+
+$('#revalidate').addEventListener('click', async function () {
+  const r = await api('/api/validate', { edits: buildEdits() });
+  LAST_SAVE = null;
+  const lines = [];
+  if (r.refused) lines.push(r.refused.summary, r.refused.detail);
+  if (r.check && !r.check.ran) lines.push('check_schema could not run: ' + r.check.error);
+  for (const p of ((r.check && r.check.problems) || [])) lines.push(p.kind + '  ' + p.message);
+  if (r.wouldWrite) lines.push('would write: ' + r.wouldWrite.join(', '));
+  const box = $('#banners');
+  render();
+  box.insertBefore(banner(r.ok ? 'ok' : 'err',
+    r.ok ? 'Validated — nothing blocking' : 'Validation found blocking problems',
+    lines.filter(Boolean)), box.firstChild);
+});
+
+$('#save').addEventListener('click', async function () {
+  $('#save').disabled = true;
+  try {
+    // fingerprints prove the save is written against the bytes this page was
+    // shown. Row identity is positional; a file edited on disk underneath us
+    // would otherwise reattach preserved keys to the wrong row.
+    LAST_SAVE = await api('/api/save',
+      { edits: buildEdits(), fingerprints: MODEL.fingerprints });
+  } catch (e) {
+    LAST_SAVE = { ok: false, refused: { summary: 'the request failed', detail: String(e) } };
+  }
+  const keep = LAST_SAVE;
+  await load();
+  LAST_SAVE = keep;
+  render();
+});
+
+load().catch(function (e) {
+  $('#banners').appendChild(banner('err', 'Could not load the config', [String(e)]));
+});
+</script>
+</body>
+</html>

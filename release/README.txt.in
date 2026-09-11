@@ -1,0 +1,151 @@
+CKF Hard Mode @VERSION@
+for Cyber Knights: Flashpoint
+
+
+WHAT IT IS
+
+A difficulty overhaul. It retunes the enemy, weapon and armour tables, changes
+how mission rewards and mission power level are calculated, and adds a merc
+fatigue system and a penalty for letting a mission's clock run down. Every
+number it uses is in a config file you can edit, and the editor in this zip is
+how you edit them.
+
+
+INSTALL
+
+1. Find the game folder. It is the one holding CyberKnights.exe. On Steam:
+   right-click the game in your library, Manage, Browse local files.
+
+2. Extract everything in this zip into that folder. Not into
+   CyberKnights_Data, and not into a subfolder. When you are done, winhttp.dll
+   and CKF-Config-Editor.exe sit next to CyberKnights.exe, with BepInEx and
+   dotnet folders beside them.
+
+That is the whole install. The config files come out of the zip with everything
+else, so there is nothing to run first. Nothing is installed into Windows,
+nothing runs in the background, and nothing has to be run as administrator.
+
+UPDATING an install you already have: extract everything EXCEPT BepInEx\config,
+and the settings you have tuned stay as they are. Extract that folder too and
+they are replaced by the ones this version ships.
+
+
+THE FIRST LAUNCH TAKES A WHILE
+
+The first time you start the game with this installed, BepInEx downloads a set
+of Unity library files from unity.bepinex.dev and generates the interop
+assemblies it needs for your version of Unity. It takes noticeably longer than
+a normal launch and the window can sit there with nothing visible happening.
+Let it finish. Later launches are normal, and neither the download nor the
+generation happens again unless the game updates.
+
+That download is the only time anything here touches the network. If you are
+offline or behind a strict firewall, it is the thing to allow.
+
+If any config file did not make it out of the zip, the mod says so at the top
+of the log: look in BepInEx\LogOutput.log for lines starting with "Defaults:".
+It names every file it could not find. Extracting the zip's BepInEx\config
+folder over the game folder again puts them back.
+
+
+CHANGING SETTINGS
+
+Double-click CKF-Config-Editor.exe.
+
+It opens a page in your browser and serves it from your own machine on
+127.0.0.1. Nothing is uploaded and nothing is downloaded. A console window
+stays open while it runs; closing that window stops the editor. Every setting
+has its documentation beside it.
+
+Saving takes a moment. Each save re-validates the whole config in a separate
+process and is refused outright if that check cannot run, so a save that
+succeeds is a config the game will load.
+
+On its first run the editor writes CKF-Config-Editor.settings.json next to
+itself. It holds the path to your game folder and nothing else. Deleting it is
+safe; the editor writes it again.
+
+To turn the whole mod off without uninstalling it, open
+BepInEx\config\ckf.hardmode.cfg in Notepad and set Enabled = false.
+
+
+THE CONFIG FILES
+
+They come out of this zip into BepInEx\config:
+
+    ckf.hardmode.json          everything the editor edits
+    ckf.hardmode.rules.json    the rule set
+    ckf.hardmode.selfcheck.csv the values the mod checks itself against
+    ckf.hardmode.cfg           one key, the master on/off switch
+    ckf.hardmode.d\            three table overlays and one generated file
+
+The mod does not write them. Delete one and it is gone: the mod reports it
+missing in the log and the part of the mod that reads it has nothing to work
+from. The exception is ckf.hardmode.cfg, which BepInEx owns and writes back
+itself. Extracting BepInEx\config from this zip over the game folder is the
+reset button, and it puts the shipped values back over your own.
+
+The three CSVs under ckf.hardmode.d are table overlays. The editor does not
+edit them. Open them in a spreadsheet if you want to change them; the copies in
+this zip are the originals to go back to.
+
+
+BACK UP YOUR SAVES
+
+The fatigue and elapsed-time systems write to your save file. Before you play
+with this installed, copy your saves somewhere else. They are in:
+
+    %USERPROFILE%\AppData\LocalLow\TreseBrothersGames\CyberKnights\
+
+Paste that into the address bar of a File Explorer window to get there.
+
+
+UNINSTALL
+
+Delete these from the game folder:
+
+    winhttp.dll
+    doorstop_config.ini
+    .doorstop_version
+    changelog.txt
+    CKF-Config-Editor.exe
+    CKF-Config-Editor.settings.json
+    the whole BepInEx folder
+    the whole dotnet folder
+
+The dotnet folder comes from this zip; the game does not ship one and does not
+use it.
+
+Verifying the game files through Steam will not remove them, because none of
+them are Steam's.
+
+
+WHAT IS IN THIS ZIP
+
+    BepInEx\, dotnet\, winhttp.dll, doorstop_config.ini, .doorstop_version
+        BepInEx @BE_BUILD@, unmodified. It is the loader; it is not part of
+        this mod. dotnet\ is the .NET runtime BepInEx runs on and is most of
+        the size of this download. changelog.txt in the game folder is
+        BepInEx's, not this mod's. See LICENSE-BepInEx.txt.
+
+    BepInEx\plugins\CKFHardMode.dll
+        the mod.
+
+    BepInEx\config\
+        the settings files listed above. They are loose files, not built into
+        the mod, and this zip is the only place they come from.
+
+    CKF-Config-Editor.exe
+        the settings editor.
+
+This BepInEx build is a bleeding-edge one, pinned by build number and commit,
+because BepInEx 6 for IL2CPP has no stable release. Installing a different one
+over the top of it is not supported.
+
+
+CREDITS
+
+Cyber Knights: Flashpoint is by Trese Brothers Games. This mod is not made by
+them and they cannot support it.
+
+BepInEx is by the BepInEx contributors, LGPL-2.1. See LICENSE-BepInEx.txt.

@@ -1,0 +1,95 @@
+{
+  "subsystem": "PowerLevel",
+  "title": "Mission Power Level Ceiling",
+  "targets": { "json": "ckf.hardmode.json", "section": "powerlevel", "legacyJson": null },
+  "enable": { "json": "enabled" },
+
+  "doc": [
+    "CKF Hard Mode - mission Power Level ceiling.",
+    "",
+    "  MissionPowerLevel = round( (TeamPowerLevel + offset) * scalar )",
+    "  clamped to [MinCap, MaxCap]",
+    "",
+    "This section does the one thing the game's own difficulty sliders cannot:",
+    "lift the ceiling of 10 the game clamps its own result to. Everything else -",
+    "the offset and the scalar - is set on the sliders, and read back off the",
+    "same GameDifficultyModel instance the postfix is handed.",
+    "",
+    "SEVEN KEYS WERE REMOVED IN 2.12.0",
+    "and are now consts, because each was a measured fact about the game rather",
+    "than a preference:",
+    "",
+    "  DerivedCallMode        PassThrough. Run25 pinned arg0 to",
+    "                         max(1, Floor(teamPowerLevel)) across three saves -",
+    "                         the game handing its own standing back to itself,",
+    "                         which is a reward calculation and not a request for",
+    "                         a mission's difficulty. Recompute is the setting",
+    "                         that turned a reward of 1 into 2.",
+    "  MatrixOffsetMode       Replace. Run21. The Matrix path uses",
+    "                         MatrixPowerLevelOffset INSTEAD of the base offset.",
+    "  OffsetProperty         BasePowerLevelOffset  ) GameDifficultyModel's own",
+    "  ScalarProperty         PowerLevelScalar      ) column names.",
+    "  MatrixOffsetProperty   MatrixPowerLevelOffset)",
+    "  InstanceTeamProperty   teamPowerLevel",
+    "  TeamPowerLevelOverride deleted outright, not frozen - at its value of 0",
+    "                         the branch reading it was unreachable.",
+    "",
+    "THERE IS NO FALLBACK SOURCE for Team Power Level. The database-discovery",
+    "machinery went in 2.11.0 (section 7.4). If the instance carries no readable",
+    "teamPowerLevel, or carries one that reads 0 - which a freshly constructed",
+    "model does before the game fills it in - this subsystem logs an error and",
+    "leaves the game's own result alone. It never proceeds on a default: a",
+    "default here is not a missing mission difficulty, it is a silently wrong one."
+  ],
+
+  "uiDoc": [
+    "By default the game clamps mission to a PL of 10. Here, the upper clamp ships at 20 as enemy archetypes exist up to PL 20. The lower clamp must stay at or below the upper one; set it higher and this refuses to run at all.",
+    "",
+    "Matrix calls have their own upper clamp, so hacking can have its own maximum difficultt. Set it to 0 to use the same clamp for both. Where the two differ, the lower one wins.",
+    "",
+    "The count of logged calculations is also the gate on the check that the mod's Team Power Level agrees with the game's own. Set it to 0 and you lose that check along with the logging."
+  ],
+
+  "fields": [
+    {
+      "path": "enabled", "in": "json", "type": "bool",
+      "default": true, "ui": "form",
+      "label": "Enabled",
+      "doc": "Recompute mission Power Level so it can exceed the stock ceiling of 10. 3.0 moved this switch and the four clamps out of the [PowerLevel] section of ckf.hardmode.cfg and into the \"powerlevel\" section of ckf.hardmode.json; the section is new in 3.0 and has no 2.x sidecar behind it, which is what targets.legacyJson: null records."
+    },
+    {
+      "path": "minCap", "in": "json", "type": "int",
+      "default": 1, "range": [1, 25], "ui": "form",
+      "label": "Lower clamp",
+      "doc": "Lower clamp. Stock is 1."
+    },
+    {
+      "path": "maxCap", "in": "json", "type": "int",
+      "default": 20, "range": [1, 25], "ui": "form",
+      "label": "Upper clamp",
+      "doc": "Upper clamp. Stock is 10; enemy archetypes exist through 20. Must not be below minCap - the subsystem refuses to run if it is."
+    },
+    {
+      "path": "matrixMaxCap", "in": "json", "type": "int",
+      "default": 10, "range": [0, 25], "ui": "form",
+      "absent": "0 means use maxCap for Matrix calls too.",
+      "label": "Matrix upper clamp",
+      "doc": "Separate upper clamp for Matrix calls, so hacking can stay at the stock ceiling while ground missions climb. 0 = use maxCap for both. The lower of this and maxCap wins."
+    },
+    {
+      "path": "logFirst", "in": "json", "type": "int",
+      "default": 0, "range": [0, 500], "ui": "form",
+      "label": "Calculations logged",
+      "uiDoc": "Calculations to log. The cross-check that the mod's Team Power Level matches the game's own is printed inside this gate, so 0 silences the only check that the two agree.",
+      "doc": "Calculations to log. The cross-check that the mod's Team Power Level matches the game's own is printed inside this gate, so 0 silences the only check that the two agree."
+    }
+  ],
+
+  "invariants": [
+    {
+      "kind": "ordered",
+      "keys": ["ckf.hardmode.json#powerlevel.minCap", "ckf.hardmode.json#powerlevel.maxCap"],
+      "reason": "maxCap below minCap leaves nothing to clamp into; PowerLevelCap.Init logs an error and installs no hook. 3.0 moved both keys out of the cfg and into the merged document, so they are spelled file#path rather than Section.Key."
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+## Settings file was created by plugin CKF Hard Mode v@VERSION@
+## Plugin GUID: ckf.hardmode
+
+[General]
+
+# Setting type: Boolean
+# Default value: true
+Enabled = true
+

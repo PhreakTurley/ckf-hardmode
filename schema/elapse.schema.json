@@ -1,0 +1,178 @@
+{
+  "subsystem": "Elapse",
+  "title": "Mission Elapse Penalty",
+  "targets": { "json": "ckf.hardmode.json", "section": "elapse", "legacyJson": "ckf.hardmode.elapse.json" },
+  "enable": { "json": "enabled" },
+
+  "doc": [
+    "CKF Hard Mode - mission elapse penalty.",
+    "",
+    "When a mission's window closes unplayed the crew pays: credits off the",
+    "balance, and Stress onto mercs linked to that contact. A mission with no",
+    "contact - ContactId 0 - is skipped and costs nothing (Elapse.cs:742-747).",
+    "",
+    "THIS SUBSYSTEM WRITES TO YOUR SAVE, through two channels, both proven",
+    "against a live save by CKF Data Dump's WriteProbe before this subsystem was",
+    "written (Elapse.cs:9-11):",
+    "",
+    "  credits  SaveManager.SpendCredits. The charge is capped to the live",
+    "           balance before it is asked for, so a 400 fine against a balance",
+    "           of 300 takes 300 and the balance never goes below zero",
+    "           (Elapse.cs:806-810).",
+    "  stress   GameCharacterModel.NegativeTraitValue, which is the Stress bar.",
+    "           The column named StressScore is the Discontent bar, not this one",
+    "           (Elapse.cs:22-23). The write goes to the engine's cached",
+    "           PlayerModel - what the roster panel reads - and to the database",
+    "           row (Elapse.cs:24-32). What the engine then does with a merc at a",
+    "           high Stress value is the engine's; this only feeds the number.",
+    "",
+    "The penalty lands one turn after the window closes. The game stamps the",
+    "expiry row with the turn that was ENDING and the hook reads GameTurn after",
+    "it has advanced (Elapse.cs:35-38).",
+    "",
+    "There is no stored progress and no high-water mark, so reloading to before",
+    "an expiry and advancing again re-applies the penalty, and the same mercs",
+    "take the Stress every time (Elapse.cs:58-62).",
+    "",
+    "Every write this subsystem makes happens live. AGENTS.md section 6 records",
+    "the standing instruction to test that way.",
+    "",
+    "THE SHIPPED AMOUNTS ARE PLACEHOLDERS. ckf.hardmode.elapse.json:38-39 states",
+    "that none of them has been played, and that they exist so the file parses",
+    "and the first live sessions produce log lines to read. [unverified - that",
+    "comment is the only source for it; no play session behind these numbers is",
+    "recorded in this repository.]",
+    "",
+    "Generated from schema/elapse.schema.json. Edits to the comments in this",
+    "file are overwritten on the next generate; edit the schema instead."
+  ],
+
+  "uiDoc": [
+    "When a mission's window closes unplayed the crew is still paid and Stress is generated for mercs linked to that contact. A mission with no contact costs nothing.",
+    "",
+    "The credit charge is capped to your live balance, so a 400 fine against a balance of 300 takes 300 and the balance never goes below zero.",
+	"",
+	"By default, the credit charge scales with Power Level, roughly mirroring what your squad would be paid for the mission. The stress taken for a related merc also scales up, as stess becomes easier to deal with later on."
+	
+  ],
+
+  "fields": [
+    {
+      "path": "enabled", "in": "json", "type": "bool",
+      "default": true, "ui": "form",
+      "label": "Enabled",
+      "uiDoc": "Off, and a mission's window can close with no credits taken and no Stress dealt.",
+      "doc": "The subsystem switch, and since 3.0 the only one - the cfg key [Elapse] Enabled that used to gate it before the file was opened is gone, so this is the whole chain. False installs no hooks and writes nothing. THIS SUBSYSTEM WRITES TO YOUR SAVE (SpendCredits, and NegativeTraitValue on GameCharacter rows)."
+    },
+
+    {
+      "path": "logFirst", "in": "json", "type": "int",
+      "default": 0, "range": [0, 500], "ui": "form",
+      "label": "Expiries logged in full",
+      "doc": "How many expiries to log in full detail (one line per channel and per merc). After that each expiry gets a single summary line."
+    },
+
+    {
+      "path": "seedSalt", "in": "json", "type": "int",
+      "default": 1163084112, "range": [0, 2147483647], "ui": "form",
+      "label": "Seed salt",
+      "uiDoc": "Randomizes which merc a given expiry picks. The same expiry picks the same mercs on every reload; change this and every future pick in every save changes with it.",
+      "doc": "Salt for the deterministic roll. It is XORed into a seed mixed from the expiry's turn and the mission's Id - its title if the Id is unreadable - and that seed orders the merc list, so the same expiry picks the same mercs on every reload (Elapse.cs:1050-1051). It is deliberately a different salt from Fatigue's so the two subsystems' rolls do not correlate. Change it and every future pick in every save changes with it."
+    },
+
+    {
+      "path": "tiers", "in": "json", "type": "table", "ui": "table",
+      "label": "Mission tiers",
+      "uiDoc": "The multiplier here scales the credit charge, and the merc count as well when Apply tier multiplier to Stress is on. It roughly mirrors how much these missions pay in the first place.",
+      "doc": "Multiplier applied to the penalty by mission family, matched by SUBSTRING on MissionTypeId - the same idiom MissionRewards uses. FIRST MATCH WINS, in a fixed order: soloHack, then story, then standard, so the block is not order-independent even though it is a JSON object (Elapse.cs:850-862). A mission matching no tier's patterns falls through to 'standard'. The multiplier scales the credit charge, and the Stress merc count as well only when stress.applyTierMultiplier is on. A pattern that matches nothing makes its tier do nothing at all and logs no complaint, so check the tier= field in the plugin's own expiry log lines against real missions. [unverified: ckf.hardmode.elapse.json:49-51 records the shipped story patterns as a starting guess read off the game's MissionModel.csv and _mission_generated.csv dumps, neither of which is in this repository.]",
+      "row": [
+        { "name": "name",       "type": "string" },
+        { "name": "patterns",   "type": "stringList" },
+        { "name": "multiplier", "type": "float", "range": [0.0, 10.0] }
+      ],
+      "keyedBy": "name"
+    },
+
+    {
+      "path": "credits.enabled", "in": "json", "type": "bool",
+      "default": true, "ui": "form",
+      "label": "Charge credits",
+      "doc": "Debit the crew's balance when a mission expires."
+    },
+    {
+      "path": "credits.percentOfBalance", "in": "json", "type": "float",
+      "default": 0.0, "range": [0.0, 1.0], "ui": "form",
+      "enabledBy": "credits.enabled",
+      "label": "Percent of balance",
+      "doc": "Charge this fraction of the current balance in addition to the flat amount. 0 = flat amount only."
+    },
+    {
+      "path": "credits.byPowerLevel", "in": "json", "type": "table", "ui": "table",
+      "enabledBy": "credits.enabled",
+      "label": "Credit charge by power level",
+      "uiDoc": "Flat credits charged, indexed by the power level the mission was generated at, so the fine only increases when base mission pay does.",
+      "doc": "Flat credits charged, indexed by the expired mission's PowerLevelUnscaled - the team power level the mission was generated at, NOT the difficulty-scaled PowerLevel, so the fine does not move when the difficulty does (Elapse.cs:781). Note that Fatigue's identically shaped byPowerLevel curves key on the effective PowerLevel instead; the two subsystems read different columns. The last row whose minPowerLevel is at or below the level applies (Elapse.cs:867-872).",
+      "absent": "A level below the first row's minPowerLevel leaves the credits channel off for that expiry; an amount of 0 turns the table term off at that level while leaving the channel on.",
+      "row": [
+        { "name": "minPowerLevel", "type": "int", "range": [0, 25] },
+        { "name": "amount",        "type": "int", "range": [0, 100000] }
+      ],
+      "sortBy": "minPowerLevel"
+    },
+
+    {
+      "path": "stress.enabled", "in": "json", "type": "bool",
+      "default": true, "ui": "form",
+      "label": "Apply Stress",
+      "doc": "Add Stress to mercs linked to the contact whose mission expired."
+    },
+    {
+      "path": "stress.cap", "in": "json", "type": "int",
+      "default": 10, "range": [1, 10], "ui": "form",
+      "enabledBy": "stress.enabled",
+      "label": "Stress cap",
+      "uiDoc": "Do not take a merc above this Stress value. A merc already at or above it is left unchanged.",
+      "doc": "Do not take a merc above this Stress value. A merc already at or above it is left unchanged. The plugin rejects the whole config if this is outside 1-10 (Elapse.cs:357-359), so the range here is the plugin's, not a guard rail."
+    },
+    {
+      "path": "stress.fallbackToRandom", "in": "json", "type": "bool",
+      "default": false, "ui": "form",
+      "enabledBy": "stress.enabled",
+      "label": "Fall back to a random merc",
+      "uiDoc": "Top the quota up from mercs with no relationship to the contact when fewer mercs like them than the count asks for. Mercs who like the contact are always taken first, and a merc who dislikes them is never picked either way. Off, and a shortfall stays a shortfall: only the positively linked mercs take stress.",
+      "doc": "Top the quota up from mercs with NO relationship to the contact when fewer mercs like them than mercCount asks for. Mercs who like the contact are always taken first, and a merc who dislikes them is never picked either way (Elapse.cs:1060-1067). Off, and a shortfall stays a shortfall: the channel charges only the positively linked mercs it found, and says so in the log."
+    },
+    {
+      "path": "stress.applyTierMultiplier", "in": "json", "type": "bool",
+      "default": false, "ui": "form",
+      "enabledBy": "stress.enabled",
+      "label": "Apply tier multiplier to Stress",
+      "uiDoc": "Scale the merc count by the mission tier multiplier as well as the credit charge, so a solo hack stresses fewer mercs. The per-merc amount is never scaled by the tier. Off, and the tier affects credits only.",
+      "doc": "Scale the MERC COUNT by the mission tier multiplier as well as the credit charge, so a solo hack stresses fewer mercs. It does not touch stressAmount: the per-merc amount is never scaled by the tier (Elapse.cs:833-835). Off, and the tier affects credits only."
+    },
+    {
+      "path": "stress.safehouseOnly", "in": "json", "type": "bool",
+      "default": true, "ui": "form",
+      "enabledBy": "stress.enabled",
+      "label": "Safehouse mercs only",
+      "uiDoc": "Only stress mercs the game counts as in the safehouse. Always leave this on.",
+      "doc": "Only charge mercs the engine's own GameCharacterModel.IsStatusSafehouseAliveAndActive() says are in the safehouse (Elapse.cs:1248). Elapse.cs:146-150 records an open question against it: Run55 stressed a Status 5 and a Status 7 merc, and what those statuses are has not been established. If the method cannot be found the filter cannot run, and that is logged rather than silently skipped."
+    },
+    {
+      "path": "stress.byPowerLevel", "in": "json", "type": "table", "ui": "table",
+      "enabledBy": "stress.enabled",
+      "label": "Stress by power level",
+      "uiDoc": "How many mercs take Stress and for how much.",
+      "doc": "How many mercs are hit and for how much, indexed by the same PowerLevelUnscaled the credits table uses and resolved the same way: the last row whose minPowerLevel is at or below the level applies (Elapse.cs:781, 874-879).",
+      "absent": "A level below the first row's minPowerLevel leaves the Stress channel off for that expiry; a mercCount of 0 or a stressAmount of 0 turns the channel off at that level while leaving it on elsewhere (Elapse.cs:836).",
+      "row": [
+        { "name": "minPowerLevel", "type": "int", "range": [0, 25] },
+        { "name": "mercCount",     "type": "int", "range": [0, 12] },
+        { "name": "stressAmount",  "type": "int", "range": [0, 100] }
+      ],
+      "sortBy": "minPowerLevel"
+    }
+  ],
+
+  "invariants": []
+}

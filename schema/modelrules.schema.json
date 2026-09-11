@@ -1,0 +1,83 @@
+{
+  "subsystem": "ModelRules",
+  "title": "Declarative Row Edits",
+  "targets": { "json": "ckf.hardmode.json", "section": "modelrules", "legacyJson": null },
+  "enable": { "json": "enabled" },
+
+  "doc": [
+    "CKF Hard Mode - declarative row edits.",
+    "",
+    "The rule engine itself is configured by ckf.hardmode.rules.json and the",
+    "ckf.hardmode.d/*.csv overlays, which this schema deliberately does NOT",
+    "cover - they are bulk table authoring with their own grammar and their own",
+    "editor, the spreadsheet. See SCHEMA-FORMAT.md, 'What the schema",
+    "deliberately does not cover'. The one exception is",
+    "ckf.hardmode.d/MissionPowerLevelModel.generated.json, which is a schema",
+    "output rather than an input and belongs to teampl.schema.json.",
+    "",
+    "So the five keys here are the wholesale switch plus the diagnostics. In 3.0",
+    "they moved out of the [ModelRules] section of ckf.hardmode.cfg and into the",
+    "\"modelrules\" section of ckf.hardmode.json; the section is new in 3.0 and has",
+    "no 2.x sidecar behind it, which is what targets.legacyJson: null records. Five",
+    "more were removed in 2.12.0:",
+    "EnableRowCloning, CloneServeById, CloneFreshInstances and CompiledAccessors",
+    "are hardcoded on, and CloneServeOnBulkReads is hardcoded OFF with its branch",
+    "deleted - nothing during play enumerates a whole table, and an append",
+    "landing after the game has already built from the list cost a mission load",
+    "in Run 42.",
+    "",
+    "THE WRITABLE-COLUMN PROBE IS NOT A DUPLICATE of CKF Data Dump's WriteProbe.",
+    "Checked 2026-08-31 against that plugin's sources: the two are disjoint on",
+    "every axis. This one probes content tables discovered from the rules, every",
+    "scalar property, at first materialization, and always restores in a finally.",
+    "WriteProbe writes four hardcoded save columns plus Credits on the first turn",
+    "tick and deliberately never restores. This one answers 'does the setter keep",
+    "the value' - the alias and Adjusted* case where a rule fails silently.",
+    "WriteProbe answers 'does an Update* persist'."
+  ],
+
+  "uiDoc": [
+    "Retune the game's talents, equipment, monster and character base stats. The rules themselves live in the rule file and the CSV overlays and are edited in a spreadsheet, not on this page.",
+    "",
+    "Tracing is for confirming a rule did what you meant without hunting for the effect in-game: it logs the first few rows each rule changes, one line per column, before and after. Three to five is enough to see a curve produce different values at different levels. It logs a line per row, so turn it off again for a normal session.",
+    "",
+    "The writable-column probe is for the other kind of failure. Some columns take a write and then recompute the value and discard yours, and a rule against one of those fails silently. The probe finds them. Turn it on for a single launch when a rule is not landing, read the report, and turn it off again."
+  ],
+
+  "fields": [
+    {
+      "path": "enabled", "in": "json", "type": "bool",
+      "default": true, "ui": "form",
+      "label": "Apply rules",
+      "doc": "Apply declarative record edits from ckf.hardmode.rules.json - talents, equipment, monster and character base stats."
+    },
+    {
+      "path": "traceRules", "in": "json", "type": "int",
+      "default": 0, "range": [0, 1000], "ui": "form",
+      "label": "Trace first N rows per rule",
+      "doc": "Log the first N rows each rule changes, one line per column, as before -> after. This is how you confirm a rule, a curve, a clamp or a clone actually did what you meant without hunting for the effect in-game. 0 is off. 3 to 5 is enough to see a curve produce different values at different power levels. It logs per row, so leave it off for a normal session."
+    },
+    {
+      "path": "probeWritableColumns", "in": "json", "type": "bool",
+      "default": false, "ui": "form",
+      "label": "Probe writable columns",
+      "uiDoc": "Write a report of which columns actually accept a write. Some columns take a value and then recompute it, discarding yours, and a rule against one of those fails silently. The probe writes a test value to one row per table, reads it back and puts the original straight back. It's worth a launch when a rule is not landing.",
+      "doc": "Write a report of which columns actually accept a write. Some setters exist but recompute their value and discard yours - the unsuffixed weapon stats are aliases for the selected firing mode, and the talent Adjusted* columns are computed - and a rule against one of those fails silently. The probe writes a test value onto one materialized row per table, reads it back, and puts the original value straight back. It is a write on the game's hot path, so it is off by default and worth turning on for one launch when a rule is not landing."
+    },
+    {
+      "path": "probeTables", "in": "json", "type": "stringList",
+      "default": [], "ui": "form",
+      "enabledBy": "probeWritableColumns",
+      "label": "Extra tables to probe",
+      "doc": "Extra tables to probe, beyond the ones your rules already target (which are probed automatically). A JSON array of strings; the 'Model' suffix is optional."
+    },
+    {
+      "path": "probeOutput", "in": "json", "type": "string",
+      "default": "", "ui": "form",
+      "enabledBy": "probeWritableColumns",
+      "absent": "Blank means BepInEx/ckf-hardmode/writable_columns.csv.",
+      "label": "Probe report path",
+      "doc": "Where to write the writable-column report. Blank means BepInEx/ckf-hardmode/writable_columns.csv. Set a path you own if the game lives under Program Files and the write is blocked."
+    }
+  ]
+}

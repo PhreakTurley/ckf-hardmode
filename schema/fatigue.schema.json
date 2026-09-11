@@ -1,0 +1,169 @@
+{
+  "subsystem": "Fatigue",
+  "title": "Mission Fatigue",
+  "targets": { "json": "ckf.hardmode.json", "section": "fatigue", "legacyJson": "ckf.hardmode.fatigue.json" },
+  "enable": { "json": "enabled" },
+
+  "doc": [
+    "CKF Hard Mode - mission fatigue.",
+    "",
+    "A merc who completes a mission may come home Running Empty; a merc who",
+    "deploys while already Running Empty is forced Off-Duty at mission end and",
+    "the engine keeps them off the roster until it expires.",
+    "",
+    "THIS SUBSYSTEM WRITES TO YOUR SAVE. It inserts GameCharacterTrait rows,",
+    "which the game's own SaveManager.ProcessTraits expires on schedule. No new",
+    "table, no new column, no side file and no tick of its own, so uninstalling",
+    "the mod leaves at most a few live traits, which lapse by themselves",
+    "(Fatigue.cs:89-91).",
+    "",
+    "A LOST mission costs nothing. The game writes no score row of any kind on",
+    "defeat, so the hook never fires there (Fatigue.cs:11-16).",
+    "",
+    "Both stages are gated twice: [Fatigue] Enabled in ckf.hardmode.cfg before",
+    "this file is opened (Fatigue.cs:343), and \"enabled\" below after it is",
+    "loaded (Fatigue.cs:353).",
+    "",
+    "Fatigue.cs still PARSES all eight keys and ignores them, so a config",
+    "written before the removal keeps loading rather than being refused for",
+    "keys that map to no member; a file carrying one gets a single log line at",
+    "load naming what it found (Fatigue.cs:580-588, 664-693). Deleting them",
+    "changes nothing.",
+    "",
+    "The one behaviour that changed with them: a mission whose PowerLevel",
+    "cannot be read used to fall back to the flat values. It now takes the",
+    "LOWEST ANCHOR of each curve, which is what makes a one-anchor PL 1 curve",
+    "behave exactly like the flat value it replaces (Fatigue.cs:1906-1922). The",
+    "once-only warning about an unreadable PowerLevel is still there and says",
+    "so."
+  ],
+
+  "uiDoc": [
+    "Missions tire the crew. A merc who finishes one may come home Running Empty; a merc who deploys while still Running Empty will become Off-Duty. A mission you lose costs nothing because this only fires on a win.",
+    "",
+    "Wound Resist is subtracted from a merc's chance, one point of resist per percentage point. Most cyberware carries negative Wound Resist, so a heavily chromed crew typically tires faster than a clean one. The safehouse's built modules, a merc's traits, their character effects, their implants and their armour all count towards resist.",
+    "",
+    "Leave the rolls deterministic unless you want fatigue to be rerollable: with it on, reloading the victory screen gives the same outcome every time."
+  ],
+
+  "fields": [
+    {
+      "path": "enabled", "in": "json", "type": "bool",
+      "default": true, "ui": "form",
+      "label": "Enabled",
+      "uiDoc": "This controls the entire Running Empty and Off-Duty loop.",
+      "doc": "The subsystem switch, and since 3.0 the only one - the cfg key [Fatigue] Enabled that used to gate it before the file was opened is gone, so this is the whole chain. False installs no hooks and writes nothing. A merc who completes a mission may come home Running Empty (-4 Initiative, -50% XP); a merc who deploys while already Running Empty is forced Off-Duty at mission end and the engine keeps them off the roster until it expires. THIS IS THE ONE SUBSYSTEM HERE THAT WRITES TO YOUR SAVE: it inserts GameCharacterTrait rows, which the game then expires by itself. [unverified: the '-4 Initiative, -50% XP' figure is game data carried over verbatim from this key's original Config.Bind description, kept at live-config-original/ckf.hardmode.cfg:25. No .cs in this tree carries it. Same claim as runningEmpty.traitId's; see TASKS.md.]"
+    },
+
+    {
+      "path": "runningEmpty.traitId", "in": "json", "type": "int",
+      "default": 2009, "ui": "form",
+      "label": "First-stage trait id",
+      "uiDoc": "The trait granted by the first stage. 2009 Running Empty is the harsher one; 2007 Checked Out is a milder alternative.",
+      "doc": "The trait granted by the first stage. 2009 Running Empty is -4 Initiative and -50% XP; 2007 Checked Out is the milder alternative. Both are TraitClass 6 and sit in their own TraitGroup, so neither collides with 2014 (Fatigue.cs:7-10, 450-453). 0 is rejected, and so is the same id on both stages. [unverified: the '-4 Initiative and -50% XP' figure is game data. It is attributed to this subsystem's original Config.Bind description, kept at live-config-original/ckf.hardmode.cfg:25, and to ckf.hardmode.fatigue.json:26-28; no .cs in this tree carries it, and 2007's own numbers were escalated rather than published for the same reason. See TASKS.md.]"
+    },
+    {
+      "path": "runningEmpty.byPowerLevel", "in": "json", "type": "table", "ui": "curve",
+      "label": "First stage by power level",
+      "uiDoc": "Scale the first stage's chance, duration, floor and ceiling. Values between anchors interpolate, and below the lowest and above the highest the nearest anchor holds. Two anchors describe all twenty levels, listing all twenty works identically if you would rather set each one by hand, and a single anchor at power level 1 is how you write a flat value. Each field interpolates over only the anchors that name it. chancePercent is per merc, per completed mission, and Wound Resist is subtracted from it before the roll. durationDays must be at least 1 because 0 makes the trait permanent. minAffected is a floor on how many mercs take the first stage: it moves the count only, the rolls still decide who, and it is capped at the number of mercs eligible to roll. maxAffected is the ceiling and must not sit below the floor at any level.",
+      "doc": "Anchor points that scale the first stage's chancePercent, durationDays, minAffected and maxAffected with the mission's PowerLevel - the effective level, the one [PowerLevel] lifts past the stock ceiling of 10, read from GameMissionModel.PowerLevel and NOT from PowerLevelUnscaled (Fatigue.cs:1245-1257). Elapse's identically shaped byPowerLevel tables key on PowerLevelUnscaled instead; the two subsystems read different columns. Values between anchors interpolate; below the lowest and above the highest the nearest anchor holds, because a curve is a statement about the levels it names rather than an extrapolation past them (Fatigue.cs:1906-1941). Two anchors describe all twenty levels, listing all twenty works identically if you would rather set each one by hand, and a single anchor is a flat value written as a curve. CHANGED, 2026-09-07: this table is now the ONLY place these four numbers live. The flat runningEmpty.chancePercent, .durationDays, .minAffected and .maxAffected were removed, so there is nothing behind a field no anchor names - Fatigue.cs returns 'no value' and the roll or the write that needed it does not happen and is logged, except minAffected, whose absence means no floor and is a warning rather than an error (Fatigue.cs:1980-2088). The per-anchor validation is unchanged and now carries the rules the flat checks used to: chancePercent 0-100, durationDays at least 1 because a zero-turn ExpiresTurn is how the game marks a trait PERMANENT, counts not negative, and a PL 1-20 sweep rejecting a ceiling that drops below the floor at any level (Fatigue.cs:839-851, 879-961). NOTE ON SHAPE: this block is a JSON object whose KEYS are the power levels, and each value is one anchor; 'powerLevel' below is that key, not a member of the anchor object. A key outside 1-20 is warned about and still used.",
+      "absent": "REFUSED while fatigue is enabled. A mission whose PowerLevel cannot be read is NOT this case - it takes the lowest anchor of each curve, and is warned about once.",
+      "row": [
+        { "name": "powerLevel",    "type": "int", "range": [1, 20] },
+        { "name": "chancePercent", "type": "int", "range": [0, 100] },
+        { "name": "durationDays",  "type": "int" },
+        { "name": "minAffected",   "type": "int" },
+        { "name": "maxAffected",   "type": "int" }
+      ],
+      "keyedBy": "powerLevel",
+      "sortBy": "powerLevel"
+    },
+    {
+      "path": "runningEmpty.knight.byPowerLevel", "in": "json", "type": "table", "ui": "curve",
+      "optional": true,
+      "label": "Cyber Knight first stage by power level",
+      "uiDoc": "The Cyber Knight can have their own odds and duration but are bound to the general min/max clamp like everyone else. Wherever this curve has no value, the CK is treated as any other merc.",
+      "doc": "The Cyber Knight's own first-stage curve, shaped like runningEmpty.byPowerLevel and keyed on the same effective PowerLevel. Where it names a value the Knight uses it; where it does not, the general curve is used (Fatigue.cs:2006-2035). CHANGED, 2026-09-07: the chain used to be Knight curve, then his flat runningEmpty.knight.chancePercent / .durationDays, then the general curve, then the general flat value. Both flat halves were removed, so it is now two steps: Knight curve, then general curve. CORRECTION, same date: this string used to end 'Commented out in the shipped file, but the deserialiser reads it if uncommented.' The shipped ckf.hardmode.json carries all twenty anchors of this curve and has for as long as the merged document has existed; the sentence was written against the retired ckf.hardmode.fatigue.json sidecar and was never updated. It keeps 'optional': true because omission is still legal.",
+      "absent": "The Cyber Knight rolls on the general runningEmpty.byPowerLevel curve, exactly like any other merc.",
+      "row": [
+        { "name": "powerLevel",    "type": "int", "range": [1, 20] },
+        { "name": "chancePercent", "type": "int", "range": [0, 100] },
+        { "name": "durationDays",  "type": "int" }
+      ],
+      "keyedBy": "powerLevel",
+      "sortBy": "powerLevel"
+    },
+
+    {
+      "path": "offDuty.traitId", "in": "json", "type": "int",
+      "default": 2014, "ui": "form",
+      "label": "Off-Duty trait id",
+      "uiDoc": "The trait ID granted when a merc who is already carrying the first stage completes another mission. 0 is rejected, and so is the same id on both stages.",
+      "doc": "The trait granted when a merc who is already carrying the first stage completes another mission. Keeping an Off-Duty merc off the roster is the ENGINE'S job and runs off that trait's SpecialCode 90 BlockMissions; the mod grants the trait and stops there - it deliberately does not filter ReadGameCharactersAvailableForMission, which is what leaves the game's own 'unless required by mission' story override intact, so an Off-Duty merc can still be pulled into a mission that requires them (Fatigue.cs:93-96). 0 is rejected, and so is the same id on both stages. CORRECTION, 2026-08-31: this string also said 2014 Off-Duty 'carries no stat penalty', that SpecialCode 90 BlockMissions is 'its entire content', and that the engine applies it 'during mission planning'. Fatigue.cs:93-96 carries none of the three, and none appears in any .cs in this tree - they are game data, the same class as 2014's quoted trait text already escalated as unpublishable. All three have been moved to TASKS.md."
+    },
+    {
+      "path": "offDuty.clearsRunningEmpty", "in": "json", "type": "bool",
+      "default": true, "ui": "form",
+      "label": "Clear the first stage on escalation",
+      "doc": "Remove the first-stage trait when escalating. Turn it off and a merc comes back off Off-Duty still carrying the first stage, so the next mission locks them again."
+    },
+    {
+      "path": "offDuty.byPowerLevel", "in": "json", "type": "table", "ui": "curve",
+      "optional": true,
+      "label": "Off-Duty duration by power level",
+      "uiDoc": "Anchor points that scale it with the mission's power level, by the same rules as the first-stage curve. Must be at least 1 because 0 makes the trait permanent. With no anchor naming a duration, nobody is sent Off-Duty at all: the merc keeps the first stage and it is logged.",
+      "doc": "Anchor points that scale the Off-Duty duration with the mission's PowerLevel, by the same rules as runningEmpty.byPowerLevel: keys are power levels, values between them interpolate, and the nearest anchor holds past either end (Fatigue.cs:1906-1941). Only durationDays means anything on an Off-Duty anchor - escalation is not a roll, so it has no chance, no floor and no ceiling. Setting one of those is not ignored quietly: it is named in a warning line (Fatigue.cs:951-961). CHANGED, 2026-09-07: flat offDuty.durationDays was removed, so this table is the only place the duration lives. Unlike runningEmpty.byPowerLevel it is not required - but with no anchor naming a durationDays, no merc is escalated at all. Fatigue.cs will not write a row it has no length for, because a zero-turn ExpiresTurn is how the game marks a trait PERMANENT and the merc would be off the roster for the rest of the save; the merc keeps the first stage and both the missing key and the merc it cost are logged (Fatigue.cs:2049-2062, 1556-1575). CORRECTION, same date: this string used to end 'Commented out in the shipped file, but the deserialiser reads it if uncommented.' The shipped ckf.hardmode.json carries all twenty anchors; the sentence was written against the retired ckf.hardmode.fatigue.json sidecar.",
+      "absent": "Nobody is escalated to Off-Duty. A trait row with no duration would be permanent, so the escalation is skipped, the merc keeps the first stage, and it is logged (Fatigue.cs:1556-1575).",
+      "row": [
+        { "name": "powerLevel",   "type": "int", "range": [1, 20] },
+        { "name": "durationDays", "type": "int" }
+      ],
+      "keyedBy": "powerLevel",
+      "sortBy": "powerLevel"
+    },
+    {
+      "path": "offDuty.knight.byPowerLevel", "in": "json", "type": "table", "ui": "curve",
+      "optional": true,
+      "label": "Cyber Knight Off-Duty duration by power level",
+      "uiDoc": "The Cyber Knight's own Off-Duty duration curve. Wherever this curve has no value, the CK is treated as any other merc.",
+      "doc": "The Cyber Knight's own Off-Duty duration curve. Where it names a level the Knight uses it; where it does not, offDuty.byPowerLevel is used (Fatigue.cs:2049-2062). Wired in 2.9.2 - before that it parsed and was never read, which is why the validator names an ignored key instead of dropping it (Fatigue.cs:951-961). CHANGED, 2026-09-07: the chain used to be Knight curve, then his flat offDuty.knight.durationDays, then the general curve, then flat offDuty.durationDays. Both flat halves were removed, so it is now two steps. CORRECTION, same date: this string used to end 'Commented out in the shipped file, but the deserialiser reads it if uncommented.' The shipped ckf.hardmode.json carries all twenty anchors; the sentence was written against the retired ckf.hardmode.fatigue.json sidecar.",
+      "absent": "The Cyber Knight serves the general offDuty.byPowerLevel duration, exactly like any other merc.",
+      "row": [
+        { "name": "powerLevel",   "type": "int", "range": [1, 20] },
+        { "name": "durationDays", "type": "int" }
+      ],
+      "keyedBy": "powerLevel",
+      "sortBy": "powerLevel"
+    },
+
+    {
+      "path": "woundResist.enabled", "in": "json", "type": "bool",
+      "default": true, "ui": "form",
+      "label": "Wound Resist mitigation",
+      "uiDoc": "Subtract a merc's Wound Resist from their chance. Positive resist protects; negative resist makes fatigue more likely, and most cyberware is negative, so a chromed crew tires faster. Off, and every merc rolls the base chance.",
+      "doc": "Subtract a merc's Wound Resist from their chance, one point per percentage point. Positive resist protects; negative resist makes fatigue more likely, and most cyberware is negative - 51 of the 83 implants that carry Wound Resist. In David's save every merc sits between -10 and -39 from implants alone, so a 25% base becomes 35-64% for a chromed crew; that is deliberate, and chrome making you tire faster is the point (Fatigue.cs:157-161). What counts: the safehouse's built modules (a Triage Clinic grants WoundRes 10/15/20/30 by upgrade level, re-read once per mission so an upgrade takes effect mid-session - Fatigue.cs:135-137, 255-258), the merc's traits, their character effects, their implants and their job nodes. Job nodes are read for completeness and contribute nothing: 0 of the 1,525 shipped JobNodeModel rows point at an effect carrying Wound Resist (Fatigue.cs:153-155). Armour counts too, since 2026-09-10 (David's ruling, reversing the 2026-08-30 one that kept gear out): the merc's armour row from ReadGameArmorByCharacter, its own effect plus any crafted upgrade, and any ArmorEffect (classification 9) arriving through another reader, counted once. Armour is the only reliably positive source, so it offsets the cyberware penalty; the roll line reports it as gear. False and every merc rolls the base chance."
+    },
+    {
+      "path": "woundResist.minChancePercent", "in": "json", "type": "int",
+      "default": 5, "range": [0, 100], "ui": "form",
+      "enabledBy": "woundResist.enabled",
+      "label": "Minimum chance after resist",
+      "doc": "The chance never falls below this however much resist a merc carries, so nobody is fully immune and minAffected always has someone to reach for. Set it to 0 to let resist cancel a chance outright."
+    },
+
+    {
+      "path": "deterministicRolls", "in": "json", "type": "bool",
+      "default": true, "ui": "form",
+      "label": "Deterministic rolls",
+      "doc": "Seed each roll from (mission turn, character id) so reloading the victory screen reproduces the same outcome. False makes the roll unseeded, which lets you reroll on save or load."
+    },
+    {
+      "path": "logGrants", "in": "json", "type": "bool",
+      "default": false, "ui": "form",
+      "label": "Log grants",
+      "doc": "One line per grant in the BepInEx log. Nothing about this feature is verifiable without it."
+    }
+  ],
+
+  "invariants": []
+}
