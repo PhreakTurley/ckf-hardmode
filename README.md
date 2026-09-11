@@ -1,5 +1,7 @@
 # CKF Hard Mode
 
+In the interest of full transparency all of the code and much of the text you can read was written by an LLM. All design and tuning choices were made by me.
+
 A BepInEx 6 (IL2CPP) plugin for *Cyber Knights: Flashpoint*. A difficulty
 overhaul: declarative row edits, the Power Level ceiling, Team PL awards,
 mission rewards, fatigue, and the mission-elapse penalty. Every number it uses
