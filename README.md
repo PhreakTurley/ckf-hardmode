@@ -2,10 +2,17 @@
 
 In the interest of full transparency all of the code and much of the text you can read was written by an LLM. All design and tuning choices were made by me.
 
-A BepInEx 6 (IL2CPP) plugin for *Cyber Knights: Flashpoint*. A difficulty
-overhaul: declarative row edits, the Power Level ceiling, Team PL awards,
-mission rewards, fatigue, and the mission-elapse penalty. Every number it uses
-is in a config file, editable through the GUI editor that ships with it.
+The mod is a BepInEx 6 (IL2CPP) plugin for *Cyber Knights: Flashpoint*.
+
+The mod has several features. Most of them can be turned on or off individually:
+1. Talent rebalance (buffs and nerfs), plus game rule tweaks that generally make the game harder
+2. Missions can now generate at Power Level 11-20, if your difficulty settings put them that high. Enemies' stats and gear will continue to scale up to PL 20.
+3. Greater freedom in tweaking the game's own difficulty modifiers (4x prices, 400% XP gain, etc.). You can easily grow this further.
+4. Mission rewards overhauled: PL gain per mission has changed to get teams to around PL 9-10 at the end of retirement. Pure Combat missions give more money/XP. Pure hacking missions generate less PL.
+5. New mechanic: Fatigue. Mercenaries might end up "Running Empty" (rolled vs Wound Resist), reducing their Initiative and XP gain for several days. If they run a mission while Running Empty, they'll be "Off-Duty" for several days.
+6. New mechanic: Guaranteed pay. Skipping a mission will still deduct credits roughly equal to what you'd have paid them for it. If the mission was for a Contact one of your mercs like, they'll take bonus Stress for ignoring their friend.
+
+Every number it uses is in a config file, editable through the GUI editor that ships with it. And if you don't like a mechanic, just turn it off with the included GUI.
 
 Not made by Trese Brothers Games and they cannot support it.
 
@@ -43,20 +50,6 @@ tuning/             alternate config sets, packaged as extra release assets
 `schema/*.schema.json` is the source of truth for the config: `gen_binds.py`
 emits `mods/CKFHardMode/Plugin.Binds.g.cs` and `gen_docs.py` emits
 `docs/config-reference.md`. Neither is hand-edited.
-
-## Building a release
-
-```
-python scripts/make_release.py
-```
-
-Builds the config editor exe, renders the `release/*.in` templates, and zips
-everything into `dist/CKF-Hard-Mode-<version>.zip`. `--selftest` runs the
-script's own checks without producing a zip. See `release/README.md` for what
-each template is and where it lands.
-
-`dist/` is gitignored — the built zip and any tuning-variant zips are
-distributed as GitHub Release assets, not committed here.
 
 ## Start here
 
