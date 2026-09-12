@@ -1,16 +1,47 @@
-# .NET build output
-mods/CKFHardMode/bin/
-mods/CKFHardMode/obj/
+# This folder holds both the public mod and the private research around it.
+# This file is an ALLOWLIST: everything is ignored unless a line below lets it
+# in, so a new file or folder stays private until it is added here on purpose.
 
-# Python
+/*
+
+!/.gitignore
+!/README.md
+!/CKF_Patch_Notes.txt
+
+# mechanics references and the workflow (the two below are research output)
+!/docs/
+/docs/_gamedb_surface.txt
+/docs/.gitkeep
+
+# the config editor; settings.json is per-machine (it holds a game path)
+!/gui/
+/gui/settings.json
+
+# the plugin source
+!/mods/
+/mods/*
+!/mods/CKFHardMode/
+/mods/CKFHardMode/bin/
+/mods/CKFHardMode/obj/
+
+# templates rendered into the player zip
+!/release/
+
+# the config schema
+!/schema/
+
+# the four scripts the build and the generated files depend on
+!/scripts/
+/scripts/*
+!/scripts/gen_binds.py
+!/scripts/gen_docs.py
+!/scripts/gen_teampl_labels.py
+!/scripts/make_release.py
+
+# the pinned BepInEx is unpacked here locally; only the how-to is published
+!/vendor/
+/vendor/*
+!/vendor/README.md
+
 __pycache__/
 *.pyc
-
-# gui/serve.py writes this next to itself on first run; it holds a local
-# game-folder path and nothing else
-gui/settings.json
-
-# scripts/make_release.py output — built locally, attached to GitHub Releases,
-# never committed
-dist/
-build/

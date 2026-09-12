@@ -3,6 +3,7 @@
 
     python scripts/make_release.py                 # build the exe, gate it, zip
     python scripts/make_release.py --skip-exe      # reuse dist/CKF-Config-Editor.exe
+    python scripts/make_release.py --config DIR    # package a config other than the live one
     python scripts/make_release.py --selftest      # prove every refusal can fire
 
 Everything a player gets comes from five places and this script checks all
@@ -12,22 +13,41 @@ five before it writes a byte:
   vendor/BepInEx-6.0.0-be.785/                          unpacked once, pinned
   dist/CKF-Config-Editor.exe                            built here by PyInstaller
   release/*.in                                          the three text templates
-  the CONFIG_FILES table below                          the seven config files
+  <game>/BepInEx/config/                                the live tuning
 
-THE CONFIG FILES SHIP LOOSE
+THE TUNING COMES FROM THE LIVE CONFIG, AND ONLY FROM THERE
+
+The config directory packaged is the one the editor edits: gui/settings.json,
+read through serve.py's own load_settings and config_dir_for, so "what I tuned
+in the editor" and "what the zip ships" cannot name two different folders.
+--config overrides it. The repo holds no copy of the tuning -- there used to be
+two (mods/CKFHardMode/defaults/ and overlays/), byte-identical to the live files
+and kept that way by hand, and they were removed on 2026-09-11 for exactly
+that reason. [David's ruling, 2026-09-11: one source of truth, the live config;
+he backs it up himself]
 
 The DLL embeds nothing. The eight files that live under BepInEx\\config -- the
 config document, the master-switch cfg, the rule set, the self-check input and
-the four files of ckf.hardmode.d -- are copied into the zip from the repo, and
-extracting the zip is what puts them on disk. Defaults.cs checks they are there
-and reports what is not; it writes nothing.
+the four files of ckf.hardmode.d -- are copied into the zip, and extracting
+the zip is what puts them on disk. Defaults.cs checks they are there and
+reports what is not; it writes nothing.
 
-That is what makes retuning the mod a text edit plus this script, with no
-dotnet build in the loop. Seven come out of CONFIG_FILES; the eighth,
+Seven come out of the live directory by the names in CONFIG_FILES. The eighth,
 ckf.hardmode.cfg, is rendered from release/ckf.hardmode.cfg.in so its header
-carries the release version. BepInEx rewrites that file on launch from the key
-the plugin binds, so shipping it only means the player's first launch is not
-what creates it.
+carries the release version. It ships with the mod switched on, whatever the
+live file says.
+BepInEx rewrites that file on launch from the key the plugin binds, so shipping
+it only means the player's first launch is not what creates it.
+
+Any OTHER file Overlays.Load would read out of ckf.hardmode.d (.csv, .tsv,
+.json) ships too, because the game on this machine loads it and a player
+without it plays a different mod. Anything in there the loader would not read
+is left out and named in the output. Nothing else at the top of BepInEx\\config
+ships -- BepInEx.cfg and other plugins' configs live there too.
+
+The files are copied into a temporary snapshot first, and every check, the
+gate and the zip all read the snapshot. A save made in the editor while the
+build runs therefore cannot put bytes in the zip that nothing validated.
 
 WHAT THE CHECKS ARE FOR
 
@@ -41,11 +61,22 @@ and is invisible until a player reports it.
   compared and any disagreement refuses. This is the check that catches the
   2.13.0 the sources sat on through Phases 0-5.
 
-  A config file can be missing from the repo.  A release that ships six of the
-  seven extracts cleanly and costs a subsystem everything it reads, and the
-  player sees one "Defaults: missing" line in a log they have no reason to
-  open. Every source in CONFIG_FILES is required and an absent one refuses by
-  name.
+  A config file can be missing from the live directory.  A release that ships
+  six of the seven extracts cleanly and costs a subsystem everything it reads,
+  and the player sees one "Defaults: missing" line in a log they have no
+  reason to open. Every name in CONFIG_FILES is required and an absent one
+  refuses by name.
+
+  The live config can be half-saved.  The editor's save is a journalled
+  transaction; a journal left in the directory means the teampl section and
+  its mirror may disagree. Its presence refuses, and opening the editor once
+  finishes the save (recover_journal).
+
+  The live config can be invalid.  It is the file David edits by hand as well
+  as through the editor, so the build runs the two checks the editor runs on a
+  save: check_schema.py over the snapshot (any problem refuses, not only the
+  RANGE and INVARIANT classes a save blocks on), and gen_teampl_labels.py
+  --check, which proves the Team PL mirror still agrees with its section.
 
   The document's layout stamp can drift from the code.  Defaults.DocVersion is
   what the C# calls the document's shape; the shipped document carries the same
@@ -86,8 +117,8 @@ Sorted paths, a fixed timestamp, fixed permissions. Two runs over unchanged
 inputs produce byte-identical zips, so "did anything actually change" is one
 md5 rather than a diff of two archives. --selftest asserts it.
 
-This script never touches a game install and never writes outside --out and
-its own temporary directories.
+This script reads the game's BepInEx\\config and never writes to it, or to
+anything else outside --out and its own temporary directories.
 """
 
 import argparse
@@ -95,12 +126,14 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
 import zipfile
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+GUI_DIR = os.path.join(REPO, 'gui')
 
 # ---------------------------------------------------------------------------
 # the pin
@@ -148,30 +181,32 @@ VENDOR_FORBIDDEN_PREFIXES = (
 PLUGIN_IN_ZIP = 'BepInEx/plugins/CKFHardMode.dll'
 EDITOR_IN_ZIP = 'CKF-Config-Editor.exe'
 
-# path in the repo -> path in the zip, which is a path under the game root
-# because that is what the zip extracts into. Seven files; the eighth,
-# BepInEx/config/ckf.hardmode.cfg, is rendered from a template and is in
-# TEMPLATES below.
+# Paths under BepInEx/config, forward-slashed, read out of the live config
+# directory and written to the same path under BepInEx/config in the zip.
+# Seven files; the eighth, ckf.hardmode.cfg, is rendered from a template and is
+# in TEMPLATES below.
 #
 # The other half of this table is `Expected` in mods/CKFHardMode/Defaults.cs,
 # which is what checks at runtime that they arrived. Nothing derives either
 # list from the other; change one and change the other.
 CONFIG_FILES = (
-    ('mods/CKFHardMode/defaults/ckf.hardmode.json',
-     'BepInEx/config/ckf.hardmode.json'),
-    ('mods/CKFHardMode/defaults/ckf.hardmode.selfcheck.csv',
-     'BepInEx/config/ckf.hardmode.selfcheck.csv'),
-    ('mods/CKFHardMode/defaults/ckf.hardmode.d/MissionPowerLevelModel.generated.json',
-     'BepInEx/config/ckf.hardmode.d/MissionPowerLevelModel.generated.json'),
-    ('overlays/ckf.hardmode.rules.json',
-     'BepInEx/config/ckf.hardmode.rules.json'),
-    ('overlays/ArmorModel.csv',
-     'BepInEx/config/ckf.hardmode.d/ArmorModel.csv'),
-    ('overlays/WeaponModel.csv',
-     'BepInEx/config/ckf.hardmode.d/WeaponModel.csv'),
-    ('overlays/MonsterTypeModel.csv',
-     'BepInEx/config/ckf.hardmode.d/MonsterTypeModel.csv'),
+    'ckf.hardmode.json',
+    'ckf.hardmode.selfcheck.csv',
+    'ckf.hardmode.rules.json',
+    'ckf.hardmode.d/ArmorModel.csv',
+    'ckf.hardmode.d/WeaponModel.csv',
+    'ckf.hardmode.d/MonsterTypeModel.csv',
+    'ckf.hardmode.d/MissionPowerLevelModel.generated.json',
 )
+CONFIG_IN_ZIP = 'BepInEx/config/'
+DOC_NAME = 'ckf.hardmode.json'
+CFG_NAME = 'ckf.hardmode.cfg'
+
+# The extensions Overlays.Load reads out of ckf.hardmode.d (Overlays.cs, the
+# Directory.GetFiles filter). A file there with one of these is loaded by the
+# game, so it ships; anything else is not, so it does not.
+OVERLAY_DIR = 'ckf.hardmode.d'
+OVERLAY_EXTS = ('.csv', '.tsv', '.json')
 
 # release/<name> -> path in the zip. Rendered through `render`, which fills the
 # placeholders and folds to CRLF. ckf.hardmode.cfg is here rather than in
@@ -187,9 +222,8 @@ DEFAULT_DLL = os.path.join(REPO, 'mods', 'CKFHardMode', 'bin', 'Release',
 CSPROJ = os.path.join(REPO, 'mods', 'CKFHardMode', 'CKFHardMode.csproj')
 PLUGIN_CS = os.path.join(REPO, 'mods', 'CKFHardMode', 'Plugin.cs')
 DEFAULTS_CS = os.path.join(REPO, 'mods', 'CKFHardMode', 'Defaults.cs')
-DOC_SRC = os.path.join(REPO, 'mods', 'CKFHardMode', 'defaults',
-                       'ckf.hardmode.json')
 SPEC = os.path.join(REPO, 'gui', 'ckf-config-editor.spec')
+TEAMPL_LABELS = os.path.join(REPO, 'scripts', 'gen_teampl_labels.py')
 RELEASE_DIR = os.path.join(REPO, 'release')
 
 # Windows names it CKF-Config-Editor.exe; a container build is an ELF with no
@@ -283,30 +317,191 @@ def check_versions(dll_bytes, csproj=CSPROJ, plugin_cs=PLUGIN_CS):
 
 
 # ---------------------------------------------------------------------------
-# the config files that ship loose
+# the config files that ship loose, out of the live config directory
 
-def config_sources(repo=REPO):
-    """-> [(absolute source, path in zip)] for CONFIG_FILES, all of them present.
+def _serve():
+    """gui/serve.py, imported for what this script has to agree with it on:
+    which directory the editor edits, the name of its save journal, and how
+    check_schema's output is read. Imported, not restated, so the two cannot
+    drift. serve.py is stdlib only and does nothing at import."""
+    if GUI_DIR not in sys.path:
+        sys.path.insert(0, GUI_DIR)
+    import serve
+    return serve
 
-    Required, not optional. A zip with six of the seven extracts cleanly and
-    costs one subsystem everything it reads, so an absent source refuses here
-    and names itself rather than shipping a config surface with a hole in it.
+
+def default_config_dir():
+    """The directory the editor edits: gui/settings.json, or the default game
+    path when that file names none."""
+    s = _serve()
+    return s.config_dir_for(s.load_settings())
+
+
+def config_sources(config_dir):
+    """-> ([(absolute source, path in zip)], [names left out]).
+
+    Every name in CONFIG_FILES is required. A zip with six of the seven
+    extracts cleanly and costs one subsystem everything it reads, so an absent
+    one refuses here and names itself rather than shipping a config surface
+    with a hole in it.
+
+    Every other file in ckf.hardmode.d that Overlays.Load would read ships as
+    well, after the required ones. Anything else in that directory is returned
+    in the second list so the caller can say it was left out: a file skipped
+    without a word would be a silent difference between the machine the build
+    ran on and every player's.
     """
+    if not os.path.isdir(config_dir):
+        raise Refused(
+            'no config directory at %s.\n'
+            'The release packages the live BepInEx\\config. Set the game '
+            'folder in the editor (gui/settings.json), or name the directory:\n'
+            '    python scripts\\make_release.py --config "<game>\\BepInEx\\config"'
+            % config_dir)
+    journal = os.path.join(config_dir, _serve().JOURNAL_NAME)
+    if os.path.exists(journal):
+        raise Refused(
+            '%s is there, so an editor save did not finish and the teampl '
+            'section and its mirror may disagree. Start the editor once -- it '
+            'completes the save on start -- and build again.' % journal)
     out, missing = [], []
-    for src, dest in CONFIG_FILES:
-        path = os.path.join(repo, *src.split('/'))
-        if not os.path.exists(path):
-            missing.append(src)
-        out.append((path, dest))
+    for rel in CONFIG_FILES:
+        path = os.path.join(config_dir, *rel.split('/'))
+        if not os.path.isfile(path):
+            missing.append(rel)
+        out.append((path, CONFIG_IN_ZIP + rel))
     if missing:
         raise Refused(
             'the release ships these as loose files under BepInEx\\config and '
-            'they are not in the repo:\n'
+            'they are not in %s:\n' % config_dir
             + ''.join('    %s\n' % m for m in missing)
             + 'Every one of them is required; the mod does not write them and '
               'a player who does not have one gets a subsystem with nothing to '
               'read.')
-    return out
+    skipped = []
+    # By case-folded name, then by identity: Windows finds ArmorModel.csv as
+    # armormodel.csv above, and listdir then returns it under its own
+    # spelling, which a plain compare would ship a second time.
+    listed = dict((r.lower(), r) for r in CONFIG_FILES)
+    overlay_dir = os.path.join(config_dir, OVERLAY_DIR)
+    for name in sorted(os.listdir(overlay_dir)):
+        rel = OVERLAY_DIR + '/' + name
+        path = os.path.join(overlay_dir, name)
+        canon = listed.get(rel.lower())
+        if canon and (canon == rel or os.path.samefile(
+                path, os.path.join(config_dir, *canon.split('/')))):
+            continue
+        if os.path.isfile(path) and name.lower().endswith(OVERLAY_EXTS):
+            out.append((path, CONFIG_IN_ZIP + rel))
+        else:
+            skipped.append(rel + ('/' if os.path.isdir(path) else ''))
+    return out, skipped
+
+
+def _stamp(path):
+    st = os.stat(path)
+    return st.st_size, st.st_mtime_ns
+
+
+def snapshot_config(sources, snap, cfg_bytes, config_dir=None):
+    """Copy what ships into `snap`, shaped like BepInEx/config. -> snap.
+
+    The .cfg written here is the rendered template, the one the zip carries,
+    so check_schema reads the same master switch a player gets rather than
+    whatever the live one happens to say.
+
+    A save in the editor while this copies would leave a snapshot that is half
+    one config and half another, and only the Team PL pair has a check that
+    would notice. So each source's size and mtime are taken before and after
+    its copy, and the save journal is looked for again once everything is
+    copied; either refuses. `config_dir` is where to look for the journal.
+    """
+    for src, dest in sources:
+        p = os.path.join(snap, *dest[len(CONFIG_IN_ZIP):].split('/'))
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        before = _stamp(src)
+        shutil.copyfile(src, p)
+        if _stamp(src) != before:
+            raise Refused('%s changed while it was being copied -- was the '
+                          'editor saving? Build again.' % src)
+    if config_dir and os.path.exists(
+            os.path.join(config_dir, _serve().JOURNAL_NAME)):
+        raise Refused('an editor save started while the config was being '
+                      'copied, so the copy may be half of each. Let it finish '
+                      'and build again.')
+    with open(os.path.join(snap, CFG_NAME), 'wb') as f:
+        f.write(cfg_bytes)
+    return snap
+
+
+def check_json(config_dir):
+    """Refuses unless every .json that ships parses.
+
+    check_schema reads ckf.hardmode.json and nothing else, so the rule set,
+    the Team PL mirror and any extra rules file in ckf.hardmode.d would
+    otherwise ship unread. Parsed the way the engine reads them -- // and /* */
+    comments and trailing commas allowed -- through check_schema's own
+    load_jsonc. The CSVs have no equivalent here: what a cell means depends on
+    the dump, which is scripts/validate_rules.py's job and needs --game.
+    """
+    load = _serve().check_schema.load_jsonc
+    bad = []
+    for root, _dirs, names in os.walk(config_dir):
+        for name in sorted(names):
+            if name.lower().endswith('.json'):
+                p = os.path.join(root, name)
+                try:
+                    load(p)
+                except Exception as e:
+                    bad.append('    %s: %s' % (os.path.relpath(p, config_dir), e))
+    if bad:
+        raise Refused('these would ship and the game could not read them:\n%s'
+                      % '\n'.join(bad))
+
+
+def check_config(config_dir, schema_run=None, teampl_cmd=None):
+    """Refuses unless check_schema finds nothing and the Team PL mirror is
+    current. `schema_run` and `teampl_cmd` are there for --selftest.
+
+    check_schema is run through serve.run_check_schema, which already refuses
+    to read a truncated or summary-less run as clean. Every problem class
+    refuses here, not only the two a save blocks on: a save is one field
+    changing, a release is every player's starting config.
+    """
+    r = (schema_run or _serve().run_check_schema)(config_dir)
+    if not r.get('ran'):
+        raise Refused('check_schema did not finish, so the config is '
+                      'unchecked and its silence is not a pass:\n%s'
+                      % (r.get('error') or '(no detail)'))
+    if r.get('problems'):
+        raise Refused(
+            'check_schema found %d problem(s) in the config about to ship:\n%s'
+            'Fix them in the editor or the file, then build again. To see the '
+            'same list yourself:\n'
+            '    python schema\\check_schema.py --config "%s"'
+            % (len(r['problems']),
+               ''.join('    %s  %s\n' % (p.get('kind'), p.get('message'))
+                       for p in r['problems']),
+               config_dir))
+    cmd = teampl_cmd or [sys.executable, TEAMPL_LABELS,
+                         '--config', config_dir, '--check']
+    try:
+        t = subprocess.run(cmd, cwd=REPO, stdin=subprocess.DEVNULL,
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        out = t.stdout.decode('utf-8', 'replace')
+        code = t.returncode
+    except Exception as e:
+        out, code = '%s: %s' % (type(e).__name__, e), None
+    # The exit code AND the line it prints when current: an interpreter that
+    # died before printing anything also exits non-zero, but a stub that
+    # printed nothing and exited 0 must not read as current either.
+    if code != 0 or 'current' not in out:
+        raise Refused(
+            'the Team PL mirror (ckf.hardmode.d/MissionPowerLevelModel.'
+            'generated.json) does not agree with the teampl section, or the '
+            'check could not run (exit %s):\n%s\n'
+            'Saving the teampl section in the editor regenerates it.'
+            % (code, out.strip()[-2000:]))
 
 
 _DOC_VERSION = re.compile(r'DocVersion\s*=\s*"([^"]+)"')
@@ -320,7 +515,7 @@ def defaults_cs_doc_version(defaults_cs=DEFAULTS_CS):
     return m.group(1)
 
 
-def check_doc_version(defaults_cs=DEFAULTS_CS, doc=DOC_SRC):
+def check_doc_version(doc, defaults_cs=DEFAULTS_CS):
     """-> the layout version, once the C# and the shipped document agree on it.
 
     Two literals in two files with nothing deriving one from the other. The
@@ -507,9 +702,13 @@ def find_exe(dist_dir):
 
 
 def build_exe(dist_dir, spec=SPEC, cwd=REPO):
-    """PyInstaller, from the repo root, into dist_dir. -> the built path."""
+    """PyInstaller, from the repo root, into dist_dir. -> the built path.
+
+    Its scratch goes to dist_dir/build rather than PyInstaller's default of
+    ./build, so a release leaves one ignored directory behind, not two."""
     cmd = [sys.executable, '-m', 'PyInstaller', '--noconfirm',
-           '--distpath', dist_dir, spec]
+           '--distpath', dist_dir,
+           '--workpath', os.path.join(dist_dir, 'build'), spec]
     r = subprocess.run(cmd, cwd=cwd, stdout=subprocess.PIPE,
                        stderr=subprocess.STDOUT)
     if r.returncode != 0:
@@ -611,16 +810,21 @@ def run_gate(cmd, cwd=REPO):
             'fails': _blocks(out, 'FAIL')}
 
 
-def gate(exe, cwd=REPO, cmd=None, echo=True, log_dir=None):
+def gate(exe, cwd=REPO, cmd=None, echo=True, log_dir=None, config_dir=None):
     """Refuses on a FAIL or on a suite that printed no result. Prints NOT RUN.
 
     A refusal carries each failing case WITH its detail line and writes the
     whole run to `log_dir/selftest-failed.log`, so the next question is never
     "re-run it and paste more" -- a re-run of a teardown that failed once is
     not the same sample.
+
+    `config_dir` is the snapshot about to ship. The suite copies its fixtures
+    out of it and never writes to it, so the gate runs against the config the
+    zip carries rather than whatever settings.json names at that moment.
     """
-    cmd = cmd or [sys.executable, os.path.join(cwd, 'gui', 'serve.py'),
-                  '--selftest', '--frozen-exe', exe]
+    cmd = cmd or ([sys.executable, os.path.join(cwd, 'gui', 'serve.py'),
+                   '--selftest', '--frozen-exe', exe]
+                  + (['--config', config_dir] if config_dir else []))
     g = run_gate(cmd, cwd=cwd)
     log_hint = ''
     if (not g['ran'] or g['failed']) and log_dir:
@@ -683,18 +887,18 @@ def render(src, version):
     return text.replace('\r\n', '\n').replace('\n', '\r\n').encode('utf-8')
 
 
-def collect(vendor_dir, dll, exe, version, release_dir=RELEASE_DIR, repo=REPO):
+def collect(vendor_dir, dll, exe, version, config_dir, release_dir=RELEASE_DIR):
     """-> {path in zip: bytes}, the whole release, before any of it is written."""
     out = {}
     for rel in vendor_files(vendor_dir):
         out[rel] = read_bytes(os.path.join(vendor_dir, rel))
     out[PLUGIN_IN_ZIP] = read_bytes(dll)
     out[EDITOR_IN_ZIP] = read_bytes(exe)
-    # The config files, byte for byte as they are in the repo. Copied, not
+    # The config files, byte for byte as they are on disk. Copied, not
     # rendered: these are the files the mod reads and the editor edits, and a
     # substitution or a line-ending fold in one of them would change what the
     # game loads.
-    for src, dest in config_sources(repo):
+    for src, dest in config_sources(config_dir)[0]:
         out[dest] = read_bytes(src)
     for name, dest in TEMPLATES:
         src = os.path.join(release_dir, name)
@@ -720,33 +924,56 @@ def write_zip(path, members):
 
 # ---------------------------------------------------------------------------
 
-def build(out_dir, vendor_dir, dll, skip_exe=False, echo=True):
-    """-> the zip path. Every refusal happens before anything is written."""
+def build(out_dir, vendor_dir, dll, config_dir, skip_exe=False, echo=True,
+          gate_fn=None, check_fn=None):
+    """-> the zip path.
+
+    Every refusal about the inputs -- DLL, versions, config, vendor tree --
+    happens before PyInstaller runs. The exe is then built into out_dir and
+    gated; a gate refusal leaves that exe and selftest-failed.log there, and no
+    zip. The zip is written last."""
     if not os.path.exists(dll):
         raise Refused('no plugin at %s. Build it:\n'
                       '    dotnet build -c Release' % dll)
     dll_bytes = read_bytes(dll)
     version = check_versions(dll_bytes)
-    doc_version = check_doc_version()
-    # Called for the refusal, not for the count: a config file missing from the
-    # repo is found before PyInstaller runs rather than after.
-    n_config = len(config_sources()) + sum(
-        1 for _, dest in TEMPLATES if dest.startswith('BepInEx/config/'))
+    # Found before PyInstaller runs rather than after: a missing file, a
+    # half-finished editor save.
+    sources, skipped = config_sources(config_dir)
     build_no, commit = check_vendor(vendor_dir)
-    if echo:
-        print('  version %s, in the csproj, Plugin.cs and the DLL' % version)
-        print('  %d config file(s) shipping loose under BepInEx\\config, at '
-              'document _version %s' % (n_config, doc_version))
-        print('  BepInEx %s+%s' % (build_no, commit[:7]))
 
-    os.makedirs(out_dir, exist_ok=True)
-    exe = find_exe(out_dir) if skip_exe else build_exe(out_dir)
-    if echo:
-        print('  editor %s (%d bytes)'
-              % (os.path.basename(exe), os.path.getsize(exe)))
-    gate(exe, echo=echo, log_dir=out_dir)
+    with tempfile.TemporaryDirectory(prefix='ckf-release-config-',
+                                     ignore_cleanup_errors=True) as snap:
+        snapshot_config(sources, snap, render(
+            os.path.join(RELEASE_DIR, 'ckf.hardmode.cfg.in'), version),
+            config_dir)
+        doc_version = check_doc_version(os.path.join(snap, DOC_NAME))
+        check_json(snap)
+        (check_fn or check_config)(snap)
+        if echo:
+            print('  version %s, in the csproj, Plugin.cs and the DLL' % version)
+            print('  config from %s' % config_dir)
+            print('  %d config file(s) shipping loose under BepInEx\\config, at '
+                  'document _version %s; every .json parses, check_schema '
+                  'clean, Team PL mirror current'
+                  % (len(sources) + 1, doc_version))
+            for _src, dest in sources[len(CONFIG_FILES):]:
+                print('    also shipping %s (the loader reads it)' % dest)
+            for rel in skipped:
+                print('    NOT shipping %s (the loader would not read it)' % rel)
+            print('  BepInEx %s+%s' % (build_no, commit[:7]))
 
-    members = collect(vendor_dir, dll, exe, version)
+        os.makedirs(out_dir, exist_ok=True)
+        exe = find_exe(out_dir) if skip_exe else build_exe(out_dir)
+        if echo:
+            print('  editor %s (%d bytes)'
+                  % (os.path.basename(exe), os.path.getsize(exe)))
+        (gate_fn or gate)(exe, echo=echo, log_dir=out_dir, config_dir=snap)
+
+        members = collect(vendor_dir, dll, exe, version, snap)
+    if echo and os.path.exists(snap):
+        print('  (the config snapshot could not be removed and is still at %s)'
+              % snap)
     path = os.path.join(out_dir, 'CKF-Hard-Mode-%s.zip' % version)
     write_zip(path, members)
     if echo:
@@ -829,13 +1056,11 @@ _STUB_DEFAULTS_CS = '''namespace CKFHardMode {
 '''
 
 
-def _fake_repo(td, version='3.0.0', doc_version='3.0.0', dll_extra=b'',
-               config=CONFIG_FILES):
+def _fake_repo(td, version='3.0.0', doc_version='3.0.0', dll_extra=b''):
     """A tree shaped like the real one, small enough to build in a loop.
 
-    Every source in `config` is written with its own bytes, so a case can
-    assert that each one reaches the zip as itself rather than that some file
-    of the right length did.
+    It carries no config: the config comes from a directory of its own, see
+    _fake_config. The Defaults.cs here holds `doc_version`.
     """
     proj = os.path.join(td, 'mods', 'CKFHardMode')
     os.makedirs(proj)
@@ -848,20 +1073,45 @@ def _fake_repo(td, version='3.0.0', doc_version='3.0.0', dll_extra=b'',
         f.write(_STUB_PLUGIN_CS % version)
     with open(defaults_cs, 'w') as f:
         f.write(_STUB_DEFAULTS_CS % doc_version)
-    for src, _dest in config:
-        p = os.path.join(td, *src.split('/'))
-        os.makedirs(os.path.dirname(p), exist_ok=True)
-        with open(p, 'wb') as f:
-            f.write(_stub_config_bytes(src, doc_version))
     dll = b'MZ\x90\x00' + version_blob(version) + b'\x00' + dll_extra
     return csproj, plugin_cs, dll
 
 
-def _stub_config_bytes(src, doc_version='3.0.0'):
-    """Distinct bytes per source, and real JSON for the config document."""
-    if src.endswith('defaults/ckf.hardmode.json'):
-        return ('{"_version": "%s", "from": "%s"}\n' % (doc_version, src)).encode()
-    return ('from %s\n' % src).encode()
+def _fake_config(td, doc_version='3.0.0', extra=()):
+    """A BepInEx/config directory holding every name in CONFIG_FILES, plus
+    `extra` (names under it), plus the files a real one also holds and that
+    must never ship. -> its path.
+
+    Every file is written with its own bytes, so a case can assert that each
+    one reaches the zip as itself rather than that some file of the right
+    length did.
+    """
+    cd = os.path.join(td, 'config')
+    for rel in tuple(CONFIG_FILES) + tuple(extra) + (
+            'BepInEx.cfg', 'ckf.datadump.cfg', CFG_NAME):
+        p = os.path.join(cd, *rel.split('/'))
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        with open(p, 'wb') as f:
+            f.write(_stub_config_bytes(rel, doc_version))
+    return cd
+
+
+def _stub_config_bytes(rel, doc_version='3.0.0'):
+    """Distinct bytes per file, and real JSON for every .json."""
+    if rel == DOC_NAME:
+        return ('{"_version": "%s", "from": "%s"}\n' % (doc_version, rel)).encode()
+    if rel.endswith('.json'):
+        return ('{"from": "%s"}\n' % rel).encode()
+    return ('from %s\n' % rel).encode()
+
+
+def _stub_schema_run(ran=True, problems=(), error=None):
+    return lambda _cd: {'ran': ran, 'problems': list(problems), 'error': error}
+
+
+def _stub_teampl_cmd(code=0, text='MissionPowerLevelModel.generated.json current'):
+    return [sys.executable, '-c',
+            'import sys; print(%r); sys.exit(%d)' % (text, code)]
 
 
 def _fake_release_dir(td):
@@ -996,24 +1246,78 @@ def selftest():
                   lambda: check_versions(dll, csproj, plugin_cs),
                   'built before the bump')
 
-    print('\n[2] the config files ship loose, and all of them ship')
+    print('\n[2] the config files come out of the live directory, and all of them ship')
     with tempfile.TemporaryDirectory() as td:
-        _fake_repo(td)
-        got = config_sources(td)
-        t.check('every source in CONFIG_FILES is found and mapped',
+        cd = _fake_config(td)
+        got, skipped = config_sources(cd)
+        t.check('every name in CONFIG_FILES is found and mapped to the same '
+                'path under BepInEx/config',
                 len(got) == len(CONFIG_FILES)
-                and all(os.path.exists(p) for p, _ in got)
-                and [d for _, d in got] == [d for _, d in CONFIG_FILES], got)
+                and all(os.path.isfile(p) for p, _ in got)
+                and [d for _, d in got]
+                == [CONFIG_IN_ZIP + r for r in CONFIG_FILES]
+                and not skipped, (got, skipped))
+        t.check('BepInEx.cfg, other plugins\' configs and the live .cfg are '
+                'not shipped',
+                not [d for _, d in got
+                     if d.endswith(('BepInEx.cfg', 'ckf.datadump.cfg', CFG_NAME))],
+                got)
 
-    for _src, _dest in CONFIG_FILES:
+    for _rel in CONFIG_FILES:
         with tempfile.TemporaryDirectory() as td:
-            _fake_repo(td)
-            os.remove(os.path.join(td, *_src.split('/')))
-            t.refuses('a release missing %s refuses, by name' % _src,
-                      (lambda s=td: config_sources(s)), _src)
+            cd = _fake_config(td)
+            os.remove(os.path.join(cd, *_rel.split('/')))
+            t.refuses('a config directory missing %s refuses, by name' % _rel,
+                      (lambda c=cd: config_sources(c)), _rel)
 
     with tempfile.TemporaryDirectory() as td:
-        _fake_repo(td)
+        t.refuses('an absent config directory refuses and says how to name one',
+                  lambda: config_sources(os.path.join(td, 'nope')), '--config')
+
+    with tempfile.TemporaryDirectory() as td:
+        cd = _fake_config(td)
+        with open(os.path.join(cd, _serve().JOURNAL_NAME), 'w') as f:
+            f.write('{}')
+        t.refuses('a half-finished editor save refuses',
+                  lambda: config_sources(cd), 'did not finish')
+
+    with tempfile.TemporaryDirectory() as td:
+        cd = _fake_config(td, extra=(
+            'ckf.hardmode.d/WeaponModel.test.csv',
+            'ckf.hardmode.d/ArmorModel.extra.TSV',
+            'ckf.hardmode.d/late.rules.json',
+            'ckf.hardmode.d/notes.txt',
+            'ckf.hardmode.d/ArmorModel.csv.gui-new',
+            'ckf.hardmode.d/_reference/gear-tiers.csv'))
+        got, skipped = config_sources(cd)
+        dests = [d for _, d in got]
+        t.check('every other file the loader reads out of ckf.hardmode.d '
+                'ships too, after the required ones',
+                dests[len(CONFIG_FILES):] == [
+                    CONFIG_IN_ZIP + 'ckf.hardmode.d/' + n for n in
+                    ('ArmorModel.extra.TSV', 'WeaponModel.test.csv',
+                     'late.rules.json')], dests)
+        t.check('and everything the loader would not read is left out and '
+                'named, a subdirectory included',
+                skipped == ['ckf.hardmode.d/ArmorModel.csv.gui-new',
+                            'ckf.hardmode.d/_reference/',
+                            'ckf.hardmode.d/notes.txt'], skipped)
+
+    with tempfile.TemporaryDirectory() as td:
+        cd = _fake_config(td, extra=('ckf.hardmode.d/WeaponModel.test.csv',))
+        sources, _sk = config_sources(cd)
+        snap = snapshot_config(sources, os.path.join(td, 'snap'), b'rendered cfg\r\n')
+        again, _sk = config_sources(snap)
+        t.check('the snapshot holds every shipped file byte for byte, and the '
+                'rendered .cfg rather than the live one',
+                [d for _, d in again] == [d for _, d in sources]
+                and all(read_bytes(a) == read_bytes(b)
+                        for (a, _), (b, _) in zip(sources, again))
+                and read_bytes(os.path.join(snap, CFG_NAME)) == b'rendered cfg\r\n'
+                and not os.path.exists(os.path.join(snap, 'BepInEx.cfg')))
+
+    with tempfile.TemporaryDirectory() as td:
+        cd = _fake_config(td)
         v = _fake_vendor(td)
         rel = _fake_release_dir(td)
         dll = os.path.join(td, 'stub.dll')
@@ -1021,87 +1325,186 @@ def selftest():
         for p in (dll, exe):
             with open(p, 'wb') as f:
                 f.write(b'binary\n')
-        members = collect(v, dll, exe, '3.0.0', release_dir=rel, repo=td)
-        wrong = [dest for src, dest in CONFIG_FILES
-                 if members.get(dest) != _stub_config_bytes(src)]
+        members = collect(v, dll, exe, '3.0.0', cd, release_dir=rel)
+        wrong = [r for r in CONFIG_FILES
+                 if members.get(CONFIG_IN_ZIP + r) != _stub_config_bytes(r)]
         t.check('every config file is in the zip at its mapped path, '
-                'byte-identical to the repo copy', not wrong, wrong)
+                'byte-identical to the live copy', not wrong, wrong)
         _cfg = members.get('BepInEx/config/ckf.hardmode.cfg')
         t.check('the master switch lands in BepInEx/config with its version '
-                'filled in and the key BepInEx binds',
+                'filled in and the key BepInEx binds, not the live file',
                 _cfg is not None
                 and b'CKF Hard Mode v3.0.0\r\n' in _cfg
                 and b'\r\n[General]\r\n' in _cfg
                 and b'\r\nEnabled = true\r\n' in _cfg,
                 _cfg)
-        t.check('and nothing else was dropped on the way in',
+        t.check('and nothing else was dropped on the way in, nor picked up',
                 members[PLUGIN_IN_ZIP] == b'binary\n'
                 and members[EDITOR_IN_ZIP] == b'binary\n'
                 and 'README.txt' in members
-                and 'BepInEx/core/BepInEx.Core.dll' in members,
+                and 'BepInEx/core/BepInEx.Core.dll' in members
+                and 'BepInEx/config/BepInEx.cfg' not in members
+                and 'BepInEx/config/ckf.datadump.cfg' not in members,
                 sorted(k for k in members if not k.startswith('dotnet/')))
 
     with tempfile.TemporaryDirectory() as td:
-        _fake_repo(td)
+        cd = _fake_config(td)
         v = _fake_vendor(td)
         rel = _fake_release_dir(td)
         dll = os.path.join(td, 'stub.dll')
         with open(dll, 'wb') as f:
             f.write(b'binary\n')
-        os.remove(os.path.join(td, 'overlays', 'MonsterTypeModel.csv'))
+        os.remove(os.path.join(cd, 'ckf.hardmode.d', 'MonsterTypeModel.csv'))
         t.refuses('and collect refuses too, rather than writing a zip with a '
                   'hole in its config surface',
-                  lambda: collect(v, dll, dll, '3.0.0', release_dir=rel,
-                                  repo=td),
-                  'overlays/MonsterTypeModel.csv')
+                  lambda: collect(v, dll, dll, '3.0.0', cd, release_dir=rel),
+                  'ckf.hardmode.d/MonsterTypeModel.csv')
+
+    with tempfile.TemporaryDirectory() as td:
+        cd = _fake_config(td)
+        sources, _sk = config_sources(cd)
+        with open(os.path.join(cd, _serve().JOURNAL_NAME), 'w') as f:
+            f.write('{}')
+        t.refuses('a save that starts while the snapshot is being taken refuses',
+                  lambda: snapshot_config(sources, os.path.join(td, 'snap'),
+                                          b'cfg', cd), 'save started')
+
+    print('\n[2b] every .json that ships parses, comments and trailing commas '
+          'allowed')
+    with tempfile.TemporaryDirectory() as td:
+        cd = _fake_config(td)
+        for rel, body in (('ckf.hardmode.json', '{"_version": "1.0.0"}'),
+                          ('ckf.hardmode.rules.json',
+                           '// a comment\n{"rules": [1, 2,], /* x */ }\n'),
+                          ('ckf.hardmode.d/MissionPowerLevelModel.generated.json',
+                           '{}')):
+            with open(os.path.join(cd, *rel.split('/')), 'w') as f:
+                f.write(body)
+        t.check('the shipped JSON, written the way the engine reads it, passes',
+                check_json(cd) is None)
+        with open(os.path.join(cd, 'ckf.hardmode.d', 'late.rules.json'), 'w') as f:
+            f.write('{"rules": [ oops ]}')
+        t.refuses('an extra rules file that does not parse refuses, by name',
+                  lambda: check_json(cd), 'late.rules.json')
+
+    with tempfile.TemporaryDirectory() as td:
+        cd = _fake_config(td)
+        seen = {}
+        v = _fake_vendor(td)
+        dll = os.path.join(td, 'CKFHardMode.dll')
+        with open(dll, 'wb') as f:
+            f.write(b'MZ' + version_blob(csproj_version()) + b'\x00')
+        with open(os.path.join(cd, DOC_NAME), 'w') as f:
+            f.write('{"_version": "%s"}\n' % defaults_cs_doc_version())
+        out = os.path.join(td, 'dist')
+        os.makedirs(out)
+        with open(os.path.join(out, EXE_NAMES[0]), 'wb') as f:
+            f.write(b'exe')
+
+        def _check(d):
+            seen['check'] = d
+            seen['listing'] = sorted(os.listdir(d))
+            # Marks the snapshot's copy, so the zip can be shown to come
+            # from the snapshot and not from a second read of the live file.
+            with open(os.path.join(d, 'ckf.hardmode.selfcheck.csv'), 'ab') as f:
+                f.write(b'#snap\n')
+
+        def _gate(exe, **kw):
+            seen['gate'] = kw.get('config_dir')
+        try:
+            z = build(out, v, dll, cd, skip_exe=True, echo=False,
+                      gate_fn=_gate, check_fn=_check)
+            with zipfile.ZipFile(z) as zf:
+                shipped = dict((n, zf.read(n)) for n in zf.namelist()
+                               if n.startswith(CONFIG_IN_ZIP))
+        except Refused as e:
+            z, shipped = None, {'refused': str(e)}
+        t.check('a whole build checks and gates the snapshot, not the live '
+                'directory, and the snapshot is gone afterwards',
+                seen.get('check') and seen.get('check') == seen.get('gate')
+                and os.path.dirname(seen['check']) != td
+                and not os.path.exists(seen['check'])
+                and CFG_NAME in seen.get('listing', ()), seen)
+        t.check('and the zip carries the snapshot\'s bytes and the rendered .cfg',
+                z is not None
+                and all(shipped.get(CONFIG_IN_ZIP + r)
+                        == read_bytes(os.path.join(cd, *r.split('/')))
+                        + (b'#snap\n' if r == 'ckf.hardmode.selfcheck.csv' else b'')
+                        for r in CONFIG_FILES)
+                and shipped.get(CONFIG_IN_ZIP + CFG_NAME, b'').startswith(
+                    b'## Settings file was created by plugin CKF Hard Mode v'
+                    + csproj_version().encode()),
+                sorted(shipped))
 
     print('\n[3] the document stamp and Defaults.DocVersion agree')
     with tempfile.TemporaryDirectory() as td:
         _fake_repo(td)
+        cd = _fake_config(td)
         proj = os.path.join(td, 'mods', 'CKFHardMode')
-        doc = os.path.join(proj, 'defaults', 'ckf.hardmode.json')
         t.check('two files carrying the same stamp read back as one',
-                check_doc_version(os.path.join(proj, 'Defaults.cs'), doc)
+                check_doc_version(os.path.join(cd, DOC_NAME),
+                                  os.path.join(proj, 'Defaults.cs'))
                 == '3.0.0')
 
     with tempfile.TemporaryDirectory() as td:
-        _fake_repo(td, doc_version='3.0.0')
+        _fake_repo(td, doc_version='3.1.0')
+        cd = _fake_config(td, doc_version='3.0.0')
         proj = os.path.join(td, 'mods', 'CKFHardMode')
-        with open(os.path.join(proj, 'Defaults.cs'), 'w') as f:
-            f.write(_STUB_DEFAULTS_CS % '3.1.0')
         t.refuses('a document left behind the code refuses, naming both',
-                  lambda: check_doc_version(
-                      os.path.join(proj, 'Defaults.cs'),
-                      os.path.join(proj, 'defaults', 'ckf.hardmode.json')),
+                  lambda: check_doc_version(os.path.join(cd, DOC_NAME),
+                                            os.path.join(proj, 'Defaults.cs')),
                   'drifted apart')
 
     with tempfile.TemporaryDirectory() as td:
         _fake_repo(td)
+        cd = _fake_config(td)
         proj = os.path.join(td, 'mods', 'CKFHardMode')
-        doc = os.path.join(proj, 'defaults', 'ckf.hardmode.json')
+        doc = os.path.join(cd, DOC_NAME)
         with open(doc, 'w') as f:
             f.write('{"_version": "3.0.0",\n')
         t.refuses('a config document that is not JSON refuses rather than '
                   'shipping a file the mod cannot read',
-                  lambda: check_doc_version(os.path.join(proj, 'Defaults.cs'),
-                                            doc),
+                  lambda: check_doc_version(doc, os.path.join(proj, 'Defaults.cs')),
                   'not valid JSON')
 
     with tempfile.TemporaryDirectory() as td:
         _fake_repo(td)
+        cd = _fake_config(td)
         proj = os.path.join(td, 'mods', 'CKFHardMode')
         with open(os.path.join(proj, 'Defaults.cs'), 'w') as f:
             f.write('namespace CKFHardMode { internal static class Defaults {} }')
         t.refuses('a Defaults.cs with no DocVersion refuses rather than '
                   'checking nothing',
-                  lambda: check_doc_version(
-                      os.path.join(proj, 'Defaults.cs'),
-                      os.path.join(proj, 'defaults', 'ckf.hardmode.json')),
+                  lambda: check_doc_version(os.path.join(cd, DOC_NAME),
+                                            os.path.join(proj, 'Defaults.cs')),
                   'no DocVersion string')
 
-    t.check('the repo\'s own Defaults.cs and config document agree',
-            check_doc_version() == defaults_cs_doc_version(),
-            DOC_SRC)
+    t.check('the repo\'s own Defaults.cs carries a DocVersion to check against',
+            bool(re.fullmatch(r'\d+\.\d+\.\d+', defaults_cs_doc_version())),
+            DEFAULTS_CS)
+
+    print('\n[3b] the config is validated before it ships')
+    ok_teampl = _stub_teampl_cmd()
+    t.check('a clean check_schema and a current mirror pass',
+            check_config('x', _stub_schema_run(), ok_teampl) is None)
+    t.refuses('a check_schema that did not finish refuses',
+              lambda: check_config('x', _stub_schema_run(False, error='died'),
+                                   ok_teampl), 'did not finish')
+    t.refuses('any check_schema problem refuses and is listed, not only the '
+              'classes a save blocks on',
+              lambda: check_config('x', _stub_schema_run(problems=[
+                  {'kind': 'UNKNOWN', 'message': 'fatigue.stray'}]), ok_teampl),
+              'UNKNOWN  fatigue.stray')
+    t.refuses('a stale Team PL mirror refuses',
+              lambda: check_config('x', _stub_schema_run(),
+                                   _stub_teampl_cmd(1, 'STALE')), 'STALE')
+    t.refuses('a mirror check that exits 0 and prints nothing is not "current"',
+              lambda: check_config('x', _stub_schema_run(),
+                                   _stub_teampl_cmd(0, '')), 'exit 0')
+    t.refuses('a mirror check that cannot be run refuses',
+              lambda: check_config('x', _stub_schema_run(),
+                                   [os.path.join(REPO, 'no-such-binary')]),
+              'exit None')
 
     print('\n[4] the vendored BepInEx is the pinned build')
     with tempfile.TemporaryDirectory() as td:
@@ -1386,7 +1789,8 @@ def selftest():
         out = os.path.join(td, 'dist')
         t.refuses('a missing plugin DLL refuses',
                   lambda: build(out, os.path.join(td, 'vendor'),
-                                os.path.join(td, 'nope.dll'), echo=False),
+                                os.path.join(td, 'nope.dll'),
+                                _fake_config(td), echo=False),
                   'dotnet build -c Release')
         t.check('and wrote nothing to the output directory',
                 not os.path.exists(out))
@@ -1407,6 +1811,9 @@ def main(argv=None):
                     help='the unpacked pinned BepInEx tree')
     ap.add_argument('--dll', default=DEFAULT_DLL,
                     help='the built CKFHardMode.dll')
+    ap.add_argument('--config',
+                    help='the BepInEx/config directory to package (default: '
+                         'the one the editor edits, from gui/settings.json)')
     ap.add_argument('--skip-exe', action='store_true',
                     help='use the editor binary already in --out instead of '
                          'building one. The gate still runs against it.')
@@ -1417,7 +1824,9 @@ def main(argv=None):
     if a.selftest:
         return selftest()
     try:
-        build(a.out, a.vendor, a.dll, skip_exe=a.skip_exe)
+        build(a.out, a.vendor, a.dll,
+              os.path.abspath(a.config) if a.config else default_config_dir(),
+              skip_exe=a.skip_exe)
     except Refused as e:
         print('\nREFUSED: %s' % e, file=sys.stderr)
         return 1

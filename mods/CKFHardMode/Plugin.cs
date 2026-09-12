@@ -119,7 +119,7 @@ namespace CKFHardMode
     {
         public const string PluginGuid = "ckf.hardmode";
         public const string PluginName = "CKF Hard Mode";
-        public const string PluginVersion = "3.0.0";
+        public const string PluginVersion = "1.0.0";
 
         internal static new ManualLogSource Log;
         internal static ConfigEntry<bool> Enabled;

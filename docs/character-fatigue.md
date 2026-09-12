@@ -551,5 +551,6 @@ changes**. They assert the pre-retune shipped curve (PL 1 chance 10, now 15),
 the flat keys removed 2026-09-07, and `Load(path)`'s old signature. They test
 stale fixtures, not regressions. `Program.cs` now reports a Part 4 crash as one
 failure instead of ending the run. Part 2 reads `/home/claude/work/ckf.hardmode.fatigue.json`,
-which is the `fatigue` section of `mods/CKFHardMode/defaults/ckf.hardmode.json`
-extracted on its own.
+which is the `fatigue` section of the live `BepInEx\config\ckf.hardmode.json`
+extracted on its own (it was taken from the repo copy under
+`mods/CKFHardMode/defaults/`, deleted 2026-09-11; the two were identical).

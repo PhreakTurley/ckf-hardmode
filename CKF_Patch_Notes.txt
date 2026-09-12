@@ -1,0 +1,226 @@
+CYBER KNIGHTS: FLASHPOINT - BALANCE PATCH NOTES
+================================================
+All permanent sources of Crit Damage have been replaced with other stats. All sources of Kinetic/Ballistic as extra Pure Damage have been replaced unless they constrain what kind of weapon they can be used with. Talents that were overpowered in my view were nerfed. Talents that were underpowered in my view were buffed. I generally didn't change any defensive talents as I have no understanding of how strong they are.
+
+AGENT EX
+--------
+White Noise: The duration upgrade now costs 1 talent point instead of 2.
+
+Dual Reload: The second -1 AP upgrade now costs 1 talent point instead of 2.
+
+Adrenaline Flow: The talent now grants +1 Action Point instead of +1 Move Point. Its damage reduction upgrade now grants +25% instead of +10%.
+
+Life Hack: Base range increased from 10m to 18m. Both range upgrades now grant +6m each, and the second one costs 1 talent point instead of 2.
+
+Glitch: AP cost reduced from 2 to 1. Range increased from 5m to 6m. The final range upgrade now grants +2m instead of +3m.
+
+Supremacy: The talent no longer grants +1 Move Point, but now grants +1 Action Point. Base cooldown reduced by 1 turn.
+
+Shuriken Wave: Damage doubled from 50 to 100. The first upgrade's penalty is now just -5 Initiative (previously -15% Move Speed and -2 Initiative). The second upgrade now grants +75% damage instead of +50%.
+
+Shadow: Base AP cost reduced from 2 to 1. Its final -1 AP upgrade has been replaced with a +1 charge upgrade, now costing 2 talent points.
+
+Armor EX: Range increased from 3m to 15m.
+
+Minor nodes with Crit Damage now grant 2% Crit Chance instead.
+
+
+CYBERKNIGHT
+-----------
+Tactical Surge: AP granted reduced from 2 to 1.
+
+Downer: Radius increased from 6 to 10, though the radius upgrades now add less (4 instead of 6). The Crit Vulnerability upgrade dropped from 25% to 15%.
+
+Sync: Base radius doubled from 15m to 30m. Base cooldown reduced from 6 to 5. Each radius upgrade now adds +5m instead of +10m.
+
+Atomic Stutter: Base duration cut from 2 turns to 1, with cooldown increased by 1 turn.
+
+Steamroll: Its upgrade no longer adds 5% Ballistic/Kinetic damage or 5% Damage to Drones.
+
+
+CYBERSWORD
+----------
+Lightfoot: Max AP that can be spent raised from 3 to 4.
+
+Improved Power Slice: Initial damage boosted from +10% to +40%. The first damage upgrade rose from +15% to +25%.
+
+Choppa: The Kinetic Damage upgrade doubled from 10% to 20%.
+
+Minor nodes granting Kinetic damage as extra Pure damage now grant 2% Kinetic Damage instead.
+
+
+CYBERWARE
+------------
+All Implants that granted Crit Damage had that bonus zeroed out.
+
+Brightshot Optic, Lumen Spear, Photon Lance, and Helios Beam all had their AP costs halved from 2 to 1. Damage was retuned across all four, which constitutes a buff at higher levels.
+Brightshot Optic: 90 / 120 / 150 / 180
+Lumen Spear: 150 / 200 / 250 / 300
+Photon Lance: 130 / 170 / 210 / 250
+Helios Beam: 180 / 240 / 300 / 360
+
+Any debuffs applied by these weapons now last 2 turns instead of 1.
+
+
+GUNSLINGER
+----------
+Fingertrick: Base ballistic damage doubled from 10% to 20%.
+
+Trigger Vector: Both Pure Damage (Ballistic) upgrades were swapped out for 10% Ballistic Damage instead.
+
+Linkwatch: All three upgrade nodes' damage bonuses doubled from 10% to 20%; the second node's cost also dropped from 2 points to 1.
+
+Thrown Bullet: Range increased from 12m to 14m. Range upgrades now add +4 instead of +3. The radius upgrade now adds +4 instead of +2.
+
+Hold Up: Range increased from 15m to 20m. The Evasion debuff doubled from 10% to 20%, and the Crit Vulnerability upgrade rose from 25% to 40%.
+
+Gun Kata: The final upgrade's arc bonus increased from +120 to +150.
+
+Minor nodes tied to Stealth Crit Damage now grant 3% Stealth Crit Chance, and ones granting Ballistic as extra Pure damage now grant 2% Ballistic Damage.
+
+
+HACKER
+------
+Packet Loss: The first range upgrade now grants +1 turn duration instead of range. The second range upgrade doubled from +5 to +10.
+
+Upchain: The duration upgrade now costs 1 talent point instead of 2.
+
+Downed Shields: Its Radius node was replaced with +10 Range.
+
+Hardshell: Base cooldown reduced by 1. The -5 AP node was replaced with a +1 charge node. The first upgrade now grants +20 Shield instead of +10. The second upgrade now grants +4 Armor instead of +10 Shield/2 Armor.
+
+Scapegoat: The second +token upgrade now costs 1 talent point instead of 2. Its duration node was replaced with -1 Cooldown.
+
+Faked Vitals: Range tripled from 6m to 18m. AP cost dropped from 2 to 1. The second -1 AP node was replaced with -1 Cooldown.
+
+Rampage: Base damage jumped from +15% to +50%, now with a 2-turn base duration. The AP upgrade quadrupled from +10 to +40 AP. Damage upgrades rose from +15% to +25%. Both the duration node and the second damage upgrade now cost 1 talent point instead of 2.
+
+Zero Interrupt: The -AP upgrade doubled from -5 to -10. The Damage/Turn upgrades tripled from 10 to 30.
+
+
+SCOURGE
+-------
+Bio-Coat Bullet: The duration node now costs 1 talent point instead of 2. The Damage/Initiative/MP upgrade no longer applies an Initiative debuff, while the damage-only upgrade now applies a -5 Initiative debuff instead. The Damage/Initiative/AP upgrade also no longer applies an Initiative debuff.
+
+Venom Trap: The -1 AP upgrade now also applies -25 HP/turn, and its cost rose to 2 talent points.
+
+Nervo-Tox Shell: Base duration cut by 1 turn.
+
+Purge: The talent now also grants +20% Crit Chance and no longer grants an armor buff. Its final upgrade also drops the armor buff, gaining +1 Action Point instead.
+
+Morass: Base zone duration cut by 2 turns. Its +Duration node was replaced with -1 Cooldown.
+
+Disorient: The first upgrade no longer reduces Initiative, and its Sight Range reduction deepened from -2 to -5. The second upgrade no longer reduces Sight Range. The duration node now costs 1 talent point instead of 2.
+
+Bio-Mimic: Base duration extended by 1 turn, and its duration upgrade doubled from +1 turn to +2 turns.
+
+Brain Worm: Base duration cut by 1 turn.
+
+Detonation: Cast range increased from 12m to 18m. Base damage doubled, from 100 Kinetic/50 Pure to 200 Kinetic/100 Pure. The first damage upgrade rose from 10% to 25%.
+
+Aero-Shrap Shell: Base damage more than doubled, from 140 Ballistic to 300.
+
+Reknit: Base range increased from 6m to 10m. The +1 charge node now costs 1 talent point instead of 2.
+
+Callus: Range increased from 6m to 10m. The first upgrade now grants +15% Armor and -5% Move Speed (previously +10%/-10%). The second upgrade's armor bonus dropped from +15% to +10%.
+
+Minor nodes that give Crit Damage now grant 2% Crit Chance instead.
+
+
+SNIPER
+------
+Deathwatch: Both Arc upgrades now cost 1 talent point instead of 2.
+
+Perimeter-Eye: The second Duration node was replaced with -1 Cooldown, now costing 1 talent point.
+
+Strike Zone: Zone duration and target-effect duration both set to 2 turns.
+
+JTAC: Zone duration and target-effect duration both set to 2 turns.
+
+Hit Streak: The initial crit-per-hit bonus doubled from +5% to +10%. The first two upgrades rose from 2% to 5% crit per streak, and the final upgrade jumped from 3% to 10% crit per streak.
+
+Pathfinder: The recoil-reduction upgrades were replaced with +10% Move Speed (previously -10% recoil).
+
+Nest: The talent's +25% Pure Damage (Ballistic) was replaced with +15% Ballistic Damage, and its stealth crit chance dropped from 25% to 15%. The first and second upgrades swap their 5% Pure Damage (Ballistic) for +5% Ballistic Damage each. The third upgrade's stealth crit chance also dropped from 25% to 15%.
+
+Empty Lung: Available AP to spend raised from 2 to 3.
+
+Skullshot: The 25% crit chance node and the +1 charge node both now cost 1 talent point instead of 2.
+
+Minor nodes tied to Crit Damage now grant 2% Crit Chance instead, and ones tied to Stealth Crit Damage now grant 3% Stealth Crit Chance. Improvements to Hit Streak were removed; where that would leave a node empty, it now grants 2% Long Range Accuracy instead.
+
+
+SOLDIER
+-------
+Marker Sights: The final upgrade no longer adds Crit Vulnerability. The duration node now costs 1 talent point instead of 2.
+
+Red Dot: Range increased from 20m to 25m. The Evasion penalty doubled from -5% to -10%, as did its upgrade. All Initiative reductions were removed.
+
+Blast Radius: Range bonus increased from 3m to 5m. The AoE/Damage, Duration/Damage, and Range/Damage upgrades all now grant 30% damage (up from 15%, 15%, and 20% respectively); their range/duration bonuses are unchanged.
+
+Roll With It: The first damage-reduction upgrade rose from 10% to 25%, while the third dropped from 25% to 10% - the two effectively swapped values. The third upgrade now costs 1 talent point instead of 2.
+
+Iron Grip: The talent now grants -15 Recoil and -10% recoil rate, and no longer converts any Ballistic damage to Pure (previously -12 Recoil, +10% Ballistic as Pure). The flat-recoil upgrades tripled, from -5 to -15. The flat + % recoil upgrade's recoil reduction dropped from -25% to -10%. The Pure Damage / % Recoil upgrade no longer converts Ballistic damage to Pure, and now reduces recoil rate by 15% instead of 25%.
+
+Splatt-Patt: Base Arc tripled from +10 to +30, and base Recoil reduction jumped from -4 to -20. Upgrade 1 now grants +15 Arc/-20 Recoil (was +10/-5). Upgrade 2 now grants +15 Arc/20% Ballistic damage (was +10/10%). Upgrade 3 now grants -20 Recoil/20% Ballistic damage (was -5/10%).
+
+Overwatch: The first Ballistic Damage upgrade doubled from +10% to +20%. The second quadrupled from +5% to +20%.
+
+Savagery: The talent no longer converts 15% Ballistic damage to Pure, instead granting +15% Ballistic Damage outright (the 15% Crit bonus is unchanged). Its upgrades likewise swap 5% Ballistic-as-Pure for +5% Ballistic Damage each.
+
+Recoup: The talent no longer grants +1 Move Point. The first +1 AP node now costs 2 talent points instead of 1.
+
+Plaster-Cross: Base shred quadrupled from +25% to +100%, and base charges doubled from 1 to 2. The shred upgrades no longer add Shred, instead granting +30% Crit Chance. The Ballistic damage upgrades no longer add Ballistic Damage directly, instead converting 15% of Ballistic damage into extra Pure Damage.
+
+Crosshair Lock: Base cooldown reduced from 8 turns to 6. Base Accuracy and Crit Chance both rose from 25% to 30%.
+
+Minor nodes that gave Crit Damage now grant 2% Ballistic Damage instead.
+
+
+VANGUARD
+--------
+Anticipation: The Initiative upgrade deepened from -2 to -5. The other upgrade now grants +10% Crit Vulnerability instead of -10% Evasion.
+
+Glasswalker: Cooldown extended from 4 to 5. The upgrade node now grants +1 Move Point instead of +1 AP and +2 Initiative. The +duration node was replaced with -1 Cooldown.
+
+Bodybag: Range increased from 12m to 18m, AP cost dropped from 2 to 1, and cooldown fell from 6 to 4. The range upgrade doubled from +3m to +6m. The second -1 AP upgrade was replaced with +1 Charge, now costing 1 talent point instead of 2.
+
+Domeshot: Duration extended by 1 turn. The cover-bonus upgrade deepened from -10% to -50%, and the evasion upgrade deepened from -10% to -25%.
+
+Lure: Radius upgrades shrank from +5 to +2. The +1 charge upgrade now costs 2 talent points instead of 1.
+
+Synapse Short: Radius doubled from 6m to 12m. Cooldown reduced by 1 turn. Radius upgrades now add +3m instead of +4m.
+
+Minor nodes that give Stealth Crit Damage now grant 3% Stealth Crit Chance instead.
+
+
+WARMACHINE
+----------
+Eye Master: Base bonus charges doubled from 1 to 2. Damage upgrades now grant 20%/20% (up from +10/+15%). Accuracy upgrades tripled from +5% to +15%. The +1 charge node and the -20 HP-taken node both now cost 1 talent point instead of 2.
+
+Overheat: Base duration set to 11 turns. The +duration node was replaced with -1 Cooldown.
+
+Nova Beam: Base kinetic damage rose from 250 to 400, while base pure damage was removed entirely (was 100, now 0).
+
+Redline: The 1 AP node now costs 2 talent points instead of 1.
+
+Pulse Gen Master: Base cooldown reduction quadrupled from -1 to -4. All three damage upgrades rose from 10% to 40%.
+
+Silent Stalker: Cooldown reduced from 6 to 4. Both upgrades drop their Kinetic-as-Pure conversion entirely and instead grant +15% Stealth Crit Chance (the 10% Stealth Crit Damage bonus is unchanged).
+
+Directed Pulse: Charges doubled from 1 to 2. Base evasion buff rose from 10% to 15%. The Kinetic/Evasion upgrade now grants +15%/+15% (up from +10%/+10%).
+
+Minor nodes tied to Stealth Crit Damage now grant 3% Stealth Crit Chance, ones tied to Crit Damage now grant 2% Crit Chance, and ones granting Kinetic Damage, Ballistic Damage, or Kinetic/Ballistic as extra Pure damage now grant 4% Cyberweapon Damage instead.
+
+
+WIREGHOST
+---------
+Ghost Distortion: Base crit chance jumped from 10% to 25%.
+
+Kill Switch: The second charge node now costs 1 talent point instead of 2.
+
+Manifest Trace: The second charge node now costs 1 talent point instead of 2.
+
+Radio Silence: Evasion upgrades tripled from -5% to -15%. The charge node now costs 1 talent point instead of 2.
+
+Minor nodes that gave Stealth Crit Damage now grant 3% Stealth Crit Chance instead.

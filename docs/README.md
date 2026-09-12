@@ -59,7 +59,8 @@ Full list in [`gotchas.md`](gotchas.md). These four account for most lost time:
    generation and drives rewards; `PowerLevel` is
    `round((teamPowerLevel + BasePowerLevelOffset) × PowerLevelScalar)` at full
    precision and drives enemies. Rounded, not truncated.
-3. **Enemy gear numbers live in `overlays/*.csv`, not `rules.json`.** Overlays
+3. **Enemy gear numbers live in the overlay CSVs in
+   `BepInEx\config\ckf.hardmode.d\`, not `rules.json`.** Overlays
    load last and win. Player gear is the opposite — it stays a rule, prefixed
    `PLAYER`.
 4. **A pointer at a row that does not exist is a black screen**, and the game's

@@ -13,10 +13,11 @@
 // ones that were absent. They are not embedded any more. They travel as loose
 // files in the release zip, under BepInEx\config\, and extracting the zip over
 // the game folder is what puts them on disk. scripts/make_release.py collects
-// them — CONFIG_FILES there is the table of what ships and where it lands, and
-// it refuses to build a release that is missing any of them. Retuning the mod
-// is now an edit to a cfg, csv or json plus make_release.py, with no
-// dotnet build in the loop.
+// them from the live BepInEx\config the config editor edits (or --config DIR);
+// the repo holds no copy. CONFIG_FILES there names the seven it copies, the
+// .cfg is rendered from release/ckf.hardmode.cfg.in, and it refuses to build a
+// release that is missing any of them. Retuning the mod is an edit to the live
+// config plus make_release.py, with no dotnet build in the loop.
 //
 // So there is nothing for this class to write, and one thing left for it to
 // say: whether the extraction actually landed. AGENTS.md §3 — an instrument
@@ -73,14 +74,14 @@ namespace CKFHardMode
         /// Plugin.PluginVersion and must not be. The plugin version moves on
         /// every build; this one moves only when the document's shape does.
         /// scripts/make_release.py reads this literal out of this file and
-        /// refuses a release where it disagrees with the "_version" of
-        /// mods/CKFHardMode/defaults/ckf.hardmode.json.</summary>
-        internal const string DocVersion = "3.0.0";
+        /// refuses a release where it disagrees with the "_version" of the
+        /// ckf.hardmode.json it packages from the live config.</summary>
+        internal const string DocVersion = "1.0.0";
 
         // Paths under BepInEx/config, forward-slashed. The other half of this
-        // table is CONFIG_FILES in scripts/make_release.py, which is what puts
-        // each of these in the zip. Nothing derives either list from the other;
-        // change one and change the other.
+        // table is CONFIG_FILES in scripts/make_release.py, which puts seven of
+        // these in the zip; ckf.hardmode.cfg comes from its template. Nothing
+        // derives either list from the other; change one and change the other.
         private static readonly string[] Expected =
         {
             ConfigDoc.FileName,

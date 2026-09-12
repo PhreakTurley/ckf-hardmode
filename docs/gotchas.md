@@ -175,17 +175,25 @@ config under `BepInEx/config/`, and the run records this file replaces.
   removed on 2026-09-07 — but the same undercount is available in its two
   successors, `CONFIG_FILES` in `scripts/make_release.py` and `Expected` in
   `Defaults.cs`, which each name all four files of `ckf.hardmode.d/` by hand.
+  Since 2026-09-11 `make_release.py` also ships any other `.csv`/`.tsv`/`.json`
+  it finds in the live `ckf.hardmode.d/`, so a fifth file reaches the zip
+  without an edit; `Expected` still has to be edited for the mod to report it
+  missing.
 - **The live `ckf.hardmode.rules.json` contains zero clone rules.** Every clone
   in this project comes from the `_clone` column of a CSV in
   `BepInEx/config/ckf.hardmode.d/`. An audit that reads only `rules.json` will
   conclude cloning is dead. It is not.
-- **Enemy gear numbers live in `overlays/*.csv`, not in `rules.json`.** A gear
-  rule added back to `rules.json` still runs, but the overlays load after it and
-  a `set` there wins, so the rule silently does nothing. Player gear is the
-  opposite: it stays a rule, marked with a `PLAYER` comment prefix.
-- **Copy `overlays/ckf.hardmode.rules.json` *and* the CSVs, or neither.** The
-  rewritten rules file no longer inserts the tiers its pointers aim at, so
-  installing it alone is a black screen.
+- **Enemy gear numbers live in the CSVs in `BepInEx/config/ckf.hardmode.d/`,
+  not in `rules.json`.** A gear rule added back to `rules.json` still runs, but
+  the overlays load after it and a `set` there wins, so the rule silently does
+  nothing. Player gear is the opposite: it stays a rule, marked with a `PLAYER`
+  comment prefix.
+- **Install `scripts/make_enemy_overlays.py`'s output `ckf.hardmode.rules.json`
+  *and* its CSVs, or neither.** The rewritten rules file no longer inserts the
+  tiers its pointers aim at, so installing it alone is a black screen. The live
+  `rules.json` and `ckf.hardmode.d/` are the same kind of pair, which is why
+  `make_release.py` requires both. (This entry used to name
+  `overlays/ckf.hardmode.rules.json`; that copy was deleted 2026-09-11.)
 - **A pointer aimed at a row that does not exist stops the mission loading** — a
   black screen, not a degraded stat, and the game's own exception never reaches
   `LogOutput.log`. Watch for `RowClone: <reader>(<id>) found nothing`.
@@ -502,9 +510,10 @@ is 22 `.cfg` keys in ten sections plus five sidecar JSONs, all declared in
   it is the cheap way to answer "does this assembly contain these exact bytes"
   for any DLL that *does* embed something — it is no longer a check this repo
   runs. What replaced it is `check_doc_version()`, which compares the `_version`
-  in `mods/CKFHardMode/defaults/ckf.hardmode.json` with the `DocVersion` literal
-  in `Defaults.cs`; the shipped file's own bytes need no proving because the same
-  file is what goes into the zip.
+  in the `ckf.hardmode.json` being packaged (since 2026-09-11 a snapshot of the
+  live config; before that `mods/CKFHardMode/defaults/`, now deleted) with the
+  `DocVersion` literal in `Defaults.cs`; the shipped file's own bytes need no
+  proving because the same file is what goes into the zip.
 - **`3.0.0` appears inside the 2.13.0 `CKFHardMode.dll` and it is not the
   version.** It is the config document's LAYOUT version — it moves when the
   layout does, not when the mod ships. Anything looking for the assembly's

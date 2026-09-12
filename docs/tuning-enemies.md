@@ -3,17 +3,20 @@
 Every gear family an enemy walks is 20 tiers, one per power level, and every
 archetype already points at the right tier for its level. **The numbers in those
 tiers are retuned — they are not the values the game shipped.** [measured]
-`ckf.hardmode.d/WeaponModel.bullpup.csv` runs `BallisticDamage1` 316 -> 498
-rising across PL 11-20; `ckf.hardmode.d/ArmorModel.guard-standard.csv` runs
-`BallisticArmorDegraded` 51 -> 62 rising over the same span.
+In `ckf.hardmode.d/WeaponModel.csv` the bullpup rows run `BallisticDamage1`
+316 -> 498 across PL 11-20 (23040-23049); in `ckf.hardmode.d/ArmorModel.csv`
+the guard-standard rows run `BallisticArmorDegraded` 51 -> 62 over the same span
+(22010-22019).
 
-Further tuning is editing cells. This page is what the cells mean;
-[`../overlays/README.md`](../overlays/README.md) is the file set they live in.
+Further tuning is editing cells. This page is what the cells mean. The cells
+live in the game's `BepInEx\config\ckf.hardmode.d\`, one file per table, and
+that is the only copy; [`../overlays/README.md`](../overlays/README.md) covers
+how the set was generated and the `_reference/` index.
 
 | To change | Where |
 |---|---|
-| Enemy stats — HP, crit, AP, talents | `overlays/MonsterTypeModel.csv`, one line per archetype row |
-| What a gear tier is worth | `overlays/ArmorModel.*.csv`, `overlays/WeaponModel.*.csv` |
+| Enemy stats — HP, crit, AP, talents | `ckf.hardmode.d/MonsterTypeModel.csv`, one line per archetype row |
+| What a gear tier is worth | `ckf.hardmode.d/ArmorModel.csv`, `ckf.hardmode.d/WeaponModel.csv` |
 | Which tier an enemy carries | the `WeaponTypeId` / `ArmorTypeId` cells in `MonsterTypeModel.csv` |
 | Stats no column exists for — damage %, armour, evasion | `EffectModel`, a rule in `ckf.hardmode.rules.json` |
 | Who fills a roster slot, and how often | `MonsterGroupMemberModel`, a rule |
@@ -32,7 +35,7 @@ axis.
 
 ---
 
-## 1. Stats — `overlays/MonsterTypeModel.csv`
+## 1. Stats — `ckf.hardmode.d/MonsterTypeModel.csv`
 
 One line per archetype row, 2,427 of them, `_comment` naming the PowerGroup and
 power level. `MonsterTypeModel` carries rows at every level 1-20, so nothing
@@ -69,11 +72,13 @@ owner. 1,116 of 2,427 archetypes carry `EffectId` 0 — no stat block at all.
 tested. Values elsewhere in the table cluster at 3/5/10/15/20/25 against weapon
 damage of 144-500, which reads as percent. [unverified]
 
-## 2. Weapons — `overlays/WeaponModel.*.csv`
+## 2. Weapons — `ckf.hardmode.d/WeaponModel.csv`
 
-Twenty blocks, twenty tiers each. `_reference/gear-tiers.csv` says which file
-holds a given tier; the shipped PL 1-10 shape each new tier continues is in
-`BepInEx/ckf-dump/WeaponModel.csv`, which is the ground truth for it.
+Twenty blocks, twenty tiers each. `_reference/gear-tiers.csv` gives each
+tier's id (its `ProvidedBy` column names the per-family file from before the
+merge; in `WeaponModel.csv` the row's `_comment` names the block). The shipped
+PL 1-10 shape each new tier continues is in `BepInEx/ckf-dump/WeaponModel.csv`,
+which is the ground truth for it.
 
 The columns that carry a weapon: `BallisticDamage1`, `PhysicalDamage1`,
 `PureDamage1`, `Accuracy1`, `ActionPoints1`, `ArmorCritRate1`, `RecoilRate1`,
@@ -87,7 +92,7 @@ to them is taken and discarded.
 `WeaponModel.PowerLevel` is cosmetic. A tier's position is its id and the
 pointer in `MonsterTypeModel.csv`.
 
-## 3. Armour — `overlays/ArmorModel.*.csv`
+## 3. Armour — `ckf.hardmode.d/ArmorModel.csv`
 
 Nine blocks, same shape.
 

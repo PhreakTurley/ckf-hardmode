@@ -3,8 +3,8 @@
 How to choose the id a `clone` inserts under, and which serving paths have
 actually been exercised.
 
-**The gear ladders are already built** and live as CSV in
-[`../overlays/`](../overlays/).
+**The gear ladders are already built** and live as CSV in the live
+`BepInEx\config\ckf.hardmode.d\` (`ArmorModel.csv`, `WeaponModel.csv`).
 
 **Enemy gear is an overlay; player gear is a rule.** Overlays load after
 `ckf.hardmode.rules.json`, so where the two overlap the overlay wins — an enemy

@@ -123,7 +123,10 @@ bind and BepInEx writes its file whatever else on disk is broken.
 
 **The release zip carries them as loose files; extracting it is what puts them
 on disk.** `scripts/make_release.py` writes these eight under `BepInEx/config/`
-in the zip — its `CONFIG_FILES` table plus the rendered `ckf.hardmode.cfg`:
+in the zip — the seven named in its `CONFIG_FILES`, copied from the live
+`BepInEx\config\` the editor edits (or `--config DIR`), plus
+`ckf.hardmode.cfg` rendered from `release/ckf.hardmode.cfg.in`. Any other
+`.csv`/`.tsv`/`.json` in the live `ckf.hardmode.d/` ships too:
 
 | File | What it is |
 |---|---|
@@ -167,15 +170,21 @@ of it was true up to today:
   as it is. `Defaults.DocVersion` still exists and still names the document's
   layout version; what reads it now is `check_doc_version()` in
   `make_release.py`, which refuses a release where that literal disagrees with
-  the `_version` in `mods/CKFHardMode/defaults/ckf.hardmode.json`.
+  the `_version` in the `ckf.hardmode.json` being packaged (the live config's,
+  since 2026-09-11).
 - *Claimed:* "**Upgrading from 2.x.** A config directory with the five 2.x
   sidecars and no `ckf.hardmode.json` is migrated on the first 3.0 launch."
   *Actually:* **there is no migration.** See the correction under "3. Configure"
   above.
 
-**What this buys.** Retuning the mod is editing a cfg, csv or json in
-`mods/CKFHardMode/defaults/` or `overlays/` and re-running
-`python scripts/make_release.py`. There is no `dotnet build` in that loop unless
+**Correction, 2026-09-11.** The paragraph below used to place the shipped
+files in this repo, under `mods/CKFHardMode/defaults/` and `overlays/`. Those
+were hand-synced copies of the live files and were deleted today; the live
+`BepInEx\config\` is the only copy, and `make_release.py` packages it.
+
+**What this buys.** Retuning the mod is editing the live config, in the editor
+or by hand, and re-running `python scripts/make_release.py`. There is no
+`dotnet build` in that loop unless
 the C# changed. The check that used to prove the DLL carried the current bytes
 of each default — `check_embedded` in `make_release.py`, a substring search over
 the assembly — is deleted along with the `embedded_sources` table it walked,
@@ -192,7 +201,7 @@ copy from. `docs/config-reference.md` says which section each key went to.
 | Know what a key does | [`../../docs/config-reference.md`](../../docs/config-reference.md) |
 | Edit without a text editor | `python gui/serve.py` |
 | Check the live install | `python schema/check_schema.py --game "<game dir>"` |
-| Check what the zip will ship | `python schema/check_schema.py --config "mods\CKFHardMode\defaults" --no-cfg` |
+| Check what the zip will ship | the live install is what ships, so the line above; `make_release.py` runs the same check on its snapshot and refuses on any problem |
 | Install, dump, change, test | [`../../docs/workflow.md`](../../docs/workflow.md) |
 | Write or debug a rule | [`../../docs/rule-engine.md`](../../docs/rule-engine.md) |
 | Write an overlay CSV | [`../../docs/overlays.md`](../../docs/overlays.md) |
@@ -228,9 +237,10 @@ none of them a clone (`EffectModel` 133, `JobNodeModel` 72, `TalentModel` 43,
 `WeaponModel` 33, `MatrixEffectModel` 8, `RuleModel` 2, `ImplantModel` 1,
 `MonsterTypeModel` 1) [measured, live install].
 
-`overlays/ckf.hardmode.rules.json` is a byte-for-byte copy of the live file,
-re-synced 2026-09-03. The pre-teampl-split copy it replaced (326 rules) is kept
-at `overlays/_archive/ckf.hardmode.rules.pre-teampl-split.json`.
+`overlays/ckf.hardmode.rules.json` was a byte-for-byte copy of the live file,
+re-synced 2026-09-03, until it was deleted 2026-09-11; the live file is the only
+copy. The pre-teampl-split copy it replaced (326 rules) is kept at
+`overlays/_archive/ckf.hardmode.rules.pre-teampl-split.json`.
 
 **Correction, 2026-09-03.** That archived file was described here as holding 33
 `MissionPowerLevelModel` rows "that now live in

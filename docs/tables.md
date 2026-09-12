@@ -250,6 +250,20 @@ Worked example, Strike Zone (nodes 11320–11325):
 | **Base** | `NodeTalent1Id` — grants the talent | the `TalentModel` row |
 | **Adjustment tier** | `NodeTalentAdjustmentId` + a stat column on the node itself | the `JobNodeModel` row |
 | **Trigger tier** | `NodeTalentTriggerEffect` — carries no stats | the `EffectModel` row it points at |
+| **Travel** | `NodeEffect1Id`, no `SubTree` — a permanent effect | the `EffectModel` row it points at |
+
+Travel nodes are the filler between talents, mostly named `Left n` /
+`Right n` / `Center n`: 334 on the twelve player jobs, all `BuyCost` 1, every
+one granting +1 of an attribute, usually plus one small stat. Each job's
+`Unlock: Extra Item Carry` capstone is the same kind of node (`ActionPoints` 1,
+i.e. 0.1 AP, on most jobs plus a job-specific stat) and roots the `Carry Generic` /
+`Carry Tech` chain. *[measured]*
+
+`NodeTalentTriggerType` is 1 (`OnChargeUsed`) on all 275 trigger tiers.
+Five base nodes have `NodeTalent1Id = -1` (Claw Master, Laser Master, Pulse Gen
+Master, Blast Radius, Metabolize); their tiers adjust a talent-group row
+instead — `TalentId` 1 Any Grenade, 3 Any Combat Drug, 20–22 the cyber weapons.
+*[measured]*
 
 ```json
 { "model": "JobNodeModel", "where": { "JobNodeId": 11321 },
@@ -343,6 +357,36 @@ effects 11119 and 11120 both carry `EffectGroupId = 11013`.
 `SpecialCode` / `SpecialValue` / `SpecialMerge` are how Face talents modify
 mission pay. The shipped codes, the merge modes and what flipping one costs you
 are in [`mission-rewards.md`](mission-rewards.md).
+
+### Enum-coded columns
+
+Il2CppInterop keeps enum constants, so every enum's values can be read offline
+from the constant table of `BepInEx/interop/CoreRPG_v1.dll`. These were read
+that way *[measured]*; which column uses which enum is matched by name and by
+fitting every talent checked *[fitted]*.
+
+| Column | Enum | Values |
+|---|---|---|
+| `EffectModel.EffectHealType` | `EffectHealType` — what `Heals` means | 1 Health, 2 Armor, 3 Stress, 4 Recoil, 5 AlarmSub, 6 Alarm, 7 Reload, 8 OverwatchToken, 9 HealthOverTime, 10 DamageOverTime, 11 BladeAmmo, 12 PureDamage, 13 CharacterAlarmLevel, 14 DroneDamageOverTime, 15 ReduceHealth |
+| `EffectModel.EffectClearType` | `EffectClearType` | -1 DoNotClearMove, 1 Invisibility, 2 Invulnerable, 3 Move, 4 AttackOrMove, 5 EndMove, 6 EndOverwatch, 7 Healing, 8 Matrix, 9 Attack, 10 MoveOrMiss, 11 EndDualSMGStreak, 12 StunBreak, 13 AttackedByEnemy, 14 HitByEnemyOrMiss, 15 SecurityDispatch, 16 PurgeDebuff, 17 TakeDamage, 18 TakeDamageOrAttack, 19 MatrixChangeNode, 20 TakeDamageDebuffOrAttack, 21 CriticalHit |
+| `EffectModel.SpecialCode` | `EffectSpecialCode` (93 values) | names match the `Job.Effects.SpecialCodes.*` locale keys, e.g. 1 Disorient, 3 EnemyShootsOwn, 10 LifeStealing, 18 SkipOverwatch, 22 IgnoreAllRecoil, 27 InvisibleWhileNotMoving |
+| `TalentModel.GameEventTrigger` | `GameActionType` | 2 OnDying, 3 OnTakeDamage, 5 OnTakeMeleeAttack, 6 OnDealDamage, 7 OnDealCritical, 11 OnAlarmRise, 12 OnKill, 13 OnKillStealth, 14 OnKillDrone, 16 OnMoveAfterAttack, 21 OnMissed, 23 OnMatrixKill, 26 OnKillDroneTeam, 27 OnDroneAttack, 28 OnMatrixDumpShock, 29 OnTakeDamageInstant, 30 OnSpottedInstant, 31 OnDebuffDOT, 32 OnAttackUnderOverwatch, 33 OnKillCyberWeapon, 34 OnUsePulseGen, 35 OnMatrixLowConnection |
+| `TalentModel.FilterTypeId` | `TalentFilterType` | 1 DroneOnly, 2 AnyDevice, 5 EnemyNonCombat, 6 NeedHealing, 7 ZeroArmor, 8 NotSelf, 9 NotVisibleToEnemy, 10 TargetIsVisible, 11 EnemyNonCombatVisible, 12 BodyHasTimer, 13 BodyIsUnknown, 15 NotDrone, 16 NotDroneOrHeadHunter, 17 NeedHealArmor, 20 FloorVisible, 21 CorpseVisible, 22 DeviceVisible, 23 DeviceCausesDmg |
+| `TalentModel.Token` | `TalentTokenType` | players only 4, 7, 19; enemies only 5, 8, 10, 14, 15; both 6, 9, 12, 13; 1 Overwatch, 2 SmokeGrenade, 3 DeflectionShield, 11 RefractWall, 16 LineCrawler |
+| `TalentModel.PreReq` | `TalentPreReq` | 1 NeedHealing, 2 NeedReloadPrimary, 3 NeedAlarmSub, 4 NeedArmorHealing, 5 AllowedOnDowned, 6 NeedsReloadSpecial, 7 OnStreak, 8 NotOnStreak, 9 SpottedByEnemy, 10 HasCover, 11 HealthAdvantage, 12 OnDualSMGStreak |
+| `JobNodeModel.NodeTalentTriggerType` | `TalentTriggerType` | 1 OnChargeUsed, 2 OnChargeGain, 3 OnChargeFull, 4 OnChargeZero |
+
+Consequences worth knowing: `Heals = 50` on Tox-Cloud is 50 damage per turn
+(type 10), and Burn Surge's `Heals = 20` costs 20 HP (type 15). `FilterTypeId =
+1` is on EMP, Leech, Quantum Assault, Disentangle, Downed Shields, N-Coat
+Bullet, Counter Static, Flash Hack and Upchain. Morass (12) and Tox-Cloud (13)
+use both-sides tokens.
+
+**Attributes** (`AttFast` … `AttTech` above) convert as the locale's
+`Att.*.BonusesDesc` strings state *[measured, game text]*: Reaction +1% Move
+Speed and +1 Initiative per 5; Strength +1% Kinetic Dmg as extra Pure, −2%
+Recoil Rate, +1% Wound Res per 2; Will +1% Cybernetic Weapon Dmg, +2% Stress
+Res, +1% Built-in Armor per 2; Tech +1% Crit, +2% Dmg vs Drones, +1 Matrix AP.
 
 ---
 

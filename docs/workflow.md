@@ -49,9 +49,9 @@ Back up saves before the first real run:
 5. Run `python scripts/validate_rules.py`. It catches the dangling pointers that
    otherwise show up as a black screen.
 6. Relaunch. Rules and overlays are a text edit, not a rebuild — only new C#
-   needs `dotnet build`. That is true of the shipped defaults too now: retuning
-   what the zip carries is an edit under `mods/CKFHardMode/defaults/` or
-   `overlays/` plus `python scripts/make_release.py`, with no build in the loop.
+   needs `dotnet build`. That is true of the shipped defaults too: retuning
+   what the zip carries is an edit to the live `BepInEx\config\` (in the editor
+   or by hand) plus `python scripts/make_release.py`, with no build in the loop.
 
 **Close the game before editing a `.cfg`.** BepInEx rewrites it on exit and will
 undo an edit made while it is running. Keep every `.cfg` value on one line.
@@ -136,9 +136,13 @@ python scripts\make_release.py
 
 It rebuilds `CKF-Config-Editor.exe`, runs `gui\serve.py --selftest
 --frozen-exe` against it, and writes `dist\CKF-Hard-Mode-<version>.zip`.
-Every check runs before anything is written, so a refusal leaves `dist\` as it
-found it. `--selftest` proves each refusal can fire; `--skip-exe` reuses the
-binary already in `dist\`.
+Every check except the gate runs before anything is written, so those refusals
+leave `dist\` as they found it. The gate needs the rebuilt exe, so a gate
+refusal leaves it in `dist\`, with `dist\selftest-failed.log`. (**Correction,
+2026-09-11:** this used to say every refusal left `dist\` untouched; `build()`
+writes the exe before `gate()` runs.) `--selftest` proves each refusal can fire;
+`--skip-exe` reuses the binary already in `dist\`. PyInstaller's scratch goes
+to `dist\build\`.
 
 Two things it needs and will not create:
 
@@ -148,13 +152,27 @@ Two things it needs and will not create:
 | `vendor\BepInEx-6.0.0-be.785\` | the pinned BepInEx build, unpacked once from https://builds.bepinex.dev/projects/bepinex_be. It refuses on any other build or commit |
 
 The config files ship as loose files under `BepInEx\config\`, not inside the
-DLL. `CONFIG_FILES` in `make_release.py` maps each source in this repo to where
-it lands in the zip — three out of `mods\CKFHardMode\defaults\`, four out of
-`overlays\` — and the master switch is rendered from
-`release\ckf.hardmode.cfg.in`. A missing source refuses by name.
+DLL, and they come from the live config directory: the one the editor edits
+(`gui\settings.json`), or `--config DIR`. `CONFIG_FILES` in `make_release.py`
+names the seven it requires; a missing one refuses by name. Any other `.csv`,
+`.tsv` or `.json` in `ckf.hardmode.d\` ships too, because the loader reads it;
+anything else there is left out and named. The master switch is rendered from
+`release\ckf.hardmode.cfg.in`, not copied from the live `.cfg`.
 
-**A retune is a config edit and this one command.** Editing a cfg, csv or json
-and re-running `make_release.py` is the whole loop; `dotnet build` is only for
+An editor save journal left in the live directory refuses. Otherwise the files
+are copied to a temporary snapshot, and everything after reads the snapshot:
+`schema\check_schema.py` (any problem refuses), `scripts\gen_teampl_labels.py
+--check`, `Defaults.DocVersion` against the document's `_version`, the gate
+(run with `--config <snapshot>`), and the zip. An editor save made during the
+build cannot reach the zip unchecked.
+
+**Correction, 2026-09-11.** This section used to say the sources were in this
+repo — three in `mods\CKFHardMode\defaults\`, four in `overlays\`. Those were
+hand-synced copies of the live files and were deleted today; the live directory
+is now the only copy.
+
+**A retune is a config edit and this one command.** Editing the live config and
+re-running `make_release.py` is the whole loop; `dotnet build` is only for
 changed C#.
 
 A `FAIL` from the gate refuses the release. A `NOT RUN` is printed with its

@@ -16,6 +16,10 @@ Every number it uses is in a config file, editable through the GUI editor that s
 
 Not made by Trese Brothers Games and they cannot support it.
 
+Current release: **1.0.0**, the first public one. Earlier builds (2.x through
+3.0.0) were private; notes in the code, schema and docs that cite those
+versions refer to them.
+
 ## Get the mod
 
 Download the latest zip from this repo's
@@ -23,33 +27,50 @@ Download the latest zip from this repo's
 folder (the one holding `CyberKnights.exe`) — full instructions are in the
 zip's `README.txt`.
 
-## Alternate tuning
-
-Releases also carry separate, smaller zips — alternate sets of the config
-files under `BepInEx/config/` — for players who want a different balance
-profile without redownloading the whole mod (BepInEx and the .NET runtime are
-most of the main zip's size). See [`tuning/README.md`](tuning/README.md) for
-what a tuning variant contains and how to install one.
-
 ## Repo layout
 
 ```
 mods/CKFHardMode/   the plugin source
 schema/             the config schema — one file per subsystem; source of
                     truth for the config, gen_binds.py, and gen_docs.py
-overlays/           enemy gear and archetype numbers, as CSV, plus the rule set
 gui/                the config editor (serve.py + app.html)
 release/            the templates make_release.py renders into the player zip
 scripts/            gen_binds.py, gen_docs.py, gen_teampl_labels.py,
                     make_release.py (builds the release zip)
 docs/               mechanics references and the workflow — start at
                     docs/README.md
-tuning/             alternate config sets, packaged as extra release assets
+vendor/README.md    which BepInEx build to unpack into vendor/ before a release
 ```
 
 `schema/*.schema.json` is the source of truth for the config: `gen_binds.py`
 emits `mods/CKFHardMode/Plugin.Binds.g.cs` and `gen_docs.py` emits
 `docs/config-reference.md`. Neither is hand-edited.
+
+The tuning itself — the config document, the rule set, the overlay CSVs — is
+not kept in this repo. It lives in the game's `BepInEx\config\`, where the
+editor edits it and the game reads it, and each release zip carries the set
+it was built from.
+
+## Building a release
+
+```
+cd mods\CKFHardMode
+dotnet build -c Release
+cd ..\..
+python scripts\make_release.py
+```
+
+`make_release.py` packages the config directory the editor is pointed at (the
+game folder set in the editor, saved in `gui/settings.json`), or the one named
+with `--config "<game>\BepInEx\config"`. It checks the versions agree, runs
+`check_schema.py` and the Team PL mirror check over that config, builds the
+editor exe with PyInstaller, runs the editor's own test suite against it, and
+writes `dist\CKF-Hard-Mode-<version>.zip`. It needs the pinned BepInEx unpacked
+into `vendor\` first — see `vendor/README.md`. `--selftest` runs the script's
+own checks without producing a zip. `release/README.md` says what each
+template is and where it lands.
+
+`dist/` is not committed; the zip is attached to a GitHub Release.
 
 ## Start here
 

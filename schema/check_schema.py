@@ -178,10 +178,10 @@ def main():
     ap.add_argument('--no-cfg', action='store_true',
                     help='the directory has no ckf.hardmode.cfg and is not meant to: '
                          'check the JSON document and the mirror only. This is for '
-                         'mods/CKFHardMode/defaults/, part of the set the release zip ships. '
-                         'BepInEx owns the .cfg and writes it itself, so a default set '
-                         'cannot carry one, and without this flag its one declared key '
-                         'reads as MISSING and the run can never be clean.')
+                         'any config directory without a .cfg, such as a copy of the '
+                         'JSON files taken out of BepInEx/config. Without this flag '
+                         'the .cfg\'s one declared key reads as MISSING and the run '
+                         'can never be clean.')
     a = ap.parse_args()
 
     cfgdir = a.config or (os.path.join(a.game, 'BepInEx', 'config') if a.game else None)

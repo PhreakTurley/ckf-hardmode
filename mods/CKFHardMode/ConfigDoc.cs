@@ -4,7 +4,7 @@
 // one BepInEx/config/ckf.hardmode.json namespaced by section, and then took
 // 21 of the 22 keys out of ckf.hardmode.cfg and put them in it too:
 //
-//     { "_version": "3.0.0",
+//     { "_version": "1.0.0",
 //       "modelrules": {...}, "selfcheck": {...}, "powerlevel": {...},
 //       "teampl": {...}, "fatigue": {...}, "elapse": {...},
 //       "missions": {...}, "rewardcurve": {...}, "difficulty": {...} }

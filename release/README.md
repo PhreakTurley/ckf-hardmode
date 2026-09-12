@@ -16,8 +16,9 @@ zip under the same name without the suffix, and `ckf.hardmode.cfg.in` goes to
 is rendered by nothing and reaches no player; `--selftest` fails on one.
 
 The rest of what ships under `BepInEx/config/` is copied byte for byte from
-`mods/CKFHardMode/defaults/` and `overlays/` — that is the `CONFIG_FILES` table
-in the same script, and nothing in here.
+the live `BepInEx\config\` the editor edits, or `--config DIR` — the names in
+the `CONFIG_FILES` table of the same script, plus any other `.csv`/`.tsv`/`.json`
+in `ckf.hardmode.d\`. Nothing in here.
 
 ## `README.txt.in`
 

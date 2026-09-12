@@ -297,7 +297,9 @@ alongside `offDuty.knight.byPowerLevel` leaves `OffDutyDaysFor` with no duration
 at all, so nobody is escalated, the merc keeps the first stage and the missing
 key is logged once (`Fatigue.cs:2012-2070`). All three are in the shipped
 `ckf.hardmode.json`, at twenty anchors each. [measured 2026-09-07,
-`mods/CKFHardMode/defaults/ckf.hardmode.json` and `live-config/ckf.hardmode.json`]
+`mods/CKFHardMode/defaults/ckf.hardmode.json` and `live-config/ckf.hardmode.json`;
+re-measured 2026-09-11 in the live `BepInEx\config\ckf.hardmode.json`, which is
+now the only copy — the `defaults/` one was deleted that day]
 
 **Correction, 2026-09-07.** That paragraph used to end: "`Curve()` returns null
 for a null or empty dictionary, so the resolver falls through to the flat value.
