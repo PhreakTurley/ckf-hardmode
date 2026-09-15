@@ -1,11 +1,29 @@
 #!/usr/bin/env python3
 """
-Generate the victory-screen Team PL label rules from ckf.hardmode.json's
-"teampl" section (or the legacy ckf.hardmode.teampl.json).
+Generate the victory-screen Team PL label rules from whichever file the
+`mirror` invariant in schema/*.schema.json names as its source.
 
     python gen_teampl_labels.py --game "C:\\...\\Cyber Knights Flashpoint"
     python gen_teampl_labels.py --game "..." --check        # CI / pre-launch
     python gen_teampl_labels.py --game "..." --strip-rules  # one-time migration
+
+WHICH FILE IT READS, AND WHY IT IS NOT WRITTEN DOWN HERE
+
+Three layouts have held the award rows now: ckf.hardmode.teampl.json in 2.x,
+the "teampl" section of the merged ckf.hardmode.json in 3.0, and since Phase 3
+of split-config-into-toggleable-slices a slice file, ckf.hardmode.d/teampl.json.
+This script used to carry the last two as a written-down list, so against the
+split directory it exited 1 with
+`not found: <dir>\\ckf.hardmode.json (nor the legacy <dir>\\ckf.hardmode.teampl.json)`
+and gate 05 went with it [measured 2026-09-13, against the split layout].
+
+It now resolves the file from the declaration that already names it -- the
+`mirror` invariant whose `target` is this script's own output. That invariant
+gives the source rows (`source`), the reference rows to merge under them
+(`mergeWith`) and the file to write (`target`), so a fourth layout moves all
+three by editing the schema and nothing here. serve.py's
+`_teampl_first_fraction` was fixed the same way and for the same reason; this
+is the same resolution, one layer up.
 
 WHY THIS EXISTS
 
@@ -58,6 +76,8 @@ def newline_of(path, default='\n'):
 
 BANNER = "MissionPowerLevelModel"
 OUTNAME = "MissionPowerLevelModel.generated.json"
+SCHEMA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                          os.pardir, 'schema')
 
 
 # --------------------------------------------------------------------------
@@ -90,6 +110,127 @@ def strip_jsonc(s):
 def load_jsonc(path):
     with open(path, encoding='utf-8-sig') as f:
         return json.loads(strip_jsonc(f.read()))
+
+
+def dig(obj, dotted):
+    """check_schema.dig, copied rather than imported. -> (value, found).
+
+    schema/ is not on sys.path for a bare `python scripts\\gen_teampl_labels.py`
+    and this script is imported BY serve.py rather than the other way round, so
+    importing check_schema here would make the GUI's import order decide
+    whether the CLI runs. Six lines, no behaviour of its own."""
+    for part in dotted.split('.'):
+        if not isinstance(obj, dict) or part not in obj:
+            return None, False
+        obj = obj[part]
+    return obj, True
+
+
+# --------------------------------------------------------------------------
+# WHERE THE ROWS ARE. Read from the `mirror` invariant, never from a list here.
+
+def load_schemas(schema_dir):
+    """-> [(filename, parsed schema)]. Raises if the directory holds none:
+    an empty schema set would make every mirror lookup below come back
+    'no declaration' and read as a layout problem instead of a missing
+    checkout."""
+    out = []
+    for fn in sorted(os.listdir(schema_dir)):
+        if fn.endswith('.schema.json'):
+            out.append((fn, load_jsonc(os.path.join(schema_dir, fn))))
+    if not out:
+        raise SystemExit(f'no *.schema.json in {schema_dir}')
+    return out
+
+
+def mirror_for(schemas, outname):
+    """The one `mirror` invariant whose target is `outname`.
+
+    -> (schema filename, schema, invariant). Raises if there is not exactly
+    one: two schemas generating the same file, or none, is a schema bug and
+    silently picking the first would hide it."""
+    hits = [(fn, sch, inv) for fn, sch in schemas
+            for inv in sch.get('invariants', [])
+            if inv.get('kind') == 'mirror'
+            and os.path.basename(inv.get('target', '')) == outname]
+    if len(hits) != 1:
+        raise SystemExit(
+            f'{len(hits)} schema(s) declare a mirror whose target is {outname}; '
+            f'expected exactly 1. Found: '
+            + (', '.join(f'{fn}:{inv.get("target")}' for fn, _s, inv in hits)
+               or 'none')
+            + f'. Looked in {SCHEMA_DIR}.')
+    return hits[0]
+
+
+def split_ref(ref):
+    """"file#a.b.rows[]" -> ("file", "a.b.rows", "a.b"), the last being the
+    object that CONTAINS the rows -- the section, or None at the file root."""
+    fname, path = ref.split('#', 1)
+    if path.endswith('[]'):
+        path = path[:-2]
+    parent = path.rsplit('.', 1)[0] if '.' in path else None
+    return fname, path, parent
+
+
+def read_source(cfgdir, schfile, sch, inv):
+    """The rows the mirror is generated from, from whichever file is on disk.
+
+    -> (object shaped for merged_cells, srcname, path read, note). `srcname`
+    is the provenance string written into the output, and is built the same
+    way serve.py builds it when it regenerates the mirror inside a save:
+    "<file>#<section>" when the rows sit under a section, "<file>" when the
+    file IS the section. Both spellings are produced by the same two lines,
+    so the two writers cannot drift apart on it.
+
+    Candidates, in order, each one a declaration and not a filename written
+    down here:
+      1. the mirror's own `source` file  -- ckf.hardmode.d/teampl.json today
+      2. the schema's `targets.legacyJson` -- the 2.x sidecar, whose root IS
+         the section, so the declared paths keep only their last segment
+    The second is UNEXERCISED by any gate in this repository: nothing on this
+    machine has a 2.x sidecar, so a run that takes it has never been measured.
+    The failure below names every candidate it tried and which of them was on
+    disk, so a fallback that fires is visible in the output rather than
+    inferred from the result."""
+    sfile, spath, section = split_ref(inv['source'])
+    mfile, mpath, _msec = split_ref(inv['mergeWith'])
+    if mfile != sfile:
+        raise SystemExit(
+            f'mirror source {inv["source"]} and mergeWith {inv["mergeWith"]} '
+            f'name different files; this script reads one file.')
+
+    legacy = (sch.get('targets') or {}).get('legacyJson')
+    cands = [(sfile, spath, mpath, sfile if section is None
+              else f'{sfile}#{section}')]
+    if legacy:
+        cands.append((legacy, spath.rsplit('.', 1)[-1],
+                      mpath.rsplit('.', 1)[-1], legacy))
+
+    tried = []
+    for fname, sp, mp, srcname in cands:
+        p = os.path.join(cfgdir, *fname.split('/'))
+        if not os.path.exists(p):
+            tried.append(f'{p} (not on disk)')
+            continue
+        doc = load_jsonc(p)
+        over, ok_o = dig(doc, sp)
+        tbl,  ok_t = dig(doc, mp)
+        if not ok_o:
+            tried.append(f'{p} (on disk, but no "{sp}")')
+            continue
+        note = ('' if fname == sfile else
+                f'  NOTE: read the legacy {fname}; the mirror\'s own source '
+                f'{sfile} is not on disk.')
+        return ({'override': over or [], 'table': (tbl if ok_t else []) or []},
+                srcname, p, note)
+
+    raise SystemExit(
+        'the mirror declared in schema/%s could not be read. Tried, in '
+        'order:\n%s\nsource: %s   mergeWith: %s' % (
+            schfile,
+            ''.join('    %s\n' % t for t in tried),
+            inv['source'], inv['mergeWith']))
 
 
 # --------------------------------------------------------------------------
@@ -240,37 +381,32 @@ def main():
                     help='verify the generated file is current; exit 1 if not')
     ap.add_argument('--strip-rules', action='store_true',
                     help='one-time migration: remove MissionPowerLevelModel rules from rules.json')
+    ap.add_argument('--schema', default=SCHEMA_DIR,
+                    help='where the *.schema.json declaring the mirror live '
+                         '(default: ../schema beside this script)')
     a = ap.parse_args()
 
     cfgdir = a.config or (os.path.join(a.game, 'BepInEx', 'config') if a.game else None)
     if not cfgdir or not os.path.isdir(cfgdir):
         sys.exit('need --game or --config pointing at BepInEx/config')
+    if not os.path.isdir(a.schema):
+        sys.exit(f'no schema directory at {a.schema}; this script reads the '
+                 f'mirror invariant to find the file it generates from')
 
-    # The five sidecars became sections of one ckf.hardmode.json in 3.0. Read
-    # that when it is there and fall back to the legacy file, so this script
-    # still runs against a 2.x install.
-    merged_file = os.path.join(cfgdir, 'ckf.hardmode.json')
-    legacy = os.path.join(cfgdir, 'ckf.hardmode.teampl.json')
-    if os.path.exists(merged_file):
-        doc = load_jsonc(merged_file)
-        if 'teampl' not in doc:
-            sys.exit(f'{merged_file} has no "teampl" section')
-        teampl = doc['teampl']
-        srcname = 'ckf.hardmode.json#teampl'
-        src_path = merged_file
-    elif os.path.exists(legacy):
-        teampl = load_jsonc(legacy)
-        srcname = 'ckf.hardmode.teampl.json'
-        src_path = legacy
-    else:
-        sys.exit(f'not found: {merged_file} (nor the legacy {legacy})')
+    schfile, sch, inv = mirror_for(load_schemas(a.schema), OUTNAME)
+    teampl, srcname, src_path, note = read_source(cfgdir, schfile, sch, inv)
 
     merged, stock = merged_cells(teampl)
     rules = rules_for(merged, stock)
     text = render(rules, srcname)
 
-    outdir = os.path.join(cfgdir, 'ckf.hardmode.d')
-    out = os.path.join(outdir, OUTNAME)
+    # The target is the invariant's too, so the output directory is not a
+    # second filename written down here either.
+    out = os.path.join(cfgdir, *inv['target'].split('/'))
+    outdir = os.path.dirname(out)
+
+    if note:
+        print(note.strip())
 
     if a.check:
         if not os.path.exists(out):
@@ -291,7 +427,10 @@ def main():
                     print(f'STALE  ActionClass {k[0]} PL {k[1]}: label {have[k]} vs award {want[k]}')
             print(f'\n{OUTNAME} is out of date. Regenerate.')
             return 1
-        print(f'{OUTNAME} current — {len(rules)} rule(s) match teampl.json.')
+        # Names the file it actually read. The old wording said "teampl.json"
+        # whichever of the three layouts it had opened, so a run against the
+        # wrong one looked exactly like a run against the right one.
+        print(f'{OUTNAME} current — {len(rules)} rule(s) match {srcname}.')
         return 0
 
     os.makedirs(outdir, exist_ok=True)
@@ -299,6 +438,8 @@ def main():
     with open(out, 'w', encoding='utf-8', newline=nl) as f:
         f.write(text)
     print(f'wrote {out}')
+    print(f'  read {src_path}  (mirror source {inv["source"]}, '
+          f'declared in schema/{schfile})')
     print(f'  {len(rules)} rule(s) from {len(merged)} merged cell(s) '
           f'({len(merged) - len(rules)} at the game\'s own value, omitted)')
 

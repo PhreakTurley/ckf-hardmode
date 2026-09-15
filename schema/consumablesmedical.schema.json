@@ -1,0 +1,78 @@
+{
+  "subsystem": "ConsumablesMedical",
+  "title": "Medical Consumables",
+  "targets": {
+    "cfg": "ckf.hardmode.cfg",
+    "overlays": [
+      "ckf.hardmode.d/consumables-medical.csv"
+    ]
+  },
+  "enable": {
+    "cfg": "Slices.ConsumablesMedical"
+  },
+  "doc": [
+    "Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate",
+    "cannot live inside the file it gates and the .cfg is the one file that must",
+    "parse before any other loading happens (split-config-into-toggleable-slices",
+    "design.md section 3). Off means the slice's file never enters RulePlan.",
+    "",
+    "A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack",
+    "is two or three, because its rows are rows of two or three game tables and",
+    "the overlay dialect keys the target table off the filename (design.md",
+    "section 2).",
+    "",
+    "LANDED in Phase 8 of split-config-into-toggleable-slices, 2026-09-14. ItemClass 1, 18 row(s), 34 column(s) -- 29 lever(s) plus 5 identity/control [measured].",
+    "",
+    "Files this toggle gates:",
+    "  consumables-medical.csv",
+    "",
+    "ItemClass 1, 18 rows (design.md section 8, tasks.md Phase 8). All 73",
+    "ItemModel rows are split into six sub-tables by ItemClass because a",
+    "flat table would be about 70% empty; the six share one toggle each.",
+    "There is no ItemClass 5.",
+    "",
+    "SUPERSEDED 2026-09-14, kept because the correction below depends on it. The paragraph that began here said \"THE KEY IS ON DISK; THE SLICE IS NOT ... the rows arrive in the phase named above\". The rows have now arrived and this file declares the slice in targets.overlays. The cfg-key half of it is still true and still the reason the count is 43: Slices.Init binds every key in Binds.All above the master-switch bail-out, so BepInEx writes the line on any launch. PHASE 8 ADDED NO CFG KEY.",
+    "else -- the rows arrive in the phase named above and are added to this same",
+    "file then -- but the key itself is bound and written today: Slices.Init binds",
+    "every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above",
+    "the master-switch bail-out, so BepInEx writes the line on any launch and",
+    "check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch:",
+    "ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed",
+    "\"0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema",
+    "file(s).\" at rc 0 [measured, Logs\\gates-phase1b.txt]. Until that run",
+    "the tag on this sentence read \"[measured 2026-09-13]\" when what had",
+    "been measured was the C#, not the file.",
+    "",
+    "CORRECTION, 2026-09-13. This block used to read \"NOT ON DISK, AND NEITHER IS",
+    "THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin,",
+    "so BepInEx binds nothing for this key and writes no line for it, and",
+    "check_schema.py reports it MISSING until the plugin binds it and the game is",
+    "launched.\" That was true when written and is false now. Plugin.cs no",
+    "longer binds anything directly; the one Binds.Bind call site is in",
+    "Slices.Init (Slices.cs).",
+    "",
+    "Turning this key off now leaves these 18 row(s) exactly as the game ships them. Every lever cell in the file is blank today -- the mod touches 0 of the 73 ItemModel rows and 0 rules reach any of the 194 consumable-reachable (table, id) pairs [measured 2026-09-14], so shipping a value here would be a balance change.",
+    "there is no file for the verdict to close.",
+    "",
+    "THIS SLICE IS A LEVER SHEET, NOT A DIRECT OVERLAY. All 18 rows carry an EffectModel payload.",
+    "",
+    "One row is one consumable item and expands at load into writes across up to three tables: ItemModel keyed on ItemTypeId, TalentModel keyed on that row's TalentId, and the payload keyed on that row's EffectId / MatrixEffectId. Consumables.cs owns the whole parse -- Overlays.TableOf would otherwise turn \"consumables-medical.csv\" into a model named \"consumables-medicalModel\", which is non-null and so does not trip the null guard.",
+    "",
+    "A BLANK IDENTITY CELL IS NOT A MALFORMED ROW HERE, which is a deliberate deviation from the Cyberweapons.cs and Implants.cs precedents. Both refuse a whole row when an id cell does not parse; that rule would refuse most of three of these six files (EffectId is blank on 10 of 11 grenade rows, 7 of 12 device rows and 6 of 11 matrix rows) [measured]. Blank means \"this row reaches no row of that table\"; a payload cell on such a row is refused and named. Whole-row refusal is reserved for a non-blank, non-integer id."
+  ],
+  "uiDoc": [
+    "Turn this off and these rows are left exactly as the game ships them."
+  ],
+  "fields": [
+    {
+      "path": "Slices.ConsumablesMedical",
+      "in": "cfg",
+      "type": "bool",
+      "default": true,
+      "ui": "form",
+      "label": "Enable Medical Consumables",
+      "doc": "On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. THIS SLICE IS A LEVER SHEET, NOT A DIRECT OVERLAY, and targets.overlays asserts nothing either way -- it claims the file and asserts it exists. The first column is ItemName; there is no game table called \"consumables-medical\" and those are not row ids.",
+      "uiDoc": "Turn this off and these rows are left exactly as the game ships them."
+    }
+  ]
+}

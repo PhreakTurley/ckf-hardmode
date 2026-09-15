@@ -62,7 +62,7 @@ so every spawn-pool clone uses the reserved range.
 
 **Always check the current dump, never a sheet in `Aug21Sheets/`.** Those are
 stale, and reading a weapon id off one has already put a wrong value in a config.
-`BepInEx/ckf-dump/<Table>.csv` is written by the live game.
+`D:\ckf-data-modding\sheets\raw\<Table>.csv` is written by the live game.
 
 Enemy weapons occupy `20000`+ and player weapons sit below it, and rules band on
 that boundary; a clone in the reserved range sits outside both. Whether the

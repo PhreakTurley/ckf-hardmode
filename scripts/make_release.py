@@ -26,18 +26,38 @@ and kept that way by hand, and they were removed on 2026-09-11 for exactly
 that reason. [David's ruling, 2026-09-11: one source of truth, the live config;
 he backs it up himself]
 
-The DLL embeds nothing. The eight files that live under BepInEx\\config -- the
-config document, the master-switch cfg, the rule set, the self-check input and
-the four files of ckf.hardmode.d -- are copied into the zip, and extracting
-the zip is what puts them on disk. Defaults.cs checks they are there and
-reports what is not; it writes nothing.
+The DLL embeds nothing. The sixteen files that MUST land under BepInEx\\config
+-- the master-switch cfg, the self-check input, the three enemy-gear overlays,
+the Team PL mirror and the ten settings slices of ckf.hardmode.d -- are copied
+into the zip, and extracting the zip is what puts them on disk. Defaults.cs
+checks they are there and reports what is not; it writes nothing.
 
-Seven come out of the live directory by the names in CONFIG_FILES. The eighth,
-ckf.hardmode.cfg, is rendered from release/ckf.hardmode.cfg.in so its header
-carries the release version. It ships with the mod switched on, whatever the
-live file says.
-BepInEx rewrites that file on launch from the key the plugin binds, so shipping
+Fifteen come out of the live directory by the names in CONFIG_FILES. The
+sixteenth, ckf.hardmode.cfg, is rendered from release/ckf.hardmode.cfg.in so its
+header carries the release version. It ships with the mod switched on, whatever
+the live file says.
+BepInEx rewrites that file on launch from the keys the plugin binds, so shipping
 it only means the player's first launch is not what creates it.
+
+CORRECTION, 2026-09-14 (Phase 9). The four paragraphs above said "eight files",
+"the config document, the master-switch cfg, the rule set, the self-check input
+and the four files of ckf.hardmode.d", "Seven come out of the live directory"
+and "the key the plugin binds", singular. Every one of those was the 3.x layout.
+What moved:
+
+  * ckf.hardmode.json, the merged config document, IS GONE. Phase 3 split it
+    into ten settings files under ckf.hardmode.d and renamed it
+    ckf.hardmode.json.pre-4.0-backup. Shipping it again would be worse than
+    useless: ConfigDoc.BothLayouts refuses to apply ANY rule for the launch when
+    that name is present beside slice files (ConfigDoc.cs, member BothLayouts),
+    so a zip carrying it turns the whole mod off.
+  * ckf.hardmode.rules.json IS NOT SHIPPED BY 4.0 -- see NOT_SHIPPED_BUT_EXPECTED
+    below for the measurement that says dropping it moves no value.
+  * "the four files of ckf.hardmode.d" is now fourteen: the three enemy-gear
+    overlays, the Team PL mirror, and the ten settings slices.
+  * the .cfg carries 43 keys, not one ([General] Enabled plus 42 [Slices]
+    toggles; Slices.Init binds all of them). check_schema.py --game prints
+    "43 cfg key(s) on disk, 43 declared" [measured, 2026-09-14].
 
 Any OTHER file Overlays.Load would read out of ckf.hardmode.d (.csv, .tsv,
 .json) ships too, because the game on this machine loads it and a player
@@ -62,10 +82,22 @@ and is invisible until a player reports it.
   2.13.0 the sources sat on through Phases 0-5.
 
   A config file can be missing from the live directory.  A release that ships
-  six of the seven extracts cleanly and costs a subsystem everything it reads,
-  and the player sees one "Defaults: missing" line in a log they have no
+  fourteen of the fifteen extracts cleanly and costs a subsystem everything it
+  reads, and the player sees one "Defaults: missing" line in a log they have no
   reason to open. Every name in CONFIG_FILES is required and an absent one
   refuses by name.
+
+  NOTHING ELSE IN THIS BUILD CATCHES AN ABSENT SETTINGS FILE. Measured
+  2026-09-14, against a copy of the live config with one file deleted at a
+  time: check_schema.py --config prints "0 problem(s)." and exits 0 with
+  difficulty.json, teampl.json, implants-global.json, ArmorModel.csv or
+  MissionPowerLevelModel.generated.json removed, and with the top-level
+  ckf.hardmode.selfcheck.csv removed. It validates the files that are there; it
+  does not require any. The one exception is the Team PL pair --
+  gen_teampl_labels.py --check stops printing "current" when either
+  teampl.json or its mirror is gone, and check_config refuses on that. So for
+  thirteen of the fifteen names, CONFIG_FILES is the only thing standing
+  between a deleted file and a shipped hole.
 
   The live config can be half-saved.  The editor's save is a journalled
   transaction; a journal left in the directory means the teampl section and
@@ -78,10 +110,19 @@ and is invisible until a player reports it.
   RANGE and INVARIANT classes a save blocks on), and gen_teampl_labels.py
   --check, which proves the Team PL mirror still agrees with its section.
 
-  The document's layout stamp can drift from the code.  Defaults.DocVersion is
-  what the C# calls the document's shape; the shipped document carries the same
-  string in its "_version". They are two literals in two files and nothing
-  derives one from the other, so both are read and compared here.
+  The layout stamp can drift from the code.  Defaults.DocVersion is what the
+  C# calls the settings layout's shape; each shipped settings slice carries the
+  same string in its "_version", and ConfigDoc.ReportStamps compares every one
+  of them to Defaults.DocVersion at launch. They are eleven literals in eleven
+  files and nothing derives one from another, so all of them are read and
+  compared here.
+
+  CORRECTION, 2026-09-14 (Phase 9). This paragraph said "The document's layout
+  stamp", "the shipped document carries the same string" and "two literals in
+  two files", and the code below read the stamp out of one file named by
+  DOC_NAME = 'ckf.hardmode.json'. There is no such document any more; the stamp
+  is on each of the ten files DOC_STAMPED names. See DOC_NAME's replacement
+  below for what the old constant was for and why one name cannot do this job.
 
   The vendored BepInEx can be the wrong build.  "Latest bleeding-edge" is not
   a reproducible dependency, so the pin is a build number AND the commit, and
@@ -183,23 +224,169 @@ EDITOR_IN_ZIP = 'CKF-Config-Editor.exe'
 
 # Paths under BepInEx/config, forward-slashed, read out of the live config
 # directory and written to the same path under BepInEx/config in the zip.
-# Seven files; the eighth, ckf.hardmode.cfg, is rendered from a template and is
-# in TEMPLATES below.
+# Fifteen files; the sixteenth, ckf.hardmode.cfg, is rendered from a template
+# and is in TEMPLATES below.
 #
 # The other half of this table is `Expected` in mods/CKFHardMode/Defaults.cs,
-# which is what checks at runtime that they arrived. Nothing derives either
-# list from the other; change one and change the other.
+# which is what checks at runtime that they arrived. Nothing in the SHIPPING
+# path derives either list from the other -- but as of 2026-09-14 the selftest
+# does: `cs_expected()` parses `Expected` out of the C# and section [2c]
+# refuses unless the two tables account for each other exactly. The comment
+# that used to sit here, "change one and change the other", was the only thing
+# connecting them and it did not hold: the two disagreed for the whole of
+# Phases 3 through 8 and nothing said so.
+#
+# CORRECTION, 2026-09-14 (Phase 9). This tuple used to read:
+#
+#     'ckf.hardmode.json',
+#     'ckf.hardmode.selfcheck.csv',
+#     'ckf.hardmode.rules.json',
+#     'ckf.hardmode.d/ArmorModel.csv',
+#     'ckf.hardmode.d/WeaponModel.csv',
+#     'ckf.hardmode.d/MonsterTypeModel.csv',
+#     'ckf.hardmode.d/MissionPowerLevelModel.generated.json',
+#
+# Two names went, ten arrived. Why each moved:
+#
+#   ckf.hardmode.json    REMOVED. Phase 3 split it into the ten slice files
+#       below and the live copy is ckf.hardmode.json.pre-4.0-backup now. Its
+#       presence here is what made `make_release.py --config <live>` refuse
+#       outright -- not ship the old layout, REFUSE -- with
+#       "the release ships these as loose files under BepInEx\config and they
+#       are not in <config>: ckf.hardmode.json" [measured, 2026-09-14].
+#       docs/HANDOFF-split-config.md section 9 says instead that "a release
+#       built today would package the old layout". That is wrong on the
+#       consequence: config_sources requires every name here BEFORE it sweeps,
+#       so the build stopped rather than shipping anything.
+#   ckf.hardmode.rules.json  REMOVED. See NOT_SHIPPED_BUT_EXPECTED.
+#   the ten ckf.hardmode.d/*.json settings slices  ADDED. They are what the
+#       merged document became; ConfigDoc owns all ten (ConfigDoc.Slots) and
+#       Defaults.cs expects all ten. The directory sweep below would ship them
+#       anyway -- the sweep is why the handoff's "only 4 of the 61 slice files"
+#       never cost a shipped file -- but the sweep is best-effort and silent:
+#       a slice deleted from the live config is simply not in the zip and
+#       NOTHING ELSE IN THIS BUILD NOTICES (the measurement is in the header,
+#       under "A config file can be missing"). Required here, they refuse by
+#       name.
+#
+# The first four are also the four the sweep would cover and that no schema
+# claims: check_schema.py --game reports "3 unclaimed by design (ArmorModel.csv,
+# WeaponModel.csv, MonsterTypeModel.csv)" [measured, 2026-09-14], and the Team
+# PL mirror is generated rather than authored.
 CONFIG_FILES = (
-    'ckf.hardmode.json',
+    # the self-check input, at the top of BepInEx/config -- the sweep does not
+    # reach outside ckf.hardmode.d, so this name is the only thing shipping it
     'ckf.hardmode.selfcheck.csv',
-    'ckf.hardmode.rules.json',
+    # the three enemy-gear overlays no schema claims, plus the Team PL mirror
     'ckf.hardmode.d/ArmorModel.csv',
     'ckf.hardmode.d/WeaponModel.csv',
     'ckf.hardmode.d/MonsterTypeModel.csv',
     'ckf.hardmode.d/MissionPowerLevelModel.generated.json',
+    # the ten settings slices ConfigDoc owns
+    'ckf.hardmode.d/difficulty.json',
+    'ckf.hardmode.d/elapse.json',
+    'ckf.hardmode.d/fatigue.json',
+    'ckf.hardmode.d/implants-global.json',
+    'ckf.hardmode.d/missions.json',
+    'ckf.hardmode.d/modelrules.json',
+    'ckf.hardmode.d/powerlevel.json',
+    'ckf.hardmode.d/rewardcurve.json',
+    'ckf.hardmode.d/selfcheck.json',
+    'ckf.hardmode.d/teampl.json',
 )
+
+# In `Expected` and NOT shipped by 4.0. Declared rather than left as a silent
+# difference, because section [2c] compares this file's tables to the C#'s and
+# an undeclared gap there is a failure, not a shrug.
+#
+# ckf.hardmode.rules.json: Phase 9 deletes it from the live config (tasks.md,
+# "Delete ckf.hardmode.rules.json from the live config"). Deleting it moves no
+# value, and that is measured rather than assumed -- 269 rules, of which
+# rules_to_overlays.py --check routes 238 into the 33 overlay/lever sheets that
+# ship, and reports "31 left in ckf.hardmode.rules.json (player-weapons 17,
+# implant-effects 9, cyberweapon-talents 5, implant-global 0, enemy-elites 0)".
+# All 31 of those are ALSO in shipping sheets already, identical:
+#   cyberweapons.py --check: "ckf.hardmode.rules.json holds 269 rule(s); 22 of
+#     them are the ones this phase converts and ALL 22 STAY", "0 value(s)
+#     differ ... over 399 (table, id, column) triple(s)", all `set`
+#   implants.py --check: "P-CHECK: 9 triple(s) compared over the union of both
+#     sides; 9 equal, 0 differ", "D-SET: 9 converted triple(s); operators in
+#     use on both sides: ['set']"
+# 22 + 9 = 31, every one set-only, so double application is a no-op and single
+# application from the sheets alone lands on the same numbers.
+# [all four measured, 2026-09-14, against /home/claude/work/game]
+#
+# THE TRIPWIRE FIRED, AND THIS IS THE ENTRY IT POINTED AT. Kept as a visible
+# correction rather than edited out, because it is the only part of this file
+# that worked exactly as designed on a day nobody was watching for it.
+#
+# It used to read:
+#
+#     WHAT THIS DOES NOT FIX, AND IT IS NOT make_release.py's TO FIX.
+#     mods/CKFHardMode/Defaults.cs still lists ckf.hardmode.rules.json in
+#     `Expected`, and Plugin.cs:275 still reads it. ... Section [2c] holds this
+#     entry as a DECLARED exception so that the day `Expected` loses the name,
+#     the case goes red and points here.
+#
+# 2026-09-14 WAS THAT DAY. Phase 9c removed the name from `Defaults.Expected`
+# (17 -> 16 entries) and deleted ckf.hardmode.rules.json from the live config,
+# and section [2c] went red naming this tuple -- `in this file and not in
+# Defaults.Expected: ['ckf.hardmode.rules.json']`. That is the whole point of a
+# declared exception: it expires loudly instead of rotting quietly. The tuple is
+# now empty and [2c] is green again.
+#
+# LEAVE IT DECLARED AND EMPTY. A name belongs here only while Defaults.Expected
+# and the zip disagree about it on purpose; an empty tuple says there is no such
+# disagreement today, which is a different statement from the constant not
+# existing.
+NOT_SHIPPED_BUT_EXPECTED = ()
+
 CONFIG_IN_ZIP = 'BepInEx/config/'
-DOC_NAME = 'ckf.hardmode.json'
+
+# WHAT DOC_NAME WAS FOR, AND WHAT REPLACES IT.
+#
+# DOC_NAME = 'ckf.hardmode.json' was the ONE file whose "_version" carried the
+# layout stamp, and it had exactly two jobs: check_doc_version read that stamp
+# and refused unless it equalled Defaults.DocVersion, and the same read was the
+# only place anything asked whether a file about to be copied into the zip was
+# JSON at all.
+#
+# The name is stale for the same reason it left CONFIG_FILES: Phase 3 split the
+# document up. The stamp did not go away -- it was copied onto every slice.
+# Each of the ten ckf.hardmode.d settings files opens
+# { "_version": "4.0.0", ... } (ConfigDoc.cs, VersionKey), and
+# ConfigDoc.ReportStamps walks ConfigDoc.Slots at launch comparing every one to
+# Defaults.DocVersion and naming the files that are behind. So the successor to
+# DOC_NAME is not another single name; it is that same set, and
+# check_doc_version now refuses unless ALL TEN agree with the C#.
+#
+# One name could not do this job: with a single file checked, nine slices could
+# sit at an older stamp and ship, and the player's first launch would be the
+# thing that reported it.
+#
+# Not in here: MissionPowerLevelModel.generated.json, which is a .json in the
+# same directory and carries no "_version" [measured, 2026-09-14]. It is an
+# overlay Overlays.Load reads as rules, not a settings slice ConfigDoc owns,
+# and putting it here would refuse every build.
+DOC_STAMPED = (
+    'ckf.hardmode.d/difficulty.json',
+    'ckf.hardmode.d/elapse.json',
+    'ckf.hardmode.d/fatigue.json',
+    'ckf.hardmode.d/implants-global.json',
+    'ckf.hardmode.d/missions.json',
+    'ckf.hardmode.d/modelrules.json',
+    'ckf.hardmode.d/powerlevel.json',
+    'ckf.hardmode.d/rewardcurve.json',
+    'ckf.hardmode.d/selfcheck.json',
+    'ckf.hardmode.d/teampl.json',
+)
+
+# The pre-4.0 merged document. Not shipped, and its PRESENCE beside the slice
+# files is what ConfigDoc.BothLayouts refuses on -- a launch that finds both
+# applies NO RULE AT ALL. Named here so the selftest can assert it is in
+# neither table rather than leaving that to reading.
+PRE_40_DOC_NAME = 'ckf.hardmode.json'
+
 CFG_NAME = 'ckf.hardmode.cfg'
 
 # The extensions Overlays.Load reads out of ckf.hardmode.d (Overlays.cs, the
@@ -207,6 +394,7 @@ CFG_NAME = 'ckf.hardmode.cfg'
 # game, so it ships; anything else is not, so it does not.
 OVERLAY_DIR = 'ckf.hardmode.d'
 OVERLAY_EXTS = ('.csv', '.tsv', '.json')
+OVERLAYS_CS = os.path.join(REPO, 'mods', 'CKFHardMode', 'Overlays.cs')
 
 # release/<name> -> path in the zip. Rendered through `render`, which fills the
 # placeholders and folds to CRLF. ckf.hardmode.cfg is here rather than in
@@ -222,6 +410,7 @@ DEFAULT_DLL = os.path.join(REPO, 'mods', 'CKFHardMode', 'bin', 'Release',
 CSPROJ = os.path.join(REPO, 'mods', 'CKFHardMode', 'CKFHardMode.csproj')
 PLUGIN_CS = os.path.join(REPO, 'mods', 'CKFHardMode', 'Plugin.cs')
 DEFAULTS_CS = os.path.join(REPO, 'mods', 'CKFHardMode', 'Defaults.cs')
+CONFIG_DOC_CS = os.path.join(REPO, 'mods', 'CKFHardMode', 'ConfigDoc.cs')
 SPEC = os.path.join(REPO, 'gui', 'ckf-config-editor.spec')
 TEAMPL_LABELS = os.path.join(REPO, 'scripts', 'gen_teampl_labels.py')
 RELEASE_DIR = os.path.join(REPO, 'release')
@@ -340,10 +529,18 @@ def default_config_dir():
 def config_sources(config_dir):
     """-> ([(absolute source, path in zip)], [names left out]).
 
-    Every name in CONFIG_FILES is required. A zip with six of the seven
+    Every name in CONFIG_FILES is required. A zip with fourteen of the fifteen
     extracts cleanly and costs one subsystem everything it reads, so an absent
     one refuses here and names itself rather than shipping a config surface
     with a hole in it.
+
+    THE SWEEP IS NOT A SUBSTITUTE FOR THE REQUIRED LIST, and the difference is
+    what docs/HANDOFF-split-config.md section 9 got wrong. The sweep is why a
+    stale CONFIG_FILES never shipped the wrong FILES -- every slice under
+    ckf.hardmode.d went into the zip whether or not it was named. What a stale
+    CONFIG_FILES did was REFUSE, on the one name in it that had been renamed
+    away. And what the sweep cannot do is notice an absence: a file that is not
+    on disk is simply not swept, silently.
 
     Every other file in ckf.hardmode.d that Overlays.Load would read ships as
     well, after the required ones. Anything else in that directory is returned
@@ -515,32 +712,159 @@ def defaults_cs_doc_version(defaults_cs=DEFAULTS_CS):
     return m.group(1)
 
 
-def check_doc_version(doc, defaults_cs=DEFAULTS_CS):
-    """-> the layout version, once the C# and the shipped document agree on it.
+def check_doc_version(config_dir, defaults_cs=DEFAULTS_CS):
+    """-> the layout version, once the C# and every stamped slice agree on it.
 
-    Two literals in two files with nothing deriving one from the other. The
-    document is also parsed here, which is the only place anything asks whether
-    the file about to be copied into the zip is JSON at all.
+    Eleven literals in eleven files with nothing deriving one from another --
+    Defaults.DocVersion and the "_version" of each of DOC_STAMPED. Every slice
+    is also parsed here, which is the only place anything asks whether the
+    settings files about to be copied into the zip are JSON at all.
+
+    CORRECTION, 2026-09-14 (Phase 9). This took ONE path, the merged document
+    named by DOC_NAME, and its docstring said "Two literals in two files". That
+    document no longer exists; see DOC_STAMPED above for where the stamp went
+    and why a single name cannot stand in for the set.
     """
     want = defaults_cs_doc_version(defaults_cs)
-    if not os.path.exists(doc):
-        raise Refused('no %s; it is the config document the release ships' % doc)
-    try:
-        parsed = json.loads(read_text(doc))
-    except ValueError as e:
-        raise Refused('%s is not valid JSON (%s), so it would ship as a file '
-                      'the mod cannot read' % (doc, e))
-    if not isinstance(parsed, dict):
-        raise Refused('%s does not hold a JSON object, so it is not a config '
-                      'document' % doc)
-    got = parsed.get('_version')
-    if got != want:
+    behind, unreadable, missing = [], [], []
+    for rel in DOC_STAMPED:
+        doc = os.path.join(config_dir, *rel.split('/'))
+        if not os.path.exists(doc):
+            missing.append(rel)
+            continue
+        try:
+            parsed = json.loads(read_text(doc))
+        except ValueError as e:
+            unreadable.append('%s: %s' % (rel, e))
+            continue
+        if not isinstance(parsed, dict):
+            unreadable.append('%s: holds a JSON %s, not an object'
+                              % (rel, type(parsed).__name__))
+            continue
+        got = parsed.get('_version')
+        if got != want:
+            behind.append('%s: _version %r' % (rel, got))
+    if missing:
+        raise Refused('no %s under %s; %s the release ships'
+                      % (', '.join(missing), config_dir,
+                         'they are settings files'
+                         if len(missing) > 1 else 'it is a settings file'))
+    if unreadable:
+        raise Refused('these are not valid JSON, so they would ship as files '
+                      'the mod cannot read:\n'
+                      + ''.join('    %s\n' % u for u in unreadable))
+    if behind:
         raise Refused(
-            '%s is at _version %r and %s says DocVersion = "%s". They are the '
-            'same number and they have drifted apart; set both to whatever the '
-            'document\'s shape is now.'
-            % (doc, got, os.path.basename(defaults_cs), want))
+            '%s says DocVersion = "%s" and these do not agree:\n%s'
+            'They are the same number and they have drifted apart; set every '
+            'one of them to whatever the settings layout\'s shape is now.'
+            % (os.path.basename(defaults_cs), want,
+               ''.join('    %s\n' % b for b in behind)))
     return want
+
+
+# ---------------------------------------------------------------------------
+# the OTHER half of CONFIG_FILES, read out of the C# rather than retyped
+#
+# `Expected` in mods/CKFHardMode/Defaults.cs is what checks at runtime that the
+# files arrived. It and CONFIG_FILES are the two halves of one table and the
+# comment connecting them was, until today, the only thing connecting them --
+# which is how they came to disagree for five phases with nothing saying so.
+#
+# This parses the C# array so the selftest can compare the two for real. It is
+# deliberately strict: an element shaped in a way this cannot read is a
+# refusal naming the element, never a short list. A parser that quietly skipped
+# what it did not understand would be the same dark instrument one level down.
+
+_CS_CONST = re.compile(r'internal\s+const\s+string\s+(\w+)\s*=\s*"([^"]*)"\s*;')
+_CS_EXPECTED = re.compile(r'Expected\s*=\s*\{(.*?)\}\s*;', re.S)
+_CS_FILEFOR = re.compile(
+    r'FileFor\s*\(\s*string\s+\w+\s*\)\s*\{\s*return\s+\w+\s*\+\s*"([^"]*)"\s*;')
+_CS_STRING = re.compile(r'^"([^"]*)"$')
+_CS_CONFIGDOC_REF = re.compile(r'^ConfigDoc\.(\w+)$')
+_CS_FILEFOR_CALL = re.compile(r'^ConfigDoc\.FileFor\(\s*ConfigDoc\.(\w+)\s*\)$')
+
+
+_CS_GETFILES = re.compile(
+    r'Directory\.GetFiles\s*\(\s*\w+\s*\)(.*?);', re.S)
+_CS_ENDSWITH = re.compile(r'EndsWith\(\s*"(\.[A-Za-z0-9]+)"')
+
+
+def cs_overlay_exts(overlays_cs=OVERLAYS_CS):
+    """-> the extensions Overlays.Load actually reads out of ckf.hardmode.d.
+
+    Parsed out of the C# for one reason: the selftest case that asks "did every
+    file the game loads reach the zip?" must not enumerate the directory with
+    the same constant config_sources ships by. Two things derived from one
+    wrong source always agree -- docs/HANDOFF-split-config.md section 4 records
+    that exact shape costing a false green that shipped (gate 15). Measured
+    2026-09-14: with OVERLAY_EXTS mutated to drop '.json', a live-config
+    coverage case written against OVERLAY_EXTS stayed GREEN while 11 shipped
+    .json overlays silently left the zip.
+    """
+    m = _CS_GETFILES.search(read_text(overlays_cs))
+    if not m:
+        raise Refused('%s has no Directory.GetFiles(...) filter, so nothing '
+                      'here knows which extensions the game loads' % overlays_cs)
+    exts = tuple(sorted(set(e.lower() for e in _CS_ENDSWITH.findall(m.group(1)))))
+    if not exts:
+        raise Refused('the Directory.GetFiles filter in %s names no extension; '
+                      'a selftest comparing against an empty set would pass '
+                      'over every shipped overlay' % overlays_cs)
+    return exts
+
+
+def cs_expected(defaults_cs=DEFAULTS_CS, config_doc_cs=CONFIG_DOC_CS):
+    """-> the paths Defaults.Install checks for on disk, in the C#'s order."""
+    consts = dict(_CS_CONST.findall(read_text(config_doc_cs)))
+    m = _CS_FILEFOR.search(read_text(config_doc_cs))
+    if not m:
+        raise Refused('%s has no ConfigDoc.FileFor of the shape `return '
+                      'section + "<suffix>";`, so this file cannot resolve the '
+                      'slice names in Defaults.Expected' % config_doc_cs)
+    suffix = m.group(1)
+    body = _CS_EXPECTED.search(read_text(defaults_cs))
+    if not body:
+        raise Refused('%s has no `Expected = { ... };` array; it is the runtime '
+                      'half of CONFIG_FILES and nothing can be compared to it'
+                      % defaults_cs)
+    out = []
+    for raw in body.group(1).split(','):
+        # strip // comments and whitespace; keep the expression
+        expr = re.sub(r'//[^\n]*', '', raw).strip()
+        if not expr:
+            continue
+        parts, ok = [], True
+        for tok in [t.strip() for t in expr.split('+')]:
+            s = _CS_STRING.match(tok)
+            f = _CS_FILEFOR_CALL.match(tok)
+            c = _CS_CONFIGDOC_REF.match(tok)
+            if s:
+                parts.append(s.group(1))
+            elif f:
+                if f.group(1) not in consts:
+                    ok = False
+                    break
+                parts.append(consts[f.group(1)] + suffix)
+            elif c:
+                if c.group(1) not in consts:
+                    ok = False
+                    break
+                parts.append(consts[c.group(1)])
+            else:
+                ok = False
+                break
+        if not ok:
+            raise Refused(
+                'Expected in %s carries an element this file cannot read: %s\n'
+                'It is compared to CONFIG_FILES by --selftest section [2c], and '
+                'a parser that skipped what it did not understand would make '
+                'that comparison pass over a name it never saw. Teach '
+                'cs_expected the new shape.' % (defaults_cs, expr))
+        out.append(''.join(parts))
+    if not out:
+        raise Refused('Expected in %s parsed to nothing' % defaults_cs)
+    return tuple(out)
 
 
 # ---------------------------------------------------------------------------
@@ -947,16 +1271,17 @@ def build(out_dir, vendor_dir, dll, config_dir, skip_exe=False, echo=True,
         snapshot_config(sources, snap, render(
             os.path.join(RELEASE_DIR, 'ckf.hardmode.cfg.in'), version),
             config_dir)
-        doc_version = check_doc_version(os.path.join(snap, DOC_NAME))
+        doc_version = check_doc_version(snap)
         check_json(snap)
         (check_fn or check_config)(snap)
         if echo:
             print('  version %s, in the csproj, Plugin.cs and the DLL' % version)
             print('  config from %s' % config_dir)
             print('  %d config file(s) shipping loose under BepInEx\\config, at '
-                  'document _version %s; every .json parses, check_schema '
+                  'layout _version %s across %d stamped slice(s); every '
+                  '.json parses, check_schema '
                   'clean, Team PL mirror current'
-                  % (len(sources) + 1, doc_version))
+                  % (len(sources) + 1, doc_version, len(DOC_STAMPED)))
             for _src, dest in sources[len(CONFIG_FILES):]:
                 print('    also shipping %s (the loader reads it)' % dest)
             for rel in skipped:
@@ -1003,6 +1328,16 @@ class _T:
     def __init__(self):
         self.passed = 0
         self.failed = []
+        self.notrun = []
+
+    def could_not_run(self, name, reason):
+        """A case with no subject here. AGENTS.md section 3: it is reported by
+        name with the reason, never skipped, and the report line carries the
+        count -- the same shape `gate` already applies to serve.py's NOT RUN.
+        It does not fail the suite, because the thing it could not look at is
+        the staged tree rather than anything being shipped."""
+        self.notrun.append(name)
+        print('  NOT RUN  %s\n           %s' % (name, reason))
 
     def check(self, name, cond, detail=''):
         if cond:
@@ -1031,8 +1366,11 @@ class _T:
             self.check(name, False, 'did not refuse')
 
     def report(self):
-        print('\nscripts/make_release.py verification: %d passed, %d failed'
-              % (self.passed, len(self.failed)))
+        print('\nscripts/make_release.py verification: %d passed, %d failed%s'
+              % (self.passed, len(self.failed),
+                 (', %d not run' % len(self.notrun)) if self.notrun else ''))
+        for name in self.notrun:
+            print('  NOT RUN  %s' % name)
         return 0 if not self.failed else 1
 
 
@@ -1085,6 +1423,22 @@ def _fake_config(td, doc_version='3.0.0', extra=()):
     Every file is written with its own bytes, so a case can assert that each
     one reaches the zip as itself rather than that some file of the right
     length did.
+
+    WHAT THIS FIXTURE CANNOT TEST, SAID HERE RATHER THAN LEFT TO BE NOTICED.
+    It creates a file for every name in CONFIG_FILES and the cases below then
+    assert that every name in CONFIG_FILES is found. The constant is both the
+    requirement and the test data, so NO WRONG NAME IN IT CAN EVER SURFACE
+    HERE: the whole of section [2] stayed green through Phases 3 to 8 while
+    CONFIG_FILES named ckf.hardmode.json, a file that had not existed since
+    Phase 3, and `make_release.py --config <live>` refused on it.
+    [measured, 2026-09-14 -- the refusal text is in section [2c]'s comment]
+
+    That is not a reason to delete these cases: they are what proves the
+    mechanics -- ordering, case folding, skipping, byte identity -- and they
+    need a directory small enough to build in a loop and to break on purpose.
+    It is the reason section [2c] exists, which re-asks every question about
+    the required set against the LIVE config and against `Expected` in the C#,
+    neither of which is derived from this constant.
     """
     cd = os.path.join(td, 'config')
     for rel in tuple(CONFIG_FILES) + tuple(extra) + (
@@ -1097,8 +1451,13 @@ def _fake_config(td, doc_version='3.0.0', extra=()):
 
 
 def _stub_config_bytes(rel, doc_version='3.0.0'):
-    """Distinct bytes per file, and real JSON for every .json."""
-    if rel == DOC_NAME:
+    """Distinct bytes per file, and real JSON for every .json.
+
+    Every DOC_STAMPED slice carries the stamp, not just one of them: a fixture
+    that stamped one file could not tell a check_doc_version that reads all ten
+    from one that reads the first and stops.
+    """
+    if rel in DOC_STAMPED:
         return ('{"_version": "%s", "from": "%s"}\n' % (doc_version, rel)).encode()
     if rel.endswith('.json'):
         return ('{"from": "%s"}\n' % rel).encode()
@@ -1202,8 +1561,74 @@ def _stub_gate_cmd(passed=301, failed=0, notrun=0, report=True, fail_lines=0):
     return [sys.executable, '-c', '\n'.join(body) or 'pass']
 
 
-def selftest():
+def missing_release_templates(release_dir=RELEASE_DIR):
+    """-> the TEMPLATES source names that are not on disk in release/."""
+    return [n for n, _d in TEMPLATES
+            if not os.path.exists(os.path.join(release_dir, n))]
+
+
+def _no_templates_reason(missing, release_dir=RELEASE_DIR):
+    return ('%s is/are not in %s. These are real inputs to the zip and this '
+            'file will not stub them: the cases they feed assert on what the '
+            'shipped bytes SAY -- the version in the .cfg header, the pinned '
+            'build in the licence -- and a stub would make them pass over '
+            'text no player ever sees. Stage the whole of release/ and run '
+            'again.' % (', '.join(missing), release_dir))
+
+
+def live_config_for_selftest(explicit=None):
+    """-> (path, how it was found) or (None, why there is none).
+
+    Section [2c] needs a REAL 4.0 config directory -- not a fixture -- because
+    the whole point of it is to ask questions this file's own constants cannot
+    answer. Three places are tried, in order, and the one that answered is
+    printed so a green [2c] can never be green about an unknown directory:
+
+      --config DIR            named on the command line
+      gui/settings.json       the directory the editor edits, which is what a
+                              real `make_release.py` run packages
+      ../game/BepInEx/config  a sibling `game/` next to the repo, which is how
+                              this change's containers are staged and what
+                              every other gate is handed as `--game <root>`
+
+    None of the three is a fallback that can quietly pass: a directory without
+    ckf.hardmode.d is rejected, and if nothing answers, [2c] reports NOT RUN by
+    name rather than being skipped.
+    """
+    tried = []
+    cands = []
+    if explicit:
+        cands.append((os.path.abspath(explicit), '--config'))
+    try:
+        cands.append((default_config_dir(), 'gui/settings.json'))
+    except Exception as e:
+        tried.append('gui/settings.json: %s: %s' % (type(e).__name__, e))
+    cands.append((os.path.join(os.path.dirname(REPO), 'game', 'BepInEx',
+                               'config'), 'the sibling game/ tree'))
+    for path, how in cands:
+        if not os.path.isdir(path):
+            tried.append('%s: no directory at %s' % (how, path))
+        elif not os.path.isdir(os.path.join(path, OVERLAY_DIR)):
+            tried.append('%s: %s has no %s/, so it is not a 4.0 config'
+                         % (how, path, OVERLAY_DIR))
+        else:
+            return path, how
+    return None, ('no live BepInEx/config to test against. Tried:\n           '
+                  + '\n           '.join(tried)
+                  + '\n           Name one: '
+                    'python scripts/make_release.py --selftest --config DIR')
+
+
+def selftest(config_dir=None):
     t = _T()
+    # release/*.in are read straight off disk by three cases below and by
+    # build() itself. An unstaged release/ used to end the run in a
+    # FileNotFoundError with NO REPORT LINE AT ALL -- the one shape this file
+    # already says a verification suite must not fail in (see [6]'s guard
+    # comment, which covered one of the four call sites and not the others).
+    # It is reported by name now, once, and the cases that cannot run without
+    # it say so instead of being stubbed into a pass.
+    _no_tpl = missing_release_templates()
 
     print('\n[1] the version has to agree in three places')
     with tempfile.TemporaryDirectory() as td:
@@ -1331,13 +1756,18 @@ def selftest():
         t.check('every config file is in the zip at its mapped path, '
                 'byte-identical to the live copy', not wrong, wrong)
         _cfg = members.get('BepInEx/config/ckf.hardmode.cfg')
-        t.check('the master switch lands in BepInEx/config with its version '
-                'filled in and the key BepInEx binds, not the live file',
-                _cfg is not None
-                and b'CKF Hard Mode v3.0.0\r\n' in _cfg
-                and b'\r\n[General]\r\n' in _cfg
-                and b'\r\nEnabled = true\r\n' in _cfg,
-                _cfg)
+        _name = ('the master switch lands in BepInEx/config with its version '
+                 'filled in and the key BepInEx binds, not the live file')
+        if 'ckf.hardmode.cfg.in' in _no_tpl:
+            t.could_not_run(_name, _no_templates_reason(
+                ['ckf.hardmode.cfg.in']))
+        else:
+            t.check(_name,
+                    _cfg is not None
+                    and b'CKF Hard Mode v3.0.0\r\n' in _cfg
+                    and b'\r\n[General]\r\n' in _cfg
+                    and b'\r\nEnabled = true\r\n' in _cfg,
+                    _cfg)
         t.check('and nothing else was dropped on the way in, nor picked up',
                 members[PLUGIN_IN_ZIP] == b'binary\n'
                 and members[EDITOR_IN_ZIP] == b'binary\n'
@@ -1373,8 +1803,15 @@ def selftest():
           'allowed')
     with tempfile.TemporaryDirectory() as td:
         cd = _fake_config(td)
-        for rel, body in (('ckf.hardmode.json', '{"_version": "1.0.0"}'),
-                          ('ckf.hardmode.rules.json',
+        # CORRECTION, 2026-09-14 (Phase 9). The first of these was
+        # 'ckf.hardmode.json' and the second 'ckf.hardmode.rules.json'; neither
+        # ships now, so the case was writing two files into the fixture that
+        # check_json would never be handed by a real build. The comment-and-
+        # trailing-comma body moved to a ckf.hardmode.d/*.json, which is where
+        # a hand-edited file with comments in it actually lives.
+        for rel, body in (('ckf.hardmode.d/difficulty.json',
+                           '{"_version": "1.0.0"}'),
+                          ('ckf.hardmode.d/modelrules.json',
                            '// a comment\n{"rules": [1, 2,], /* x */ }\n'),
                           ('ckf.hardmode.d/MissionPowerLevelModel.generated.json',
                            '{}')):
@@ -1387,6 +1824,262 @@ def selftest():
         t.refuses('an extra rules file that does not parse refuses, by name',
                   lambda: check_json(cd), 'late.rules.json')
 
+    # -----------------------------------------------------------------------
+    print('\n[2c] the required set, checked against things this file does not '
+          'define')
+    #
+    # WHY THIS SECTION EXISTS. Section [2] builds its config directory from
+    # CONFIG_FILES and then asserts that every name in CONFIG_FILES is found
+    # (_fake_config's docstring says so at length). The constant is both the
+    # requirement and the test data, so a wrong name in it cannot surface
+    # there. It did not: CONFIG_FILES named ckf.hardmode.json from Phase 3 to
+    # Phase 9 while [2] reported PASS on every run, and a real build against
+    # the live config printed
+    #
+    #     REFUSED: the release ships these as loose files under BepInEx\config
+    #     and they are not in <config>:
+    #         ckf.hardmode.json
+    #
+    # [measured, 2026-09-14, /home/claude/work/game/BepInEx/config]
+    #
+    # Every case below compares CONFIG_FILES to something derived somewhere
+    # else: `Expected` parsed out of the C# (cs_expected), or a real live
+    # config directory listed on disk. Fixing the constant without adding
+    # these would have rebuilt the same blind instrument with better values.
+    _expected = cs_expected()
+    _accounted = set(CONFIG_FILES) | {CFG_NAME} | set(NOT_SHIPPED_BUT_EXPECTED)
+    _only_cs = sorted(set(_expected) - _accounted)
+    _only_py = sorted(_accounted - set(_expected))
+    t.check('every path Defaults.cs expects on disk is accounted for here, and '
+            'nothing here is unknown to it',
+            not _only_cs and not _only_py,
+            'in Defaults.Expected and in neither CONFIG_FILES, TEMPLATES nor '
+            'NOT_SHIPPED_BUT_EXPECTED: %s\nin this file and not in '
+            'Defaults.Expected: %s' % (_only_cs or '-', _only_py or '-'))
+    t.check('and it read a real array, not an empty one',
+            len(_expected) >= 15, _expected)
+    # The pre-4.0 merged document must be in NEITHER table. Shipping it is not
+    # merely useless: ConfigDoc.BothLayouts refuses to apply any rule for the
+    # launch when it sits beside slice files.
+    t.check('the pre-4.0 merged document is in no table here',
+            PRE_40_DOC_NAME not in CONFIG_FILES
+            and PRE_40_DOC_NAME not in DOC_STAMPED
+            and PRE_40_DOC_NAME not in [d for _n, d in TEMPLATES],
+            PRE_40_DOC_NAME)
+    # DOC_STAMPED has to be a subset of what ships, or the build would stamp-
+    # check a file it never puts in the zip.
+    t.check('every stamped slice is also a shipped file',
+            not [r for r in DOC_STAMPED if r not in CONFIG_FILES],
+            [r for r in DOC_STAMPED if r not in CONFIG_FILES])
+    # OVERLAY_EXTS decides what ships out of ckf.hardmode.d; Overlays.cs's
+    # Directory.GetFiles filter decides what the game reads. A file in one set
+    # and not the other either ships unread or is read and absent.
+    t.check('the extensions this file ships by are the ones Overlays.Load '
+            'reads by',
+            tuple(sorted(e.lower() for e in OVERLAY_EXTS))
+            == cs_overlay_exts(),
+            (sorted(OVERLAY_EXTS), cs_overlay_exts()))
+
+    _live, _how = live_config_for_selftest(config_dir)
+    if _live is None:
+        # Every case in the else-branch is named here. A list that named only
+        # some of them would under-report what went unchecked, which is the
+        # same silence in smaller print.
+        for _name in (
+                'the live config is packageable as it stands today',
+                'a required name absent from the LIVE config refuses, by name',
+                'every shipping-extension file in the live ckf.hardmode.d '
+                'reaches the zip',
+                'every file in the live ckf.hardmode.d is either shipped or '
+                'named as skipped',
+                'a file planted in the live ckf.hardmode.d ships if the loader '
+                'reads it and is named as skipped if not',
+                'every stamped slice in the live config agrees with '
+                'Defaults.DocVersion',
+                'one live slice left behind the code refuses, naming that '
+                'slice'):
+            t.could_not_run(_name, _how)
+    else:
+        print('  (live config: %s, via %s)' % (_live, _how))
+
+        # THE STATE AS OF TODAY. Before CONFIG_FILES was rewritten this case
+        # was written the other way round -- it asserted that config_sources
+        # REFUSED and named ckf.hardmode.json -- and it passed, which is what
+        # proved the live directory no longer carries that file. Rewriting the
+        # constant flipped it to the assertion below. Both halves were run:
+        # with 'ckf.hardmode.json' back in CONFIG_FILES this case fails with
+        # "refused: ... ckf.hardmode.json" as its detail.
+        _err = None
+        try:
+            _sources, _skipped = config_sources(_live)
+        except Refused as e:
+            _sources, _skipped, _err = None, None, str(e)
+        t.check('the live config is packageable as it stands today',
+                _err is None
+                and sorted(r for r in CONFIG_FILES)
+                == sorted(d[len(CONFIG_IN_ZIP):]
+                          for _s, d in _sources[:len(CONFIG_FILES)]),
+                'refused: %s' % _err if _err else _sources)
+
+        # A required name absent from a REAL config. The directory is a copy of
+        # the live one, so the only thing making a name "required" is
+        # CONFIG_FILES -- a name that is not on disk cannot be papered over by
+        # the fixture creating it.
+        _bad = []
+        for _rel in CONFIG_FILES:
+            with tempfile.TemporaryDirectory() as td:
+                _cd = os.path.join(td, 'config')
+                shutil.copytree(_live, _cd)
+                _src = os.path.join(_cd, *_rel.split('/'))
+                if not os.path.isfile(_src):
+                    # The live config does not carry this name AT ALL, so
+                    # there is nothing to remove and this case has no subject.
+                    # That is the finding, not a reason to skip: it means
+                    # CONFIG_FILES names a file that does not exist, which is
+                    # exactly the state ckf.hardmode.json was in from Phase 3
+                    # to Phase 9. Removing it by os.remove used to raise
+                    # FileNotFoundError out of selftest() and end the run with
+                    # no report line.
+                    _bad.append('%s: not in the live config at all -- the name '
+                                'is wrong, or the file is gone and every build '
+                                'refuses on it' % _rel)
+                    continue
+                os.remove(_src)
+                try:
+                    config_sources(_cd)
+                    _bad.append('%s: did not refuse' % _rel)
+                except Refused as e:
+                    if _rel not in str(e):
+                        _bad.append('%s: refused without naming it: %s'
+                                    % (_rel, e))
+                except Exception as e:
+                    _bad.append('%s: raised %s, not Refused: %s'
+                                % (_rel, type(e).__name__, e))
+        t.check('a required name absent from the LIVE config refuses, by name',
+                not _bad, _bad)
+
+        if _err is None:
+            _dests = set(d[len(CONFIG_IN_ZIP):] for _s, d in _sources)
+            _on_disk = sorted(
+                OVERLAY_DIR + '/' + n
+                for n in os.listdir(os.path.join(_live, OVERLAY_DIR))
+                if os.path.isfile(os.path.join(_live, OVERLAY_DIR, n)))
+            # Enumerated from the DIRECTORY, not from CONFIG_FILES: a file the
+            # game loads and the zip does not carry is a player playing a
+            # different mod, and nothing else in this file would notice.
+            #
+            # And filtered by cs_overlay_exts(), read out of Overlays.cs, NOT by
+            # OVERLAY_EXTS, which is what config_sources ships by. Written
+            # against OVERLAY_EXTS this case was green under a mutation that
+            # dropped '.json' from it and cost 11 shipped overlays
+            # [measured, 2026-09-14] -- both sides moved together, which is the
+            # failure shape that already shipped once here as gate 15.
+            _ships = [r for r in _on_disk
+                      if r.lower().endswith(cs_overlay_exts())]
+            _lost = sorted(set(_ships) - _dests)
+            t.check('every shipping-extension file in the live ckf.hardmode.d '
+                    'reaches the zip',
+                    not _lost,
+                    '%d of %d on disk did not reach it: %s'
+                    % (len(_lost), len(_ships), _lost))
+            # And the other half: a file the loader would NOT read must be
+            # reported as skipped, never dropped without a word. The two lists
+            # have to partition the directory exactly -- no file in both, none
+            # in neither.
+            _skip_set = set(s.rstrip('/') for s in _skipped)
+            _silent = sorted(set(_on_disk) - _dests - _skip_set)
+            _both = sorted((set(_on_disk) & _dests) & _skip_set)
+            _nonship = [r for r in _on_disk
+                        if not r.lower().endswith(cs_overlay_exts())]
+            t.check('every file in the live ckf.hardmode.d is either shipped '
+                    'or named as skipped',
+                    not _silent and not _both,
+                    'dropped without a word: %s\nin both lists: %s'
+                    % (_silent or '-', _both or '-'))
+            # The subject count is printed, not just the verdict: "every
+            # shipping-extension file reached the zip" over a directory where
+            # every such file is also a required name would be a green over
+            # nothing swept. The third number is how many of them the SWEEP
+            # carried.
+            print('    %d file(s) in %s: %d shipped (%d by name, %d by the '
+                  'sweep), %d named as skipped (%d of them for their extension)'
+                  % (len(_on_disk), OVERLAY_DIR,
+                     len([r for r in _on_disk if r in _dests]),
+                     len([r for r in _on_disk if r in CONFIG_FILES]),
+                     len([r for r in _on_disk
+                          if r in _dests and r not in CONFIG_FILES]),
+                     len(_skip_set & set(_on_disk)), len(_nonship)))
+
+            # The same two questions asked with files PLANTED in a copy of the
+            # live directory, so each assertion has a subject even on a day
+            # when the live ckf.hardmode.d happens to hold only shipping
+            # extensions. Without this, the skipped half above is an assertion
+            # over an empty set.
+            with tempfile.TemporaryDirectory() as td:
+                _cd = os.path.join(td, 'config')
+                shutil.copytree(_live, _cd)
+                _planted = {'zz-planted-overlay.csv': True,
+                            'zz-planted-overlay.tsv': True,
+                            'zz-planted-overlay.json': True,
+                            'zz-planted.txt': False,
+                            'zz-planted.csv.gui-new': False}
+                for _n, _ship in _planted.items():
+                    with open(os.path.join(_cd, OVERLAY_DIR, _n), 'w') as f:
+                        f.write('{}' if _n.endswith('.json') else 'x\n')
+                os.makedirs(os.path.join(_cd, OVERLAY_DIR, 'zz-planted-dir'))
+                _ps, _pk = config_sources(_cd)
+                _pd = set(d[len(CONFIG_IN_ZIP):] for _s, d in _ps)
+                _pk = set(s.rstrip('/') for s in _pk)
+                _wrong = []
+                for _n, _ship in _planted.items():
+                    _rel = OVERLAY_DIR + '/' + _n
+                    if _ship and _rel not in _pd:
+                        _wrong.append('%s should have shipped' % _rel)
+                    if not _ship and _rel not in _pk:
+                        _wrong.append('%s was dropped without being named'
+                                      % _rel)
+                    if not _ship and _rel in _pd:
+                        _wrong.append('%s shipped and the loader will not '
+                                      'read it' % _rel)
+                if OVERLAY_DIR + '/zz-planted-dir' not in _pk:
+                    _wrong.append('a subdirectory was dropped without being '
+                                  'named')
+                t.check('a file planted in the live ckf.hardmode.d ships if '
+                        'the loader reads it and is named as skipped if not',
+                        not _wrong, _wrong)
+
+        # The stamp, against the live files rather than against a fixture the
+        # constant stamped for us.
+        try:
+            _v = check_doc_version(_live)
+            t.check('every stamped slice in the live config agrees with '
+                    'Defaults.DocVersion',
+                    _v == defaults_cs_doc_version(), _v)
+        except Refused as e:
+            t.check('every stamped slice in the live config agrees with '
+                    'Defaults.DocVersion', False, e)
+        with tempfile.TemporaryDirectory() as td:
+            _cd = os.path.join(td, 'config')
+            shutil.copytree(_live, _cd)
+            _one = os.path.join(_cd, *DOC_STAMPED[-1].split('/'))
+            # Written rather than edited in place, so a DOC_STAMPED name that
+            # is not in the live config makes the case FAIL by name instead of
+            # raising FileNotFoundError out of the suite.
+            with open(_one, 'w') as f:
+                f.write('{"_version": "0.0.1-behind"}\n')
+            t.refuses('one live slice left behind the code refuses, naming '
+                      'that slice',
+                      lambda c=_cd: check_doc_version(c), DOC_STAMPED[-1])
+
+    _build_cases = ('a whole build checks and gates the snapshot, not the live '
+                    'directory, and the snapshot is gone afterwards',
+                    'and the zip carries the snapshot\'s bytes and the '
+                    'rendered .cfg')
+    if _no_tpl:
+        # build() renders release/ckf.hardmode.cfg.in into the snapshot before
+        # anything else reads it, so these two cases have no subject at all.
+        for _n in _build_cases:
+            t.could_not_run(_n, _no_templates_reason(_no_tpl))
     with tempfile.TemporaryDirectory() as td:
         cd = _fake_config(td)
         seen = {}
@@ -1394,8 +2087,10 @@ def selftest():
         dll = os.path.join(td, 'CKFHardMode.dll')
         with open(dll, 'wb') as f:
             f.write(b'MZ' + version_blob(csproj_version()) + b'\x00')
-        with open(os.path.join(cd, DOC_NAME), 'w') as f:
-            f.write('{"_version": "%s"}\n' % defaults_cs_doc_version())
+        for _rel in DOC_STAMPED:
+            with open(os.path.join(cd, *_rel.split('/')), 'w') as f:
+                f.write('{"_version": "%s", "from": "%s"}\n'
+                        % (defaults_cs_doc_version(), _rel))
         out = os.path.join(td, 'dist')
         os.makedirs(out)
         with open(os.path.join(out, EXE_NAMES[0]), 'wb') as f:
@@ -1411,61 +2106,99 @@ def selftest():
 
         def _gate(exe, **kw):
             seen['gate'] = kw.get('config_dir')
-        try:
-            z = build(out, v, dll, cd, skip_exe=True, echo=False,
-                      gate_fn=_gate, check_fn=_check)
-            with zipfile.ZipFile(z) as zf:
-                shipped = dict((n, zf.read(n)) for n in zf.namelist()
-                               if n.startswith(CONFIG_IN_ZIP))
-        except Refused as e:
-            z, shipped = None, {'refused': str(e)}
-        t.check('a whole build checks and gates the snapshot, not the live '
-                'directory, and the snapshot is gone afterwards',
-                seen.get('check') and seen.get('check') == seen.get('gate')
-                and os.path.dirname(seen['check']) != td
-                and not os.path.exists(seen['check'])
-                and CFG_NAME in seen.get('listing', ()), seen)
-        t.check('and the zip carries the snapshot\'s bytes and the rendered .cfg',
-                z is not None
-                and all(shipped.get(CONFIG_IN_ZIP + r)
-                        == read_bytes(os.path.join(cd, *r.split('/')))
-                        + (b'#snap\n' if r == 'ckf.hardmode.selfcheck.csv' else b'')
-                        for r in CONFIG_FILES)
-                and shipped.get(CONFIG_IN_ZIP + CFG_NAME, b'').startswith(
-                    b'## Settings file was created by plugin CKF Hard Mode v'
-                    + csproj_version().encode()),
-                sorted(shipped))
+        if not _no_tpl:
+            try:
+                z = build(out, v, dll, cd, skip_exe=True, echo=False,
+                          gate_fn=_gate, check_fn=_check)
+                with zipfile.ZipFile(z) as zf:
+                    shipped = dict((n, zf.read(n)) for n in zf.namelist()
+                                   if n.startswith(CONFIG_IN_ZIP))
+            except Refused as e:
+                z, shipped = None, {'refused': str(e)}
+            t.check(_build_cases[0],
+                    seen.get('check') and seen.get('check') == seen.get('gate')
+                    and os.path.dirname(seen['check']) != td
+                    and not os.path.exists(seen['check'])
+                    and CFG_NAME in seen.get('listing', ()), seen)
+            t.check(_build_cases[1],
+                    z is not None
+                    and all(shipped.get(CONFIG_IN_ZIP + r)
+                            == read_bytes(os.path.join(cd, *r.split('/')))
+                            + (b'#snap\n' if r == 'ckf.hardmode.selfcheck.csv'
+                               else b'')
+                            for r in CONFIG_FILES)
+                    and shipped.get(CONFIG_IN_ZIP + CFG_NAME, b'').startswith(
+                        b'## Settings file was created by plugin CKF Hard Mode v'
+                        + csproj_version().encode()),
+                    sorted(shipped))
 
-    print('\n[3] the document stamp and Defaults.DocVersion agree')
+    print('\n[3] the slice stamps and Defaults.DocVersion agree')
+    # CORRECTION, 2026-09-14 (Phase 9). Every case here used to hand
+    # check_doc_version ONE path, os.path.join(cd, DOC_NAME) -- the merged
+    # document. It takes the config directory now and reads all ten of
+    # DOC_STAMPED; the cases below break one slice at a time so that a
+    # check_doc_version which read the first file and stopped would fail on
+    # nine of the ten.
     with tempfile.TemporaryDirectory() as td:
         _fake_repo(td)
         cd = _fake_config(td)
         proj = os.path.join(td, 'mods', 'CKFHardMode')
-        t.check('two files carrying the same stamp read back as one',
-                check_doc_version(os.path.join(cd, DOC_NAME),
-                                  os.path.join(proj, 'Defaults.cs'))
-                == '3.0.0')
+        # Wrapped, because an unexpected Refused out of a case that expects a
+        # VALUE used to end the run with no report line: with one DOC_STAMPED
+        # name missing from CONFIG_FILES the fixture never creates it and this
+        # raised here instead of failing. [measured, 2026-09-14, mutation M2]
+        try:
+            _v = check_doc_version(cd, os.path.join(proj, 'Defaults.cs'))
+        except Refused as e:
+            _v = 'refused: %s' % e
+        t.check('eleven files carrying the same stamp read back as one',
+                _v == '3.0.0', _v)
 
     with tempfile.TemporaryDirectory() as td:
         _fake_repo(td, doc_version='3.1.0')
         cd = _fake_config(td, doc_version='3.0.0')
         proj = os.path.join(td, 'mods', 'CKFHardMode')
-        t.refuses('a document left behind the code refuses, naming both',
-                  lambda: check_doc_version(os.path.join(cd, DOC_NAME),
-                                            os.path.join(proj, 'Defaults.cs')),
+        t.refuses('slices left behind the code refuse, naming both',
+                  lambda: check_doc_version(cd, os.path.join(proj, 'Defaults.cs')),
                   'drifted apart')
+
+    _one_behind = []
+    for _i, _rel in enumerate(DOC_STAMPED):
+        with tempfile.TemporaryDirectory() as td:
+            _fake_repo(td)
+            cd = _fake_config(td)
+            proj = os.path.join(td, 'mods', 'CKFHardMode')
+            with open(os.path.join(cd, *_rel.split('/')), 'w') as f:
+                f.write('{"_version": "2.9.9"}\n')
+            try:
+                check_doc_version(cd, os.path.join(proj, 'Defaults.cs'))
+                _one_behind.append('%s: did not refuse' % _rel)
+            except Refused as e:
+                if _rel not in str(e):
+                    _one_behind.append('%s: refused without naming it' % _rel)
+    t.check('ANY ONE of the ten slices left behind refuses, naming that slice',
+            not _one_behind, _one_behind)
 
     with tempfile.TemporaryDirectory() as td:
         _fake_repo(td)
         cd = _fake_config(td)
         proj = os.path.join(td, 'mods', 'CKFHardMode')
-        doc = os.path.join(cd, DOC_NAME)
+        doc = os.path.join(cd, *DOC_STAMPED[0].split('/'))
         with open(doc, 'w') as f:
             f.write('{"_version": "3.0.0",\n')
-        t.refuses('a config document that is not JSON refuses rather than '
+        t.refuses('a settings slice that is not JSON refuses rather than '
                   'shipping a file the mod cannot read',
-                  lambda: check_doc_version(doc, os.path.join(proj, 'Defaults.cs')),
+                  lambda: check_doc_version(cd, os.path.join(proj, 'Defaults.cs')),
                   'not valid JSON')
+
+    with tempfile.TemporaryDirectory() as td:
+        _fake_repo(td)
+        cd = _fake_config(td)
+        proj = os.path.join(td, 'mods', 'CKFHardMode')
+        os.remove(os.path.join(cd, *DOC_STAMPED[-1].split('/')))
+        t.refuses('a settings slice that is not there refuses, by name',
+                  lambda: check_doc_version(cd, os.path.join(proj, 'Defaults.cs')),
+                  DOC_STAMPED[-1])
 
     with tempfile.TemporaryDirectory() as td:
         _fake_repo(td)
@@ -1475,9 +2208,25 @@ def selftest():
             f.write('namespace CKFHardMode { internal static class Defaults {} }')
         t.refuses('a Defaults.cs with no DocVersion refuses rather than '
                   'checking nothing',
-                  lambda: check_doc_version(os.path.join(cd, DOC_NAME),
-                                            os.path.join(proj, 'Defaults.cs')),
+                  lambda: check_doc_version(cd, os.path.join(proj, 'Defaults.cs')),
                   'no DocVersion string')
+
+    t.check('cs_expected reads Defaults.Expected out of the repo\'s own C#',
+            len(cs_expected()) >= 15, cs_expected())
+    with tempfile.TemporaryDirectory() as td:
+        _fake_repo(td)
+        proj = os.path.join(td, 'mods', 'CKFHardMode')
+        t.refuses('a Defaults.cs with no Expected array refuses rather than '
+                  'comparing CONFIG_FILES to an empty list',
+                  lambda: cs_expected(os.path.join(proj, 'Defaults.cs')),
+                  'nothing can be compared to it')
+    with tempfile.TemporaryDirectory() as td:
+        _cs = os.path.join(td, 'Defaults.cs')
+        with open(_cs, 'w') as f:
+            f.write('string[] Expected = { "a.csv", SomeOther.Thing };\n')
+        t.refuses('an element cs_expected cannot read refuses rather than '
+                  'being skipped',
+                  lambda: cs_expected(_cs), 'SomeOther.Thing')
 
     t.check('the repo\'s own Defaults.cs carries a DocVersion to check against',
             bool(re.fullmatch(r'\d+\.\d+\.\d+', defaults_cs_doc_version())),
@@ -1716,10 +2465,15 @@ def selftest():
                 out)
     with tempfile.TemporaryDirectory() as td:
         p = os.path.join(td, 'README.txt.in')
-        with open(p, 'w') as f:
+        # newline='' or the handle's own translation defeats the fixture: on
+        # Windows newline=None writes every '\n' as '\r\n', so the three CRLF
+        # meant to be on disk land as '\r\r\n' and the case measures the
+        # fixture's damage instead of render()'s fold.
+        with open(p, 'w', newline='') as f:
             f.write('already \r\n windows \r\n endings\r\n')
+        _crlf = render(p, '3.0.0')
         t.check('a template already saved with CRLF is not doubled',
-                render(p, '3.0.0').count(b'\r') == 3)
+                _crlf.count(b'\r') == 3, _crlf)
     with tempfile.TemporaryDirectory() as td:
         p = os.path.join(td, 'README.txt.in')
         with open(p, 'w') as f:
@@ -1727,41 +2481,92 @@ def selftest():
         t.refuses('a placeholder nothing fills refuses rather than shipping '
                   'the literal',
                   lambda: render(p, '3.0.0'), '@BUILD_DATE@')
+    # This is the one case whose JOB is to say the templates are absent, so it
+    # stays a FAIL rather than a NOT RUN: in David's repo release/*.in missing
+    # IS the defect, and in a half-staged container it is the thing to stage.
+    # Everything downstream of it reports NOT RUN instead, so one absence gives
+    # one red and four named non-runs rather than a traceback.
     for name in ('README.txt', 'LICENSE-BepInEx.txt'):
         src = os.path.join(RELEASE_DIR, name + '.in')
         t.check('release/%s.in is on disk and renders' % name,
                 os.path.exists(src) and len(render(src, '0.0.0')) > 500,
                 src)
-    # Guarded on the file being there, not because its absence is acceptable --
-    # the case above already fails on that -- but because an unguarded render
-    # raises out of selftest() and the run ends with no report line at all,
-    # which is the one shape a verification suite must not fail in.
     _lic = os.path.join(RELEASE_DIR, 'LICENSE-BepInEx.txt.in')
-    t.check('the licence header names the pinned build and its commit',
-            os.path.exists(_lic)
-            and all(s in render(_lic, '0.0.0').decode()
-                    for s in (BE_BUILD, BE_COMMIT,
+    _n = 'the licence header names the pinned build and its commit'
+    if not os.path.exists(_lic):
+        t.could_not_run(_n, _no_templates_reason(['LICENSE-BepInEx.txt.in']))
+    else:
+        t.check(_n,
+                all(x in render(_lic, '0.0.0').decode()
+                    for x in (BE_BUILD, BE_COMMIT,
                               'LESSER GENERAL PUBLIC LICENSE')),
-            _lic)
+                _lic)
     # BepInEx rewrites this file on launch, so what ships has to be what
     # BepInEx would have written: CRLF, the version in the header comment, and
-    # the one key it binds.
-    _cfg = render(os.path.join(RELEASE_DIR, 'ckf.hardmode.cfg.in'), '9.9.9')
-    t.check('the master switch renders with its version, its section and its '
-            'one key',
-            _cfg.startswith(b'## Settings file was created by plugin '
-                            b'CKF Hard Mode v9.9.9\r\n')
-            and b'\r\n[General]\r\n' in _cfg
-            and b'\r\nEnabled = true\r\n' in _cfg
-            and b'\n' not in _cfg.replace(b'\r\n', b''),
-            _cfg)
+    # the keys it binds.
+    #
+    # CORRECTION, 2026-09-15. This block used to stop at [General] and Enabled,
+    # and it PASSED all the way through the 4.0.0 build that check_config then
+    # refused with 42 MISSING keys: release/ckf.hardmode.cfg.in had never grown
+    # a [Slices] section, and nothing here looked for one. The case is kept and
+    # widened rather than replaced, because the failure was not a wrong
+    # assertion -- it was a true assertion standing in for a claim four times
+    # its size. A one-key stub now fails it.
+    _cfgin = os.path.join(RELEASE_DIR, 'ckf.hardmode.cfg.in')
+    _n = 'the master switch renders with its version, its section and its key'
+    if not os.path.exists(_cfgin):
+        t.could_not_run(_n, _no_templates_reason(['ckf.hardmode.cfg.in']))
+    else:
+        _cfg = render(_cfgin, '9.9.9')
+        t.check(_n,
+                _cfg.startswith(b'## Settings file was created by plugin '
+                                b'CKF Hard Mode v9.9.9\r\n')
+                and b'\r\n[General]\r\n' in _cfg
+                and b'\r\nEnabled = true\r\n' in _cfg
+                and b'\n' not in _cfg.replace(b'\r\n', b''),
+                _cfg)
+    # The slice toggles are the point of the 4.0 config: a zip whose .cfg has
+    # no [Slices] section cannot be hand-edited until after a first launch, and
+    # check_config refuses on it. Counted rather than named, because the number
+    # of slices is declared in schema/ and a copy of it here would be the next
+    # thing to go stale -- what this asserts is that the section exists and is
+    # not a stub.
+    _n = 'the rendered .cfg carries a [Slices] section, not just the master switch'
+    if not os.path.exists(_cfgin):
+        t.could_not_run(_n, _no_templates_reason(['ckf.hardmode.cfg.in']))
+    else:
+        _cfg = render(_cfgin, '9.9.9')
+        _slices = _cfg.split(b'\r\n[Slices]\r\n', 1)
+        _keys = ([l for l in _slices[1].split(b'\r\n')
+                  if b' = ' in l and not l.startswith(b'#')]
+                 if len(_slices) == 2 else [])
+        t.check(_n, len(_keys) > 1, '%d key(s) under [Slices]' % len(_keys))
+    # ...and that it is CURRENT with the schemas, which is the drift that
+    # produced the stub. Same check as GATE 16; run here too because this
+    # selftest is the gate that stands for "the release is buildable", and it
+    # stood for it while the template was four years of keys behind.
+    _n = 'release/ckf.hardmode.cfg.in is what the schemas say it should be'
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import gen_cfg_template as _gct
+    except Exception as _e:
+        t.could_not_run(_n, 'scripts/gen_cfg_template.py could not be '
+                            'imported (%s: %s).' % (type(_e).__name__, _e))
+    else:
+        _rc = _gct.main(['--check'])
+        t.check(_n, _rc == 0,
+                'gen_cfg_template.py --check exited %s; re-run it without '
+                '--check' % _rc)
     # A template added to release/ and not to TEMPLATES is rendered by nothing
     # and reaches no player, and nothing else here would notice.
-    _orphans = sorted(set(n for n in os.listdir(RELEASE_DIR)
-                          if n.endswith('.in'))
-                      - set(n for n, _ in TEMPLATES))
-    t.check('every template in release/ has a path in the zip', not _orphans,
-            _orphans)
+    _n = 'every template in release/ has a path in the zip'
+    if not os.path.isdir(RELEASE_DIR):
+        t.could_not_run(_n, 'there is no %s to list.' % RELEASE_DIR)
+    else:
+        _orphans = sorted(set(n for n in os.listdir(RELEASE_DIR)
+                              if n.endswith('.in'))
+                          - set(n for n, _ in TEMPLATES))
+        t.check(_n, not _orphans, _orphans)
 
     print('\n[7] the zip')
     with tempfile.TemporaryDirectory() as td:
@@ -1818,11 +2623,15 @@ def main(argv=None):
                     help='use the editor binary already in --out instead of '
                          'building one. The gate still runs against it.')
     ap.add_argument('--selftest', action='store_true',
-                    help='prove every refusal in this file can fire')
+                    help='prove every refusal in this file can fire. --config '
+                         'names the live directory section [2c] tests against; '
+                         'without it, gui/settings.json and a sibling game/ '
+                         'tree are tried in that order and [2c] reports NOT '
+                         'RUN by name if neither answers.')
     a = ap.parse_args(argv)
 
     if a.selftest:
-        return selftest()
+        return selftest(a.config)
     try:
         build(a.out, a.vendor, a.dll,
               os.path.abspath(a.config) if a.config else default_config_dir(),

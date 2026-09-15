@@ -355,6 +355,53 @@ never observed in game.
   mission.
 - There is no dedupe on the domain id; Run 32's `WeaponModel.csv` carried
   `WeaponId` 13000 twice.
+- **The dump stopped trimming columns on 2026-09-13, and that moved a decision
+  into every consumer.** `ModelColumnsOnly`, `DropPresentationColumns` and
+  `DropConstantColumns` now default to `false`: columns arrive exactly as they
+  sit in memory, constants and art references included. Only compiler
+  `<Name>_k__BackingField` duplicates and the Il2Cpp plumbing (`Pointer`,
+  `WasCollected`, `ObjectClass`, `ObjectBase`) are still filtered, and only
+  scalars are written at all. The trap is that **a blank overlay cell means
+  "leave this column alone" and a filled one is a write that beats anything
+  merged after it**, so a generator that emits every column it reads turns a
+  no-op into a real write. Three did: `make_enemy_overlays.py` would have
+  written an explicit `0` into `WeaponModel.PhysicalDamage2` on ~800 cells;
+  `implants.py` would have put `EffectModel.IconAsset` and `VFX` into the slot
+  lever sheets as numeric adjustment cells; and `consumables.py` — written the
+  same day, after the first two were fixed — carried 1 to 14 extra columns into
+  each of its six sheets and failed gate 15's P-MAP check against
+  `Consumables.cs` on all six. All three now filter for themselves:
+  `informative()`, `is_presentation()`, and in `consumables.py` both an art
+  clause and a constancy clause on `take()`.
+- **The trim had two dimensions, and a consumer needs both.** `consumables.py`
+  proved it. Of its extra columns, twelve were art references by name —
+  `ExtraAsset`, `AnimationKey`, `Vfx`, `SelfVfx`, `TokenVfx`, `IconPng`,
+  `EventSFX`, `GroupNameSFX`, `TypeSFX`, `Asset3DTypeId`, `IconAsset`,
+  `MatrixIconAsset` — and three were constants the old dump had removed:
+  `TalentModel.IsActiveForDisplay` = `True`, `TalentCyberEnabled` = `True` and
+  `TalentLevel` = `1`, each on all 384 rows [measured]. An art filter alone
+  leaves exactly those three behind on five of the six classes. `consumables.py`
+  had explicitly argued in a comment that no "or constant" clause was needed
+  "because the shipped cells are all blank" — sound only while the dump was
+  doing that job.
+- **`ModelColumnsOnly` has never removed anything.** `_dropped_columns.csv` from
+  2026-09-12 holds 1336 rows and **zero** with reason `inherited UI member`,
+  across all 54 captured tables. The inherited UI-row-class members are not
+  public scalar properties on the Il2Cpp side, or are declared on a
+  `...ModelBase` after all. The rule is kept in case a game update changes that.
+  Any doc claiming it cuts `WeaponModel` from 141 columns to 78 is wrong.
+- **Names in `[Dump] Tables`, `Skip` and `Include` are matched verbatim** since
+  2026-09-13. `Weapon` no longer finds `WeaponModel`; the suffix is part of the
+  name. A name that matches nothing is now named in a startup warning rather
+  than hooking silently. `make_overlay.py` lost the same auto-suffix, and its
+  positional `cols[0]` key fallback — a table outside its `KEYS` map needs
+  `--key`.
+- **The nine writing tables dump by default** as of 2026-09-13:
+  `BackstoryModel`, `BlockConditionModel`, `ContactBackstoryModel`,
+  `DialogModel`, `DialogQuipModel`, `JournalModel`, `MissionBlockModel`,
+  `StoryMatchModel`, `StoryNodeModel`. They are the bulk of the bytes.
+  `validate_rules.py` now validates rules that target them instead of handing
+  out an INFO "table not dumped" pass, so new WARNs there are real.
 - **`_reward_curve.csv` can never show a patched curve.** CKF Data Dump loads
   first and sweeps before CKF Hard Mode patches (sweep at log line 4081, patch at
   4548). Use `rewardcurve.logEffectiveCurve` instead.
@@ -399,6 +446,82 @@ never observed in game.
 - A database is per *type*, not per table — a `GameDb` selfcheck run read only
   `WeaponModel` and 96 checks came back "row not read".
 - Do not put a test fixture on a row that a clone rule copies.
+
+## Shipped-data anomalies in `ImplantModel`
+
+Four rows of the shipped `ImplantModel` do something the other 194 do not.
+**All four ship as-is, per David: no investigation, no `SelfCheck` row, no
+edit.** The eleven `implants-slotNN.csv` tables show each of them at its shipped
+value and `validate_rules.py` flags none of them. This section exists so the
+next agent does not re-derive them. Measured against `sheets\raw\` from the
+2026-09-12 dump; Phase 7 of `split-config-into-toggleable-slices`.
+
+- **`Deactivated = 904` on row 904, a self-pointer.** `ImplantTypeId` 904
+  `SAM-Matrix Link 5` (`ImplantClass` 9 MatrixLink, `ImplantSlot` 3) carries
+  `Deactivated = 904`, its own id. It is the only row in the table that does.
+  Ten rows carry a positive `Deactivated`; the other nine each name a
+  **different** `ImplantTypeId` that exists in the table and whose own
+  `Deactivated` is `-1` — 914 -> 915, 1904 -> 1905, 2850 -> 2853, 2851 -> 2854,
+  2852 -> 2855, 3004 -> 3005, 3217 -> 3218, 3606 -> 3607. 904 names itself, and
+  no other row of class 9 has `Deactivated = -1`. Whether that is a data error
+  or a convention nobody here has read is not established. `[unverified]` —
+  and it stays `[unverified]` rather than being explained, because what
+  `Deactivated` *does* is a code question and the interop assembly is
+  marshalling stubs with no bodies (`AGENTS.md` section 1). **Do not repoint
+  it**; a repoint would be a balance change on an unread mechanic.
+
+- **`Deactivated = -2` on row 3801.** `N-Filament SME Filter` (`ImplantClass`
+  37 Cyber Lung, `ImplantSlot` 10) uses `-2` where every other live row uses
+  `-1`. `-1` appears on exactly 8 rows, `-2` on exactly this one, `0` on the
+  other 180. It is also **the only one of the five Cyber Lung rows with
+  `ImplantTalentId` 0** — 3701, 3703, 3704 and 3800 carry talents 80000, 80001,
+  80002 and 80054. Whether the two facts are related is not established.
+  `[unverified]`. Ships as-is; no `SelfCheck` row, no edit.
+
+- **Quantum Rider's `MatrixEffectId` 50014 has no row in
+  `MatrixEffectModel`.** Row 100 `Quantum Rider` (`ImplantSlot` 11, the only
+  row in that slot) carries `MatrixEffectId = 50014`. `MatrixEffectModel` has
+  251 rows and 50014 is not one of them; the nearest ids it does have are 50000
+  and 50001. `EffectModel` **does** have a 50014, named `Quantum Rider`,
+  carrying `InitBonus 2` and nothing else. The contrast is sharper than the
+  bare fact: **20 implant rows carry a non-zero `MatrixEffectId`, and the other
+  19 — ids 70001-70019 — all resolve in `MatrixEffectModel` and none of them
+  exists in `EffectModel`.** Row 100 is the only one the other way round.
+
+  Whether the game resolves that field against `EffectModel` when
+  `MatrixEffectModel` misses is a **code** question, and the interop assembly
+  cannot answer it: it is marshalling stubs, not game logic, so there is no
+  body to read and no caller graph to walk (`AGENTS.md` section 1). No
+  explanation is offered here and none should be added without a reading.
+  `[unverified]`. **Do not "fix" it** — repointing 50014 at a
+  `MatrixEffectModel` row would be a balance change on an unread mechanic.
+
+- **`ImplantLevel` is not a tier index, and the slot tables use file order
+  because of it.** In slot 3 the four rows named `CombatLink 1` through
+  `CombatLink 4` (905-908) are all `ImplantLevel 1`, as are both rows named
+  `M-Grade CombatLink` (914, 915) — six class-16 rows at level 1 — and all five
+  `Cortex Wetgates` rows (909-913, `Cortex Wetware 1`-`4` plus
+  `MEK-Cortical Wetgate`). In slot 7, `SynthMuscle 3` and `SynthMuscle 4` (3002,
+  3003) are both level 3, and so are both `SynthBuilder ROM` rows (3004, 3005) —
+  four class-30 rows at level 3. No column orders those tiers, so
+  `implants-slot03.csv` and `implants-slot07.csv` present their rows in **dump
+  file order**, and the slot 3 and slot 7 help text says so, in case a player
+  reads the ordering as a tier ladder.
+
+  This is an observation about what the data contains, not a claim awaiting a
+  test, so it carries **no** `[unverified]` tag.
+
+  **A correction to `tasks.md` Phase 7's own wording, which said "All four
+  CombatLink rows and all four Cortex Wetware rows are level 1, and SynthMuscle
+  3 and 4 are both 3".** Every part of that is true and every count is low:
+  six class-16 rows, five class-41 rows, four class-30 rows. And the condition
+  is **not confined to slots 3 and 7** — duplicate `(ImplantClass,
+  ImplantLevel)` pairs occur in **nine of the eleven** character slots; only
+  slot 5 and the single-row slot 11 are free of them. In most of those the
+  duplication is benign (slot 6's class 27 is four claw families at four tiers
+  each, so level really is the tier). Slots 3 and 7 are where rows whose
+  **names** number 1..4 do not have levels 1..4, which is the case a player can
+  misread. [measured]
 
 ## Settings that were removed or renamed
 
@@ -569,3 +692,27 @@ is 22 `.cfg` keys in ten sections plus five sidecar JSONs, all declared in
   network access anything in the player zip makes, it happens once per Unity
   version, and an offline or firewalled machine will not get past it.
   `release/README.txt.in` says so. [measured, Run61 line 8]
+- **The editor's schema check ran against a staging directory with no lever
+  sheet in it, and reported 53 problems for files that were all present on
+  disk.** `files_check_schema_reads` in `gui/serve.py` derives the paths a
+  staging copy needs from the schemas rather than guessing them, and it returned
+  12 — the `.cfg` and the eleven sidecar JSONs — on the reading that
+  `check_schema` "opens" only the documents it parses. It does not only open: it
+  stats every declared overlay and grades an absent one `MISSING`, and it
+  censuses `ckf.hardmode.d\` for sheets no schema claims. `stage_and_validate`
+  copies exactly that list, so every validate and every save built a staging
+  directory holding no overlay CSV at all and got one `MISSING` back per
+  declared sheet. `MISSING` is not in `BLOCKING` — which is `RANGE` and
+  `INVARIANT` — so no save was ever refused by it: the editor showed 53 false
+  problems on every save and nothing failed, which is exactly why it survived
+  this long. The same omission kept the sheets out of `fingerprints`, so a sheet
+  edited on disk between the browser's read and the save could not be detected
+  either. `files_check_schema_reads` now returns 65 paths: the same 12 plus all
+  53 declared sheets. This is the `AGENTS.md` section 3 shape with the
+  instrument pointed at the wrong directory — it could not see its subject, and
+  what it said instead was a problem class nobody acted on, hidden behind a
+  severity that does not block. When a check reports the same count on every
+  run, confirm it is looking at the files it names.
+  [measured 2026-09-14: 53 problems, all kind `MISSING`, staging off the old
+  12-path list against the live config; 0 problems from the 65-path list against
+  that same config]

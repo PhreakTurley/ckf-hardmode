@@ -7,3 +7,173 @@
 # Default value: true
 Enabled = true
 
+[Slices]
+
+# Setting type: Boolean
+# Default value: true
+ConsumablesChems = true
+
+# Setting type: Boolean
+# Default value: true
+ConsumablesDevices = true
+
+# Setting type: Boolean
+# Default value: true
+ConsumablesGrenades = true
+
+# Setting type: Boolean
+# Default value: true
+ConsumablesMatrix = true
+
+# Setting type: Boolean
+# Default value: true
+ConsumablesMedical = true
+
+# Setting type: Boolean
+# Default value: true
+ConsumablesSploitkits = true
+
+# Setting type: Boolean
+# Default value: true
+CyberweaponsClaws = true
+
+# Setting type: Boolean
+# Default value: true
+CyberweaponsLasers = true
+
+# Setting type: Boolean
+# Default value: true
+Difficulty = true
+
+# Setting type: Boolean
+# Default value: true
+Elapse = true
+
+# Setting type: Boolean
+# Default value: true
+Fatigue = true
+
+# Setting type: Boolean
+# Default value: true
+GearClasses = true
+
+# Setting type: Boolean
+# Default value: true
+ImplantsGlobal = true
+
+# Setting type: Boolean
+# Default value: true
+ImplantsSlot01 = true
+
+# Setting type: Boolean
+# Default value: true
+ImplantsSlot02 = true
+
+# Setting type: Boolean
+# Default value: true
+ImplantsSlot03 = true
+
+# Setting type: Boolean
+# Default value: true
+ImplantsSlot04 = true
+
+# Setting type: Boolean
+# Default value: true
+ImplantsSlot05 = true
+
+# Setting type: Boolean
+# Default value: true
+ImplantsSlot06 = true
+
+# Setting type: Boolean
+# Default value: true
+ImplantsSlot07 = true
+
+# Setting type: Boolean
+# Default value: true
+ImplantsSlot08 = true
+
+# Setting type: Boolean
+# Default value: true
+ImplantsSlot09 = true
+
+# Setting type: Boolean
+# Default value: true
+ImplantsSlot10 = true
+
+# Setting type: Boolean
+# Default value: true
+ImplantsSlot11 = true
+
+# Setting type: Boolean
+# Default value: true
+MissionRewards = true
+
+# Setting type: Boolean
+# Default value: true
+ModelRules = true
+
+# Setting type: Boolean
+# Default value: true
+PowerLevel = true
+
+# Setting type: Boolean
+# Default value: true
+Progression = true
+
+# Setting type: Boolean
+# Default value: true
+RewardCurve = true
+
+# Setting type: Boolean
+# Default value: true
+RuleModel = true
+
+# Setting type: Boolean
+# Default value: false
+SelfCheck = false
+
+# Setting type: Boolean
+# Default value: true
+TalentsAEX = true
+
+# Setting type: Boolean
+# Default value: true
+TalentsCS = true
+
+# Setting type: Boolean
+# Default value: true
+TalentsCyberKnight = true
+
+# Setting type: Boolean
+# Default value: true
+TalentsGunslinger = true
+
+# Setting type: Boolean
+# Default value: true
+TalentsHacker = true
+
+# Setting type: Boolean
+# Default value: true
+TalentsSawbones = true
+
+# Setting type: Boolean
+# Default value: true
+TalentsSniper = true
+
+# Setting type: Boolean
+# Default value: true
+TalentsSoldier = true
+
+# Setting type: Boolean
+# Default value: true
+TalentsVanguard = true
+
+# Setting type: Boolean
+# Default value: true
+TalentsWarMachine = true
+
+# Setting type: Boolean
+# Default value: true
+TalentsWraith = true
+

@@ -473,7 +473,7 @@ into the roster:
 
 ```
 python scripts/refresh_mission_roster.py ^
-    --dump "<game>/BepInEx/ckf-dump" ^
+    --dump "D:\ckf-data-modding\sheets\raw" ^
     --json "<game>/BepInEx/config/ckf.hardmode.missions.json"
 ```
 

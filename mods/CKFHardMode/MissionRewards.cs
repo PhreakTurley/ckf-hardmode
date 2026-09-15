@@ -87,10 +87,32 @@ namespace CKFHardMode
 
         public static void Init(Harmony harmony)
         {
-            // The section is read first now: it carries the switch as well as
-            // the overrides. LoadOverrides sets `enabled`, and leaves it false
-            // if the section could not be read at all — which it says at Error
-            // rather than letting this read like someone turned it off.
+            // THE GATE IS READ FIRST, from ckf.hardmode.cfg. The "missions"
+            // section carries only the per-type overrides now.
+            //
+            // CORRECTION, 2026-09-13. This comment used to read "The section is
+            // read first now: it carries the switch as well as the overrides."
+            // The switch is back in ckf.hardmode.cfg as [Slices] MissionRewards
+            // (design.md section 3), and this gate is what reads it.
+            //
+            // This gate was MISSING for one revision on 2026-09-13: the
+            // "enabled" branch was deleted out of LoadOverrides and nothing was
+            // put here in its place, so this subsystem had no gate at all and
+            // ran unconditionally. Caught by comparing Plugin.Binds.g.cs's 42
+            // [Slices] keys against the keys the plugin actually reads --
+            // MissionRewards was the one declared key that neither the overlay
+            // file table nor any Slices.On call named.
+            if (!Slices.On("MissionRewards"))
+            {
+                Plugin.Log.LogInfo(Slices.OffBecause("MissionRewards",
+                    "no hook is installed and no per-mission override is applied."));
+                enabled = false;
+                return;
+            }
+
+            // LoadOverrides still leaves `enabled` false when the section could
+            // not be read at all — which it says at Error rather than letting
+            // this read like someone turned it off.
             LoadOverrides();
 
             if (!enabled) return;                    // LoadOverrides said why
@@ -546,11 +568,16 @@ namespace CKFHardMode
 
         private sealed class MissionFile
         {
-            // 3.0: the subsystem switch lives here now. [MissionRewards]
-            // Enabled is gone from ckf.hardmode.cfg and this is the whole
-            // enable chain.
+            // RETIRED 2026-09-13. This used to be
+            //     [JsonPropertyName("enabled")] public bool Enabled { get; set; } = true;
+            // with the comment "3.0: the subsystem switch lives here now.
+            // [MissionRewards] Enabled is gone from ckf.hardmode.cfg and this is
+            // the whole enable chain." That is reversed: the switch is back in
+            // ckf.hardmode.cfg, as [Slices] MissionRewards (design.md section
+            // 3). The key is still parsed so an existing document is not
+            // refused; nothing branches on it.
             [JsonPropertyName("enabled")]
-            public bool Enabled { get; set; } = true;
+            public bool? RetiredEnabled { get; set; }
 
             [JsonPropertyName("missions")]
             public List<MissionOverride> Missions { get; set; } = new List<MissionOverride>();
@@ -575,7 +602,7 @@ namespace CKFHardMode
                     var why = $"MissionRewards: {ConfigDoc.WhyNo(ConfigDoc.Missions)}, and there "
                         + "is no pattern-bucket layer behind it any more, so nothing will be "
                         + "adjusted and no hook is installed.";
-                    if (ConfigDoc.CouldNotRead) Plugin.Log.LogError(why);
+                    if (ConfigDoc.CouldNotRead(ConfigDoc.Missions)) Plugin.Log.LogError(why);
                     else Plugin.Log.LogInfo(why);
                     return;
                 }
@@ -587,13 +614,9 @@ namespace CKFHardMode
                 };
                 var file = JsonSerializer.Deserialize<MissionFile>(text, opts);
 
-                if (file != null && !file.Enabled)
-                {
-                    Plugin.Log.LogInfo("MissionRewards: \"enabled\": false in the \""
-                        + ConfigDoc.Missions + "\" section of " + ConfigDoc.FileName
-                        + " — no hook installed, no override applied.");
-                    return;
-                }
+                if (file != null)
+                    Slices.ReportRetiredGate("MissionRewards", ConfigDoc.Missions,
+                                             "MissionRewards", file.RetiredEnabled);
                 enabled = true;
 
                 foreach (var m in file?.Missions ?? new List<MissionOverride>())
@@ -649,9 +672,18 @@ namespace CKFHardMode
 
         // ---- adjust expressions ---------------------------------------------
 
-        private enum AdjustKind { None, Set, Add, Multiply }
+        // INTERNAL, not private, since 2026-09-13 (Phase 5).
+        //
+        // gui/serve.py's parse_adjust and app.html's JavaScript twin are both
+        // explicit transcriptions of Adjust.Parse below, tested against one
+        // shared case table. GearClasses needs the same grammar for its lever
+        // cells, and a FOURTH copy of a parser that already exists three times
+        // is how the copies start disagreeing. Widening the visibility of the
+        // one that owns it is the smaller change: no behaviour moves, and
+        // MissionRewards remains the only place the grammar is defined.
+        internal enum AdjustKind { None, Set, Add, Multiply }
 
-        private sealed class Adjust
+        internal sealed class Adjust
         {
             public static readonly Adjust None = new Adjust { Kind = AdjustKind.None };
 
@@ -685,8 +717,36 @@ namespace CKFHardMode
             }
 
             // "" none | "=40" or "40" set | "+25" / "-25" add | "x1.5" / "*1.5" multiply
+            // THREE-STATE, added 2026-09-13 (Phase 5).
+            //
+            // Parse(spec) answers None for a blank cell AND for a cell holding
+            // text the grammar rejects, which makes the two indistinguishable
+            // to a caller. That is survivable here — MissionRewards logs the
+            // rejection itself and carries on — but a lever sheet has to tell
+            // "this column is not tuned" from "somebody typed 1.8x instead of
+            // x1.8", because the second is a tuning change that silently did
+            // not happen. Overlays.BuildRule grew a three-state LineResult for
+            // the same reason in Phase 4.
+            //
+            // The one-argument form is unchanged in behaviour, logs exactly
+            // what it logged before, and is still what MissionRewards calls.
             public static Adjust Parse(string spec)
             {
+                bool ok;
+                var a = Parse(spec, out ok);
+                if (!ok)
+                    Plugin.Log.LogWarning($"MissionRewards: could not parse adjustment "
+                        + $"'{spec}' — expected blank, =N, +N, -N or xN. Ignoring it.");
+                return a;
+            }
+
+            /// <summary><paramref name="ok"/> is false ONLY for a cell that
+            /// carried text the grammar rejects. A blank cell returns None with
+            /// ok true. The caller owns the diagnostic, so it can name its own
+            /// sheet, row and column.</summary>
+            public static Adjust Parse(string spec, out bool ok)
+            {
+                ok = true;
                 spec = (spec ?? "").Trim();
                 if (spec.Length == 0) return None;
 
@@ -702,8 +762,7 @@ namespace CKFHardMode
                 if (!double.TryParse(body.Trim(), NumberStyles.Float,
                                      CultureInfo.InvariantCulture, out double v))
                 {
-                    Plugin.Log.LogWarning($"MissionRewards: could not parse adjustment '{spec}' — "
-                        + "expected blank, =N, +N, -N or xN. Ignoring it.");
+                    ok = false;
                     return None;
                 }
                 return new Adjust { Kind = kind, Value = v };

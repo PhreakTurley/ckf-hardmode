@@ -35,6 +35,7 @@ one disagrees with the code, the code wins.
 | Enemy difficulty and the Power Level 10 ceiling | [`power-and-progression.md`](power-and-progression.md) |
 | What drops, and where V-Chip parts come from | [`loot.md`](loot.md) |
 | Taking a character out of action after missions | [`character-fatigue.md`](character-fatigue.md) |
+| The limit break temporary trait pool, buff and debuff | [`limit-break-traits.md`](limit-break-traits.md) |
 | Punishing a mission that expires unplayed | [`mission-elapse-penalty.md`](mission-elapse-penalty.md) |
 | Writing credits, Stress or Discontent onto a save | [`gamedb-write-surface.md`](gamedb-write-surface.md) |
 | Mid-mission reinforcements (read off the data, never observed firing) | [`reinforcements.md`](reinforcements.md) |

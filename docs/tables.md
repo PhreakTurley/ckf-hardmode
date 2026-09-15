@@ -2,7 +2,7 @@
 
 This file says which table controls what, which column is the key, and what is
 worth knowing before you edit it. Column names themselves come from
-`BepInEx/ckf-dump/<Table>.csv` — see [`workflow.md`](workflow.md).
+`D:\ckf-data-modding\sheets\raw\<Table>.csv` — see [`workflow.md`](workflow.md).
 
 192 tables across three databases. 191 carry a zero-arg bulk reader
 (`ReadWeapons()`), which is how the dumper captures everything in one launch;
@@ -135,9 +135,11 @@ one specific enemy.
 
 ### `WeaponModel`
 
-Key: `WeaponId`. Player weapons occupy low ids; **enemy weapons start at 20000**
-(`WeaponName.20000` = "Guard Rifle Lvl1"), so `whereMin` / `whereMax` on
-`WeaponId` separates the two groups.
+Key: `WeaponId`. **No column says whether a row is player or enemy gear — the
+only thing that makes a row enemy gear is that `MonsterTypeModel` points at
+it.** Id ranges do not separate the two groups cleanly; the canonical split, and
+the `whereMin` / `whereMax` pairs that express it, is in
+[`../overlays/_reference/player-vs-enemy-gear.md`](../overlays/_reference/player-vs-enemy-gear.md).
 
 Every weapon has two firing modes with a full stat block each. **Write the
 suffixed columns** — see [`gotchas.md`](gotchas.md).

@@ -15,7 +15,7 @@ ArmorId, BallisticArmorDegraded, PhysicalArmorDegraded, MaxArmorPoints, _comment
 ```
 
 One line per row edited. **The header row is column names straight out of
-`BepInEx/ckf-dump/<Table>.csv`**, so an LLM handed the dump edits a file it can
+`D:\ckf-data-modding\sheets\raw\<Table>.csv`**, so an LLM handed the dump edits a file it can
 already read, and a human opens the result in a spreadsheet and changes one
 cell. **An empty cell means "leave that column alone"**, so a sparse edit costs
 no more to write than a dense one.
@@ -174,7 +174,7 @@ the validator reports any others, and [`gotchas.md`](gotchas.md) says why not to
 target one.
 
 Then edit the numbers, by hand or by handing the file to an LLM along with
-`BepInEx/ckf-dump/<Table>.csv` — the format is the dump's own columns.
+`D:\ckf-data-modding\sheets\raw\<Table>.csv` — the format is the dump's own columns.
 
 ### Validate before launching
 
@@ -197,7 +197,7 @@ that catches it at your desk rather than in a mission.
 | `duplicate overlay id` **W** | the same row set twice; the later file wins |
 | `row does not exist` **W** | an edit line for an id nothing provides |
 
-Truth comes from `BepInEx/ckf-dump/`, written by the live game; it reads
+Truth comes from `D:\ckf-data-modding\sheets\raw\`, written by the live game; it reads
 `_dropped_columns.csv` and `_skipped_tables.csv` too, so a column the dumper
 trimmed is reported as INFO rather than as a mistake, and it refuses to fall
 back to `Aug21Sheets/`.

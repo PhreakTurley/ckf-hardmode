@@ -14,7 +14,7 @@ READMEs cover building from source and nothing else.
 | `BepInEx/config/ckf.hardmode.selfcheck.csv` | the regression suite's expectations |
 | `BepInEx/config/ckf.hardmode.{elapse,fatigue,missions,rewardcurve,teampl}.json` | the 2.x sidecars, if a 2.x install left them there. Nothing reads them |
 | `BepInEx/config/ckf.datadump.cfg` | Data Dump settings |
-| `BepInEx/ckf-dump/*.csv` | Data Dump output |
+| `D:\ckf-data-modding\sheets\raw\*.csv` | Data Dump output — save tables go to `D:\ckf-data-modding\sheets\raw-save\` |
 | `BepInEx/interop/CoreRPG_v1.dll` | where `RPG.Database.*` lives — **not** `Assembly-CSharp.dll` |
 | `BepInEx/LogOutput.log` | what every mod reports at startup |
 | `<game>/StreamingAssets/Locales/en-US.json` | unencrypted; maps numeric ids to display names |
@@ -42,7 +42,7 @@ Back up saves before the first real run:
 1. Both plugins installed, Data Dump `[General] Enabled = false`.
 2. Need column names, or want to see what exists? Set `Enabled = true`, launch,
    reach the main menu, quit, set it back to `false`.
-3. Read `BepInEx/ckf-dump/<Table>.csv`. **The header row is the real column
+3. Read `D:\ckf-data-modding\sheets\raw\<Table>.csv`. **The header row is the real column
    names** — that is what rules and overlays are written against.
 4. Edit `ckf.hardmode.rules.json` (see [`rule-engine.md`](rule-engine.md)) or an
    overlay CSV (see [`overlays.md`](overlays.md)).
@@ -72,8 +72,9 @@ and column counts; `_skipped_tables.csv` lists what was skipped and why;
 | Mission keys and goal structure | Nothing — `BlockModel` is in the default sweep (~1.9 MB). It holds story and dialogue blocks, so you get the `SN_*` mission keys and the goal chains, **not** price or XP modifiers |
 | A column that was trimmed away | Check `_dropped_columns.csv`; it records the value of every constant column removed |
 
-If the game lives under `Program Files`, Windows may block the write — point
-`[Dump] OutputDirectory` somewhere you own.
+`[Dump] OutputDirectory` points at `D:\ckf-data-modding\sheets\raw`, and that
+is where the CSVs land. The game lives under `Program Files`, where Windows may
+block the write, so keep it pointed at a path you own.
 
 ## Finding an id
 

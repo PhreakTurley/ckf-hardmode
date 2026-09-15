@@ -18,6 +18,34 @@
 //   The prose itself now lives in the schema's `doc` arrays, rendered into
 //   docs/config-reference.md.
 //
+//   ONE KEY PER SLICE. A slice is a schema file declaring targets.cfg; its
+//   toggle is that file's one "in": "cfg" field. gen_binds.py compares the two
+//   sets in both directions and refuses to write this file if they disagree --
+//   a slice with no key, a key with no slice, two keys in one slice, or an
+//   enable.cfg naming a key no schema declares as a field.
+//
+//   THE COUNT BELOW IS THE COUNT IN ckf.hardmode.cfg. Slices.Init binds every
+//   row of this table (Slices.cs) and Plugin.Load calls it ABOVE the
+//   master-switch bail-out, so BepInEx writes a line for all of them on any
+//   launch, including one where the mod is switched off.
+//
+//   CORRECTION, 2026-09-13. This paragraph used to read "THE COUNT BELOW IS NOT
+//   THE COUNT IN ckf.hardmode.cfg. This table is a declaration; a key reaches
+//   the file only when something calls Bind for it, and Plugin.cs:161 is the
+//   only call site. Every other key here is declared and unbound, so BepInEx
+//   writes no line for it and schema/check_schema.py reports it MISSING until a
+//   caller exists and the game has been launched." It was true when written and
+//   is false now: Slices.cs was added and Plugin.cs no longer binds anything
+//   directly. It is quoted rather than deleted because it is the shape of claim
+//   that goes stale silently -- a statement about what some other file does, in
+//   a generated header nobody re-reads.
+//
+//   CITATIONS HERE NAME A MEMBER, NOT A LINE. The quoted paragraph above cited
+//   Plugin.cs:161, and that citation was stale within hours of being written
+//   because the line moved. A member name survives every edit to its file that
+//   does not rename it, and a rename makes the citation fail loudly under grep
+//   instead of silently pointing at whatever now occupies the line.
+//
 // </auto-generated>
 
 using System;
@@ -33,11 +61,23 @@ namespace CKFHardMode
     /// <c>ConfigFile.Bind</c> itself, so the section, key, type and default
     /// are stated once, here, and match the schema by construction.
     ///
-    /// Bind is still a real <c>ConfigFile.Bind</c> call made at the same point
-    /// in startup as the hand-written call it replaced: BepInEx writes the file
-    /// from the set of keys actually bound, and a key nothing binds is left in
-    /// place as an orphan. Binding every key eagerly would change that, so this
-    /// class does not do it.
+    /// Bind is a real <c>ConfigFile.Bind</c> call, and every row of
+    /// <see cref="All"/> now gets one: <c>Slices.Init</c> walks the table at
+    /// startup (Slices.cs) and binds each key, so BepInEx writes the whole file
+    /// rather than whichever keys a subsystem happened to reach.
+    ///
+    /// CORRECTION, 2026-09-13. This paragraph used to end "BepInEx writes the
+    /// file from the set of keys actually bound, and a key nothing binds is
+    /// left in place as an orphan. Binding every key eagerly would change that,
+    /// so this class does not do it." The first sentence still holds; the last
+    /// one is reversed. Eager binding is now the point of the table, because a
+    /// toggle a player cannot see in ckf.hardmode.cfg is a toggle they cannot
+    /// use, and binding under the master-switch bail-out would have left a
+    /// fresh install with Enabled = false carrying no [Slices] lines at all.
+    /// The orphan rule is unchanged and is why the count matters: a key this
+    /// table stops declaring stays in the file until someone deletes the line.
+    ///
+    /// The one call site is the <c>Binds.Bind</c> in <c>Slices.Init</c>.
     /// </summary>
     internal static class Binds
     {
@@ -74,10 +114,53 @@ namespace CKFHardMode
             internal override Type ValueType { get { return typeof(T); } }
         }
 
-        /// <summary>Every key in ckf.hardmode.cfg, 1 of them.</summary>
+        /// <summary>Every key in ckf.hardmode.cfg, 43 of them.</summary>
         internal static readonly Def[] All =
         {
-            new Def<bool>("General", "Enabled", true),
+            new Def<bool>("General", "Enabled",               true),
+
+            new Def<bool>("Slices",  "ConsumablesChems",      true),
+            new Def<bool>("Slices",  "ConsumablesDevices",    true),
+            new Def<bool>("Slices",  "ConsumablesGrenades",   true),
+            new Def<bool>("Slices",  "ConsumablesMatrix",     true),
+            new Def<bool>("Slices",  "ConsumablesMedical",    true),
+            new Def<bool>("Slices",  "ConsumablesSploitkits", true),
+            new Def<bool>("Slices",  "CyberweaponsClaws",     true),
+            new Def<bool>("Slices",  "CyberweaponsLasers",    true),
+            new Def<bool>("Slices",  "Difficulty",            true),
+            new Def<bool>("Slices",  "Elapse",                true),
+            new Def<bool>("Slices",  "Fatigue",               true),
+            new Def<bool>("Slices",  "GearClasses",           true),
+            new Def<bool>("Slices",  "ImplantsGlobal",        true),
+            new Def<bool>("Slices",  "ImplantsSlot01",        true),
+            new Def<bool>("Slices",  "ImplantsSlot02",        true),
+            new Def<bool>("Slices",  "ImplantsSlot03",        true),
+            new Def<bool>("Slices",  "ImplantsSlot04",        true),
+            new Def<bool>("Slices",  "ImplantsSlot05",        true),
+            new Def<bool>("Slices",  "ImplantsSlot06",        true),
+            new Def<bool>("Slices",  "ImplantsSlot07",        true),
+            new Def<bool>("Slices",  "ImplantsSlot08",        true),
+            new Def<bool>("Slices",  "ImplantsSlot09",        true),
+            new Def<bool>("Slices",  "ImplantsSlot10",        true),
+            new Def<bool>("Slices",  "ImplantsSlot11",        true),
+            new Def<bool>("Slices",  "MissionRewards",        true),
+            new Def<bool>("Slices",  "ModelRules",            true),
+            new Def<bool>("Slices",  "PowerLevel",            true),
+            new Def<bool>("Slices",  "Progression",           true),
+            new Def<bool>("Slices",  "RewardCurve",           true),
+            new Def<bool>("Slices",  "RuleModel",             true),
+            new Def<bool>("Slices",  "SelfCheck",             false),
+            new Def<bool>("Slices",  "TalentsAEX",            true),
+            new Def<bool>("Slices",  "TalentsCS",             true),
+            new Def<bool>("Slices",  "TalentsCyberKnight",    true),
+            new Def<bool>("Slices",  "TalentsGunslinger",     true),
+            new Def<bool>("Slices",  "TalentsHacker",         true),
+            new Def<bool>("Slices",  "TalentsSawbones",       true),
+            new Def<bool>("Slices",  "TalentsSniper",         true),
+            new Def<bool>("Slices",  "TalentsSoldier",        true),
+            new Def<bool>("Slices",  "TalentsVanguard",       true),
+            new Def<bool>("Slices",  "TalentsWarMachine",     true),
+            new Def<bool>("Slices",  "TalentsWraith",         true),
         };
 
         private static readonly Dictionary<string, Def> ById = BuildIndex();

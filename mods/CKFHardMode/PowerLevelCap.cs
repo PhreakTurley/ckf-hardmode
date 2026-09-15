@@ -190,7 +190,12 @@ namespace CKFHardMode
         // the unknown-key report.
         private sealed class Options : ConfigDoc.IHasUnknownKeys
         {
-            [JsonPropertyName("enabled")]      public bool Enabled { get; set; } = true;
+            // RETIRED 2026-09-13. This used to be
+            //     [JsonPropertyName("enabled")] public bool Enabled { get; set; } = true;
+            // and Init branched on it. The gate is [Slices] PowerLevel in
+            // ckf.hardmode.cfg now. Still parsed so an existing document is not
+            // refused for a key that maps to no member; nothing branches on it.
+            [JsonPropertyName("enabled")]      public bool? RetiredEnabled { get; set; }
             [JsonPropertyName("minCap")]       public int MinCap { get; set; } = 1;
             [JsonPropertyName("maxCap")]       public int MaxCap { get; set; } = 20;
             [JsonPropertyName("matrixMaxCap")] public int MatrixMaxCap { get; set; } = 10;
@@ -201,24 +206,27 @@ namespace CKFHardMode
 
         public static void Init(Harmony harmony)
         {
+            if (!Slices.On("PowerLevel"))
+            {
+                Plugin.Log.LogInfo(Slices.OffBecause("PowerLevel",
+                    "nothing is patched and the game's own clamp of 10 stands."));
+                enabled = false;
+                return;
+            }
+
             var opt = ConfigDoc.ReadSection<Options>("PowerLevel", ConfigDoc.PowerLevel,
                 "The mission Power Level ceiling is NOT lifted this launch — nothing is "
                 + "patched and the game's own clamp of 10 stands.");
             if (opt == null) return;
 
-            enabled = opt.Enabled;
+            Slices.ReportRetiredGate("PowerLevel", ConfigDoc.PowerLevel,
+                                     "PowerLevel", opt.RetiredEnabled);
+
+            enabled = true;
             maxCap = opt.MaxCap;
             minCap = opt.MinCap;
             matrixMaxCap = opt.MatrixMaxCap;
             logFirst = opt.LogFirst;
-
-            if (!enabled)
-            {
-                Plugin.Log.LogInfo("PowerLevel: \"enabled\": false in the \""
-                    + ConfigDoc.PowerLevel + "\" section of " + ConfigDoc.FileName
-                    + " — nothing patched, the game's own clamp of 10 stands.");
-                return;
-            }
             if (maxCap < minCap)
             {
                 Plugin.Log.LogWarning($"PowerLevel: maxCap {maxCap} < minCap {minCap}. Not patching.");

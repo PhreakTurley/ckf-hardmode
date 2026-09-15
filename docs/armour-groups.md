@@ -16,9 +16,9 @@ Two blocks shipped with their PowerGroups at **different offsets into one id run
 That offset was how the designers said "this enemy is a weaker Guard". Normalising
 erased it: every PG in the block now reads identically at all 20 levels.
 
-## The baseline — shipped pointer runs, from `BepInEx/ckf-dump/MonsterTypeModel.csv`
+## The baseline — shipped pointer runs, from `D:\ckf-data-modding\sheets\raw\MonsterTypeModel.csv`
 
-Values come from `ckf-dump/ArmorModel.csv` at these ids. **Read them from the dump,
+Values come from `D:\ckf-data-modding\sheets\raw\ArmorModel.csv` at these ids. **Read them from the dump,
 never from `ckf.hardmode.d/`** — see the "What 'current' means" note in
 [`tuning-enemies.md`](tuning-enemies.md).
 

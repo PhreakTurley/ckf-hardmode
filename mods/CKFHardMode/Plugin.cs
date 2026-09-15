@@ -34,12 +34,26 @@
 // existed to catch. The files are the release's now, and retuning the mod is a
 // file edit and a re-run of scripts/make_release.py.
 //
-// ckf.hardmode.cfg has exactly one key left, [General] Enabled. It stays a
-// BepInEx bind because it is the switch that has to work when the merged
-// document does not exist at all. One consequence worth stating: a syntax
-// error anywhere in ckf.hardmode.json now costs every subsystem its settings
-// AND its switch, where in 2.x the switch came from the cfg and survived.
-// ConfigDoc says so at Error, and each subsystem says which of the two it is.
+// CORRECTION, 2026-09-13. Until this date this comment read:
+//
+//     "ckf.hardmode.cfg has exactly one key left, [General] Enabled. It stays
+//      a BepInEx bind because it is the switch that has to work when the merged
+//      document does not exist at all. One consequence worth stating: a syntax
+//      error anywhere in ckf.hardmode.json now costs every subsystem its
+//      settings AND its switch, where in 2.x the switch came from the cfg and
+//      survived. ConfigDoc says so at Error, and each subsystem says which of
+//      the two it is."
+//
+// The first sentence is no longer true and the consequence it warned about is
+// what got fixed. ckf.hardmode.cfg now has 43 keys: [General] Enabled plus one
+// [Slices] key per slice. The eight subsystem "enabled" fields are gone from
+// ckf.hardmode.json, because a gate cannot live inside the file it gates and a
+// syntax error in that document must not be able to take a switch with it
+// (split-config-into-toggleable-slices design.md section 3). Slices.cs binds
+// all 43 and is the only place a gate is read.
+//
+// [General] Enabled keeps its own section and its own name, so a .cfg written
+// by an older build still turns the mod off.
 //
 // [Fatigue] and [Elapse] are the odd ones out and worth flagging here: they
 // are the only subsystems that WRITE to the save. Everything else reads the
@@ -119,7 +133,7 @@ namespace CKFHardMode
     {
         public const string PluginGuid = "ckf.hardmode";
         public const string PluginName = "CKF Hard Mode";
-        public const string PluginVersion = "1.0.0";
+        public const string PluginVersion = "4.0.0";
 
         internal static new ManualLogSource Log;
         internal static ConfigEntry<bool> Enabled;
@@ -153,19 +167,42 @@ namespace CKFHardMode
             // were BepInEx's source for the "## " prose in ckf.hardmode.cfg, and
             // that prose now lives in docs/config-reference.md (gui-plan.md 3.2).
             //
-            // 3.0: this is the ONLY bind. The other 21 keys are sections of
-            // ckf.hardmode.json, read below. This one stays a bind because it
-            // is the switch that has to work when that document does not exist
-            // at all — BepInEx owns ckf.hardmode.cfg and writes it whether or
-            // not anything else on disk is intact.
-            Enabled = Binds.Bind<bool>(Config, "General", "Enabled");
+            // CORRECTION, 2026-09-13. Until this date this comment read "3.0:
+            // this is the ONLY bind. The other 21 keys are sections of
+            // ckf.hardmode.json, read below." Both halves are now wrong. Every
+            // one of the 43 declared keys is bound here, through Slices.Init,
+            // because design.md section 3 requires every toggle to be a line in
+            // ckf.hardmode.cfg and BepInEx only writes a line for a key that
+            // something bound.
+            //
+            // ORDER. This is ABOVE the bail-out below on purpose. Binding under
+            // it would mean a fresh install with Enabled = false never gets the
+            // 42 [Slices] lines written at all, so the config editor would have
+            // nothing to show and check_schema.py would report every one of them
+            // MISSING. The reason [General] Enabled itself is a bind is
+            // unchanged: it is the switch that has to work when the merged
+            // document does not exist at all, and BepInEx owns ckf.hardmode.cfg
+            // and writes it whether or not anything else on disk is intact.
+            Enabled = Slices.Init(Config);
 
             // ORDER MATTERS. This bail-out has to come before any subsystem is
             // initialised. It used to sit underneath, which meant Enabled =
             // false still let ModelRules rewrite every row and PowerLevelCap
             // overwrite every calculation — the master switch turned off the
             // [Difficulty] knobs and nothing else.
-            if (!Enabled.Value)
+            //
+            // A master switch that could NOT BE READ is not a master switch set
+            // to false (AGENTS.md §3). Slices.Init reports the bind failure by
+            // name at Error; this runs on rather than turning the mod off on an
+            // answer nobody got, which would look identical to the player having
+            // turned it off themselves.
+            if (Enabled == null)
+            {
+                Log.LogError("Plugin: [General] Enabled could not be bound — see the error "
+                    + "above. That is NOT the same as it being false, so the mod RUNS this "
+                    + "launch. If you meant to turn it off, fix ckf.hardmode.cfg and relaunch.");
+            }
+            else if (!Enabled.Value)
             {
                 Log.LogInfo("Disabled via config; nothing patched. The game runs unmodified.");
                 return;
@@ -192,6 +229,28 @@ namespace CKFHardMode
             // runs when someone asks is one that can go quiet.
             ConfigDoc.Init();
 
+            // BOTH LAYOUTS PRESENT IS A REFUSAL, NOT A PREFERENCE.
+            // specs/config-surface/spec.md. ConfigDoc has already logged the
+            // Error naming both layouts and saying the migrator has not been
+            // run; this is the half that makes "and does not apply any rule"
+            // true. It returns ABOVE the difficulty hook, above
+            // ModelRules.Init and above everything below them, so no rule is
+            // compiled, no row is edited and no slider bound is widened.
+            //
+            // It returns BELOW Slices.Init, on purpose and for the same reason
+            // Slices.Init sits above the master-switch bail-out: BepInEx writes
+            // ckf.hardmode.cfg from the keys something bound, and a launch that
+            // refused before binding would leave the config editor with nothing
+            // to show and check_schema.py reporting 42 keys MISSING.
+            if (ConfigDoc.BothLayouts)
+            {
+                Log.LogError("Plugin: stopping here. The game runs UNMODIFIED this launch. "
+                    + "See the ConfigDoc error above for which two layouts are on disk and "
+                    + "what to do about it. Nothing was patched, no rule was compiled and no "
+                    + "file was written or renamed.");
+                return;
+            }
+
             // Every subsystem's settings, including its switch, now come from
             // that document. [ModelRules] Enabled used to be bound and read
             // ABOVE this call; ModelRules.Init reads it out of the "modelrules"
@@ -213,7 +272,78 @@ namespace CKFHardMode
             }
 
             var harmonyEarly = new Harmony(PluginGuid + ".models");
+
+            // THE 4.0 LAYOUT HAS NO RULES FILE, AND THIS SAYS SO OUT LOUD.
+            //
+            // What this path feeds, measured rather than assumed: it is handed
+            // to ModelRules.Init (ModelRules.cs, member Init), which uses it
+            // for TWO things -- LoadRules(rulesPath) reads the rules out of it,
+            // and Overlays.Load is handed
+            // Path.GetDirectoryName(rulesPath) + "ckf.hardmode.d". The second
+            // is why this variable still exists: the overlay directory is
+            // derived from it, and that directory is the whole rule set now.
+            // GetDirectoryName of this path is Paths.ConfigPath whether or not
+            // the file is there, so the directory walk is unaffected by the
+            // absence.
+            //
+            // ckf.hardmode.rules.json was deleted on 2026-09-14. It held 269
+            // rules -- 263 exact, 6 range, 0 unscoped, 76,451 bytes -- and all
+            // 269 are in ckf.hardmode.d now: 238 as direct overlay CSVs, 22 in
+            // the two cyberweapon sheets and 9 in implants-slot08.csv. The
+            // compiled set was compared with the file and without it over
+            // 42,471 (table, id, column) triples: 0 differences, and every one
+            // of the 448 writes it made is matched by an identical
+            // (operator, value) write from a shipping sheet [measured,
+            // 2026-09-14].
+            //
+            // SO THE POLARITY OF THIS CHECK IS INVERTED FROM WHAT IT WAS.
+            // "Not there" is the expected 4.0 answer and is stated at Info --
+            // unconditionally, because an instrument that speaks only on
+            // failure has gone quiet (AGENTS.md section 3, and the same
+            // argument Defaults.cs opens with). "There" is the surprise, and
+            // it is an Error: a rules file that comes back is read FIRST and
+            // its rules are applied BEFORE the sheets, so any rule in it that
+            // is not a plain `set` -- a multiply, an add, a clamp, a clone --
+            // lands on top of the sheet that replaced it. That is the Phase 5
+            // double-application shape, reached backwards.
+            //
+            // NEITHER BRANCH IS "COULD NOT LOOK". An exception out of
+            // File.Exists is its own third outcome, reported as itself, and it
+            // is never counted as either answer (AGENTS.md section 3).
             var rulesPath = System.IO.Path.Combine(Paths.ConfigPath, "ckf.hardmode.rules.json");
+            try
+            {
+                if (System.IO.File.Exists(rulesPath))
+                {
+                    Log.LogError($"ModelRules: {rulesPath} IS ON DISK. The 4.0 layout does "
+                        + "not have this file -- it was deleted on 2026-09-14 and all 269 of "
+                        + "its rules live in " + ConfigDoc.DirName + " now. It will be read "
+                        + "FIRST, before every overlay and every lever sheet, so anything in "
+                        + "it that is not a plain `set` applies ON TOP of the sheet that "
+                        + "replaced it. If you restored it deliberately, the rules it "
+                        + "duplicates are live twice; if you did not, delete it. The rule "
+                        + "count it contributes is reported on ModelRules' own line below.");
+                }
+                else
+                {
+                    Log.LogInfo($"ModelRules: no {System.IO.Path.GetFileName(rulesPath)} in "
+                        + $"{Paths.ConfigPath}. THIS IS THE 4.0 LAYOUT AND IS EXPECTED -- the "
+                        + "file was deleted on 2026-09-14 and its 269 rules are in "
+                        + ConfigDoc.DirName + " now (238 as overlay CSVs, 22 in the two "
+                        + "cyberweapon sheets, 9 in implants-slot08.csv). Nothing is missing "
+                        + "and no rule was lost. The rule plan below is the whole of it.");
+                }
+            }
+            catch (Exception e)
+            {
+                // Not "absent": nobody could look. Its own outcome, so a config
+                // directory this process cannot read never reads as the
+                // expected 4.0 answer.
+                Log.LogError($"ModelRules: could not tell whether {rulesPath} exists: "
+                    + $"{e.GetType().Name}: {e.Message}. Neither \"the 4.0 layout has no "
+                    + "rules file\" nor \"a rules file came back\" has been established "
+                    + "this launch.");
+            }
             try
             {
                 // Init reads the "modelrules" section itself and returns without
@@ -312,6 +442,20 @@ namespace CKFHardMode
             // it did not resolve, this section is skipped and the error above
             // says so; nothing else in the plugin depends on it.
             if (type == null) return;
+
+            // ADDED 2026-09-13, not moved. The other eight subsystems had an
+            // "enabled" field at the root of their section and this one never
+            // did — sliderRangeMultiplier at 1.0 was the whole off switch. It
+            // gets a gate now because design.md section 3 requires one key per
+            // slice and gen_binds.py declares [Slices] Difficulty. No field is
+            // deleted from the "difficulty" section by this: there was none.
+            if (!Slices.On("Difficulty"))
+            {
+                Log.LogInfo(Slices.OffBecause("Difficulty",
+                    "the custom-difficulty sliders keep their stock bounds this launch. "
+                    + "Nothing is patched."));
+                return;
+            }
 
             // The one key this section has. A section that could not be read
             // leaves SliderRange at 1.0, and WidenSliders returns immediately

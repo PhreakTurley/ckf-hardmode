@@ -9,6 +9,24 @@ Config.Bind call that passes no description writes no prose. See gui-plan.md
 section 3.2 -- the "# Setting type:" / "# Default value:" pair survives either
 way, because those two strings are literals inside BepInEx.Core.dll.
 
+ONE BIND PER SLICE, CHECKED BOTH WAYS. A slice is a schema file declaring
+targets.cfg; its toggle is that file's one "in": "cfg" field. The two sets are
+compared in both directions and a mismatch is a non-zero exit from --check AND
+from a plain run, never a silently smaller table:
+
+  a slice with no key   a schema declaring targets.cfg and no "in": "cfg" field.
+                        Its toggle would not exist and the slice could not be
+                        turned off.
+  a key with no slice   an "in": "cfg" field in a schema that declares no
+                        targets.cfg. BepInEx would write a key into
+                        ckf.hardmode.cfg that gates nothing.
+  two keys in one slice one toggle per slice is the rule; a second key in the
+                        same schema means two gates for one file.
+  a dangling enable.cfg an "enable": {"cfg": ...} naming a key no schema
+                        declares as a field. check_schema.py counts such a key
+                        as declared (check_schema.py:235-237) but never looks
+                        for it on disk, so nothing else reports it.
+
 Output is deterministic: rows are sorted by (section, key) with an ordinal
 sort, so the same schema directory always produces a byte-identical file.
 
@@ -38,6 +56,10 @@ CLR_TYPES = {
     "string": "string",
     "stringList": "string",
 }
+
+# The one file this generator emits binds for. A schema naming any other file
+# in targets.cfg is a defect, not a second output.
+CFG_FILE = "ckf.hardmode.cfg"
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_SCHEMA_DIR = os.path.join(REPO_ROOT, "schema")
@@ -102,17 +124,42 @@ def cs_default(clr, value, where):
 
 
 def collect(schema_dir):
-    """Read every *.schema.json and return the cfg rows, sorted and checked."""
+    """Read every *.schema.json and return the cfg rows, sorted and checked.
+
+    Also called by scripts/gen_cfg_template.py, which emits the OTHER file this
+    key set defines -- release/ckf.hardmode.cfg.in, the .cfg the zip ships.
+    The two generators share this function on purpose: the slice/key
+    correspondence is checked once, so the C# table and the shipped .cfg cannot
+    come to disagree about which keys exist. Each row therefore carries the
+    schema "type" and the raw JSON "default" as well as the C# literal, because
+    the .cfg needs BepInEx's spelling of both and not C#'s.
+    """
     paths = sorted(glob.glob(os.path.join(schema_dir, "*.schema.json")))
     if not paths:
         raise SchemaError("no *.schema.json under %s" % schema_dir)
 
     rows = []
     seen = {}
+    slices = []          # schema files declaring targets.cfg, in read order
+    cfg_fields = {}      # schema file -> [Section.Key, ...] declared in it
+    enable_cfg = {}      # schema file -> the enable.cfg key it names, if any
     for path in paths:
         name = os.path.basename(path)
         with open(path, "r", encoding="utf-8") as handle:
             schema = json.load(handle)
+
+        target_cfg = (schema.get("targets") or {}).get("cfg")
+        if target_cfg:
+            if target_cfg != CFG_FILE:
+                raise SchemaError(
+                    "%s: targets.cfg is %r; this generator emits binds for %s "
+                    "only" % (name, target_cfg, CFG_FILE)
+                )
+            slices.append(name)
+        cfg_fields[name] = []
+        ek = (schema.get("enable") or {}).get("cfg")
+        if ek:
+            enable_cfg[name] = ek
 
         for index, field in enumerate(schema.get("fields", [])):
             if field.get("in") != "cfg":
@@ -144,6 +191,7 @@ def collect(schema_dir):
                     "%s declared twice: %s and %s" % (dotted, seen[dotted], name)
                 )
             seen[dotted] = name
+            cfg_fields[name].append(dotted)
 
             rows.append(
                 {
@@ -152,8 +200,47 @@ def collect(schema_dir):
                     "clr": clr,
                     "literal": literal,
                     "schema": name,
+                    "type": schema_type,
+                    "default": field["default"],
                 }
             )
+
+    # ---- the slice set and the key set, compared in both directions.
+    #
+    # Both halves are defects in the schema directory, not states a player can
+    # reach, so they stop the run rather than producing a table that is quietly
+    # missing a toggle or quietly carrying a spare one.
+    problems = []
+    for name in slices:
+        keys = cfg_fields[name]
+        if not keys:
+            problems.append(
+                "%s declares targets.cfg but no \"in\": \"cfg\" field: the slice "
+                "has no key and could not be turned off" % name
+            )
+        elif len(keys) > 1:
+            problems.append(
+                "%s declares targets.cfg and %d cfg keys (%s): one toggle per "
+                "slice" % (name, len(keys), ", ".join(sorted(keys)))
+            )
+    for name in sorted(cfg_fields):
+        if cfg_fields[name] and name not in slices:
+            problems.append(
+                "%s declares cfg key(s) %s but no targets.cfg: the key has no "
+                "slice and would gate nothing"
+                % (name, ", ".join(sorted(cfg_fields[name])))
+            )
+    for name in sorted(enable_cfg):
+        if enable_cfg[name] not in seen:
+            problems.append(
+                "%s: enable.cfg names %r, which no schema declares as a field. "
+                "check_schema.py counts it as declared and never looks for it "
+                "on disk" % (name, enable_cfg[name])
+            )
+    if problems:
+        raise SchemaError(
+            "slice set and key set disagree:\n  " + "\n  ".join(problems)
+        )
 
     rows.sort(key=lambda row: (row["section"], row["key"]))
     return rows
@@ -179,6 +266,34 @@ HEADER = """// <auto-generated>
 //   The prose itself now lives in the schema's `doc` arrays, rendered into
 //   docs/config-reference.md.
 //
+//   ONE KEY PER SLICE. A slice is a schema file declaring targets.cfg; its
+//   toggle is that file's one "in": "cfg" field. gen_binds.py compares the two
+//   sets in both directions and refuses to write this file if they disagree --
+//   a slice with no key, a key with no slice, two keys in one slice, or an
+//   enable.cfg naming a key no schema declares as a field.
+//
+//   THE COUNT BELOW IS THE COUNT IN ckf.hardmode.cfg. Slices.Init binds every
+//   row of this table (Slices.cs) and Plugin.Load calls it ABOVE the
+//   master-switch bail-out, so BepInEx writes a line for all of them on any
+//   launch, including one where the mod is switched off.
+//
+//   CORRECTION, 2026-09-13. This paragraph used to read "THE COUNT BELOW IS NOT
+//   THE COUNT IN ckf.hardmode.cfg. This table is a declaration; a key reaches
+//   the file only when something calls Bind for it, and Plugin.cs:161 is the
+//   only call site. Every other key here is declared and unbound, so BepInEx
+//   writes no line for it and schema/check_schema.py reports it MISSING until a
+//   caller exists and the game has been launched." It was true when written and
+//   is false now: Slices.cs was added and Plugin.cs no longer binds anything
+//   directly. It is quoted rather than deleted because it is the shape of claim
+//   that goes stale silently -- a statement about what some other file does, in
+//   a generated header nobody re-reads.
+//
+//   CITATIONS HERE NAME A MEMBER, NOT A LINE. The quoted paragraph above cited
+//   Plugin.cs:161, and that citation was stale within hours of being written
+//   because the line moved. A member name survives every edit to its file that
+//   does not rename it, and a rename makes the citation fail loudly under grep
+//   instead of silently pointing at whatever now occupies the line.
+//
 // </auto-generated>
 
 using System;
@@ -194,11 +309,23 @@ namespace CKFHardMode
     /// <c>ConfigFile.Bind</c> itself, so the section, key, type and default
     /// are stated once, here, and match the schema by construction.
     ///
-    /// Bind is still a real <c>ConfigFile.Bind</c> call made at the same point
-    /// in startup as the hand-written call it replaced: BepInEx writes the file
-    /// from the set of keys actually bound, and a key nothing binds is left in
-    /// place as an orphan. Binding every key eagerly would change that, so this
-    /// class does not do it.
+    /// Bind is a real <c>ConfigFile.Bind</c> call, and every row of
+    /// <see cref="All"/> now gets one: <c>Slices.Init</c> walks the table at
+    /// startup (Slices.cs) and binds each key, so BepInEx writes the whole file
+    /// rather than whichever keys a subsystem happened to reach.
+    ///
+    /// CORRECTION, 2026-09-13. This paragraph used to end "BepInEx writes the
+    /// file from the set of keys actually bound, and a key nothing binds is
+    /// left in place as an orphan. Binding every key eagerly would change that,
+    /// so this class does not do it." The first sentence still holds; the last
+    /// one is reversed. Eager binding is now the point of the table, because a
+    /// toggle a player cannot see in ckf.hardmode.cfg is a toggle they cannot
+    /// use, and binding under the master-switch bail-out would have left a
+    /// fresh install with Enabled = false carrying no [Slices] lines at all.
+    /// The orphan rule is unchanged and is why the count matters: a key this
+    /// table stops declaring stays in the file until someone deletes the line.
+    ///
+    /// The one call site is the <c>Binds.Bind</c> in <c>Slices.Init</c>.
     /// </summary>
     internal static class Binds
     {

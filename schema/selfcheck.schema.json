@@ -1,8 +1,8 @@
 {
   "subsystem": "SelfCheck",
   "title": "Regression Suite",
-  "targets": { "json": "ckf.hardmode.json", "section": "selfcheck", "legacyJson": null },
-  "enable": { "json": "enabled" },
+  "targets": { "cfg": "ckf.hardmode.cfg", "json": "ckf.hardmode.d/selfcheck.json", "legacyJson": null },
+  "enable": { "cfg": "Slices.SelfCheck" },
 
   "doc": [
     "CKF Hard Mode - regression suite.",
@@ -53,11 +53,11 @@
 
   "fields": [
     {
-      "path": "enabled", "in": "json", "type": "bool",
+      "path": "Slices.SelfCheck", "in": "cfg", "type": "bool",
       "default": false, "ui": "form",
-      "label": "Enabled",
-      "uiDoc": "Read a list of rows by id at startup and check their columns against values written down in advance, then report pass or fail per column.",
-      "doc": "Read a list of rows by id at startup and check their columns against values written down in advance, then report PASS/FAIL per column. It reads rows the game did not ask for, so it is a diagnostic rather than part of play, and one of those reads builds a clone earlier than the game would have. OFF by default - the one feature switch that is. Turn it on for a verification launch after a retune, regenerate the expectations file, read the block, turn it back off. 3.0 moved these three keys out of the [SelfCheck] section of ckf.hardmode.cfg and into the \"selfcheck\" section of ckf.hardmode.json; the section is new in 3.0 and has no 2.x sidecar behind it, which is what targets.legacyJson: null records."
+      "label": "Enable Regression Suite",
+      "doc": "Slice toggle. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice never enters RulePlan. THIS IS THE GATE. Slices.Init binds every key in Binds.All (Slices.cs) and is called from Plugin.Load (Plugin.cs), above the master-switch bail-out, so BepInEx writes the line whether the mod is on or off. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg is 3,238 bytes carrying [General] and [Slices] and all 43 keys, and check_schema.py --game printed \"0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s).\" at rc 0 [measured, Logs\\gates-phase1b.txt]. The tag on this sentence used to sit before that run: it read \"[measured 2026-09-13]\" when what had been measured was the C#, not the file. The file has now been measured too. CORRECTION, 2026-09-13: this doc used to say \"the section's own \\\"enabled\\\" field is still on disk and is still the gate the plugin reads\" and \"NOT ON DISK ... check_schema.py reports it MISSING\". Both were true when written and are false now. The section's \"enabled\" field is deleted from this schema and the gate is this key. The RETIRED KEY IS STILL PARSED, into a report-only bool? RetiredEnabled ([JsonPropertyName(\"enabled\")]), because four subsystems refuse a whole section on an unknown key (ConfigDoc.ReadSection, ConfigDoc.cs) and an upgraded document would otherwise switch OFF. Slices.ReportRetiredGate (Slices.cs) names it: Warning normally, Error when the retired value is false and this key is not. Nothing branches on it -- grep RetiredEnabled finds one declaration and one report call per subsystem and no read. It is a migration report, not a second gate. Defaults FALSE, matching the \"selfcheck\" section's own enabled field, which is the one default among the nine that is not true [measured 2026-09-13, schema/selfcheck.schema.json].",
+      "uiDoc": "Turn this off and this part of the mod does nothing; the game uses its own values. The master switch on the first page turns off everything at once."
     },
     {
       "path": "file", "in": "json", "type": "string",

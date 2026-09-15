@@ -85,9 +85,65 @@ automatically.
 ## 3. Configure
 
 No key is reproduced here, because they are generated. Everything lives in
-`BepInEx/config/`: `ckf.hardmode.json` — one document holding nine subsystem
-sections — plus `ckf.hardmode.cfg` (one key), the `ckf.hardmode.d/` overlay
-directory, `ckf.hardmode.rules.json` and `ckf.hardmode.selfcheck.csv`.
+`BepInEx/config/`: **one file per slice under `ckf.hardmode.d/`**, plus
+`ckf.hardmode.cfg` — 43 keys, `[General] Enabled` and 42 `[Slices]` toggles —
+and `ckf.hardmode.selfcheck.csv`.
+
+**Correction, 2026-09-15.** Everything from here to the end of this section was
+written against the 3.x shape and most of it is no longer the shape on disk.
+The paragraph above used to read *"`ckf.hardmode.json` — one document holding
+nine subsystem sections — plus `ckf.hardmode.cfg` (one key), the
+`ckf.hardmode.d/` overlay directory, `ckf.hardmode.rules.json` and
+`ckf.hardmode.selfcheck.csv`."* The dated corrections below are kept because
+they are the record of decisions, not because they describe today's disk.
+**What is on disk today:**
+
+| | 3.x | 4.0 |
+|---|---|---|
+| settings | one `ckf.hardmode.json`, nine sections | **one file per slice** under `ckf.hardmode.d/` |
+| rules | `ckf.hardmode.rules.json` | **deleted.** Split into per-table sheets under `ckf.hardmode.d/` (Phase 9) |
+| gates | one `[General] Enabled` | `[General] Enabled` **plus 42 `[Slices]` toggles**, one per slice |
+| overlay dir | three carried CSVs + one generated file | 67 files: every slice, every sheet, the three carried CSVs and the generated mirror |
+
+**A gate cannot live inside the file it gates** (`design.md` §3), which is why
+each slice's on/off switch is a `.cfg` key and not an `"enabled"` at the top of
+its own `.json`. Eight 3.x sections carried such a key; it is retired, the C#
+still parses it into a `bool? RetiredEnabled`, and `Slices.ReportRetiredGate`
+warns rather than letting it read as a stray.
+
+### Both layouts present is a refusal, not a preference
+
+`specs/config-surface/spec.md` names this requirement, and
+`ConfigDoc.BothLayouts` implements it: when `ckf.hardmode.json` is on disk
+**and** any slice file is, `ConfigDoc` logs an Error naming both layouts and
+`Plugin.Load` returns at `Plugin.cs:245` before the difficulty hook,
+`ModelRules.Init` and everything below them. **No rule is compiled, no row is
+edited and nothing is written or renamed.** The launch is unmodified and says
+so.
+
+It returns *below* `Slices.Init`, on purpose: BepInEx writes `ckf.hardmode.cfg`
+from the keys something bound, so a launch that refused before binding would
+leave the editor with nothing to show and `check_schema.py` reporting 42 keys
+`MISSING`.
+
+**Why a zip overwrite alone is not enough, and what the player is told.**
+Extracting a release never *deletes* anything, so a 3.x install that takes a 4.0
+zip on top of it ends up with both layouts and a dud first launch — loud and
+safe, but a dud. The player-facing instruction is therefore *delete
+`BepInEx\config\ckf.hardmode.json`*, stated in `release/README.txt.in` (which
+ships inside the zip) and in the repo root `README.md`. Do not soften the
+refusal to avoid it; the refusal is what stops the mod from silently choosing
+which of two copies of a player's edits count.
+
+**Migration is for the maintainer, not for players.** `serve.py --migrate`
+still converts a 3.x directory and still renames the originals to
+`.pre-4.0-backup`, and its 67 selftest cases still run under
+`serve.py --selftest --migration`. They are retired from the default
+`--selftest`, which reports them `NOT RUN` by name.
+[David's ruling, 2026-09-15: *"Players will simply download a new zip and
+overwrite everything... Migration for me but not for end users."*]
+
+---
 
 **3.0 merged five sidecars and then 21 cfg keys into that one document.**
 Phase 2 turned `ckf.hardmode.{elapse,fatigue,missions,rewardcurve,teampl}.json`
@@ -128,11 +184,21 @@ in the zip — the seven named in its `CONFIG_FILES`, copied from the live
 `ckf.hardmode.cfg` rendered from `release/ckf.hardmode.cfg.in`. Any other
 `.csv`/`.tsv`/`.json` in the live `ckf.hardmode.d/` ships too:
 
-| File | What it is |
+**Correction, 2026-09-15.** The table below is the 3.x shipping set and three
+of its rows name files that no longer exist. What ships today is
+`ckf.hardmode.cfg`, `ckf.hardmode.selfcheck.csv` and **the whole of the live
+`ckf.hardmode.d/` — 67 files** [measured, live install, 2026-09-15]: one `.json`
+per settings slice, the generated lever sheets, the three carried table overlays
+and `MissionPowerLevelModel.generated.json`. There is **no `ckf.hardmode.json`
+and no `ckf.hardmode.rules.json`**. `make_release.py` names what it ships and
+what it skips; the list is in its `CONFIG_FILES` and its selftest asserts every
+file in the live `ckf.hardmode.d/` is either shipped or named as skipped.
+
+| File | What it is (3.x — superseded) |
 |---|---|
-| `ckf.hardmode.json` | the merged config document, nine sections |
-| `ckf.hardmode.cfg` | the one key left, `[General] Enabled` |
-| `ckf.hardmode.rules.json` | 293 row-edit rules over 8 model types |
+| `ckf.hardmode.json` | **GONE.** the merged config document, nine sections |
+| `ckf.hardmode.cfg` | now 43 keys, not one: `[General] Enabled` + 42 `[Slices]` |
+| `ckf.hardmode.rules.json` | **GONE.** 293 row-edit rules over 8 model types |
 | `ckf.hardmode.selfcheck.csv` | the regression suite's expectations |
 | `ckf.hardmode.d/ArmorModel.csv` | 180 overlay rows |
 | `ckf.hardmode.d/WeaponModel.csv` | 385 overlay rows |
@@ -254,7 +320,7 @@ underlay spans −10 to 10 and supplies `(1,0) = 0.08` itself
 of the 30 cells that did move are no-ops.
 
 **Column names come from CKF Data Dump.** Run it once, then read the header row
-of `BepInEx/ckf-dump/<Table>.csv`. A rule naming a column that doesn't exist
+of `D:\ckf-data-modding\sheets\raw\<Table>.csv`. A rule naming a column that doesn't exist
 logs one warning and does nothing; a rule naming a *table* that doesn't exist is
 listed by name at startup, because otherwise it fails silently.
 

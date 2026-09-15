@@ -1,5 +1,5 @@
-// Defaults — the eight config files this mod needs on disk, and whether they
-// are there.
+// Defaults — the sixteen config files this mod needs on disk, and whether
+// they are there.
 //
 // WHY THIS FILE EXISTS
 //
@@ -24,31 +24,127 @@
 // that only reports when something went wrong is one that has gone quiet, and
 // a config surface with a hole in it is a subsystem that says it has nothing to
 // read for a reason nobody connects to the install. Install() checks each of
-// the eight paths, logs one summary line whatever it finds, and names every
+// the sixteen paths, logs one summary line whatever it finds, and names every
 // file that is not there.
 //
-// The eight, all under BepInEx/config:
+// The sixteen, all under BepInEx/config:
 //
-//   ckf.hardmode.json                          the merged config document
-//   ckf.hardmode.cfg                           one key, [General] Enabled
-//   ckf.hardmode.rules.json                    the rule set
+//   ckf.hardmode.cfg                           43 keys (see the correction below)
 //   ckf.hardmode.selfcheck.csv                 the regression suite's input
 //   ckf.hardmode.d/ArmorModel.csv              armour overlay rows
 //   ckf.hardmode.d/WeaponModel.csv             weapon overlay rows
 //   ckf.hardmode.d/MonsterTypeModel.csv        enemy overlay rows
 //   ckf.hardmode.d/MissionPowerLevelModel.generated.json   30 label rules
+//   ckf.hardmode.d/difficulty.json             ] the nine subsystem slices,
+//   ckf.hardmode.d/elapse.json                 ] one settings file each,
+//   ckf.hardmode.d/fatigue.json                ] tables included
+//   ckf.hardmode.d/missions.json               ]
+//   ckf.hardmode.d/rewardcurve.json            ]
+//   ckf.hardmode.d/teampl.json                 ]
+//   ckf.hardmode.d/powerlevel.json             ]
+//   ckf.hardmode.d/modelrules.json             ]
+//   ckf.hardmode.d/selfcheck.json              ]
+//   ckf.hardmode.d/implants-global.json        the THREE implant multipliers
 //
-// The last one is in the list because Overlays.Load takes .json as well as
-// .csv (Overlays.cs:88-90) and loads it as an ordinary rules file. It is what
-// makes the victory screen's "Team gained N PL" agree with the award, and it
-// is why a good launch reports "Overlays: 4 file(s), 3022 row(s) merged" —
-// three CSVs and the mirror. Without it a launch reports 3 files and loses
-// those 30 rules with nothing saying so.
+// CORRECTION, 2026-09-14 (Phase 9). This table used to carry a second row,
+// directly under ckf.hardmode.cfg, and `Expected` below used to carry the
+// matching entry:
+//
+//     ckf.hardmode.rules.json                    the rule set
+//
+// WHAT THAT FILE WAS. One flat JSONC array of 269 rules -- 263 exact
+// selectors, 6 range selectors, 0 unscoped, 76,451 bytes, 2,930 lines --
+// read by ModelRules.LoadRules and applied before the overlay directory.
+// Per model: EffectModel 129, JobNodeModel 71, TalentModel 42, WeaponModel 17,
+// MatrixEffectModel 8, RuleModel 2 [measured, 2026-09-14, on the live file as
+// it was deleted].
+//
+// WHY IT WENT. split-config-into-toggleable-slices converted all 269 into
+// ckf.hardmode.d: 238 into the 33 direct-overlay CSVs (scripts/
+// rules_to_overlays.py wrote them and compared both compiled sets element by
+// element, in order) and the remaining 31 into the shipping lever sheets --
+// 22 into cyberweapons-lasers.csv / cyberweapons-claws.csv and 9 into
+// implants-slot08.csv. Every one of the 269 rules is `set`-only and exact, so
+// the sheets alone land on the same numbers the sheets plus the file did:
+// 42,471 (table, id, column) triple(s) compared with the file and without it,
+// 0 differences, and all 448 writes the file made matched by an identical
+// (operator, value) write from a shipping sheet [measured, 2026-09-14].
+//
+// WHY THE ROW HAD TO GO WITH IT. Leaving the name in `Expected` after the file
+// was deleted made this instrument report a correctly migrated 4.0 install as
+// a broken one, at Error, on every launch: "Defaults: missing
+// <config>\ckf.hardmode.rules.json" and a summary reading 16 of 17
+// [measured on a 4.0 zip built 2026-09-14, scripts/make_release.py
+// NOT_SHIPPED_BUT_EXPECTED]. That is the same failure the Phase 3 correction
+// below describes, in the other direction.
+//
+// THE ABSENCE IS STILL REPORTED, JUST NOT AS A FAULT. Plugin.Load states which
+// of the two layouts it found before it calls ModelRules.Init, and
+// ModelRules.LoadRules names the file when it is not there rather than
+// returning quietly. A rules file that COMES BACK is the loud case now.
+//
+// STILL OPEN, AND NOT THIS FILE'S TO CLOSE. scripts/make_release.py's
+// NOT_SHIPPED_BUT_EXPECTED still names ckf.hardmode.rules.json, and its
+// selftest section [2c] is armed to go RED the day this array loses the name.
+// It has. That tripwire fired as designed; scripts/ is outside this commit's
+// file boundary, so it is reported rather than silenced.
+//
+// CORRECTION, 2026-09-13 (Phase 3). This table used to open "The eight, all
+// under BepInEx/config" and its first row was
+//
+//     ckf.hardmode.json                          the merged config document
+//
+// That file is the PRE-4.0 layout and IS NO LONGER EXPECTED. Leaving it in the
+// list would have made this instrument report a correctly migrated install as
+// a broken one, at Error, on every launch -- and leaving the ten slice files
+// OUT of the list would have made it report a missing one as nothing at all,
+// which is the failure this class exists to prevent. Both halves moved
+// together. split-config-into-toggleable-slices Phase 3.
+//
+// MissionPowerLevelModel.generated.json is in the list because Overlays.Load
+// takes .json as well as .csv (Overlays.cs, member Load) and loads it as an
+// ordinary rules file. It is what makes the victory screen's "Team gained N
+// PL" agree with the award, and it is why a good launch reports "Overlays: 4
+// file(s), 3022 row(s) merged" — three CSVs and the mirror. Without it a launch
+// reports 3 files and loses those 30 rules with nothing saying so.
+//
+// CORRECTION, 2026-09-13 (Phase 3). That paragraph used to open "The last one"
+// and cite Overlays.cs:88-90. It is no longer last in the table -- ten slice
+// files were appended below it -- and the line numbers went stale the moment
+// Overlays.cs was edited, which is why the citation is now the member.
+//
+// THE TEN SLICE FILES ARE NOT IN THAT COUNT. Overlays skips them by name
+// before opening them (Overlays.cs, member Load, via ConfigDoc.OwnsFile), so
+// "4 file(s) read" stays 4 and they are named on a line of their own. ConfigDoc
+// is what reports on them.
 //
 // ckf.hardmode.cfg is in the list even though BepInEx rewrites it on launch
-// from the key Plugin.cs binds. Shipping it means the player's first launch is
+// from the keys Plugin.cs binds. Shipping it means the player's first launch is
 // not the thing that creates it, and a config directory without it is still
 // worth reporting, because it means the extraction did not land here.
+//
+// CORRECTION, 2026-09-13. The table above used to describe ckf.hardmode.cfg as
+// "one key, [General] Enabled", and the paragraph above said "the key Plugin.cs
+// binds", singular. Both were true until this date and neither is now: the file
+// carries 43 keys, [General] Enabled plus one [Slices] key per slice, and
+// Slices.Init binds all of them (split-config-into-toggleable-slices design.md
+// section 3). Nothing about THIS class changed — it counts files, not keys —
+// but the description of the file it counts was wrong and would have been read
+// as fact by the next reader.
+//
+// CORRECTION, 2026-09-13 (Phase 3). The paragraph here used to read: "The
+// eight paths below are unchanged by that. The slice files this change
+// introduces arrive in Phases 4 through 8 and are added to `Expected` then,
+// alongside CONFIG_FILES in scripts/make_release.py." The first sentence is
+// no longer true -- Phase 3 changed the paths, see the table above -- and the
+// second was only ever true of Phases 4 through 8's files. Phase 3's ten
+// arrived first.
+//
+// CONFIG_FILES in scripts/make_release.py IS STILL THE OTHER HALF OF THIS
+// TABLE AND HAS NOT BEEN UPDATED. scripts/ is outside Phase 3's file boundary,
+// so that list still names ckf.hardmode.json and none of the ten. A release
+// built before it is updated would package the old layout. Nothing derives
+// either list from the other; this comment is the only thing connecting them.
 //
 // THIS CLASS WRITES NOTHING. It does not create a file, a directory, a backup
 // or a rename. Every outcome it has is a log line.
@@ -76,7 +172,7 @@ namespace CKFHardMode
         /// scripts/make_release.py reads this literal out of this file and
         /// refuses a release where it disagrees with the "_version" of the
         /// ckf.hardmode.json it packages from the live config.</summary>
-        internal const string DocVersion = "1.0.0";
+        internal const string DocVersion = "4.0.0";
 
         // Paths under BepInEx/config, forward-slashed. The other half of this
         // table is CONFIG_FILES in scripts/make_release.py, which puts seven of
@@ -84,14 +180,22 @@ namespace CKFHardMode
         // derives either list from the other; change one and change the other.
         private static readonly string[] Expected =
         {
-            ConfigDoc.FileName,
             "ckf.hardmode.cfg",
-            "ckf.hardmode.rules.json",
             "ckf.hardmode.selfcheck.csv",
-            "ckf.hardmode.d/ArmorModel.csv",
-            "ckf.hardmode.d/WeaponModel.csv",
-            "ckf.hardmode.d/MonsterTypeModel.csv",
-            "ckf.hardmode.d/MissionPowerLevelModel.generated.json",
+            ConfigDoc.DirName + "/ArmorModel.csv",
+            ConfigDoc.DirName + "/WeaponModel.csv",
+            ConfigDoc.DirName + "/MonsterTypeModel.csv",
+            ConfigDoc.DirName + "/MissionPowerLevelModel.generated.json",
+            ConfigDoc.DirName + "/" + ConfigDoc.FileFor(ConfigDoc.Difficulty),
+            ConfigDoc.DirName + "/" + ConfigDoc.FileFor(ConfigDoc.Elapse),
+            ConfigDoc.DirName + "/" + ConfigDoc.FileFor(ConfigDoc.Fatigue),
+            ConfigDoc.DirName + "/" + ConfigDoc.FileFor(ConfigDoc.Missions),
+            ConfigDoc.DirName + "/" + ConfigDoc.FileFor(ConfigDoc.RewardCurve),
+            ConfigDoc.DirName + "/" + ConfigDoc.FileFor(ConfigDoc.TeamPl),
+            ConfigDoc.DirName + "/" + ConfigDoc.FileFor(ConfigDoc.PowerLevel),
+            ConfigDoc.DirName + "/" + ConfigDoc.FileFor(ConfigDoc.ModelRules),
+            ConfigDoc.DirName + "/" + ConfigDoc.FileFor(ConfigDoc.SelfCheck),
+            ConfigDoc.DirName + "/" + ConfigDoc.FileFor(ConfigDoc.ImplantsGlobal),
         };
 
         private static bool ran;

@@ -10,18 +10,51 @@ This document is the single destination for the prose that used to live as `//` 
 
 | Subsystem | Title | Sidecar | cfg keys | Fields | Enable chain depth |
 |---|---|---|---|---|---|
-| [Difficulty](#difficulty) | Custom Difficulty Slider Range | `ckf.hardmode.json#difficulty` | 0 | 1 | 0 |
-| [Elapse](#elapse) | Mission Elapse Penalty | `ckf.hardmode.json#elapse` | 0 | 13 | 1 + 2 per-field gate(s) |
-| [Fatigue](#fatigue) | Mission Fatigue | `ckf.hardmode.json#fatigue` | 0 | 12 | 1 + 1 per-field gate(s) |
+| [ConsumablesChems](#consumableschems) | Chem Consumables | — | 1 | 1 | 1 |
+| [ConsumablesDevices](#consumablesdevices) | Device Consumables | — | 1 | 1 | 1 |
+| [ConsumablesGrenades](#consumablesgrenades) | Grenade Consumables | — | 1 | 1 | 1 |
+| [ConsumablesMatrix](#consumablesmatrix) | Matrix Consumables | — | 1 | 1 | 1 |
+| [ConsumablesMedical](#consumablesmedical) | Medical Consumables | — | 1 | 1 | 1 |
+| [ConsumablesSploitkits](#consumablessploitkits) | Sploitkit Consumables | — | 1 | 1 | 1 |
+| [CyberweaponsClaws](#cyberweaponsclaws) | Claw Cyberweapons | — | 1 | 1 | 1 |
+| [CyberweaponsLasers](#cyberweaponslasers) | Eye Laser Cyberweapons | — | 1 | 1 | 1 |
+| [Difficulty](#difficulty) | Custom Difficulty Slider Range | `ckf.hardmode.d/difficulty.json` | 1 | 2 | 1 |
+| [Elapse](#elapse) | Mission Elapse Penalty | `ckf.hardmode.d/elapse.json` | 1 | 13 | 1 + 2 per-field gate(s) |
+| [Fatigue](#fatigue) | Mission Fatigue | `ckf.hardmode.d/fatigue.json` | 1 | 12 | 1 + 1 per-field gate(s) |
+| [GearClasses](#gearclasses) | Player Weapon Classes | — | 1 | 1 | 1 |
 | [General](#general) | Master Switch | — | 1 | 1 | 1 |
-| [MissionRewards](#missionrewards) | Per-Mission-Type Reward Overrides | `ckf.hardmode.json#missions` | 0 | 2 | 1 |
-| [ModelRules](#modelrules) | Declarative Row Edits | `ckf.hardmode.json#modelrules` | 0 | 5 | 1 + 1 per-field gate(s) |
-| [PowerLevel](#powerlevel) | Mission Power Level Ceiling | `ckf.hardmode.json#powerlevel` | 0 | 5 | 1 |
-| [RewardCurve](#rewardcurve) | Baseline Reward Curve | `ckf.hardmode.json#rewardcurve` | 0 | 3 | 1 |
-| [SelfCheck](#selfcheck) | Regression Suite | `ckf.hardmode.json#selfcheck` | 0 | 3 | 1 + 1 per-field gate(s) |
-| [Progression](#progression) | Team Power Level Award | `ckf.hardmode.json#teampl` | 0 | 3 | 1 |
+| [ImplantsGlobal](#implantsglobal) | Implant Global Multipliers | `ckf.hardmode.d/implants-global.json` | 1 | 4 | 1 |
+| [ImplantsSlot01](#implantsslot01) | Implant Slot 01 | — | 1 | 1 | 1 |
+| [ImplantsSlot02](#implantsslot02) | Implant Slot 02 | — | 1 | 1 | 1 |
+| [ImplantsSlot03](#implantsslot03) | Implant Slot 03 | — | 1 | 1 | 1 |
+| [ImplantsSlot04](#implantsslot04) | Implant Slot 04 | — | 1 | 1 | 1 |
+| [ImplantsSlot05](#implantsslot05) | Implant Slot 05 | — | 1 | 1 | 1 |
+| [ImplantsSlot06](#implantsslot06) | Implant Slot 06 | — | 1 | 1 | 1 |
+| [ImplantsSlot07](#implantsslot07) | Implant Slot 07 | — | 1 | 1 | 1 |
+| [ImplantsSlot08](#implantsslot08) | Implant Slot 08 | — | 1 | 1 | 1 |
+| [ImplantsSlot09](#implantsslot09) | Implant Slot 09 | — | 1 | 1 | 1 |
+| [ImplantsSlot10](#implantsslot10) | Implant Slot 10 | — | 1 | 1 | 1 |
+| [ImplantsSlot11](#implantsslot11) | Implant Slot 11 | — | 1 | 1 | 1 |
+| [MissionRewards](#missionrewards) | Per-Mission-Type Reward Overrides | `ckf.hardmode.d/missions.json` | 1 | 2 | 1 |
+| [ModelRules](#modelrules) | Declarative Row Edits | `ckf.hardmode.d/modelrules.json` | 1 | 5 | 1 + 1 per-field gate(s) |
+| [PowerLevel](#powerlevel) | Mission Power Level Ceiling | `ckf.hardmode.d/powerlevel.json` | 1 | 5 | 1 |
+| [RewardCurve](#rewardcurve) | Baseline Reward Curve | `ckf.hardmode.d/rewardcurve.json` | 1 | 3 | 1 |
+| [RuleModel](#rulemodel) | Game Rule Constants | — | 1 | 2 | 1 |
+| [SelfCheck](#selfcheck) | Regression Suite | `ckf.hardmode.d/selfcheck.json` | 1 | 3 | 1 + 1 per-field gate(s) |
+| [TalentsAEX](#talentsaex) | Agent EX Talent Balance | — | 1 | 1 | 1 |
+| [TalentsCS](#talentscs) | Cybersword Talent Balance | — | 1 | 1 | 1 |
+| [TalentsCyberKnight](#talentscyberknight) | Cyber Knight Talent Balance | — | 1 | 1 | 1 |
+| [TalentsGunslinger](#talentsgunslinger) | Gunslinger Talent Balance | — | 1 | 1 | 1 |
+| [TalentsHacker](#talentshacker) | Hacker Talent Balance | — | 1 | 1 | 1 |
+| [TalentsSawbones](#talentssawbones) | Scourge Talent Balance | — | 1 | 1 | 1 |
+| [TalentsSniper](#talentssniper) | Sniper Talent Balance | — | 1 | 1 | 1 |
+| [TalentsSoldier](#talentssoldier) | Soldier Talent Balance | — | 1 | 1 | 1 |
+| [TalentsVanguard](#talentsvanguard) | Vanguard Talent Balance | — | 1 | 1 | 1 |
+| [TalentsWarMachine](#talentswarmachine) | Warmachine Talent Balance | — | 1 | 1 | 1 |
+| [TalentsWraith](#talentswraith) | Wireghost Talent Balance | — | 1 | 1 | 1 |
+| [Progression](#progression) | Team Power Level Award | `ckf.hardmode.d/teampl.json` | 1 | 3 | 1 |
 
-10 subsystems, 1 cfg keys, 48 fields in total.
+43 subsystems, 43 cfg keys, 86 fields in total.
 
 ## Retroactive controls — read before changing these
 
@@ -29,10 +62,9 @@ A retroactive control re-prices existing save data. It is not a setting that tak
 
 | Subsystem | Field | What it re-prices |
 |---|---|---|
-| Progression | **`enabled`** | Recompute Team Power Level from the 'override' section instead of the game's table. 3.0 moved this switch out of the cfg key [Progression] Enabled and into this section; it is the whole enable chain for this subsystem. ALWAYS RETROACTIVE: turning it on re-prices every past mission at load, and the substituted total persists into the save, so turning it back off leaves a modded figure behind. RetroactiveTable was removed in 2.12.0 — it was this subsystem's only mode, so it had nothing left to switch, and the other three levers (GainScalar, GainOverride and a 'remap' list, all of which worked by rewriting a row's join keys so the award had to snap to one of the 63 shipped cells) went in 2.11.0 (Progression.cs:49-60). HOW TO TELL IT IS WORKING: before substituting anything the plugin sums the GAME'S values over the same rows and compares them with what the game just returned, and logs 'Progression: reconciled <total> over <n> row(s).' when they agree. If that line does not appear, the plugin could not reproduce the game's own total and has left Team PL exactly as the game computed it — on purpose, not because the subsystem is off (Progression.cs:291-322). To watch the award itself, trace RPG.Database.GameDb.SumGameMissionScore; that setting belongs to the separate CKF Data Dump plugin's [Diagnostics] section, not to any key this schema declares (Plugin.cs:57-58). The victory screen is not evidence either way — it reads a different path at a different time. |
 | Progression | **`override`** | Per-cell replacement for the award. A cell absent here keeps its 'table' value, and a cell present here replaces it outright - the value is used verbatim, with no snapping to a shipped cell and no clamp of any kind in the code (Progression.cs:150-152, 340-342). A cell with no 'table' value works too: it simply contributes its own figure to the sum, and gen_teampl_labels.py emits its label rule marked '(no stock cell)'. THE RANGES BELOW ARE GUARD RAILS FOR THE EDITOR, NOT ENGINE LIMITS. ActionClass runs 0-3 because that is what the save files rows under; the shipped table has no class-0 band, so a class-0 override has no stock value behind it and re-prices every LEGWORK row from zero. PowerLevelFraction is allowed to go negative because the game's own table does. A worked example: an override cell of ActionClass 2, MissionPowerLevel 7, PowerLevelFraction 0.015 makes Treaty contracts at PL 7 pay a solo hack's rate, 0.03 down to 0.015, and setting the same cell to 0 stops that class and level advancing the team at all. |
 
-2 retroactive control(s). Every other control in this document takes effect from the next relevant event onwards.
+1 retroactive control(s). Every other control in this document takes effect from the next relevant event onwards.
 
 ## Every `.cfg` key
 
@@ -41,62 +73,99 @@ One row per `Section.Key` in `ckf.hardmode.cfg`. `schema/check_schema.py` report
 | Key | Type | Default | Subsystem | Label |
 |---|---|---|---|---|
 | `General.Enabled` | `bool` | `true` | [General](#general) | Enable CKF Hard Mode |
+| `Slices.ConsumablesChems` | `bool` | `true` | [ConsumablesChems](#consumableschems) | Enable Chem Consumables |
+| `Slices.ConsumablesDevices` | `bool` | `true` | [ConsumablesDevices](#consumablesdevices) | Enable Device Consumables |
+| `Slices.ConsumablesGrenades` | `bool` | `true` | [ConsumablesGrenades](#consumablesgrenades) | Enable Grenade Consumables |
+| `Slices.ConsumablesMatrix` | `bool` | `true` | [ConsumablesMatrix](#consumablesmatrix) | Enable Matrix Consumables |
+| `Slices.ConsumablesMedical` | `bool` | `true` | [ConsumablesMedical](#consumablesmedical) | Enable Medical Consumables |
+| `Slices.ConsumablesSploitkits` | `bool` | `true` | [ConsumablesSploitkits](#consumablessploitkits) | Enable Sploitkit Consumables |
+| `Slices.CyberweaponsClaws` | `bool` | `true` | [CyberweaponsClaws](#cyberweaponsclaws) | Enable Claw Cyberweapons |
+| `Slices.CyberweaponsLasers` | `bool` | `true` | [CyberweaponsLasers](#cyberweaponslasers) | Enable Eye Laser Cyberweapons |
+| `Slices.Difficulty` | `bool` | `true` | [Difficulty](#difficulty) | Enable Custom Difficulty Slider Range |
+| `Slices.Elapse` | `bool` | `true` | [Elapse](#elapse) | Enable Mission Elapse Penalty |
+| `Slices.Fatigue` | `bool` | `true` | [Fatigue](#fatigue) | Enable Mission Fatigue |
+| `Slices.GearClasses` | `bool` | `true` | [GearClasses](#gearclasses) | Enable Player Weapon Classes |
+| `Slices.ImplantsGlobal` | `bool` | `true` | [ImplantsGlobal](#implantsglobal) | Enable Implant Global Multipliers |
+| `Slices.ImplantsSlot01` | `bool` | `true` | [ImplantsSlot01](#implantsslot01) | Enable Implant Slot 01 |
+| `Slices.ImplantsSlot02` | `bool` | `true` | [ImplantsSlot02](#implantsslot02) | Enable Implant Slot 02 |
+| `Slices.ImplantsSlot03` | `bool` | `true` | [ImplantsSlot03](#implantsslot03) | Enable Implant Slot 03 |
+| `Slices.ImplantsSlot04` | `bool` | `true` | [ImplantsSlot04](#implantsslot04) | Enable Implant Slot 04 |
+| `Slices.ImplantsSlot05` | `bool` | `true` | [ImplantsSlot05](#implantsslot05) | Enable Implant Slot 05 |
+| `Slices.ImplantsSlot06` | `bool` | `true` | [ImplantsSlot06](#implantsslot06) | Enable Implant Slot 06 |
+| `Slices.ImplantsSlot07` | `bool` | `true` | [ImplantsSlot07](#implantsslot07) | Enable Implant Slot 07 |
+| `Slices.ImplantsSlot08` | `bool` | `true` | [ImplantsSlot08](#implantsslot08) | Enable Implant Slot 08 |
+| `Slices.ImplantsSlot09` | `bool` | `true` | [ImplantsSlot09](#implantsslot09) | Enable Implant Slot 09 |
+| `Slices.ImplantsSlot10` | `bool` | `true` | [ImplantsSlot10](#implantsslot10) | Enable Implant Slot 10 |
+| `Slices.ImplantsSlot11` | `bool` | `true` | [ImplantsSlot11](#implantsslot11) | Enable Implant Slot 11 |
+| `Slices.MissionRewards` | `bool` | `true` | [MissionRewards](#missionrewards) | Enable Per-Mission-Type Reward Overrides |
+| `Slices.ModelRules` | `bool` | `true` | [ModelRules](#modelrules) | Enable Declarative Row Edits |
+| `Slices.PowerLevel` | `bool` | `true` | [PowerLevel](#powerlevel) | Enable Mission Power Level Ceiling |
+| `Slices.Progression` | `bool` | `true` | [Progression](#progression) | Enable Team Power Level Award |
+| `Slices.RewardCurve` | `bool` | `true` | [RewardCurve](#rewardcurve) | Enable Baseline Reward Curve |
+| `Slices.RuleModel` | `bool` | `true` | [RuleModel](#rulemodel) | Enable Game Rule Constants |
+| `Slices.SelfCheck` | `bool` | `false` | [SelfCheck](#selfcheck) | Enable Regression Suite |
+| `Slices.TalentsAEX` | `bool` | `true` | [TalentsAEX](#talentsaex) | Enable Agent EX Talent Balance |
+| `Slices.TalentsCS` | `bool` | `true` | [TalentsCS](#talentscs) | Enable Cybersword Talent Balance |
+| `Slices.TalentsCyberKnight` | `bool` | `true` | [TalentsCyberKnight](#talentscyberknight) | Enable Cyber Knight Talent Balance |
+| `Slices.TalentsGunslinger` | `bool` | `true` | [TalentsGunslinger](#talentsgunslinger) | Enable Gunslinger Talent Balance |
+| `Slices.TalentsHacker` | `bool` | `true` | [TalentsHacker](#talentshacker) | Enable Hacker Talent Balance |
+| `Slices.TalentsSawbones` | `bool` | `true` | [TalentsSawbones](#talentssawbones) | Enable Scourge Talent Balance |
+| `Slices.TalentsSniper` | `bool` | `true` | [TalentsSniper](#talentssniper) | Enable Sniper Talent Balance |
+| `Slices.TalentsSoldier` | `bool` | `true` | [TalentsSoldier](#talentssoldier) | Enable Soldier Talent Balance |
+| `Slices.TalentsVanguard` | `bool` | `true` | [TalentsVanguard](#talentsvanguard) | Enable Vanguard Talent Balance |
+| `Slices.TalentsWarMachine` | `bool` | `true` | [TalentsWarMachine](#talentswarmachine) | Enable Warmachine Talent Balance |
+| `Slices.TalentsWraith` | `bool` | `true` | [TalentsWraith](#talentswraith) | Enable Wireghost Talent Balance |
 
-1 key(s).
+43 key(s).
 
 ## Every sidecar field
 
 | Sidecar | Path | Type | UI | Subsystem |
 |---|---|---|---|---|
-| `ckf.hardmode.json#difficulty` | `sliderRangeMultiplier` | `float` | `form` | [Difficulty](#difficulty) |
-| `ckf.hardmode.json#elapse` | `enabled` | `bool` | `form` | [Elapse](#elapse) |
-| `ckf.hardmode.json#elapse` | `logFirst` | `int` | `form` | [Elapse](#elapse) |
-| `ckf.hardmode.json#elapse` | `seedSalt` | `int` | `form` | [Elapse](#elapse) |
-| `ckf.hardmode.json#elapse` | `tiers` | `table` | `table` | [Elapse](#elapse) |
-| `ckf.hardmode.json#elapse` | `credits.enabled` | `bool` | `form` | [Elapse](#elapse) |
-| `ckf.hardmode.json#elapse` | `credits.percentOfBalance` | `float` | `form` | [Elapse](#elapse) |
-| `ckf.hardmode.json#elapse` | `credits.byPowerLevel` | `table` | `table` | [Elapse](#elapse) |
-| `ckf.hardmode.json#elapse` | `stress.enabled` | `bool` | `form` | [Elapse](#elapse) |
-| `ckf.hardmode.json#elapse` | `stress.cap` | `int` | `form` | [Elapse](#elapse) |
-| `ckf.hardmode.json#elapse` | `stress.fallbackToRandom` | `bool` | `form` | [Elapse](#elapse) |
-| `ckf.hardmode.json#elapse` | `stress.applyTierMultiplier` | `bool` | `form` | [Elapse](#elapse) |
-| `ckf.hardmode.json#elapse` | `stress.safehouseOnly` | `bool` | `form` | [Elapse](#elapse) |
-| `ckf.hardmode.json#elapse` | `stress.byPowerLevel` | `table` | `table` | [Elapse](#elapse) |
-| `ckf.hardmode.json#fatigue` | `enabled` | `bool` | `form` | [Fatigue](#fatigue) |
-| `ckf.hardmode.json#fatigue` | `runningEmpty.traitId` | `int` | `form` | [Fatigue](#fatigue) |
-| `ckf.hardmode.json#fatigue` | `runningEmpty.byPowerLevel` | `table` | `curve` | [Fatigue](#fatigue) |
-| `ckf.hardmode.json#fatigue` | `runningEmpty.knight.byPowerLevel` | `table` | `curve` | [Fatigue](#fatigue) |
-| `ckf.hardmode.json#fatigue` | `offDuty.traitId` | `int` | `form` | [Fatigue](#fatigue) |
-| `ckf.hardmode.json#fatigue` | `offDuty.clearsRunningEmpty` | `bool` | `form` | [Fatigue](#fatigue) |
-| `ckf.hardmode.json#fatigue` | `offDuty.byPowerLevel` | `table` | `curve` | [Fatigue](#fatigue) |
-| `ckf.hardmode.json#fatigue` | `offDuty.knight.byPowerLevel` | `table` | `curve` | [Fatigue](#fatigue) |
-| `ckf.hardmode.json#fatigue` | `woundResist.enabled` | `bool` | `form` | [Fatigue](#fatigue) |
-| `ckf.hardmode.json#fatigue` | `woundResist.minChancePercent` | `int` | `form` | [Fatigue](#fatigue) |
-| `ckf.hardmode.json#fatigue` | `deterministicRolls` | `bool` | `form` | [Fatigue](#fatigue) |
-| `ckf.hardmode.json#fatigue` | `logGrants` | `bool` | `form` | [Fatigue](#fatigue) |
-| `ckf.hardmode.json#missions` | `enabled` | `bool` | `form` | [MissionRewards](#missionrewards) |
-| `ckf.hardmode.json#missions` | `missions` | `table` | `table` | [MissionRewards](#missionrewards) |
-| `ckf.hardmode.json#modelrules` | `enabled` | `bool` | `form` | [ModelRules](#modelrules) |
-| `ckf.hardmode.json#modelrules` | `traceRules` | `int` | `form` | [ModelRules](#modelrules) |
-| `ckf.hardmode.json#modelrules` | `probeWritableColumns` | `bool` | `form` | [ModelRules](#modelrules) |
-| `ckf.hardmode.json#modelrules` | `probeTables` | `stringList` | `form` | [ModelRules](#modelrules) |
-| `ckf.hardmode.json#modelrules` | `probeOutput` | `string` | `form` | [ModelRules](#modelrules) |
-| `ckf.hardmode.json#powerlevel` | `enabled` | `bool` | `form` | [PowerLevel](#powerlevel) |
-| `ckf.hardmode.json#powerlevel` | `minCap` | `int` | `form` | [PowerLevel](#powerlevel) |
-| `ckf.hardmode.json#powerlevel` | `maxCap` | `int` | `form` | [PowerLevel](#powerlevel) |
-| `ckf.hardmode.json#powerlevel` | `matrixMaxCap` | `int` | `form` | [PowerLevel](#powerlevel) |
-| `ckf.hardmode.json#powerlevel` | `logFirst` | `int` | `form` | [PowerLevel](#powerlevel) |
-| `ckf.hardmode.json#rewardcurve` | `enabled` | `bool` | `form` | [RewardCurve](#rewardcurve) |
-| `ckf.hardmode.json#rewardcurve` | `logEffectiveCurve` | `bool` | `form` | [RewardCurve](#rewardcurve) |
-| `ckf.hardmode.json#rewardcurve` | `curve` | `table` | `curve` | [RewardCurve](#rewardcurve) |
-| `ckf.hardmode.json#selfcheck` | `enabled` | `bool` | `form` | [SelfCheck](#selfcheck) |
-| `ckf.hardmode.json#selfcheck` | `file` | `string` | `form` | [SelfCheck](#selfcheck) |
-| `ckf.hardmode.json#selfcheck` | `output` | `string` | `form` | [SelfCheck](#selfcheck) |
-| `ckf.hardmode.json#teampl` | `enabled` | `bool` | `form` | [Progression](#progression) |
-| `ckf.hardmode.json#teampl` | `table` | `table` | `readonly` | [Progression](#progression) |
-| `ckf.hardmode.json#teampl` | `override` | `table` | `matrix` | [Progression](#progression) |
+| `ckf.hardmode.d/difficulty.json` | `sliderRangeMultiplier` | `float` | `form` | [Difficulty](#difficulty) |
+| `ckf.hardmode.d/elapse.json` | `logFirst` | `int` | `form` | [Elapse](#elapse) |
+| `ckf.hardmode.d/elapse.json` | `seedSalt` | `int` | `form` | [Elapse](#elapse) |
+| `ckf.hardmode.d/elapse.json` | `tiers` | `table` | `table` | [Elapse](#elapse) |
+| `ckf.hardmode.d/elapse.json` | `credits.enabled` | `bool` | `form` | [Elapse](#elapse) |
+| `ckf.hardmode.d/elapse.json` | `credits.percentOfBalance` | `float` | `form` | [Elapse](#elapse) |
+| `ckf.hardmode.d/elapse.json` | `credits.byPowerLevel` | `table` | `table` | [Elapse](#elapse) |
+| `ckf.hardmode.d/elapse.json` | `stress.enabled` | `bool` | `form` | [Elapse](#elapse) |
+| `ckf.hardmode.d/elapse.json` | `stress.cap` | `int` | `form` | [Elapse](#elapse) |
+| `ckf.hardmode.d/elapse.json` | `stress.fallbackToRandom` | `bool` | `form` | [Elapse](#elapse) |
+| `ckf.hardmode.d/elapse.json` | `stress.applyTierMultiplier` | `bool` | `form` | [Elapse](#elapse) |
+| `ckf.hardmode.d/elapse.json` | `stress.safehouseOnly` | `bool` | `form` | [Elapse](#elapse) |
+| `ckf.hardmode.d/elapse.json` | `stress.byPowerLevel` | `table` | `table` | [Elapse](#elapse) |
+| `ckf.hardmode.d/fatigue.json` | `runningEmpty.traitId` | `int` | `form` | [Fatigue](#fatigue) |
+| `ckf.hardmode.d/fatigue.json` | `runningEmpty.byPowerLevel` | `table` | `curve` | [Fatigue](#fatigue) |
+| `ckf.hardmode.d/fatigue.json` | `runningEmpty.knight.byPowerLevel` | `table` | `curve` | [Fatigue](#fatigue) |
+| `ckf.hardmode.d/fatigue.json` | `offDuty.traitId` | `int` | `form` | [Fatigue](#fatigue) |
+| `ckf.hardmode.d/fatigue.json` | `offDuty.clearsRunningEmpty` | `bool` | `form` | [Fatigue](#fatigue) |
+| `ckf.hardmode.d/fatigue.json` | `offDuty.byPowerLevel` | `table` | `curve` | [Fatigue](#fatigue) |
+| `ckf.hardmode.d/fatigue.json` | `offDuty.knight.byPowerLevel` | `table` | `curve` | [Fatigue](#fatigue) |
+| `ckf.hardmode.d/fatigue.json` | `woundResist.enabled` | `bool` | `form` | [Fatigue](#fatigue) |
+| `ckf.hardmode.d/fatigue.json` | `woundResist.minChancePercent` | `int` | `form` | [Fatigue](#fatigue) |
+| `ckf.hardmode.d/fatigue.json` | `deterministicRolls` | `bool` | `form` | [Fatigue](#fatigue) |
+| `ckf.hardmode.d/fatigue.json` | `logGrants` | `bool` | `form` | [Fatigue](#fatigue) |
+| `ckf.hardmode.d/implants-global.json` | `costMultiply` | `float` | `form` | [ImplantsGlobal](#implantsglobal) |
+| `ckf.hardmode.d/implants-global.json` | `installTimeMultiply` | `float` | `form` | [ImplantsGlobal](#implantsglobal) |
+| `ckf.hardmode.d/implants-global.json` | `implantStressMultiply` | `float` | `form` | [ImplantsGlobal](#implantsglobal) |
+| `ckf.hardmode.d/missions.json` | `missions` | `table` | `table` | [MissionRewards](#missionrewards) |
+| `ckf.hardmode.d/modelrules.json` | `traceRules` | `int` | `form` | [ModelRules](#modelrules) |
+| `ckf.hardmode.d/modelrules.json` | `probeWritableColumns` | `bool` | `form` | [ModelRules](#modelrules) |
+| `ckf.hardmode.d/modelrules.json` | `probeTables` | `stringList` | `form` | [ModelRules](#modelrules) |
+| `ckf.hardmode.d/modelrules.json` | `probeOutput` | `string` | `form` | [ModelRules](#modelrules) |
+| `ckf.hardmode.d/powerlevel.json` | `minCap` | `int` | `form` | [PowerLevel](#powerlevel) |
+| `ckf.hardmode.d/powerlevel.json` | `maxCap` | `int` | `form` | [PowerLevel](#powerlevel) |
+| `ckf.hardmode.d/powerlevel.json` | `matrixMaxCap` | `int` | `form` | [PowerLevel](#powerlevel) |
+| `ckf.hardmode.d/powerlevel.json` | `logFirst` | `int` | `form` | [PowerLevel](#powerlevel) |
+| `ckf.hardmode.d/rewardcurve.json` | `logEffectiveCurve` | `bool` | `form` | [RewardCurve](#rewardcurve) |
+| `ckf.hardmode.d/rewardcurve.json` | `curve` | `table` | `curve` | [RewardCurve](#rewardcurve) |
+| `ckf.hardmode.d/selfcheck.json` | `file` | `string` | `form` | [SelfCheck](#selfcheck) |
+| `ckf.hardmode.d/selfcheck.json` | `output` | `string` | `form` | [SelfCheck](#selfcheck) |
+| `ckf.hardmode.d/teampl.json` | `table` | `table` | `readonly` | [Progression](#progression) |
+| `ckf.hardmode.d/teampl.json` | `override` | `table` | `matrix` | [Progression](#progression) |
 
-47 sidecar field(s) across 9 section(s) in 1 file(s).
+42 sidecar field(s) across 10 section(s) in 10 file(s).
 
 ## How to read the field tables
 
@@ -124,9 +193,651 @@ Table and matrix fields get a `Columns of ...` section of their own below. A col
 
 ---
 
+## ConsumablesChems
+
+**Chem Consumables** &nbsp;·&nbsp; `.cfg` section `[ConsumablesChems]` &nbsp;·&nbsp; declared in `schema/consumableschems.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+LANDED in Phase 8 of split-config-into-toggleable-slices, 2026-09-14. ItemClass 4, 18 row(s), 44 column(s) -- 39 lever(s) plus 5 identity/control [measured].
+
+Files this toggle gates:
+
+```text
+  consumables-chems.csv
+```
+
+ItemClass 4, 18 rows (design.md section 8, tasks.md Phase 8). All 73 ItemModel rows are split into six sub-tables by ItemClass because a flat table would be about 70% empty; the six share one toggle each. There is no ItemClass 5.
+
+SUPERSEDED 2026-09-14, kept because the correction below depends on it. The paragraph that began here said "THE KEY IS ON DISK; THE SLICE IS NOT ... the rows arrive in the phase named above". The rows have now arrived and this file declares the slice in targets.overlays. The cfg-key half of it is still true and still the reason the count is 43: Slices.Init binds every key in Binds.All above the master-switch bail-out, so BepInEx writes the line on any launch. PHASE 8 ADDED NO CFG KEY. else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off now leaves these 18 row(s) exactly as the game ships them. Every lever cell in the file is blank today -- the mod touches 0 of the 73 ItemModel rows and 0 rules reach any of the 194 consumable-reachable (table, id) pairs [measured 2026-09-14], so shipping a value here would be a balance change. there is no file for the verdict to close.
+
+THIS SLICE IS A LEVER SHEET, NOT A DIRECT OVERLAY. All 18 rows carry an EffectModel payload, and it is the widest of the six: the union of the EffectModel columns those effects actually use, sparse, blank where unused. Without it a chem table could only tune AP and charges.
+
+One row is one consumable item and expands at load into writes across up to three tables: ItemModel keyed on ItemTypeId, TalentModel keyed on that row's TalentId, and the payload keyed on that row's EffectId / MatrixEffectId. Consumables.cs owns the whole parse -- Overlays.TableOf would otherwise turn "consumables-chems.csv" into a model named "consumables-chemsModel", which is non-null and so does not trip the null guard.
+
+A BLANK IDENTITY CELL IS NOT A MALFORMED ROW HERE, which is a deliberate deviation from the Cyberweapons.cs and Implants.cs precedents. Both refuse a whole row when an id cell does not parse; that rule would refuse most of three of these six files (EffectId is blank on 10 of 11 grenade rows, 7 of 12 device rows and 6 of 11 matrix rows) [measured]. Blank means "this row reaches no row of that table"; a payload cell on such a row is refused and named. Whole-row refusal is reserved for a non-blank, non-integer id.
+
+Winternight Black applies StressRes -15 and nothing else. Shipped behaviour, help text, not a fix.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/consumables-chems.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] ConsumablesChems = true   ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.ConsumablesChems` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Chem Consumables | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. THIS SLICE IS A LEVER SHEET, NOT A DIRECT OVERLAY, and targets.overlays asserts nothing either way -- it claims the file and asserts it exists. The first column is ItemName; there is no game table called "consumables-chems" and those are not row ids. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.ConsumablesChems` | Turn this off and these rows are left exactly as the game ships them. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
+## ConsumablesDevices
+
+**Device Consumables** &nbsp;·&nbsp; `.cfg` section `[ConsumablesDevices]` &nbsp;·&nbsp; declared in `schema/consumablesdevices.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+LANDED in Phase 8 of split-config-into-toggleable-slices, 2026-09-14. ItemClass 3, 12 row(s), 33 column(s) -- 28 lever(s) plus 5 identity/control [measured].
+
+Files this toggle gates:
+
+```text
+  consumables-devices.csv
+```
+
+ItemClass 3, 12 rows (design.md section 8, tasks.md Phase 8). All 73 ItemModel rows are split into six sub-tables by ItemClass because a flat table would be about 70% empty; the six share one toggle each. There is no ItemClass 5.
+
+SUPERSEDED 2026-09-14, kept because the correction below depends on it. The paragraph that began here said "THE KEY IS ON DISK; THE SLICE IS NOT ... the rows arrive in the phase named above". The rows have now arrived and this file declares the slice in targets.overlays. The cfg-key half of it is still true and still the reason the count is 43: Slices.Init binds every key in Binds.All above the master-switch bail-out, so BepInEx writes the line on any launch. PHASE 8 ADDED NO CFG KEY. else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off now leaves these 12 row(s) exactly as the game ships them. Every lever cell in the file is blank today -- the mod touches 0 of the 73 ItemModel rows and 0 rules reach any of the 194 consumable-reachable (table, id) pairs [measured 2026-09-14], so shipping a value here would be a balance change. there is no file for the verdict to close.
+
+THIS SLICE IS A LEVER SHEET, NOT A DIRECT OVERLAY. Only 5 of the 12 rows reach an EffectModel row; the other 7 have SelfEffect and TargetEffect both 0 [measured].
+
+One row is one consumable item and expands at load into writes across up to three tables: ItemModel keyed on ItemTypeId, TalentModel keyed on that row's TalentId, and the payload keyed on that row's EffectId / MatrixEffectId. Consumables.cs owns the whole parse -- Overlays.TableOf would otherwise turn "consumables-devices.csv" into a model named "consumables-devicesModel", which is non-null and so does not trip the null guard.
+
+A BLANK IDENTITY CELL IS NOT A MALFORMED ROW HERE, which is a deliberate deviation from the Cyberweapons.cs and Implants.cs precedents. Both refuse a whole row when an id cell does not parse; that rule would refuse most of three of these six files (EffectId is blank on 10 of 11 grenade rows, 7 of 12 device rows and 6 of 11 matrix rows) [measured]. Blank means "this row reaches no row of that table"; a payload cell on such a row is refused and named. Whole-row refusal is reserved for a non-blank, non-integer id.
+
+Echo-Cutter, Boosted Echo-Cutter and Ping-Cutter carry TargetEffectDuration 3/4/4 with NO effect row behind them. That column is the whole mechanic on those three. Shipped behaviour, help text, not a fix.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/consumables-devices.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] ConsumablesDevices = true ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.ConsumablesDevices` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Device Consumables | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. THIS SLICE IS A LEVER SHEET, NOT A DIRECT OVERLAY, and targets.overlays asserts nothing either way -- it claims the file and asserts it exists. The first column is ItemName; there is no game table called "consumables-devices" and those are not row ids. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.ConsumablesDevices` | Turn this off and these rows are left exactly as the game ships them. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
+## ConsumablesGrenades
+
+**Grenade Consumables** &nbsp;·&nbsp; `.cfg` section `[ConsumablesGrenades]` &nbsp;·&nbsp; declared in `schema/consumablesgrenades.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+LANDED in Phase 8 of split-config-into-toggleable-slices, 2026-09-14. ItemClass 2, 11 row(s), 30 column(s) -- 25 lever(s) plus 5 identity/control [measured].
+
+Files this toggle gates:
+
+```text
+  consumables-grenades.csv
+```
+
+ItemClass 2, 11 rows (design.md section 8, tasks.md Phase 8). All 73 ItemModel rows are split into six sub-tables by ItemClass because a flat table would be about 70% empty; the six share one toggle each. There is no ItemClass 5.
+
+SUPERSEDED 2026-09-14, kept because the correction below depends on it. The paragraph that began here said "THE KEY IS ON DISK; THE SLICE IS NOT ... the rows arrive in the phase named above". The rows have now arrived and this file declares the slice in targets.overlays. The cfg-key half of it is still true and still the reason the count is 43: Slices.Init binds every key in Binds.All above the master-switch bail-out, so BepInEx writes the line on any launch. PHASE 8 ADDED NO CFG KEY. else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off now leaves these 11 row(s) exactly as the game ships them. Every lever cell in the file is blank today -- the mod touches 0 of the 73 ItemModel rows and 0 rules reach any of the 194 consumable-reachable (table, id) pairs [measured 2026-09-14], so shipping a value here would be a balance change. there is no file for the verdict to close.
+
+THIS SLICE IS A LEVER SHEET, NOT A DIRECT OVERLAY. Only 1 of the 11 rows reaches an EffectModel row; the other 10 have SelfEffect and TargetEffect both 0, so their whole payload is TalentModel columns [measured].
+
+One row is one consumable item and expands at load into writes across up to three tables: ItemModel keyed on ItemTypeId, TalentModel keyed on that row's TalentId, and the payload keyed on that row's EffectId / MatrixEffectId. Consumables.cs owns the whole parse -- Overlays.TableOf would otherwise turn "consumables-grenades.csv" into a model named "consumables-grenadesModel", which is non-null and so does not trip the null guard.
+
+A BLANK IDENTITY CELL IS NOT A MALFORMED ROW HERE, which is a deliberate deviation from the Cyberweapons.cs and Implants.cs precedents. Both refuse a whole row when an id cell does not parse; that rule would refuse most of three of these six files (EffectId is blank on 10 of 11 grenade rows, 7 of 12 device rows and 6 of 11 matrix rows) [measured]. Blank means "this row reaches no row of that table"; a payload cell on such a row is refused and named. Whole-row refusal is reserved for a non-blank, non-integer id.
+
+Smoke Grenade and Smokebang XS do no damage -- PureDamage, PhysicalDamage and BallisticDamage are all 0. Their payload is Token 2 / TokenDuration 2. This is shipped behaviour and gets help text, not a fix.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/consumables-grenades.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] ConsumablesGrenades = true ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.ConsumablesGrenades` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Grenade Consumables | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. THIS SLICE IS A LEVER SHEET, NOT A DIRECT OVERLAY, and targets.overlays asserts nothing either way -- it claims the file and asserts it exists. The first column is ItemName; there is no game table called "consumables-grenades" and those are not row ids. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.ConsumablesGrenades` | Turn this off and these rows are left exactly as the game ships them. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
+## ConsumablesMatrix
+
+**Matrix Consumables** &nbsp;·&nbsp; `.cfg` section `[ConsumablesMatrix]` &nbsp;·&nbsp; declared in `schema/consumablesmatrix.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+LANDED in Phase 8 of split-config-into-toggleable-slices, 2026-09-14. ItemClass 7, 11 row(s), 45 column(s) -- 39 lever(s) plus 5 identity/control [measured].
+
+Files this toggle gates:
+
+```text
+  consumables-matrix.csv
+```
+
+ItemClass 7, 11 rows (design.md section 8, tasks.md Phase 8). All 73 ItemModel rows are split into six sub-tables by ItemClass because a flat table would be about 70% empty; the six share one toggle each. There is no ItemClass 5.
+
+SUPERSEDED 2026-09-14, kept because the correction below depends on it. The paragraph that began here said "THE KEY IS ON DISK; THE SLICE IS NOT ... the rows arrive in the phase named above". The rows have now arrived and this file declares the slice in targets.overlays. The cfg-key half of it is still true and still the reason the count is 43: Slices.Init binds every key in Binds.All above the master-switch bail-out, so BepInEx writes the line on any launch. PHASE 8 ADDED NO CFG KEY. else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off now leaves these 11 row(s) exactly as the game ships them. Every lever cell in the file is blank today -- the mod touches 0 of the 73 ItemModel rows and 0 rules reach any of the 194 consumable-reachable (table, id) pairs [measured 2026-09-14], so shipping a value here would be a balance change. there is no file for the verdict to close.
+
+THIS SLICE IS A LEVER SHEET, NOT A DIRECT OVERLAY. Two payload tables. 5 of the 11 rows reach an EffectModel row and 7 reach a MatrixEffectModel row; Eclipse Microdust (ItemTypeId 5404) reaches BOTH [measured].
+
+One row is one consumable item and expands at load into writes across up to three tables: ItemModel keyed on ItemTypeId, TalentModel keyed on that row's TalentId, and the payload keyed on that row's EffectId / MatrixEffectId. Consumables.cs owns the whole parse -- Overlays.TableOf would otherwise turn "consumables-matrix.csv" into a model named "consumables-matrixModel", which is non-null and so does not trip the null guard.
+
+A BLANK IDENTITY CELL IS NOT A MALFORMED ROW HERE, which is a deliberate deviation from the Cyberweapons.cs and Implants.cs precedents. Both refuse a whole row when an id cell does not parse; that rule would refuse most of three of these six files (EffectId is blank on 10 of 11 grenade rows, 7 of 12 device rows and 6 of 11 matrix rows) [measured]. Blank means "this row reaches no row of that table"; a payload cell on such a row is refused and named. Whole-row refusal is reserved for a non-blank, non-integer id.
+
+design.md section 8 said the matrix payload is "effect OR matrix-effect". That is wrong and is corrected there: Eclipse Microdust carries a MatrixEffect AND a SelfEffect.
+
+MatrixEffectModel payload columns are ALIASED with a Matrix prefix in the header (MatrixActionPoints, MatrixInstant, ...) because EffectClassification and ActionPoints are live in BOTH effect tables. The prefix is applied to every MatrixEffectModel column, not only the two that collide, because a rule applied to part of a table is unauditable. MatrixEffect and MatrixDuration are NOT aliases -- they are real TalentModel columns -- and MatrixEffectId is an identity column.
+
+Blue Juice's MatrixDuration 0 is an instantaneous effect, not a bug. Per David. No rule touches it.
+
+Striatum Catalyst NMF (ItemTypeId 5403, description "for loading") is EXCLUDED FROM THE GUI and nowhere else. The row stays on disk in this file, consumables.py still writes it and the plugin still expands it; gui/serve.py declines to draw it and prints a legend line saying so. A row hidden in the GUI but writable on disk and a row absent from both are different products; this is the first.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/consumables-matrix.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] ConsumablesMatrix = true  ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.ConsumablesMatrix` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Matrix Consumables | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. THIS SLICE IS A LEVER SHEET, NOT A DIRECT OVERLAY, and targets.overlays asserts nothing either way -- it claims the file and asserts it exists. The first column is ItemName; there is no game table called "consumables-matrix" and those are not row ids. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.ConsumablesMatrix` | Turn this off and these rows are left exactly as the game ships them. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
+## ConsumablesMedical
+
+**Medical Consumables** &nbsp;·&nbsp; `.cfg` section `[ConsumablesMedical]` &nbsp;·&nbsp; declared in `schema/consumablesmedical.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+LANDED in Phase 8 of split-config-into-toggleable-slices, 2026-09-14. ItemClass 1, 18 row(s), 34 column(s) -- 29 lever(s) plus 5 identity/control [measured].
+
+Files this toggle gates:
+
+```text
+  consumables-medical.csv
+```
+
+ItemClass 1, 18 rows (design.md section 8, tasks.md Phase 8). All 73 ItemModel rows are split into six sub-tables by ItemClass because a flat table would be about 70% empty; the six share one toggle each. There is no ItemClass 5.
+
+SUPERSEDED 2026-09-14, kept because the correction below depends on it. The paragraph that began here said "THE KEY IS ON DISK; THE SLICE IS NOT ... the rows arrive in the phase named above". The rows have now arrived and this file declares the slice in targets.overlays. The cfg-key half of it is still true and still the reason the count is 43: Slices.Init binds every key in Binds.All above the master-switch bail-out, so BepInEx writes the line on any launch. PHASE 8 ADDED NO CFG KEY. else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off now leaves these 18 row(s) exactly as the game ships them. Every lever cell in the file is blank today -- the mod touches 0 of the 73 ItemModel rows and 0 rules reach any of the 194 consumable-reachable (table, id) pairs [measured 2026-09-14], so shipping a value here would be a balance change. there is no file for the verdict to close.
+
+THIS SLICE IS A LEVER SHEET, NOT A DIRECT OVERLAY. All 18 rows carry an EffectModel payload.
+
+One row is one consumable item and expands at load into writes across up to three tables: ItemModel keyed on ItemTypeId, TalentModel keyed on that row's TalentId, and the payload keyed on that row's EffectId / MatrixEffectId. Consumables.cs owns the whole parse -- Overlays.TableOf would otherwise turn "consumables-medical.csv" into a model named "consumables-medicalModel", which is non-null and so does not trip the null guard.
+
+A BLANK IDENTITY CELL IS NOT A MALFORMED ROW HERE, which is a deliberate deviation from the Cyberweapons.cs and Implants.cs precedents. Both refuse a whole row when an id cell does not parse; that rule would refuse most of three of these six files (EffectId is blank on 10 of 11 grenade rows, 7 of 12 device rows and 6 of 11 matrix rows) [measured]. Blank means "this row reaches no row of that table"; a payload cell on such a row is refused and named. Whole-row refusal is reserved for a non-blank, non-integer id.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/consumables-medical.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] ConsumablesMedical = true ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.ConsumablesMedical` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Medical Consumables | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. THIS SLICE IS A LEVER SHEET, NOT A DIRECT OVERLAY, and targets.overlays asserts nothing either way -- it claims the file and asserts it exists. The first column is ItemName; there is no game table called "consumables-medical" and those are not row ids. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.ConsumablesMedical` | Turn this off and these rows are left exactly as the game ships them. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
+## ConsumablesSploitkits
+
+**Sploitkit Consumables** &nbsp;·&nbsp; `.cfg` section `[ConsumablesSploitkits]` &nbsp;·&nbsp; declared in `schema/consumablessploitkits.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+LANDED in Phase 8 of split-config-into-toggleable-slices, 2026-09-14. ItemClass 6, 3 row(s), 8 column(s) -- 5 lever(s) plus 5 identity/control [measured].
+
+Files this toggle gates:
+
+```text
+  consumables-sploitkits.csv
+```
+
+ItemClass 6, 3 rows (design.md section 8, tasks.md Phase 8). All 73 ItemModel rows are split into six sub-tables by ItemClass because a flat table would be about 70% empty; the six share one toggle each. There is no ItemClass 5.
+
+SUPERSEDED 2026-09-14, kept because the correction below depends on it. The paragraph that began here said "THE KEY IS ON DISK; THE SLICE IS NOT ... the rows arrive in the phase named above". The rows have now arrived and this file declares the slice in targets.overlays. The cfg-key half of it is still true and still the reason the count is 43: Slices.Init binds every key in Binds.All above the master-switch bail-out, so BepInEx writes the line on any launch. PHASE 8 ADDED NO CFG KEY. else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off now leaves these 3 row(s) exactly as the game ships them. Every lever cell in the file is blank today -- the mod touches 0 of the 73 ItemModel rows and 0 rules reach any of the 194 consumable-reachable (table, id) pairs [measured 2026-09-14], so shipping a value here would be a balance change. there is no file for the verdict to close.
+
+THIS SLICE IS A LEVER SHEET, NOT A DIRECT OVERLAY. These three rows carry TalentId 0 and no talent row exists for them, so the sheet holds ItemModel columns ONLY. A sheet that offered talent levers here would give the player rows that do nothing.
+
+One row is one consumable item and expands at load into writes across up to three tables: ItemModel keyed on ItemTypeId, TalentModel keyed on that row's TalentId, and the payload keyed on that row's EffectId / MatrixEffectId. Consumables.cs owns the whole parse -- Overlays.TableOf would otherwise turn "consumables-sploitkits.csv" into a model named "consumables-sploitkitsModel", which is non-null and so does not trip the null guard.
+
+A BLANK IDENTITY CELL IS NOT A MALFORMED ROW HERE, which is a deliberate deviation from the Cyberweapons.cs and Implants.cs precedents. Both refuse a whole row when an id cell does not parse; that rule would refuse most of three of these six files (EffectId is blank on 10 of 11 grenade rows, 7 of 12 device rows and 6 of 11 matrix rows) [measured]. Blank means "this row reaches no row of that table"; a payload cell on such a row is refused and named. Whole-row refusal is reserved for a non-blank, non-integer id.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/consumables-sploitkits.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] ConsumablesSploitkits = true ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.ConsumablesSploitkits` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Sploitkit Consumables | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. THIS SLICE IS A LEVER SHEET, NOT A DIRECT OVERLAY, and targets.overlays asserts nothing either way -- it claims the file and asserts it exists. The first column is ItemName; there is no game table called "consumables-sploitkits" and those are not row ids. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.ConsumablesSploitkits` | Turn this off and these rows are left exactly as the game ships them. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
+## CyberweaponsClaws
+
+**Claw Cyberweapons** &nbsp;·&nbsp; `.cfg` section `[CyberweaponsClaws]` &nbsp;·&nbsp; declared in `schema/cyberweaponsclaws.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+Arrives in Phase 6 of split-config-into-toggleable-slices.
+
+Files this toggle gates:
+
+```text
+  cyberweapons-claws.csv
+```
+
+16 rows, 12 columns (tasks.md Phase 6). All 16 claws and all 16 claw talents are untouched by the mod today; the sheet presents them with shipped values and no override (design.md section 6). These items are ImplantClass 27, ImplantSlot 6.
+
+THE KEY IS ON DISK; THE SLICE IS NOT. This file declares the key and nothing else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off while the slice has no file changes nothing, because there is no file for the verdict to close.
+
+REQUIRES Slices.ImplantsSlot06. design.md section 4 declares only the laser pair and gives no rule for deriving others. This one is derived from the dumps: TalentModel has exactly 33 rows with a non-zero Weapon, every one is pointed at by an ImplantModel row's ImplantTalentId, and they split 17 from ImplantClass 32 / ImplantSlot 8 and 16 from ImplantClass 27 / ImplantSlot 6 with nothing else contributing. All 16 claw talents' weapons are WeaponClass 16 (Cyber Weapon Claws). So all 16 rows of cyberweapons-claws.csv and all 16 ImplantClass 27 rows of implants-slot06.csv are the same 16 items -- the claw sheet stands to slot 6 exactly as the laser sheet stands to slot 8, which design.md section 7 states for both slots and section 4 does not. [measured 2026-09-13, sheets\raw\TalentModel.csv, ImplantModel.csv, WeaponModel.csv]
+
+ONE ASYMMETRY, STATED RATHER THAN SMOOTHED OVER. The laser pair also collides on an effect payload: 4 of the 17 lasers (Brightshot Optic 1-4) carry an ImplantEffectId whose CritMultiBase the slot-8 slice edits. The claw pair has no such collision -- every ImplantClass 27 row has ImplantEffectId 0, and TargetEffect, SelfEffect and MatrixEffect are 0 on all 16 claw talents. [measured 2026-09-13] So the half of design.md section 4's reason that says 'implant payloads' has no claw counterpart; what carries the declaration here is item identity alone, plus Cost, Rarity and PowerLevel appearing on both sides of the same item with different shipped values (implant Cost 80/250/900/2400 against weapon Cost 110/220/400/700 on Hand Blades 1-4, for one row family). [measured 2026-09-13]
+
+The declaration is enforceable now even though neither slice has a file yet: it is a statement about two .cfg keys, and both keys are on disk. A run in which it could not be compared prints a SKIPPED line and is counted on check_schema.py's 'requires:' census line rather than passing in silence.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/cyberweapons-claws.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] CyberweaponsClaws = true  ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.CyberweaponsClaws` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Claw Cyberweapons | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. THIS SLICE IS A LEVER SHEET, NOT A DIRECT OVERLAY, and targets.overlays asserts nothing either way -- it claims the file and asserts it exists. The first column is WeaponName and it repeats: four each for Hand Blades, Hand Razors, Ripper Blades and Mono-Razors. There is no game table called "cyberweapons-claws", those are not row ids, and one row is a cyberweapon that Cyberweapons.cs splits at load into a WeaponModel rule and a TalentModel rule (design.md section 1). Same kind as gear-classes.csv. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.CyberweaponsClaws` | Turn this off and these rows are left exactly as the game ships them. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+#### `requires`
+
+**Reason.** Claw combat rules and the slot-6 implant rows describe the same 16 items.
+
+---
+
+## CyberweaponsLasers
+
+**Eye Laser Cyberweapons** &nbsp;·&nbsp; `.cfg` section `[CyberweaponsLasers]` &nbsp;·&nbsp; declared in `schema/cyberweaponslasers.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+Arrives in Phase 6 of split-config-into-toggleable-slices.
+
+Files this toggle gates:
+
+```text
+  cyberweapons-lasers.csv
+```
+
+CORRECTION, 2026-09-13: THIS SHEET IS 18 NAMED COLUMNS, NOT 16. This doc said "17 rows, 16 columns", and design.md section 6 and tasks.md Phase 6 say 16 as well and list them. The list omits SpecialRule and ApCost.
+
+THOSE TWO ARE THE ONLY COLUMNS THE MOD'S LASER RULES WRITE. Rule 241 sets WeaponModel.SpecialRule = 0 across 25000-25015 ("Rapid Fire removed"), and two rules set TalentModel.ApCost = 10 on 80007-80010 and 80027-80038. A 16-column sheet gives 16 lasers back Rapid Fire and 16 laser talents back their second AP -- a balance change, which the proposal's non-goals forbid. NO VALUE MOVED; the column list was wrong.
+
+WHY IT WAS EASY TO DROP: both are CONSTANT across the 17 shipped rows, SpecialRule 3 on all 17 WeaponModel rows 25000-25016 and ApCost 20 on all 17 talents [measured 2026-09-13, sheets\raw\WeaponModel.csv and TalentModel.csv]. A constant column looks like one carrying no lever, and "no table shows a column dead for its own rows" would have dropped it. That rule is about a column with no lever in it. These two carry the only lever pulled here, and a column being constant in the SHIPPED data says nothing about whether a rule writes it.
+
+17 rows, 19 columns -- 18 named plus _comment [measured 2026-09-13, the live cyberweapons-lasers.csv]. These items are ImplantClass 32, ImplantSlot 8, so their install economics live in the slot 8 implant table and their combat stats live here; Cost appears in both and means different things (design.md section 7).
+
+THE KEY IS ON DISK; THE SLICE IS NOT. This file declares the key and nothing else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off while the slice has no file changes nothing, because there is no file for the verdict to close.
+
+REQUIRES Slices.ImplantsSlot08. design.md section 4 declares this pair and gives one example and no rule for deriving others; the pairing is confirmed against sheets\raw\: TalentModel has exactly 33 rows with a non-zero Weapon, and every one of the 33 is pointed at by an ImplantModel row's ImplantTalentId -- 17 of them from ImplantClass 32 / ImplantSlot 8 and 16 from ImplantClass 27 / ImplantSlot 6, with no other class or slot contributing. Those 17 weapons are WeaponClass 17 (Gear.WeaponClass.CyberWeaponEyes). So the 17 rows of cyberweapons-lasers.csv and 17 of the 18 ImplantClass 32 rows of implants-slot08.csv are the same 17 items; the 18th, ImplantTypeId 3217 'Lumen Trident', carries ImplantTalentId 0 and so has no laser sheet row. TWO SPELLINGS, BOTH LEFT AS THEY ARE: ImplantModel 3217 and 3218 are BOTH named "Lumen Trident" -- 3217 with ImplantTalentId 0, 3218 with 80060 -- while the WEAPON, 25016, is "Luem Trident". Neither is normalised here. [measured 2026-09-13, sheets\raw\TalentModel.csv, ImplantModel.csv, WeaponModel.csv]
+
+The sharpest case is Brightshot Optic 1-4. They are 4 of the 17 laser rows (weapons 25000-25003, talents 80007-80010) and 4 of the slot-8 implant rows (ImplantTypeId 3200-3203, ImplantEffectId 50107-50110). Both sheets carry a crit column for the same item, against different tables: the laser sheet's CritMultiBase/CritMultiStealth on WeaponModel, the slot-8 sheet's CritMultiBase on EffectModel. Exactly 9 implant effects in the whole referenced set have a non-zero CritMultiBase, all 9 in slot 8, and these 4 are among them at a shipped 25 -- which is the set design.md section 7 calls 'the nine CritMultiBase rules'. With slot 8 off and lasers on, the implant side keeps its shipped 25 while the weapon side has been retuned. [measured 2026-09-13, sheets\raw\EffectModel.csv]
+
+Rarity and PowerLevel also appear on both sides for the same item and are not the same number: over the 33 paired items Rarity agrees on 17 and PowerLevel on 8. [measured 2026-09-13] What either column does in the game was not read and is not claimed here.
+
+The declaration is enforceable now even though neither slice has a file yet: it is a statement about two .cfg keys, and both keys are on disk. A run in which it could not be compared prints a SKIPPED line and is counted on check_schema.py's 'requires:' census line rather than passing in silence.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/cyberweapons-lasers.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] CyberweaponsLasers = true ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.CyberweaponsLasers` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Eye Laser Cyberweapons | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. THIS SLICE IS A LEVER SHEET, NOT A DIRECT OVERLAY, and targets.overlays asserts nothing either way -- it claims the file and asserts it exists. The first column is WeaponName and it repeats: four each for Brightshot Optic, Lumen Spear, Photon Lance and Helios Beam, then one Luem Trident. There is no game table called "cyberweapons-lasers", those are not row ids, and one row is a cyberweapon that Cyberweapons.cs splits at load into a WeaponModel rule and a TalentModel rule (design.md section 1). Same kind as gear-classes.csv. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.CyberweaponsLasers` | Turn this off and these rows are left exactly as the game ships them. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+#### `requires`
+
+**Reason.** Laser damage rules and the slot-8 implant payloads describe the same items.
+
+---
+
 ## Difficulty
 
-**Custom Difficulty Slider Range** &nbsp;·&nbsp; `ckf.hardmode.json#difficulty` &nbsp;·&nbsp; declared in `schema/difficulty.schema.json`
+**Custom Difficulty Slider Range** &nbsp;·&nbsp; `.cfg` section `[Difficulty]` &nbsp;·&nbsp; declared in `schema/difficulty.schema.json`
 
 CKF Hard Mode - custom-difficulty slider range.
 
@@ -148,37 +859,39 @@ This does not set difficulty. It widens how far the game's own custom difficulty
 
 | Role | File |
 |---|---|
-| `json` | `ckf.hardmode.json` |
+| `cfg` | `ckf.hardmode.cfg` |
+| `json` | `ckf.hardmode.d/difficulty.json` |
 | `legacyJson` | _none — this section is new in 3.0_ |
-| `section` | `difficulty` |
 
 ### Enable chain
 
 Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
 
 ```text
-(no enable block declared in this schema)
+  cfg      [Slices] Difficulty = true         ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
 ```
 
-**No gate of its own.** `difficulty.schema.json` declares no `enable` block, so this document can cite no per-subsystem switch for it.
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
 
 Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
 
 ### Fields
 
-1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+2 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.Difficulty` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Custom Difficulty Slider Range | Slice toggle. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice never enters RulePlan. THIS IS THE GATE. Slices.Init binds every key in Binds.All (Slices.cs) and is called from Plugin.Load (Plugin.cs), above the master-switch bail-out, so BepInEx writes the line whether the mod is on or off. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg is 3,238 bytes carrying [General] and [Slices] and all 43 keys, and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\\gates-phase1b.txt]. The tag on this sentence used to sit before that run: it read "[measured 2026-09-13]" when what had been measured was the C#, not the file. The file has now been measured too. CORRECTION, 2026-09-13: this doc used to say "the section's own \\"enabled\\" field is still on disk and is still the gate the plugin reads" and "NOT ON DISK ... check_schema.py reports it MISSING". Both were true when written and are false now. The section's "enabled" field is deleted from this schema and the gate is this key. The RETIRED KEY IS STILL PARSED, into a report-only bool? RetiredEnabled ([JsonPropertyName("enabled")]), because four subsystems refuse a whole section on an unknown key (ConfigDoc.ReadSection, ConfigDoc.cs) and an upgraded document would otherwise switch OFF. Slices.ReportRetiredGate (Slices.cs) names it: Warning normally, Error when the retired value is false and this key is not. Nothing branches on it -- grep RetiredEnabled finds one declaration and one report call per subsystem and no read. It is a migration report, not a second gate. This subsystem has no gate today: difficulty.schema.json declares no "enable" block and the "difficulty" section carries no "enabled" field [measured 2026-09-13, schema/difficulty.schema.json]. The key therefore ADDS a gate rather than moving one, and defaults true so behaviour is unchanged. |
 | `sliderRangeMultiplier` | json | `float` | `form` | `3.0` |  | `1.0` to `100.0` |  |  | Slider range multiplier | How far past stock the game's own custom-difficulty sliders may be pushed. GameDifficultyModel pairs each setting with Min/Max properties and they are writable, so this stretches them: a positive ceiling is multiplied, a negative floor is multiplied (further down), a positive floor is divided (closer to zero), and a bound of exactly zero is left alone. 1 = leave the stock ranges alone. 3.0 moved this key out of the [Difficulty] section of ckf.hardmode.cfg and into the "difficulty" section of ckf.hardmode.json; the section is new in 3.0 and has no 2.x sidecar behind it, which is what targets.legacyJson: null records. |
 
 **What the config GUI shows for these fields.**
 
 | Field | GUI help |
 |---|---|
+| `Slices.Difficulty` | Turn this off and this part of the mod does nothing; the game uses its own values. The master switch on the first page turns off everything at once. |
 | `sliderRangeMultiplier` | 1 = leave the stock ranges alone. |
 
-1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+2 of 2 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
 
 ### Invariants
 
@@ -188,7 +901,7 @@ None declared.
 
 ## Elapse
 
-**Mission Elapse Penalty** &nbsp;·&nbsp; `ckf.hardmode.json#elapse` &nbsp;·&nbsp; declared in `schema/elapse.schema.json`
+**Mission Elapse Penalty** &nbsp;·&nbsp; `.cfg` section `[Elapse]` &nbsp;·&nbsp; declared in `schema/elapse.schema.json`
 
 CKF Hard Mode - mission elapse penalty.
 
@@ -233,22 +946,22 @@ By default, the credit charge scales with Power Level, roughly mirroring what yo
 
 | Role | File |
 |---|---|
-| `json` | `ckf.hardmode.json` |
+| `cfg` | `ckf.hardmode.cfg` |
+| `json` | `ckf.hardmode.d/elapse.json` |
 | `legacyJson` | `ckf.hardmode.elapse.json` |
-| `section` | `elapse` |
 
 ### Enable chain
 
 Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
 
 ```text
-  document "enabled": true                    ckf.hardmode.json#elapse — checked after the document loads
+  cfg      [Slices] Elapse = true             ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
         AND  (per field, not per subsystem)
   field    "credits.enabled": true            gates credits.byPowerLevel, credits.percentOfBalance
   field    "stress.enabled": true             gates stress.applyTierMultiplier, stress.byPowerLevel, stress.cap, stress.fallbackToRandom, stress.safehouseOnly
 ```
 
-**One gate.** 3.0 collapsed the chain: the `.cfg` key that used to gate this subsystem before its settings were read is gone, and `"enabled"` in its own section is the whole of it. One consequence worth holding: a `ckf.hardmode.json` that cannot be read costs this subsystem its switch as well as its values, and the log says which of the two it is rather than implying someone set a toggle.
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
 
 Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
 
@@ -258,7 +971,7 @@ Outside every chain in this document sits `[General] Enabled`, which since 3.0 i
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `enabled` | json | `bool` | `form` | `true` |  |  |  |  | Enabled | The subsystem switch, and since 3.0 the only one - the cfg key [Elapse] Enabled that used to gate it before the file was opened is gone, so this is the whole chain. False installs no hooks and writes nothing. THIS SUBSYSTEM WRITES TO YOUR SAVE (SpendCredits, and NegativeTraitValue on GameCharacter rows). |
+| `Slices.Elapse` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Mission Elapse Penalty | Slice toggle. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice never enters RulePlan. THIS IS THE GATE. Slices.Init binds every key in Binds.All (Slices.cs) and is called from Plugin.Load (Plugin.cs), above the master-switch bail-out, so BepInEx writes the line whether the mod is on or off. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg is 3,238 bytes carrying [General] and [Slices] and all 43 keys, and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\\gates-phase1b.txt]. The tag on this sentence used to sit before that run: it read "[measured 2026-09-13]" when what had been measured was the C#, not the file. The file has now been measured too. CORRECTION, 2026-09-13: this doc used to say "the section's own \\"enabled\\" field is still on disk and is still the gate the plugin reads" and "NOT ON DISK ... check_schema.py reports it MISSING". Both were true when written and are false now. The section's "enabled" field is deleted from this schema and the gate is this key. The RETIRED KEY IS STILL PARSED, into a report-only bool? RetiredEnabled ([JsonPropertyName("enabled")]), because four subsystems refuse a whole section on an unknown key (ConfigDoc.ReadSection, ConfigDoc.cs) and an upgraded document would otherwise switch OFF. Slices.ReportRetiredGate (Slices.cs) names it: Warning normally, Error when the retired value is false and this key is not. Nothing branches on it -- grep RetiredEnabled finds one declaration and one report call per subsystem and no read. It is a migration report, not a second gate. |
 | `logFirst` | json | `int` | `form` | `0` |  | `0` to `500` |  |  | Expiries logged in full | How many expiries to log in full detail (one line per channel and per merc). After that each expiry gets a single summary line. |
 | `seedSalt` | json | `int` | `form` | `1163084112` |  | `0` to `2147483647` |  |  | Seed salt | Salt for the deterministic roll. It is XORed into a seed mixed from the expiry's turn and the mission's Id - its title if the Id is unreadable - and that seed orders the merc list, so the same expiry picks the same mercs on every reload (Elapse.cs:1050-1051). It is deliberately a different salt from Fatigue's so the two subsystems' rolls do not correlate. Change it and every future pick in every save changes with it. |
 | `tiers` | json | `table` | `table` | _none declared_ |  |  |  | keyed by `name` | Mission tiers | Multiplier applied to the penalty by mission family, matched by SUBSTRING on MissionTypeId - the same idiom MissionRewards uses. FIRST MATCH WINS, in a fixed order: soloHack, then story, then standard, so the block is not order-independent even though it is a JSON object (Elapse.cs:850-862). A mission matching no tier's patterns falls through to 'standard'. The multiplier scales the credit charge, and the Stress merc count as well only when stress.applyTierMultiplier is on. A pattern that matches nothing makes its tier do nothing at all and logs no complaint, so check the tier= field in the plugin's own expiry log lines against real missions. [unverified: ckf.hardmode.elapse.json:49-51 records the shipped story patterns as a starting guess read off the game's MissionModel.csv and _mission_generated.csv dumps, neither of which is in this repository.] |
@@ -276,7 +989,7 @@ Outside every chain in this document sits `[General] Enabled`, which since 3.0 i
 
 | Field | GUI help |
 |---|---|
-| `enabled` | Off, and a mission's window can close with no credits taken and no Stress dealt. |
+| `Slices.Elapse` | Turn this off and this part of the mod does nothing; the game uses its own values. The master switch on the first page turns off everything at once. |
 | `seedSalt` | Randomizes which merc a given expiry picks. The same expiry picks the same mercs on every reload; change this and every future pick in every save changes with it. |
 | `tiers` | The multiplier here scales the credit charge, and the merc count as well when Apply tier multiplier to Stress is on. It roughly mirrors how much these missions pay in the first place. |
 | `credits.byPowerLevel` | Flat credits charged, indexed by the power level the mission was generated at, so the fine only increases when base mission pay does. |
@@ -329,7 +1042,7 @@ None declared.
 
 ## Fatigue
 
-**Mission Fatigue** &nbsp;·&nbsp; `ckf.hardmode.json#fatigue` &nbsp;·&nbsp; declared in `schema/fatigue.schema.json`
+**Mission Fatigue** &nbsp;·&nbsp; `.cfg` section `[Fatigue]` &nbsp;·&nbsp; declared in `schema/fatigue.schema.json`
 
 CKF Hard Mode - mission fatigue.
 
@@ -359,21 +1072,21 @@ Leave the rolls deterministic unless you want fatigue to be rerollable: with it 
 
 | Role | File |
 |---|---|
-| `json` | `ckf.hardmode.json` |
+| `cfg` | `ckf.hardmode.cfg` |
+| `json` | `ckf.hardmode.d/fatigue.json` |
 | `legacyJson` | `ckf.hardmode.fatigue.json` |
-| `section` | `fatigue` |
 
 ### Enable chain
 
 Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
 
 ```text
-  document "enabled": true                    ckf.hardmode.json#fatigue — checked after the document loads
+  cfg      [Slices] Fatigue = true            ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
         AND  (per field, not per subsystem)
   field    "woundResist.enabled": true        gates woundResist.minChancePercent
 ```
 
-**One gate.** 3.0 collapsed the chain: the `.cfg` key that used to gate this subsystem before its settings were read is gone, and `"enabled"` in its own section is the whole of it. One consequence worth holding: a `ckf.hardmode.json` that cannot be read costs this subsystem its switch as well as its values, and the log says which of the two it is rather than implying someone set a toggle.
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
 
 Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
 
@@ -383,7 +1096,7 @@ Outside every chain in this document sits `[General] Enabled`, which since 3.0 i
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `enabled` | json | `bool` | `form` | `true` |  |  |  |  | Enabled | The subsystem switch, and since 3.0 the only one - the cfg key [Fatigue] Enabled that used to gate it before the file was opened is gone, so this is the whole chain. False installs no hooks and writes nothing. A merc who completes a mission may come home Running Empty (-4 Initiative, -50% XP); a merc who deploys while already Running Empty is forced Off-Duty at mission end and the engine keeps them off the roster until it expires. THIS IS THE ONE SUBSYSTEM HERE THAT WRITES TO YOUR SAVE: it inserts GameCharacterTrait rows, which the game then expires by itself. [unverified: the '-4 Initiative, -50% XP' figure is game data carried over verbatim from this key's original Config.Bind description, kept at live-config-original/ckf.hardmode.cfg:25. No .cs in this tree carries it. Same claim as runningEmpty.traitId's; see TASKS.md.] |
+| `Slices.Fatigue` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Mission Fatigue | Slice toggle. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice never enters RulePlan. THIS IS THE GATE. Slices.Init binds every key in Binds.All (Slices.cs) and is called from Plugin.Load (Plugin.cs), above the master-switch bail-out, so BepInEx writes the line whether the mod is on or off. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg is 3,238 bytes carrying [General] and [Slices] and all 43 keys, and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\\gates-phase1b.txt]. The tag on this sentence used to sit before that run: it read "[measured 2026-09-13]" when what had been measured was the C#, not the file. The file has now been measured too. CORRECTION, 2026-09-13: this doc used to say "the section's own \\"enabled\\" field is still on disk and is still the gate the plugin reads" and "NOT ON DISK ... check_schema.py reports it MISSING". Both were true when written and are false now. The section's "enabled" field is deleted from this schema and the gate is this key. The RETIRED KEY IS STILL PARSED, into a report-only bool? RetiredEnabled ([JsonPropertyName("enabled")]), because four subsystems refuse a whole section on an unknown key (ConfigDoc.ReadSection, ConfigDoc.cs) and an upgraded document would otherwise switch OFF. Slices.ReportRetiredGate (Slices.cs) names it: Warning normally, Error when the retired value is false and this key is not. Nothing branches on it -- grep RetiredEnabled finds one declaration and one report call per subsystem and no read. It is a migration report, not a second gate. |
 | `runningEmpty.traitId` | json | `int` | `form` | `2009` |  |  |  |  | First-stage trait id | The trait granted by the first stage. 2009 Running Empty is -4 Initiative and -50% XP; 2007 Checked Out is the milder alternative. Both are TraitClass 6 and sit in their own TraitGroup, so neither collides with 2014 (Fatigue.cs:7-10, 450-453). 0 is rejected, and so is the same id on both stages. [unverified: the '-4 Initiative and -50% XP' figure is game data. It is attributed to this subsystem's original Config.Bind description, kept at live-config-original/ckf.hardmode.cfg:25, and to ckf.hardmode.fatigue.json:26-28; no .cs in this tree carries it, and 2007's own numbers were escalated rather than published for the same reason. See TASKS.md.] |
 | `runningEmpty.byPowerLevel` | json | `table` | `curve` | _none declared_ | REFUSED while fatigue is enabled. A mission whose PowerLevel cannot be read is NOT this case - it takes the lowest anchor of each curve, and is warned about once. |  |  | keyed by `powerLevel`, sorted by `powerLevel` | First stage by power level | Anchor points that scale the first stage's chancePercent, durationDays, minAffected and maxAffected with the mission's PowerLevel - the effective level, the one [PowerLevel] lifts past the stock ceiling of 10, read from GameMissionModel.PowerLevel and NOT from PowerLevelUnscaled (Fatigue.cs:1245-1257). Elapse's identically shaped byPowerLevel tables key on PowerLevelUnscaled instead; the two subsystems read different columns. Values between anchors interpolate; below the lowest and above the highest the nearest anchor holds, because a curve is a statement about the levels it names rather than an extrapolation past them (Fatigue.cs:1906-1941). Two anchors describe all twenty levels, listing all twenty works identically if you would rather set each one by hand, and a single anchor is a flat value written as a curve. CHANGED, 2026-09-07: this table is now the ONLY place these four numbers live. The flat runningEmpty.chancePercent, .durationDays, .minAffected and .maxAffected were removed, so there is nothing behind a field no anchor names - Fatigue.cs returns 'no value' and the roll or the write that needed it does not happen and is logged, except minAffected, whose absence means no floor and is a warning rather than an error (Fatigue.cs:1980-2088). The per-anchor validation is unchanged and now carries the rules the flat checks used to: chancePercent 0-100, durationDays at least 1 because a zero-turn ExpiresTurn is how the game marks a trait PERMANENT, counts not negative, and a PL 1-20 sweep rejecting a ceiling that drops below the floor at any level (Fatigue.cs:839-851, 879-961). NOTE ON SHAPE: this block is a JSON object whose KEYS are the power levels, and each value is one anchor; 'powerLevel' below is that key, not a member of the anchor object. A key outside 1-20 is warned about and still used. |
 | `runningEmpty.knight.byPowerLevel` | json | `table` | `curve` | _none declared_ | The Cyber Knight rolls on the general runningEmpty.byPowerLevel curve, exactly like any other merc. |  |  | optional, keyed by `powerLevel`, sorted by `powerLevel` | Cyber Knight first stage by power level | The Cyber Knight's own first-stage curve, shaped like runningEmpty.byPowerLevel and keyed on the same effective PowerLevel. Where it names a value the Knight uses it; where it does not, the general curve is used (Fatigue.cs:2006-2035). CHANGED, 2026-09-07: the chain used to be Knight curve, then his flat runningEmpty.knight.chancePercent / .durationDays, then the general curve, then the general flat value. Both flat halves were removed, so it is now two steps: Knight curve, then general curve. CORRECTION, same date: this string used to end 'Commented out in the shipped file, but the deserialiser reads it if uncommented.' The shipped ckf.hardmode.json carries all twenty anchors of this curve and has for as long as the merged document has existed; the sentence was written against the retired ckf.hardmode.fatigue.json sidecar and was never updated. It keeps 'optional': true because omission is still legal. |
@@ -400,7 +1113,7 @@ Outside every chain in this document sits `[General] Enabled`, which since 3.0 i
 
 | Field | GUI help |
 |---|---|
-| `enabled` | This controls the entire Running Empty and Off-Duty loop. |
+| `Slices.Fatigue` | Turn this off and this part of the mod does nothing; the game uses its own values. The master switch on the first page turns off everything at once. |
 | `runningEmpty.traitId` | The trait granted by the first stage. 2009 Running Empty is the harsher one; 2007 Checked Out is a milder alternative. |
 | `runningEmpty.byPowerLevel` | Scale the first stage's chance, duration, floor and ceiling. Values between anchors interpolate, and below the lowest and above the highest the nearest anchor holds. Two anchors describe all twenty levels, listing all twenty works identically if you would rather set each one by hand, and a single anchor at power level 1 is how you write a flat value. Each field interpolates over only the anchors that name it. chancePercent is per merc, per completed mission, and Wound Resist is subtracted from it before the roll. durationDays must be at least 1 because 0 makes the trait permanent. minAffected is a floor on how many mercs take the first stage: it moves the count only, the rolls still decide who, and it is capped at the number of mercs eligible to roll. maxAffected is the ceiling and must not sit below the floor at any level. |
 | `runningEmpty.knight.byPowerLevel` | The Cyber Knight can have their own odds and duration but are bound to the general min/max clamp like everyone else. Wherever this curve has no value, the CK is treated as any other merc. |
@@ -457,6 +1170,77 @@ None declared.
 
 ---
 
+## GearClasses
+
+**Player Weapon Classes** &nbsp;·&nbsp; `.cfg` section `[GearClasses]` &nbsp;·&nbsp; declared in `schema/gearclasses.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+Arrives in Phase 5 of split-config-into-toggleable-slices.
+
+Files this toggle gates:
+
+```text
+  gear-classes.csv
+```
+
+Ten player weapon-class rows (tasks.md Phase 5). WeaponClass 9, 18 and 19 are drone classes and get no row: drones are out of scope for this change (design.md, 'Decided, recorded so they are not re-opened').
+
+THE KEY IS ON DISK; THE SLICE IS NOT. This file declares the key and nothing else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off while the slice has no file changes nothing, because there is no file for the verdict to close.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/gear-classes.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] GearClasses = true        ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.GearClasses` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Player Weapon Classes | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. THIS SLICE IS A LEVER SHEET, NOT A DIRECT OVERLAY, and targets.overlays asserts nothing either way -- it claims the file and asserts it exists. gear-classes.csv has 10 rows and 24 columns and its first column is WeaponClass, carrying the ten class ids 1, 2, 3, 4, 5, 6, 10, 11, 12, 14 [measured 2026-09-13, the live file]. There is no game table called "gear-classes" and those are not row ids: one row names a CLASS, and the plugin expands it at load through GearClasses.cs into one rule per class with a WeaponClass selector and an enemy-id exclusion set. A direct overlay's filename names the game table and its first column is that table's id column (Overlays.cs's header comment; design.md section 1 is the distinction). Neither holds here. The 22 lever columns are WeaponModel column NAMES, which is what makes the file look like a direct overlay on a first read; what differs is the row, and the row is what the distinction is about. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.GearClasses` | Turn this off and these rows are left exactly as the game ships them. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
 ## General
 
 **Master Switch** &nbsp;·&nbsp; `.cfg` section `[General]` &nbsp;·&nbsp; declared in `schema/general.schema.json`
@@ -505,9 +1289,990 @@ None declared.
 
 ---
 
+## ImplantsGlobal
+
+**Implant Global Multipliers** &nbsp;·&nbsp; `.cfg` section `[ImplantsGlobal]` &nbsp;·&nbsp; declared in `schema/implantsglobal.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+Arrives in Phase 3 of split-config-into-toggleable-slices.
+
+Files this toggle gates:
+
+```text
+  implants-global.json
+```
+
+THREE numbers from the one unscoped implant rule: Cost *0.5, InstallTime *0.5, ImplantStress *3. Three scalars, so a form, not a table (design.md section 7).
+
+CORRECTION, 2026-09-14 (Phase 9). THESE THREE LINES SAID FOUR, AND LISTED "clampMin ImplantStress 1" AMONG THEM. That is sanctioned deviation D3 INVERTED, in the file a migrator author reads to learn what to carry across. The floor is NOT part of this slice and must NOT be migrated: ImplantStress ships as 1 on 197 rows and 5 on Quantum Rider, so after the x3 the lowest value is 3 and clampMin 1 lifts nothing -- it binds on 0 of 198 rows [measured; scripts/implants.py D-CLAMP re-derives it every run]. Dropping it moves no value. implants-global.json has carried three keys since Phase 3 and the lever-sheets spec has said three since then too; only this file and the sidecar's own _doc still said four. Phase 9 shipped the expander that reads these three, so a fourth number here would now reach the game.
+
+CORRECTION, 2026-09-14, SAME DAY, TO THE BLOCK ABOVE: the check is named D-CLAMP, not D-CLAUSE. The line above said D-CLAUSE, which is not a symbol that exists anywhere in the repository. scripts/implants.py spells it D-CLAMP -- the docstring at implants.py:935, the line it prints at :941 and the failure it raises at :949 [measured 2026-09-14]. The sidecar's own _doc had it right. A mistyped symbol in a sentence whose whole job is to send a reader to the instrument is a dead pointer, and it is corrected here rather than overwritten because this schema is the document the other two were just made to agree with.
+
+AND THE SENTENCE ABOVE IS NOW SPENT: "only this file and the sidecar's own _doc still said four" was true when written this morning. Both were corrected on 2026-09-14 -- this file first, then implants-global.json's _doc and its verbatim transcription as IMPLANTS_GLOBAL_DOC in gui/serve.py, which move together or the migration's 68-of-68 byte-identity case goes red. Nothing now says four.
+
+The rule has no where clause, so it reaches all 198 ImplantModel rows including the 20 drone modules the GUI does not show. That reach is accepted as-is, per David; scoping the rule would be a balance change and this change makes none.
+
+CORRECTION, 2026-09-13, SECOND. The heading below reads "THE KEY IS ON DISK; THE SLICE IS NOT" and its first sentence reads "This file declares the key and nothing else". Both were true when written and are false now. This schema now declares targets.json and the three values, so check_schema.py opens ckf.hardmode.d/implants-global.json, the editor renders it, and serve.py's orphan census stops naming it. Before that, no schema named the file at all, which by SCHEMA-FORMAT.md's own rule meant the three values did not exist. WHAT IS NO LONGER TRUE, corrected 2026-09-14: this block used to end "nothing applies these numbers. The expander is Phase 7; the live effect is still the one unscoped ImplantModel rule in ckf.hardmode.rules.json." Phase 9 deleted that rule and replaced Implants.RefuseGlobal with Implants.ExpandGlobal in the SAME COMMIT -- either half alone is a balance change, because multiply is not idempotent. THIS FILE IS NOW THE ONLY SOURCE of the three multipliers, and 594 cells (198 rows x 3 columns) were measured equal across the swap.
+
+THE KEY IS ON DISK; THE SLICE IS NOT. This file declares the key and nothing else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off while the slice has no file changes nothing, because there is no file for the verdict to close.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `json` | `ckf.hardmode.d/implants-global.json` |
+| `legacyJson` | _none — this section is new in 3.0_ |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] ImplantsGlobal = true     ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+4 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.ImplantsGlobal` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Global Multipliers | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. |
+| `costMultiply` | json | `float` | `form` | `0.5` |  | `0.0` to `10.0` |  |  | Install cost multiplier | Multiplies ImplantModel.Cost on every row. Transcribed from "multiply": { "Cost": 0.5 } on the one unscoped ImplantModel rule in ckf.hardmode.rules.json [measured 2026-09-13, read off that rule]. Cost runs 80 to 10200 over the 198 rows [measured 2026-09-13, sheets/raw/ImplantModel.csv]. NOTHING READS THIS VALUE. The expander that applies it is Phase 7 of split-config-into-toggleable-slices; until then the live effect is the rule itself, and editing this number changes no price in game. THE RANGE IS AN EDITOR GUARD RAIL, NOT AN ENGINE LIMIT, and it is derived rather than chosen: elapse.tiers[].multiplier is the only other plain value-scaler declared in these schemas and it carries [0.0, 10.0] with shipped values 0.5, 1 and 1.5. Nothing in this repository bounds a multiply operand at runtime. 0 zeroes the column; 1 leaves it alone. |
+| `installTimeMultiply` | json | `float` | `form` | `0.5` |  | `0.0` to `10.0` |  |  | Install time multiplier | Multiplies ImplantModel.InstallTime on every row. Transcribed from "multiply": { "InstallTime": 0.5 } on the same rule [measured 2026-09-13]. InstallTime runs 0 to 84 over the 198 rows, 15 distinct values [measured 2026-09-13, sheets/raw/ImplantModel.csv]. NOTHING READS THIS VALUE - see costMultiply. Range derived the same way and for the same reason: it is elapse.tiers[].multiplier's, the repository's one prior plain value-scaler. A guard rail, not an engine limit. |
+| `implantStressMultiply` | json | `float` | `form` | `3` |  | `0.0` to `10.0` |  |  | Implant stress multiplier | Multiplies ImplantModel.ImplantStress on every row. Transcribed from "multiply": { "ImplantStress": 3 } on the same rule [measured 2026-09-13]. ImplantStress is 1 on 197 rows and 5 on Quantum Rider, so this takes them to 3 and 15 [measured 2026-09-13, sheets/raw/ImplantModel.csv: 198 rows, two distinct values]. NOTHING READS THIS VALUE - see costMultiply. Range derived the same way: elapse.tiers[].multiplier's [0.0, 10.0]. The shipped 3 sits inside it; a guard rail, not an engine limit. TYPE IS float WHILE THE VALUE ON DISK IS THE INTEGER 3, matching the rule, which writes a bare 3 in a "multiply" block whose other two operands are 0.5. check_schema.coerce and check_range both accept an int where a float is declared. CORRECTION, 2026-09-13: a fourth field, implantStressClampMin, was declared beside this one for a few hours and David removed it the same day, on the grounds that it is useless. It declared "in": "json", "type": "int", "default": 1, "ui": "form", label "Implant stress floor", and NO "range" -- that missing range was the open question that went to him. THE CLAMP CANNOT BIND ON ANY ROW: ImplantModel has 198 rows, ImplantStress is 1 on 197 of them and 5 on Quantum Rider, the clamp is compared against the POST-multiply value, and 1*3 = 3 and 5*3 = 15 are both above a floor of 1 [measured 2026-09-13, sheets/raw/ImplantModel.csv]. It was not a value whose domain was hard to bound; it was a value with no reachable effect. It is recorded here rather than deleted in silence because design.md section 7 and this file's own _doc both describe the clamp, so a later reader finding it in the live rule and not in this schema would otherwise read the absence as an omission. THE LIVE RULE STILL CARRIES IT: the one unscoped ImplantModel rule in ckf.hardmode.rules.json declares "clampMin": { "ImplantStress": 1 } beside its three multiplies [measured 2026-09-13, the live file]. Phase 9's converter must NOT carry that clamp across. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.ImplantsGlobal` | Turn this off and these rows are left exactly as the game ships them. |
+| `costMultiply` | Multiplies every implant's clinic price. 1 leaves prices as the game ships them; 0.5 halves them. Nothing applies this number yet - the live effect still comes from the rule file. |
+| `installTimeMultiply` | Multiplies the days an implant takes to fit. 1 leaves them as the game ships them. Nothing applies this number yet. |
+| `implantStressMultiply` | Multiplies the stress each implant costs to carry. 1 leaves it as the game ships it. Nothing applies this number yet. |
+
+4 of 4 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
+## ImplantsSlot01
+
+**Implant Slot 01** &nbsp;·&nbsp; `.cfg` section `[ImplantsSlot01]` &nbsp;·&nbsp; declared in `schema/implantsslot01.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+Arrives in Phase 7 of split-config-into-toggleable-slices.
+
+Files this toggle gates:
+
+```text
+  implants-slot01.csv
+```
+
+PER-SLOT HELP, transcribed verbatim from Implants.SlotHelp (mods/CKFHardMode/Implants.cs). That dictionary is the source; this is a copy of it, and the transcription is kept by hand.
+
+CORRECTION, 2026-09-14. The line above used to end "... and scripts/implants.py's P-HELP fails if the two diverge." THAT IS FALSE AND WAS NEVER TRUE. P-HELP (scripts/implants.py, probe_help) reads only mods/CKFHardMode/Implants.cs: it asserts that all eleven slots have a SlotHelp entry, that slot 8's carries "EVERY IMPLANT EFFECT IN THE GAME", and that slots 3 and 7 say "file order". It opens no schema file at all, and implants.py reads no schema file anywhere [measured 2026-09-14, the live scripts/implants.py]. Its own docstring says so -- "the schema's doc array is the other half of this and schema\ is not this phase's directory to write, so the plugin holds the text verbatim and the schema owner transcribes" -- so nothing mechanical catches a divergence between this block and the plugin. The same sentence was corrected in implantsslot11.schema.json first, which is where it was noticed.
+
+Slot 1 is the only slot where ArmorRestriction is live (6 of the 198 rows carry a 1; all of them are here). Two rows KEEP a crit multiplier and no rule touches either: Chameleon Sheathe at CritMultiStealth 20 and Chameleon S-Mesh at 25. Dermal Plating 1's effect row, EffectModel 50000, is SHARED with all 20 drone modules, which have no table — an edit to its payload reaches them too. That marker informs; it does not block, because there is only one editable owner and divergence is therefore impossible.
+
+12 rows, 25 columns -- 24 named plus 1 control [measured 2026-09-13, the live implants-slot01.csv]. THIS SLICE IS A LEVER SHEET, NOT A DIRECT OVERLAY: targets.overlays asserts only that the file exists and that this slice claims it. The first column is ImplantName, there is no game table called "implants-slot01", and implants.py expands each row into ImplantModel and EffectModel writes at load.
+
+One of the 11 character implant slot tables, 178 rows across the 11 slots (design.md section 7). Each table carries only the columns live for its own slot, and the union of the EffectModel columns its own effects use.
+
+ImplantSlot 100-107, the 20 drone modules, get no table and no toggle.
+
+THE KEY IS ON DISK; THE SLICE IS NOT. This file declares the key and nothing else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off while the slice has no file changes nothing, because there is no file for the verdict to close.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/implants-slot01.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] ImplantsSlot01 = true     ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.ImplantsSlot01` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 01 | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.ImplantsSlot01` | Turn this off and these rows are left exactly as the game ships them. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
+## ImplantsSlot02
+
+**Implant Slot 02** &nbsp;·&nbsp; `.cfg` section `[ImplantsSlot02]` &nbsp;·&nbsp; declared in `schema/implantsslot02.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+Arrives in Phase 7 of split-config-into-toggleable-slices.
+
+Files this toggle gates:
+
+```text
+  implants-slot02.csv
+```
+
+PER-SLOT HELP, transcribed verbatim from Implants.SlotHelp (mods/CKFHardMode/Implants.cs). That dictionary is the source; this is a copy of it, and the transcription is kept by hand.
+
+CORRECTION, 2026-09-14. The line above used to end "... and scripts/implants.py's P-HELP fails if the two diverge." THAT IS FALSE AND WAS NEVER TRUE. P-HELP (scripts/implants.py, probe_help) reads only mods/CKFHardMode/Implants.cs: it asserts that all eleven slots have a SlotHelp entry, that slot 8's carries "EVERY IMPLANT EFFECT IN THE GAME", and that slots 3 and 7 say "file order". It opens no schema file at all, and implants.py reads no schema file anywhere [measured 2026-09-14, the live scripts/implants.py]. Its own docstring says so -- "the schema's doc array is the other half of this and schema\ is not this phase's directory to write, so the plugin holds the text verbatim and the schema owner transcribes" -- so nothing mechanical catches a divergence between this block and the plugin. The same sentence was corrected in implantsslot11.schema.json first, which is where it was noticed.
+
+ImplantConflictId is live in slots 2 and 4 only (16 rows carry a 1). This slot holds seven different ImplantClass values, including the single Pain Inhibitors row of class 16 — the one class that spans two slots, its other six rows being the CombatLinks in slot 3.
+
+27 rows, 33 columns -- 32 named plus 1 control [measured 2026-09-13, the live implants-slot02.csv]. THIS SLICE IS A LEVER SHEET, NOT A DIRECT OVERLAY: targets.overlays asserts only that the file exists and that this slice claims it. The first column is ImplantName, there is no game table called "implants-slot02", and implants.py expands each row into ImplantModel and EffectModel writes at load.
+
+One of the 11 character implant slot tables, 178 rows across the 11 slots (design.md section 7). Each table carries only the columns live for its own slot, and the union of the EffectModel columns its own effects use.
+
+ImplantSlot 100-107, the 20 drone modules, get no table and no toggle.
+
+THE KEY IS ON DISK; THE SLICE IS NOT. This file declares the key and nothing else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off while the slice has no file changes nothing, because there is no file for the verdict to close.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/implants-slot02.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] ImplantsSlot02 = true     ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.ImplantsSlot02` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 02 | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.ImplantsSlot02` | Turn this off and these rows are left exactly as the game ships them. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
+## ImplantsSlot03
+
+**Implant Slot 03** &nbsp;·&nbsp; `.cfg` section `[ImplantsSlot03]` &nbsp;·&nbsp; declared in `schema/implantsslot03.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+Arrives in Phase 7 of split-config-into-toggleable-slices.
+
+Files this toggle gates:
+
+```text
+  implants-slot03.csv
+```
+
+PER-SLOT HELP, transcribed verbatim from Implants.SlotHelp (mods/CKFHardMode/Implants.cs). That dictionary is the source; this is a copy of it, and the transcription is kept by hand.
+
+CORRECTION, 2026-09-14. The line above used to end "... and scripts/implants.py's P-HELP fails if the two diverge." THAT IS FALSE AND WAS NEVER TRUE. P-HELP (scripts/implants.py, probe_help) reads only mods/CKFHardMode/Implants.cs: it asserts that all eleven slots have a SlotHelp entry, that slot 8's carries "EVERY IMPLANT EFFECT IN THE GAME", and that slots 3 and 7 say "file order". It opens no schema file at all, and implants.py reads no schema file anywhere [measured 2026-09-14, the live scripts/implants.py]. Its own docstring says so -- "the schema's doc array is the other half of this and schema\ is not this phase's directory to write, so the plugin holds the text verbatim and the schema owner transcribes" -- so nothing mechanical catches a divergence between this block and the plugin. The same sentence was corrected in implantsslot11.schema.json first, which is where it was noticed.
+
+ImplantLevel IS NOT A TIER INDEX HERE, so these rows are in dump file order rather than sorted. All four CombatLink rows, both M-Grade CombatLink rows and all five Cortex Wetgates rows are ImplantLevel 1; no column orders those tiers. Do not read the order as a ladder. EffectModel 50126 is SHARED by CombatLink 4 and M-Grade CombatLink: both are editable here, so giving them different payloads is refused and the refusal names both. See docs\gotchas.md for row 904's self-pointing Deactivated, which ships as-is.
+
+21 rows, 26 columns -- 25 named plus 1 control [measured 2026-09-13, the live implants-slot03.csv]. THIS SLICE IS A LEVER SHEET, NOT A DIRECT OVERLAY: targets.overlays asserts only that the file exists and that this slice claims it. The first column is ImplantName, there is no game table called "implants-slot03", and implants.py expands each row into ImplantModel and EffectModel writes at load.
+
+One of the 11 character implant slot tables, 178 rows across the 11 slots (design.md section 7). Each table carries only the columns live for its own slot, and the union of the EffectModel columns its own effects use.
+
+ImplantSlot 100-107, the 20 drone modules, get no table and no toggle.
+
+THE KEY IS ON DISK; THE SLICE IS NOT. This file declares the key and nothing else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off while the slice has no file changes nothing, because there is no file for the verdict to close.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/implants-slot03.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] ImplantsSlot03 = true     ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.ImplantsSlot03` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 03 | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.ImplantsSlot03` | Turn this off and these rows are left exactly as the game ships them. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
+## ImplantsSlot04
+
+**Implant Slot 04** &nbsp;·&nbsp; `.cfg` section `[ImplantsSlot04]` &nbsp;·&nbsp; declared in `schema/implantsslot04.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+Arrives in Phase 7 of split-config-into-toggleable-slices.
+
+Files this toggle gates:
+
+```text
+  implants-slot04.csv
+```
+
+PER-SLOT HELP, transcribed verbatim from Implants.SlotHelp (mods/CKFHardMode/Implants.cs). That dictionary is the source; this is a copy of it, and the transcription is kept by hand.
+
+CORRECTION, 2026-09-14. The line above used to end "... and scripts/implants.py's P-HELP fails if the two diverge." THAT IS FALSE AND WAS NEVER TRUE. P-HELP (scripts/implants.py, probe_help) reads only mods/CKFHardMode/Implants.cs: it asserts that all eleven slots have a SlotHelp entry, that slot 8's carries "EVERY IMPLANT EFFECT IN THE GAME", and that slots 3 and 7 say "file order". It opens no schema file at all, and implants.py reads no schema file anywhere [measured 2026-09-14, the live scripts/implants.py]. Its own docstring says so -- "the schema's doc array is the other half of this and schema\ is not this phase's directory to write, so the plugin holds the text verbatim and the schema owner transcribes" -- so nothing mechanical catches a divergence between this block and the plugin. The same sentence was corrected in implantsslot11.schema.json first, which is where it was noticed.
+
+ImplantConflictId is live in slots 2 and 4 only. MatrixEffectId is live in slots 1, 3, 4 and 11 only.
+
+22 rows, 28 columns -- 27 named plus 1 control [measured 2026-09-13, the live implants-slot04.csv]. THIS SLICE IS A LEVER SHEET, NOT A DIRECT OVERLAY: targets.overlays asserts only that the file exists and that this slice claims it. The first column is ImplantName, there is no game table called "implants-slot04", and implants.py expands each row into ImplantModel and EffectModel writes at load.
+
+One of the 11 character implant slot tables, 178 rows across the 11 slots (design.md section 7). Each table carries only the columns live for its own slot, and the union of the EffectModel columns its own effects use.
+
+ImplantSlot 100-107, the 20 drone modules, get no table and no toggle.
+
+THE KEY IS ON DISK; THE SLICE IS NOT. This file declares the key and nothing else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off while the slice has no file changes nothing, because there is no file for the verdict to close.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/implants-slot04.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] ImplantsSlot04 = true     ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.ImplantsSlot04` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 04 | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.ImplantsSlot04` | Turn this off and these rows are left exactly as the game ships them. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
+## ImplantsSlot05
+
+**Implant Slot 05** &nbsp;·&nbsp; `.cfg` section `[ImplantsSlot05]` &nbsp;·&nbsp; declared in `schema/implantsslot05.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+Arrives in Phase 7 of split-config-into-toggleable-slices.
+
+Files this toggle gates:
+
+```text
+  implants-slot05.csv
+```
+
+PER-SLOT HELP, transcribed verbatim from Implants.SlotHelp (mods/CKFHardMode/Implants.cs). That dictionary is the source; this is a copy of it, and the transcription is kept by hand.
+
+CORRECTION, 2026-09-14. The line above used to end "... and scripts/implants.py's P-HELP fails if the two diverge." THAT IS FALSE AND WAS NEVER TRUE. P-HELP (scripts/implants.py, probe_help) reads only mods/CKFHardMode/Implants.cs: it asserts that all eleven slots have a SlotHelp entry, that slot 8's carries "EVERY IMPLANT EFFECT IN THE GAME", and that slots 3 and 7 say "file order". It opens no schema file at all, and implants.py reads no schema file anywhere [measured 2026-09-14, the live scripts/implants.py]. Its own docstring says so -- "the schema's doc array is the other half of this and schema\ is not this phase's directory to write, so the plugin holds the text verbatim and the schema owner transcribes" -- so nothing mechanical catches a divergence between this block and the plugin. The same sentence was corrected in implantsslot11.schema.json first, which is where it was noticed.
+
+BackstoryGroup is live in slot 5 and nowhere else — exactly one row of the 198 carries a 1. No row in this slot has a talent.
+
+7 rows, 19 columns -- 18 named plus 1 control [measured 2026-09-13, the live implants-slot05.csv]. THIS SLICE IS A LEVER SHEET, NOT A DIRECT OVERLAY: targets.overlays asserts only that the file exists and that this slice claims it. The first column is ImplantName, there is no game table called "implants-slot05", and implants.py expands each row into ImplantModel and EffectModel writes at load.
+
+One of the 11 character implant slot tables, 178 rows across the 11 slots (design.md section 7). Each table carries only the columns live for its own slot, and the union of the EffectModel columns its own effects use.
+
+ImplantSlot 100-107, the 20 drone modules, get no table and no toggle.
+
+THE KEY IS ON DISK; THE SLICE IS NOT. This file declares the key and nothing else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off while the slice has no file changes nothing, because there is no file for the verdict to close.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/implants-slot05.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] ImplantsSlot05 = true     ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.ImplantsSlot05` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 05 | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.ImplantsSlot05` | Turn this off and these rows are left exactly as the game ships them. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
+## ImplantsSlot06
+
+**Implant Slot 06** &nbsp;·&nbsp; `.cfg` section `[ImplantsSlot06]` &nbsp;·&nbsp; declared in `schema/implantsslot06.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+Arrives in Phase 7 of split-config-into-toggleable-slices.
+
+Files this toggle gates:
+
+```text
+  implants-slot06.csv
+```
+
+PER-SLOT HELP, transcribed verbatim from Implants.SlotHelp (mods/CKFHardMode/Implants.cs). That dictionary is the source; this is a copy of it, and the transcription is kept by hand.
+
+CORRECTION, 2026-09-14. The line above used to end "... and scripts/implants.py's P-HELP fails if the two diverge." THAT IS FALSE AND WAS NEVER TRUE. P-HELP (scripts/implants.py, probe_help) reads only mods/CKFHardMode/Implants.cs: it asserts that all eleven slots have a SlotHelp entry, that slot 8's carries "EVERY IMPLANT EFFECT IN THE GAME", and that slots 3 and 7 say "file order". It opens no schema file at all, and implants.py reads no schema file anywhere [measured 2026-09-14, the live scripts/implants.py]. Its own docstring says so -- "the schema's doc array is the other half of this and schema\ is not this phase's directory to write, so the plugin holds the text verbatim and the schema owner transcribes" -- so nothing mechanical catches a divergence between this block and the plugin. The same sentence was corrected in implantsslot11.schema.json first, which is where it was noticed.
+
+These 25 rows include the 16 cyberweapon claws (ImplantClass 27). The claws are ALSO in cyberweapons-claws.csv, and the columns do not collide: this table carries the install economics and the implant-side effect, that sheet carries the weapon and talent combat stats. Cost here is the CLINIC PRICE (80-10200 across the table); Cost there is the item's valuation (50-700). Every class-27 row has ImplantEffectId 0, so its payload cells are blank and there is nothing here to edit for a claw's effect.
+
+25 rows, 21 columns -- 20 named plus 1 control [measured 2026-09-13, the live implants-slot06.csv]. THIS SLICE IS A LEVER SHEET, NOT A DIRECT OVERLAY: targets.overlays asserts only that the file exists and that this slice claims it. The first column is ImplantName, there is no game table called "implants-slot06", and implants.py expands each row into ImplantModel and EffectModel writes at load.
+
+One of the 11 character implant slot tables, 178 rows across the 11 slots (design.md section 7). Each table carries only the columns live for its own slot, and the union of the EffectModel columns its own effects use.
+
+ImplantSlot 100-107, the 20 drone modules, get no table and no toggle.
+
+THE KEY IS ON DISK; THE SLICE IS NOT. This file declares the key and nothing else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off while the slice has no file changes nothing, because there is no file for the verdict to close.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/implants-slot06.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] ImplantsSlot06 = true     ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.ImplantsSlot06` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 06 | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.ImplantsSlot06` | Turn this off and these rows are left exactly as the game ships them. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
+## ImplantsSlot07
+
+**Implant Slot 07** &nbsp;·&nbsp; `.cfg` section `[ImplantsSlot07]` &nbsp;·&nbsp; declared in `schema/implantsslot07.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+Arrives in Phase 7 of split-config-into-toggleable-slices.
+
+Files this toggle gates:
+
+```text
+  implants-slot07.csv
+```
+
+PER-SLOT HELP, transcribed verbatim from Implants.SlotHelp (mods/CKFHardMode/Implants.cs). That dictionary is the source; this is a copy of it, and the transcription is kept by hand.
+
+CORRECTION, 2026-09-14. The line above used to end "... and scripts/implants.py's P-HELP fails if the two diverge." THAT IS FALSE AND WAS NEVER TRUE. P-HELP (scripts/implants.py, probe_help) reads only mods/CKFHardMode/Implants.cs: it asserts that all eleven slots have a SlotHelp entry, that slot 8's carries "EVERY IMPLANT EFFECT IN THE GAME", and that slots 3 and 7 say "file order". It opens no schema file at all, and implants.py reads no schema file anywhere [measured 2026-09-14, the live scripts/implants.py]. Its own docstring says so -- "the schema's doc array is the other half of this and schema\ is not this phase's directory to write, so the plugin holds the text verbatim and the schema owner transcribes" -- so nothing mechanical catches a divergence between this block and the plugin. The same sentence was corrected in implantsslot11.schema.json first, which is where it was noticed.
+
+ImplantLevel IS NOT A TIER INDEX HERE either, so these rows are in dump file order. SynthMuscle 3, SynthMuscle 4 and both SynthBuilder ROM rows are all ImplantLevel 3. Do not read the order as a ladder.
+
+11 rows, 22 columns -- 21 named plus 1 control [measured 2026-09-13, the live implants-slot07.csv]. THIS SLICE IS A LEVER SHEET, NOT A DIRECT OVERLAY: targets.overlays asserts only that the file exists and that this slice claims it. The first column is ImplantName, there is no game table called "implants-slot07", and implants.py expands each row into ImplantModel and EffectModel writes at load.
+
+One of the 11 character implant slot tables, 178 rows across the 11 slots (design.md section 7). Each table carries only the columns live for its own slot, and the union of the EffectModel columns its own effects use.
+
+ImplantSlot 100-107, the 20 drone modules, get no table and no toggle.
+
+THE KEY IS ON DISK; THE SLICE IS NOT. This file declares the key and nothing else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off while the slice has no file changes nothing, because there is no file for the verdict to close.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/implants-slot07.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] ImplantsSlot07 = true     ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.ImplantsSlot07` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 07 | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.ImplantsSlot07` | Turn this off and these rows are left exactly as the game ships them. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
+## ImplantsSlot08
+
+**Implant Slot 08** &nbsp;·&nbsp; `.cfg` section `[ImplantsSlot08]` &nbsp;·&nbsp; declared in `schema/implantsslot08.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+Arrives in Phase 7 of split-config-into-toggleable-slices.
+
+Files this toggle gates:
+
+```text
+  implants-slot08.csv
+```
+
+PER-SLOT HELP, transcribed verbatim from Implants.SlotHelp (mods/CKFHardMode/Implants.cs). That dictionary is the source; this is a copy of it, and the transcription is kept by hand.
+
+CORRECTION, 2026-09-14. The line above used to end "... and scripts/implants.py's P-HELP fails if the two diverge." THAT IS FALSE AND WAS NEVER TRUE. P-HELP (scripts/implants.py, probe_help) reads only mods/CKFHardMode/Implants.cs: it asserts that all eleven slots have a SlotHelp entry, that slot 8's carries "EVERY IMPLANT EFFECT IN THE GAME", and that slots 3 and 7 say "file order". It opens no schema file at all, and implants.py reads no schema file anywhere [measured 2026-09-14, the live scripts/implants.py]. Its own docstring says so -- "the schema's doc array is the other half of this and schema\ is not this phase's directory to write, so the plugin holds the text verbatim and the schema owner transcribes" -- so nothing mechanical catches a divergence between this block and the plugin. The same sentence was corrected in implantsslot11.schema.json first, which is where it was noticed.
+
+THE NINE CritMultiBase CELLS SET TO 0 ARE THE WHOLE OF THE MOD'S CRIT DAMAGE REMOVAL. Display Link, Combat DisplayLink, Target Optimizer, Apex DisplayLink, Apex Optimizer and Brightshot Optic 1-4 each ship CritMultiBase 25 and are set to 0; CritRate and RangedAttack are left alone. AFTER THEY RUN, CritMultiBase IS ZERO ON EVERY IMPLANT EFFECT IN THE GAME — those nine were the only implant effects in the whole table that had one, and that is not visible from these nine rows. Range Finder is the exception that survives: it keeps CritMultiStealth 25 and no rule touches it. These 26 rows include the 18 optical lasers (ImplantClass 32), which are also in cyberweapons-lasers.csv; Cost here is the clinic price, Cost there is the item's valuation.
+
+26 rows, 23 columns -- 22 named plus 1 control [measured 2026-09-13, the live implants-slot08.csv]. THIS SLICE IS A LEVER SHEET, NOT A DIRECT OVERLAY: targets.overlays asserts only that the file exists and that this slice claims it. The first column is ImplantName, there is no game table called "implants-slot08", and implants.py expands each row into ImplantModel and EffectModel writes at load.
+
+One of the 11 character implant slot tables, 178 rows across the 11 slots (design.md section 7). Each table carries only the columns live for its own slot, and the union of the EffectModel columns its own effects use.
+
+ImplantSlot 100-107, the 20 drone modules, get no table and no toggle. The nine CritMultiBase rules are all slot 8 and are edited here, not in a talent pack: there is no cyberware pack (tasks.md Phase 4's correction, Phase 7).
+
+THE KEY IS ON DISK; THE SLICE IS NOT. This file declares the key and nothing else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off while the slice has no file changes nothing, because there is no file for the verdict to close.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/implants-slot08.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] ImplantsSlot08 = true     ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.ImplantsSlot08` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 08 | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.ImplantsSlot08` | Turn this off and these rows are left exactly as the game ships them. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
+## ImplantsSlot09
+
+**Implant Slot 09** &nbsp;·&nbsp; `.cfg` section `[ImplantsSlot09]` &nbsp;·&nbsp; declared in `schema/implantsslot09.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+Arrives in Phase 7 of split-config-into-toggleable-slices.
+
+Files this toggle gates:
+
+```text
+  implants-slot09.csv
+```
+
+PER-SLOT HELP, transcribed verbatim from Implants.SlotHelp (mods/CKFHardMode/Implants.cs). That dictionary is the source; this is a copy of it, and the transcription is kept by hand.
+
+CORRECTION, 2026-09-14. The line above used to end "... and scripts/implants.py's P-HELP fails if the two diverge." THAT IS FALSE AND WAS NEVER TRUE. P-HELP (scripts/implants.py, probe_help) reads only mods/CKFHardMode/Implants.cs: it asserts that all eleven slots have a SlotHelp entry, that slot 8's carries "EVERY IMPLANT EFFECT IN THE GAME", and that slots 3 and 7 say "file order". It opens no schema file at all, and implants.py reads no schema file anywhere [measured 2026-09-14, the live scripts/implants.py]. Its own docstring says so -- "the schema's doc array is the other half of this and schema\ is not this phase's directory to write, so the plugin holds the text verbatim and the schema owner transcribes" -- so nothing mechanical catches a divergence between this block and the plugin. The same sentence was corrected in implantsslot11.schema.json first, which is where it was noticed.
+
+MatrixEffectId, InstallJobId, ImplantConflictId, ArmorRestriction and BackstoryGroup are all zero on every row of this slot and are not shown. 14 of the 18 rows have ImplantEffectId 0.
+
+18 rows, 22 columns -- 21 named plus 1 control [measured 2026-09-13, the live implants-slot09.csv]. THIS SLICE IS A LEVER SHEET, NOT A DIRECT OVERLAY: targets.overlays asserts only that the file exists and that this slice claims it. The first column is ImplantName, there is no game table called "implants-slot09", and implants.py expands each row into ImplantModel and EffectModel writes at load.
+
+One of the 11 character implant slot tables, 178 rows across the 11 slots (design.md section 7). Each table carries only the columns live for its own slot, and the union of the EffectModel columns its own effects use.
+
+ImplantSlot 100-107, the 20 drone modules, get no table and no toggle.
+
+THE KEY IS ON DISK; THE SLICE IS NOT. This file declares the key and nothing else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off while the slice has no file changes nothing, because there is no file for the verdict to close.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/implants-slot09.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] ImplantsSlot09 = true     ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.ImplantsSlot09` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 09 | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.ImplantsSlot09` | Turn this off and these rows are left exactly as the game ships them. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
+## ImplantsSlot10
+
+**Implant Slot 10** &nbsp;·&nbsp; `.cfg` section `[ImplantsSlot10]` &nbsp;·&nbsp; declared in `schema/implantsslot10.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+Arrives in Phase 7 of split-config-into-toggleable-slices.
+
+Files this toggle gates:
+
+```text
+  implants-slot10.csv
+```
+
+PER-SLOT HELP, transcribed verbatim from Implants.SlotHelp (mods/CKFHardMode/Implants.cs). That dictionary is the source; this is a copy of it, and the transcription is kept by hand.
+
+CORRECTION, 2026-09-14. The line above used to end "... and scripts/implants.py's P-HELP fails if the two diverge." THAT IS FALSE AND WAS NEVER TRUE. P-HELP (scripts/implants.py, probe_help) reads only mods/CKFHardMode/Implants.cs: it asserts that all eleven slots have a SlotHelp entry, that slot 8's carries "EVERY IMPLANT EFFECT IN THE GAME", and that slots 3 and 7 say "file order". It opens no schema file at all, and implants.py reads no schema file anywhere [measured 2026-09-14, the live scripts/implants.py]. Its own docstring says so -- "the schema's doc array is the other half of this and schema\ is not this phase's directory to write, so the plugin holds the text verbatim and the schema owner transcribes" -- so nothing mechanical catches a divergence between this block and the plugin. The same sentence was corrected in implantsslot11.schema.json first, which is where it was noticed.
+
+Rarity is 0 on every row of this slot and is not shown. See docs\gotchas.md for row 3801's Deactivated = -2, which ships as-is.
+
+8 rows, 17 columns -- 16 named plus 1 control [measured 2026-09-13, the live implants-slot10.csv]. THIS SLICE IS A LEVER SHEET, NOT A DIRECT OVERLAY: targets.overlays asserts only that the file exists and that this slice claims it. The first column is ImplantName, there is no game table called "implants-slot10", and implants.py expands each row into ImplantModel and EffectModel writes at load.
+
+One of the 11 character implant slot tables, 178 rows across the 11 slots (design.md section 7). Each table carries only the columns live for its own slot, and the union of the EffectModel columns its own effects use.
+
+ImplantSlot 100-107, the 20 drone modules, get no table and no toggle.
+
+THE KEY IS ON DISK; THE SLICE IS NOT. This file declares the key and nothing else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off while the slice has no file changes nothing, because there is no file for the verdict to close.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/implants-slot10.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] ImplantsSlot10 = true     ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.ImplantsSlot10` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 10 | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.ImplantsSlot10` | Turn this off and these rows are left exactly as the game ships them. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
+## ImplantsSlot11
+
+**Implant Slot 11** &nbsp;·&nbsp; `.cfg` section `[ImplantsSlot11]` &nbsp;·&nbsp; declared in `schema/implantsslot11.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+Arrives in Phase 7 of split-config-into-toggleable-slices.
+
+Files this toggle gates:
+
+```text
+  implants-slot11.csv
+```
+
+PER-SLOT HELP, transcribed verbatim from Implants.SlotHelp (mods/CKFHardMode/Implants.cs). That dictionary is the source; this is a copy of it, and the transcription is kept by hand.
+
+CORRECTION, 2026-09-14. The line above used to end "... and scripts/implants.py's P-HELP fails if the two diverge." THAT IS FALSE AND WAS NEVER TRUE. P-HELP (scripts/implants.py, probe_help) reads only mods/CKFHardMode/Implants.cs: it asserts that all eleven slots have a SlotHelp entry, that slot 8's carries "EVERY IMPLANT EFFECT IN THE GAME", and that slots 3 and 7 say "file order". It opens no schema file at all, and implants.py reads no schema file anywhere [measured 2026-09-14]. Its own docstring says so -- "the schema's doc array is the other half of this and schema\ is not this phase's directory to write, so the plugin holds the text verbatim and the schema owner transcribes" -- so nothing mechanical catches a divergence. THE SAME FALSE SENTENCE STANDS IN THE OTHER TEN implantsslotNN.schema.json FILES and was left alone rather than edited in passing; it needs the same correction.
+
+One row, DRAWN AS A GRID like every other implant slot. CONSTANCY IS VACUOUS AT ONE ROW: every column is trivially constant, so the usual 'omit a column constant across the table's own rows' rule would empty this table entirely. Only the all-zero test is applied here, and that exemption is unchanged. See docs\gotchas.md for Quantum Rider's MatrixEffectId 50014, which has no MatrixEffectModel row and ships as-is.
+
+CORRECTION, 2026-09-14. The paragraph above read "One row, so this renders as a form rather than a grid ... would empty this form entirely", and gui/serve.py published form: true for an expanded sheet of exactly one row while gui/app.html drew it as a stack of labelled values. David opened the config editor in a browser on 2026-09-14, looked at the page that produced, and overruled it: slot 11 is drawn as a table like the other ten, and the form key is gone from the server entirely (design.md section 7). NOT TO BE CONFUSED WITH THE CONSTANCY EXEMPTION, which is a different rule and is unchanged: a sheet of fewer than two rows is exempt from constant-column suppression because constant across one row is arithmetic, not an observation.
+
+1 rows, 15 columns -- 14 named plus 1 control [measured 2026-09-13, the live implants-slot11.csv]. THIS SLICE IS A LEVER SHEET, NOT A DIRECT OVERLAY: targets.overlays asserts only that the file exists and that this slice claims it. The first column is ImplantName, there is no game table called "implants-slot11", and implants.py expands each row into ImplantModel and EffectModel writes at load.
+
+One of the 11 character implant slot tables, 178 rows across the 11 slots (design.md section 7). Each table carries only the columns live for its own slot, and the union of the EffectModel columns its own effects use.
+
+ImplantSlot 100-107, the 20 drone modules, get no table and no toggle. A single row, rendered as a grid like every other slot (design.md section 7). CORRECTION, 2026-09-14: this line read "A single row; renders as a form, not a grid" until David reversed it having seen the page.
+
+THE KEY IS ON DISK; THE SLICE IS NOT. This file declares the key and nothing else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off while the slice has no file changes nothing, because there is no file for the verdict to close.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/implants-slot11.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] ImplantsSlot11 = true     ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.ImplantsSlot11` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 11 | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.ImplantsSlot11` | Turn this off and these rows are left exactly as the game ships them. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
 ## MissionRewards
 
-**Per-Mission-Type Reward Overrides** &nbsp;·&nbsp; `ckf.hardmode.json#missions` &nbsp;·&nbsp; declared in `schema/missionrewards.schema.json`
+**Per-Mission-Type Reward Overrides** &nbsp;·&nbsp; `.cfg` section `[MissionRewards]` &nbsp;·&nbsp; declared in `schema/missionrewards.schema.json`
 
 CKF Hard Mode - per-mission-type reward overrides.
 
@@ -559,19 +2324,19 @@ Non-cash rewards like blueprints, files, influence, and NBS cubes are unaffected
 
 | Role | File |
 |---|---|
-| `json` | `ckf.hardmode.json` |
+| `cfg` | `ckf.hardmode.cfg` |
+| `json` | `ckf.hardmode.d/missions.json` |
 | `legacyJson` | `ckf.hardmode.missions.json` |
-| `section` | `missions` |
 
 ### Enable chain
 
 Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
 
 ```text
-  document "enabled": true                    ckf.hardmode.json#missions — checked after the document loads
+  cfg      [Slices] MissionRewards = true     ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
 ```
 
-**One gate.** 3.0 collapsed the chain: the `.cfg` key that used to gate this subsystem before its settings were read is gone, and `"enabled"` in its own section is the whole of it. One consequence worth holding: a `ckf.hardmode.json` that cannot be read costs this subsystem its switch as well as its values, and the log says which of the two it is rather than implying someone set a toggle.
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
 
 Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
 
@@ -581,16 +2346,17 @@ Outside every chain in this document sits `[General] Enabled`, which since 3.0 i
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `enabled` | json | `bool` | `form` | `true` |  |  |  |  | Enabled | Per-mission-type control of payment, XP and Team Power Level. |
+| `Slices.MissionRewards` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Per-Mission-Type Reward Overrides | Slice toggle. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice never enters RulePlan. THIS IS THE GATE. Slices.Init binds every key in Binds.All (Slices.cs) and is called from Plugin.Load (Plugin.cs), above the master-switch bail-out, so BepInEx writes the line whether the mod is on or off. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg is 3,238 bytes carrying [General] and [Slices] and all 43 keys, and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\\gates-phase1b.txt]. The tag on this sentence used to sit before that run: it read "[measured 2026-09-13]" when what had been measured was the C#, not the file. The file has now been measured too. CORRECTION, 2026-09-13: this doc used to say "the section's own \\"enabled\\" field is still on disk and is still the gate the plugin reads" and "NOT ON DISK ... check_schema.py reports it MISSING". Both were true when written and are false now. The section's "enabled" field is deleted from this schema and the gate is this key. The RETIRED KEY IS STILL PARSED, into a report-only bool? RetiredEnabled ([JsonPropertyName("enabled")]), because four subsystems refuse a whole section on an unknown key (ConfigDoc.ReadSection, ConfigDoc.cs) and an upgraded document would otherwise switch OFF. Slices.ReportRetiredGate (Slices.cs) names it: Warning normally, Error when the retired value is false and this key is not. Nothing branches on it -- grep RetiredEnabled finds one declaration and one report call per subsystem and no read. It is a migration report, not a second gate. The key is named for the subsystem, MissionRewards, not for its document section, which is "missions". |
 | `missions` | json | `table` | `table` | _none declared_ |  |  |  |  | Mission type overrides | One row per MissionTypeId, matched exactly and case-insensitively - there is no pattern layer, so a family is reached one type at a time. A type listed twice is warned about and the later entry wins. A row with every slot blank is inert. The shipped file groups its entries into five families, which are an editorial aid to reading rather than anything the plugin acts on: story and other non-procedural types (no PGen in the key, or an _M<n> series marker, or a row in MissionModel - hand-authored, often NoPayment); Power Play types (PowerPlay in the key); solo hacks (MaxCharacters 1); pure-combat types (Battle in the key, with RoomFlagTypes.FullCombat as the authoritative test); and everything else, where combat may still happen but a quiet route exists. [unverified: the MissionModel, MaxCharacters and RoomFlagTypes tests behind that grouping are read off game dumps that are not in this repository, and the solo-hack group is measured only where marked and inferred from the key otherwise - scripts/refresh_mission_roster.py:109-110 states that caveat and family() at :135-139 implements it, taking MaxCharacters 1 where a shipped value exists and falling back to the key otherwise.] CITATION CORRECTION, 2026-08-31: that caveat was cited as ckf.hardmode.missions.json:294 until the sidecar comment strip removed the section banner that line held, leaving a citation to a line that no longer exists. The banners were generated from refresh_mission_roster.py's FAMILIES table and were never hand-written (that table), so the wording did not move out of the repository - the citation was pointing at the copy rather than the source. CORRECTION, 2026-08-31: this field carried "keyedBy": "type", which says the block is a JSON object keyed by the type. It is not, and never was: the file on disk is a JSON array, and MissionRewards.cs:297-298 declares `[JsonPropertyName("missions")] public List<MissionOverride> Missions`, deserialised at :318, so an object here would break the plugin's read outright. The keyedBy has been dropped; the array is the truth. How it came to be written is not recorded anywhere in this repository and is not guessed at here. [measured: MissionRewards.cs:297-298, 318-320; ckf.hardmode.missions.json "missions" is a 70-element JSON array] |
 
 **What the config GUI shows for these fields.**
 
 | Field | GUI help |
 |---|---|
+| `Slices.MissionRewards` | Turn this off and this part of the mod does nothing; the game uses its own values. The master switch on the first page turns off everything at once. |
 | `missions` | One row per mission type, matched exactly and case-insensitively. A type listed twice is warned about and the later entry wins. A row with every slot blank changes nothing. Setting to 0 means paying 100% of the baseline mission reweard. Most proc-gen missions default to -20% XP for example. |
 
-1 of 2 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+2 of 2 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
 
 #### Columns of `missions`
 
@@ -618,7 +2384,7 @@ None declared.
 
 ## ModelRules
 
-**Declarative Row Edits** &nbsp;·&nbsp; `ckf.hardmode.json#modelrules` &nbsp;·&nbsp; declared in `schema/modelrules.schema.json`
+**Declarative Row Edits** &nbsp;·&nbsp; `.cfg` section `[ModelRules]` &nbsp;·&nbsp; declared in `schema/modelrules.schema.json`
 
 CKF Hard Mode - declarative row edits.
 
@@ -642,21 +2408,21 @@ The writable-column probe is for the other kind of failure. Some columns take a 
 
 | Role | File |
 |---|---|
-| `json` | `ckf.hardmode.json` |
+| `cfg` | `ckf.hardmode.cfg` |
+| `json` | `ckf.hardmode.d/modelrules.json` |
 | `legacyJson` | _none — this section is new in 3.0_ |
-| `section` | `modelrules` |
 
 ### Enable chain
 
 Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
 
 ```text
-  document "enabled": true                    ckf.hardmode.json#modelrules — checked after the document loads
+  cfg      [Slices] ModelRules = true         ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
         AND  (per field, not per subsystem)
   field    "probeWritableColumns": true       gates probeOutput, probeTables
 ```
 
-**One gate.** 3.0 collapsed the chain: the `.cfg` key that used to gate this subsystem before its settings were read is gone, and `"enabled"` in its own section is the whole of it. One consequence worth holding: a `ckf.hardmode.json` that cannot be read costs this subsystem its switch as well as its values, and the log says which of the two it is rather than implying someone set a toggle.
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
 
 Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
 
@@ -666,7 +2432,7 @@ Outside every chain in this document sits `[General] Enabled`, which since 3.0 i
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `enabled` | json | `bool` | `form` | `true` |  |  |  |  | Apply rules | Apply declarative record edits from ckf.hardmode.rules.json - talents, equipment, monster and character base stats. |
+| `Slices.ModelRules` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Declarative Row Edits | Slice toggle. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice never enters RulePlan. THIS IS THE GATE. Slices.Init binds every key in Binds.All (Slices.cs) and is called from Plugin.Load (Plugin.cs), above the master-switch bail-out, so BepInEx writes the line whether the mod is on or off. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg is 3,238 bytes carrying [General] and [Slices] and all 43 keys, and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\\gates-phase1b.txt]. The tag on this sentence used to sit before that run: it read "[measured 2026-09-13]" when what had been measured was the C#, not the file. The file has now been measured too. CORRECTION, 2026-09-13: this doc used to say "the section's own \\"enabled\\" field is still on disk and is still the gate the plugin reads" and "NOT ON DISK ... check_schema.py reports it MISSING". Both were true when written and are false now. The section's "enabled" field is deleted from this schema and the gate is this key. The RETIRED KEY IS STILL PARSED, into a report-only bool? RetiredEnabled ([JsonPropertyName("enabled")]), because four subsystems refuse a whole section on an unknown key (ConfigDoc.ReadSection, ConfigDoc.cs) and an upgraded document would otherwise switch OFF. Slices.ReportRetiredGate (Slices.cs) names it: Warning normally, Error when the retired value is false and this key is not. Nothing branches on it -- grep RetiredEnabled finds one declaration and one report call per subsystem and no read. It is a migration report, not a second gate. |
 | `traceRules` | json | `int` | `form` | `0` |  | `0` to `1000` |  |  | Trace first N rows per rule | Log the first N rows each rule changes, one line per column, as before -> after. This is how you confirm a rule, a curve, a clamp or a clone actually did what you meant without hunting for the effect in-game. 0 is off. 3 to 5 is enough to see a curve produce different values at different power levels. It logs per row, so leave it off for a normal session. |
 | `probeWritableColumns` | json | `bool` | `form` | `false` |  |  |  |  | Probe writable columns | Write a report of which columns actually accept a write. Some setters exist but recompute their value and discard yours - the unsuffixed weapon stats are aliases for the selected firing mode, and the talent Adjusted* columns are computed - and a rule against one of those fails silently. The probe writes a test value onto one materialized row per table, reads it back, and puts the original value straight back. It is a write on the game's hot path, so it is off by default and worth turning on for one launch when a rule is not landing. |
 | `probeTables` | json | `stringList` | `form` | `"[]"` |  |  | `probeWritableColumns` |  | Extra tables to probe | Extra tables to probe, beyond the ones your rules already target (which are probed automatically). A JSON array of strings; the 'Model' suffix is optional. |
@@ -676,9 +2442,10 @@ Outside every chain in this document sits `[General] Enabled`, which since 3.0 i
 
 | Field | GUI help |
 |---|---|
+| `Slices.ModelRules` | Turn this off and this part of the mod does nothing; the game uses its own values. The master switch on the first page turns off everything at once. |
 | `probeWritableColumns` | Write a report of which columns actually accept a write. Some columns take a value and then recompute it, discarding yours, and a rule against one of those fails silently. The probe writes a test value to one row per table, reads it back and puts the original straight back. It's worth a launch when a rule is not landing. |
 
-1 of 5 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+2 of 5 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
 
 **Type notes.**
 
@@ -692,7 +2459,7 @@ None declared.
 
 ## PowerLevel
 
-**Mission Power Level Ceiling** &nbsp;·&nbsp; `ckf.hardmode.json#powerlevel` &nbsp;·&nbsp; declared in `schema/powerlevel.schema.json`
+**Mission Power Level Ceiling** &nbsp;·&nbsp; `.cfg` section `[PowerLevel]` &nbsp;·&nbsp; declared in `schema/powerlevel.schema.json`
 
 CKF Hard Mode - mission Power Level ceiling.
 
@@ -738,19 +2505,19 @@ The count of logged calculations is also the gate on the check that the mod's Te
 
 | Role | File |
 |---|---|
-| `json` | `ckf.hardmode.json` |
+| `cfg` | `ckf.hardmode.cfg` |
+| `json` | `ckf.hardmode.d/powerlevel.json` |
 | `legacyJson` | _none — this section is new in 3.0_ |
-| `section` | `powerlevel` |
 
 ### Enable chain
 
 Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
 
 ```text
-  document "enabled": true                    ckf.hardmode.json#powerlevel — checked after the document loads
+  cfg      [Slices] PowerLevel = true         ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
 ```
 
-**One gate.** 3.0 collapsed the chain: the `.cfg` key that used to gate this subsystem before its settings were read is gone, and `"enabled"` in its own section is the whole of it. One consequence worth holding: a `ckf.hardmode.json` that cannot be read costs this subsystem its switch as well as its values, and the log says which of the two it is rather than implying someone set a toggle.
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
 
 Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
 
@@ -760,7 +2527,7 @@ Outside every chain in this document sits `[General] Enabled`, which since 3.0 i
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `enabled` | json | `bool` | `form` | `true` |  |  |  |  | Enabled | Recompute mission Power Level so it can exceed the stock ceiling of 10. 3.0 moved this switch and the four clamps out of the [PowerLevel] section of ckf.hardmode.cfg and into the "powerlevel" section of ckf.hardmode.json; the section is new in 3.0 and has no 2.x sidecar behind it, which is what targets.legacyJson: null records. |
+| `Slices.PowerLevel` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Mission Power Level Ceiling | Slice toggle. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice never enters RulePlan. THIS IS THE GATE. Slices.Init binds every key in Binds.All (Slices.cs) and is called from Plugin.Load (Plugin.cs), above the master-switch bail-out, so BepInEx writes the line whether the mod is on or off. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg is 3,238 bytes carrying [General] and [Slices] and all 43 keys, and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\\gates-phase1b.txt]. The tag on this sentence used to sit before that run: it read "[measured 2026-09-13]" when what had been measured was the C#, not the file. The file has now been measured too. CORRECTION, 2026-09-13: this doc used to say "the section's own \\"enabled\\" field is still on disk and is still the gate the plugin reads" and "NOT ON DISK ... check_schema.py reports it MISSING". Both were true when written and are false now. The section's "enabled" field is deleted from this schema and the gate is this key. The RETIRED KEY IS STILL PARSED, into a report-only bool? RetiredEnabled ([JsonPropertyName("enabled")]), because four subsystems refuse a whole section on an unknown key (ConfigDoc.ReadSection, ConfigDoc.cs) and an upgraded document would otherwise switch OFF. Slices.ReportRetiredGate (Slices.cs) names it: Warning normally, Error when the retired value is false and this key is not. Nothing branches on it -- grep RetiredEnabled finds one declaration and one report call per subsystem and no read. It is a migration report, not a second gate. |
 | `minCap` | json | `int` | `form` | `1` |  | `1` to `25` |  |  | Lower clamp | Lower clamp. Stock is 1. |
 | `maxCap` | json | `int` | `form` | `20` |  | `1` to `25` |  |  | Upper clamp | Upper clamp. Stock is 10; enemy archetypes exist through 20. Must not be below minCap - the subsystem refuses to run if it is. |
 | `matrixMaxCap` | json | `int` | `form` | `10` | 0 means use maxCap for Matrix calls too. | `0` to `25` |  |  | Matrix upper clamp | Separate upper clamp for Matrix calls, so hacking can stay at the stock ceiling while ground missions climb. 0 = use maxCap for both. The lower of this and maxCap wins. |
@@ -770,9 +2537,10 @@ Outside every chain in this document sits `[General] Enabled`, which since 3.0 i
 
 | Field | GUI help |
 |---|---|
+| `Slices.PowerLevel` | Turn this off and this part of the mod does nothing; the game uses its own values. The master switch on the first page turns off everything at once. |
 | `logFirst` | Calculations to log. The cross-check that the mod's Team Power Level matches the game's own is printed inside this gate, so 0 silences the only check that the two agree. |
 
-1 of 5 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+2 of 5 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
 
 ### Invariants
 
@@ -780,15 +2548,15 @@ Outside every chain in this document sits `[General] Enabled`, which since 3.0 i
 
 | | |
 |---|---|
-| Keys | `ckf.hardmode.json#powerlevel.minCap`, `ckf.hardmode.json#powerlevel.maxCap` |
+| Keys | `ckf.hardmode.d/powerlevel.json#minCap`, `ckf.hardmode.d/powerlevel.json#maxCap` |
 
-**Reason.** maxCap below minCap leaves nothing to clamp into; PowerLevelCap.Init logs an error and installs no hook. 3.0 moved both keys out of the cfg and into the merged document, so they are spelled file#path rather than Section.Key.
+**Reason.** maxCap below minCap leaves nothing to clamp into; PowerLevelCap.Init logs an error and installs no hook. 3.0 moved both keys out of the cfg and into the merged document, so they are spelled file#path rather than Section.Key. CORRECTION, 2026-09-13: the file half of that spelling is now ckf.hardmode.d/powerlevel.json, because Phase 3 split the merged document and each slice file holds its fields at the top level -- so the path is #minCap, not #powerlevel.minCap. The old spelling was not merely stale: inv_value resolves a file#path key by reading <cfgdir>/<file> off disk, so with the merged document present it graded THAT file's values rather than the live slice file's, and with it deleted it returned not-found and the pair was skipped in silence. Both were measured on 2026-09-13: minCap 20 above maxCap 1 in the live powerlevel.json reported 0 problem(s) at rc 0 with the merged document absent, and a correctly-ordered slice file reported an INVARIANT read out of a stale merged document that was still present.
 
 ---
 
 ## RewardCurve
 
-**Baseline Reward Curve** &nbsp;·&nbsp; `ckf.hardmode.json#rewardcurve` &nbsp;·&nbsp; declared in `schema/rewardcurve.schema.json`
+**Baseline Reward Curve** &nbsp;·&nbsp; `.cfg` section `[RewardCurve]` &nbsp;·&nbsp; declared in `schema/rewardcurve.schema.json`
 
 CKF Hard Mode - the baseline reward tiers, keyed on PowerLevelUnscaled.
 
@@ -830,19 +2598,19 @@ To check it took, turn on the effective-curve log and read the plugin's log afte
 
 | Role | File |
 |---|---|
-| `json` | `ckf.hardmode.json` |
+| `cfg` | `ckf.hardmode.cfg` |
+| `json` | `ckf.hardmode.d/rewardcurve.json` |
 | `legacyJson` | `ckf.hardmode.rewardcurve.json` |
-| `section` | `rewardcurve` |
 
 ### Enable chain
 
 Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
 
 ```text
-  document "enabled": true                    ckf.hardmode.json#rewardcurve — checked after the document loads
+  cfg      [Slices] RewardCurve = true        ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
 ```
 
-**One gate.** 3.0 collapsed the chain: the `.cfg` key that used to gate this subsystem before its settings were read is gone, and `"enabled"` in its own section is the whole of it. One consequence worth holding: a `ckf.hardmode.json` that cannot be read costs this subsystem its switch as well as its values, and the log says which of the two it is rather than implying someone set a toggle.
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
 
 Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
 
@@ -852,7 +2620,7 @@ Outside every chain in this document sits `[General] Enabled`, which since 3.0 i
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `enabled` | json | `bool` | `form` | `true` |  |  |  |  | Enabled | Overwrite the baseline reward tiers that every other reward multiplier is applied to. The table is the "rewardcurve" section of BepInEx/config/ckf.hardmode.json, one row per PowerLevelUnscaled. This is the only way to fix the flatline above PL 10, where the game pays the PL 10 tier no matter how hard the fight is. The three functions are patched on load once this is true, and logEffectiveCurve is the verification. 3.0 moved this switch out of the cfg key [RewardCurve] Enabled and into this section; it is the whole enable chain for this subsystem. |
+| `Slices.RewardCurve` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Baseline Reward Curve | Slice toggle. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice never enters RulePlan. THIS IS THE GATE. Slices.Init binds every key in Binds.All (Slices.cs) and is called from Plugin.Load (Plugin.cs), above the master-switch bail-out, so BepInEx writes the line whether the mod is on or off. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg is 3,238 bytes carrying [General] and [Slices] and all 43 keys, and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\\gates-phase1b.txt]. The tag on this sentence used to sit before that run: it read "[measured 2026-09-13]" when what had been measured was the C#, not the file. The file has now been measured too. CORRECTION, 2026-09-13: this doc used to say "the section's own \\"enabled\\" field is still on disk and is still the gate the plugin reads" and "NOT ON DISK ... check_schema.py reports it MISSING". Both were true when written and are false now. The section's "enabled" field is deleted from this schema and the gate is this key. The RETIRED KEY IS STILL PARSED, into a report-only bool? RetiredEnabled ([JsonPropertyName("enabled")]), because four subsystems refuse a whole section on an unknown key (ConfigDoc.ReadSection, ConfigDoc.cs) and an upgraded document would otherwise switch OFF. Slices.ReportRetiredGate (Slices.cs) names it: Warning normally, Error when the retired value is false and this key is not. Nothing branches on it -- grep RetiredEnabled finds one declaration and one report call per subsystem and no read. It is a migration report, not a second gate. |
 | `logEffectiveCurve` | json | `bool` | `form` | `false` |  |  |  |  | Log the effective curve | After patching, call the three functions and log what they now return. This is the verification: CKF Data Dump's _reward_curve.csv cannot show it, because that plugin loads first and sweeps the curve before this one patches it. |
 | `curve` | json | `table` | `curve` | _none declared_ | A column set to -1 or any negative value, or left out of the row, keeps the game's own number for that function at that power level; the plugin's own initialiser is -1. |  |  | sorted by `PowerLevel` | Reward tiers by power level | One row per PowerLevelUnscaled. Each column replaces the return value of one RulesUtil function at that level, rounded to a whole number. Only the levels named here are touched; a level with no row keeps the game's own three values. Nothing is patched at all if every cell is left absent or negative. |
 
@@ -860,7 +2628,7 @@ Outside every chain in this document sits `[General] Enabled`, which since 3.0 i
 
 | Field | GUI help |
 |---|---|
-| `enabled` | Overwrite the baseline rewards that every other reward multiplier is applied to. |
+| `Slices.RewardCurve` | Turn this off and this part of the mod does nothing; the game uses its own values. The master switch on the first page turns off everything at once. |
 | `logEffectiveCurve` | After patching, call the three reward functions and log what they now return. |
 | `curve` | One row per power level. Each column replaces one of the three baseline numbers at that level, rounded to a whole number. Only the levels named here are touched; a level with no row keeps the game's own values. Nothing is patched at all if every cell is left empty or negative. |
 
@@ -887,9 +2655,97 @@ None declared.
 
 ---
 
+## RuleModel
+
+**Game Rule Constants** &nbsp;·&nbsp; `.cfg` section `[RuleModel]` &nbsp;·&nbsp; declared in `schema/rulemodel.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+Arrives in Phase 4 of split-config-into-toggleable-slices.
+
+Files this toggle gates:
+
+```text
+  RuleModel.csv
+```
+
+76 rows, ids 1-76 contiguous, every Value an integer, min -50, max 400 (design.md section 9). The overlay carries RuleId plus Value; blank means untouched. The mod touches 2 of the 76 today, rows 22 and 23 (tasks.md Phase 4).
+
+Correction carried forward from design.md section 9: an earlier pass reported RuleModel as 64 rows and called docs/game-constants.md wrong for saying 76. The 64 came from sheets\Old\RuleModel.csv, a stale dump. The doc was correct.
+
+THE KEY IS ON DISK; THE SLICE IS NOT. This file declares the key and nothing else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off while the slice has no file changes nothing, because there is no file for the verdict to close.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/RuleModel.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] RuleModel = true          ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+2 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.RuleModel` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Game Rule Constants | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. |
+| `ruleReference` | reference | `table` | `readonly` | _none declared_ |  |  |  | sorted by `RuleId` | Game rule constants (reference) | The 76 game rows RuleModel.csv overrides, as reference: the id, the GroupId design.md section 9 requires the editor to group by, the ConfigName to label the control with, and the value the game ships. WHY IT IS HERE AND NOT IN THE OVERLAY. The shipped ckf.hardmode.d/RuleModel.csv carries three columns - RuleId, Value, _comment - and none of them is GroupId [measured 2026-09-13, the live file]. GroupId could not be added to that header: it is a real game column, so a header naming it is a set over all 76 rows, which is metadata that behaves like a tuning change. Nor is it parsed back out of _comment: that column carries the ConfigName and the shipped value as prose for someone reading the CSV in a spreadsheet, and making a free-text field load-bearing is the defect proposal.md section 1 exists to remove - it is the same shape as the "XX /" pack prefixes this change deleted. IT IS A SNAPSHOT OF A DUMP, sheets/raw/RuleModel.csv, taken 2026-09-13: 76 rows, ids 1-76 contiguous, columns RuleId, Value, GroupId, ConfigName, ConfigDesc, Value spanning -50 to 400, and GroupId distributed STORY 31, COMBAT 17, CHARACTER 15, HEAT 6, MAP 2, CONTACT 2, MATRIX 1, ECONOMY 1, SAFEHOUSE 1 [measured]. A dump is not shippable and no runtime behaviour may depend on one being present, which is why the snapshot lives here rather than being read at load. A game update that renumbers or regroups these rows makes this block stale and there is nothing that will notice: re-dump RuleModel and re-derive it. ANCHORED ON THE TWO THE MOD OVERRIDES: id 22 Surprised Bonus ships 25 and the overlay sets 15; id 23 Glancing Distance Limit ships 5 and the overlay sets 4 [measured 2026-09-13, both files]. If those two disagree with the dump the snapshot is stale. |
+
+> This document does not render these field `ruleReference` keys: `rows`.
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.RuleModel` | Turn this off and these rows are left exactly as the game ships them. |
+| `ruleReference` | What the game ships for each rule, and which group it belongs to. Shown beside the override so you can see what you are changing it from. |
+
+2 of 2 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+#### Columns of `ruleReference`
+
+On disk this is a JSON **array** of row objects. Sorted by `RuleId`.
+
+| Column | Type | Range |
+|---|---|---|
+| `RuleId` | `int` | `1` to `76` |
+| `GroupId` | `string` |  |
+| `ConfigName` | `string` |  |
+| `Shipped` | `int` | `-50` to `400` |
+
+### Invariants
+
+None declared.
+
+---
+
 ## SelfCheck
 
-**Regression Suite** &nbsp;·&nbsp; `ckf.hardmode.json#selfcheck` &nbsp;·&nbsp; declared in `schema/selfcheck.schema.json`
+**Regression Suite** &nbsp;·&nbsp; `.cfg` section `[SelfCheck]` &nbsp;·&nbsp; declared in `schema/selfcheck.schema.json`
 
 CKF Hard Mode - regression suite.
 
@@ -933,21 +2789,21 @@ It is only as good as the values you wrote down. An expectations file that has n
 
 | Role | File |
 |---|---|
-| `json` | `ckf.hardmode.json` |
+| `cfg` | `ckf.hardmode.cfg` |
+| `json` | `ckf.hardmode.d/selfcheck.json` |
 | `legacyJson` | _none — this section is new in 3.0_ |
-| `section` | `selfcheck` |
 
 ### Enable chain
 
 Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
 
 ```text
-  document "enabled": true                    ckf.hardmode.json#selfcheck — checked after the document loads
+  cfg      [Slices] SelfCheck = true          ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
         AND  (per field, not per subsystem)
   field    "enabled": true                    gates file, output
 ```
 
-**One gate.** 3.0 collapsed the chain: the `.cfg` key that used to gate this subsystem before its settings were read is gone, and `"enabled"` in its own section is the whole of it. One consequence worth holding: a `ckf.hardmode.json` that cannot be read costs this subsystem its switch as well as its values, and the log says which of the two it is rather than implying someone set a toggle.
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
 
 Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
 
@@ -957,7 +2813,7 @@ Outside every chain in this document sits `[General] Enabled`, which since 3.0 i
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `enabled` | json | `bool` | `form` | `false` |  |  |  |  | Enabled | Read a list of rows by id at startup and check their columns against values written down in advance, then report PASS/FAIL per column. It reads rows the game did not ask for, so it is a diagnostic rather than part of play, and one of those reads builds a clone earlier than the game would have. OFF by default - the one feature switch that is. Turn it on for a verification launch after a retune, regenerate the expectations file, read the block, turn it back off. 3.0 moved these three keys out of the [SelfCheck] section of ckf.hardmode.cfg and into the "selfcheck" section of ckf.hardmode.json; the section is new in 3.0 and has no 2.x sidecar behind it, which is what targets.legacyJson: null records. |
+| `Slices.SelfCheck` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Regression Suite | Slice toggle. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice never enters RulePlan. THIS IS THE GATE. Slices.Init binds every key in Binds.All (Slices.cs) and is called from Plugin.Load (Plugin.cs), above the master-switch bail-out, so BepInEx writes the line whether the mod is on or off. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg is 3,238 bytes carrying [General] and [Slices] and all 43 keys, and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\\gates-phase1b.txt]. The tag on this sentence used to sit before that run: it read "[measured 2026-09-13]" when what had been measured was the C#, not the file. The file has now been measured too. CORRECTION, 2026-09-13: this doc used to say "the section's own \\"enabled\\" field is still on disk and is still the gate the plugin reads" and "NOT ON DISK ... check_schema.py reports it MISSING". Both were true when written and are false now. The section's "enabled" field is deleted from this schema and the gate is this key. The RETIRED KEY IS STILL PARSED, into a report-only bool? RetiredEnabled ([JsonPropertyName("enabled")]), because four subsystems refuse a whole section on an unknown key (ConfigDoc.ReadSection, ConfigDoc.cs) and an upgraded document would otherwise switch OFF. Slices.ReportRetiredGate (Slices.cs) names it: Warning normally, Error when the retired value is false and this key is not. Nothing branches on it -- grep RetiredEnabled finds one declaration and one report call per subsystem and no read. It is a migration report, not a second gate. Defaults FALSE, matching the "selfcheck" section's own enabled field, which is the one default among the nine that is not true [measured 2026-09-13, schema/selfcheck.schema.json]. |
 | `file` | json | `string` | `form` | `""` — empty | Blank means ckf.hardmode.selfcheck.csv beside the config file. |  | `enabled` |  | Expectations file | The expectations file. Blank means ckf.hardmode.selfcheck.csv beside this config. Columns: Table,Id,Column,Expect,Note. Leave Expect blank to report the value without judging it. |
 | `output` | json | `string` | `form` | `""` — empty | Blank means BepInEx/ckf-hardmode/selfcheck.csv. |  | `enabled` |  | Result table path | Where to write the result table. Blank means BepInEx/ckf-hardmode/selfcheck.csv. The log carries the same lines. |
 
@@ -965,7 +2821,7 @@ Outside every chain in this document sits `[General] Enabled`, which since 3.0 i
 
 | Field | GUI help |
 |---|---|
-| `enabled` | Read a list of rows by id at startup and check their columns against values written down in advance, then report pass or fail per column. |
+| `Slices.SelfCheck` | Turn this off and this part of the mod does nothing; the game uses its own values. The master switch on the first page turns off everything at once. |
 
 1 of 3 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
 
@@ -975,11 +2831,1064 @@ None declared.
 
 ---
 
+## TalentsAEX
+
+**Agent EX Talent Balance** &nbsp;·&nbsp; `.cfg` section `[TalentsAEX]` &nbsp;·&nbsp; declared in `schema/talentsaex.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+Arrives in Phase 4 of split-config-into-toggleable-slices.
+
+Files this toggle gates:
+
+```text
+  EffectModel.aex.csv
+  JobNodeModel.aex.csv
+  TalentModel.aex.csv
+```
+
+One of the 11 talent-balance class packs, 3 files behind this one toggle. 11 packs, 32 files, 236 rules in total (tasks.md Phase 4). Flipping this off skips every file listed above.
+
+The pack's filename tag is "aex". The class is Agent EX -- JobId 5, JobName "Agent EX" in sheets\raw\JobModel.csv. [measured 2026-09-14; the join is written out in the CORRECTION below.]
+
+CORRECTION, 2026-09-14. The tag-to-class pairing on this file had never been measured. This block used to read: "The tag-to-class pairing is positional: design.md section 2 lists the tags and section 12 lists the classes in the same order and the same count, and neither document pairs one with the other in words. [fitted -- the conversion script in Phase 4 is what settles it, by naming the rules it puts in each file.]" That was a guess off two same-length lists, and it is what produced the wrong class names. The pairing is measured now, by joins that never touch design.md:
+
+```text
+  1. Every JobNodeId in ckf.hardmode.d/JobNodeModel.aex.csv (7 of 7, its
+     first column) joins sheets\raw\JobNodeModel.csv on JobNodeId. Every
+     matched row carries JobId 5, which sheets\raw\JobModel.csv spells
+     JobName "Agent EX". No id failed to match.
+  2. Independently: every TalentId in ckf.hardmode.d/TalentModel.aex.csv
+     (6 of 6) resolves in sheets\raw\TalentModel.csv, and the only
+     JobNodeModel rows naming it in NodeTalent1Id carry that same JobId 5.
+```
+
+THE ORDER WAS RIGHT; THE NAMES WERE NOT. Re-checked against the two lists the guess used: design.md section 2 line 79 lists the tags as "sol wm sn sc vg hkr gs aex ck cs wg" and section 12's nav table lists the classes in the matching order, and the measurement above agrees with that order at all eleven positions. What was wrong was section 12's NAMES. Three of its eleven entries -- "Sawbones", "CS", "Wraith" -- are not JobModel.JobName values at all, and two more -- "AEX", "War Machine" -- are not the game's spelling. The fault was never the pairing; it was that nobody checked the list being paired against. design.md section 12 still carries those five names as of 2026-09-14 and is the upstream fix. [measured 2026-09-14] [measured 2026-09-14]
+
+THE TITLE AND THE TOGGLE LABEL WERE WRONG AND ARE CORRECTED HERE. The title read "AEX Talent Balance" and the label read "Enable AEX Talent Balance". They now read "Agent EX Talent Balance" and "Enable Agent EX Talent Balance", which is the game's own spelling of JobName for JobId 5. "AEX" does not appear in JobModel.JobName at all.
+
+NOT RENAMED, DELIBERATELY: the subsystem name, the field path and the enable key all stay "TalentsAEX". Those three are the one .cfg key this file declares, and check_schema.py asserts 43 cfg keys on disk against 43 declared across 43 schema files. Renaming any of them breaks that gate. The filename tag "aex" and the overlay filenames are likewise unchanged: the overlay dialect keys the target table off the filename.
+
+There is no cyberware pack. An earlier version of Phase 4 listed 12 packs and routed 9 EffectModel rules into EffectModel.cyberware.csv; that file does not exist and those 9 CritMultiBase rules are slot-8 implant effects, edited in the slot 8 implant table (tasks.md Phase 4's correction).
+
+THE KEY IS ON DISK; THE SLICE IS NOT. This file declares the key and nothing else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off while the slice has no file changes nothing, because there is no file for the verdict to close.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/EffectModel.aex.csv', 'ckf.hardmode.d/JobNodeModel.aex.csv', 'ckf.hardmode.d/TalentModel.aex.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] TalentsAEX = true         ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.TalentsAEX` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Agent EX Talent Balance | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.TalentsAEX` | Turn this off and these rows are left exactly as the game ships them. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
+## TalentsCS
+
+**Cybersword Talent Balance** &nbsp;·&nbsp; `.cfg` section `[TalentsCS]` &nbsp;·&nbsp; declared in `schema/talentscs.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+Arrives in Phase 4 of split-config-into-toggleable-slices.
+
+Files this toggle gates:
+
+```text
+  EffectModel.cs.csv
+  JobNodeModel.cs.csv
+  TalentModel.cs.csv
+```
+
+One of the 11 talent-balance class packs, 3 files behind this one toggle. 11 packs, 32 files, 236 rules in total (tasks.md Phase 4). Flipping this off skips every file listed above.
+
+The pack's filename tag is "cs". The class is Cybersword -- JobId 3, JobName "Cybersword" in sheets\raw\JobModel.csv. [measured 2026-09-14; the join is written out in the CORRECTION below.]
+
+CORRECTION, 2026-09-14. The tag-to-class pairing on this file had never been measured. This block used to read: "The tag-to-class pairing is positional: design.md section 2 lists the tags and section 12 lists the classes in the same order and the same count, and neither document pairs one with the other in words. [fitted -- the conversion script in Phase 4 is what settles it, by naming the rules it puts in each file.]" That was a guess off two same-length lists, and it is what produced the wrong class names. The pairing is measured now, by joins that never touch design.md:
+
+```text
+  1. Every JobNodeId in ckf.hardmode.d/JobNodeModel.cs.csv (2 of 2, its
+     first column) joins sheets\raw\JobNodeModel.csv on JobNodeId. Every
+     matched row carries JobId 3, which sheets\raw\JobModel.csv spells
+     JobName "Cybersword". No id failed to match.
+  2. Independently: every TalentId in ckf.hardmode.d/TalentModel.cs.csv
+     (1 of 1) resolves in sheets\raw\TalentModel.csv, and the only
+     JobNodeModel rows naming it in NodeTalent1Id carry that same JobId 3.
+```
+
+THE ORDER WAS RIGHT; THE NAMES WERE NOT. Re-checked against the two lists the guess used: design.md section 2 line 79 lists the tags as "sol wm sn sc vg hkr gs aex ck cs wg" and section 12's nav table lists the classes in the matching order, and the measurement above agrees with that order at all eleven positions. What was wrong was section 12's NAMES. Three of its eleven entries -- "Sawbones", "CS", "Wraith" -- are not JobModel.JobName values at all, and two more -- "AEX", "War Machine" -- are not the game's spelling. The fault was never the pairing; it was that nobody checked the list being paired against. design.md section 12 still carries those five names as of 2026-09-14 and is the upstream fix. [measured 2026-09-14] [measured 2026-09-14]
+
+THE TITLE AND THE TOGGLE LABEL WERE WRONG AND ARE CORRECTED HERE. The title read "CS Talent Balance" and the label read "Enable CS Talent Balance". They now read "Cybersword Talent Balance" and "Enable Cybersword Talent Balance", which is the game's own spelling of JobName for JobId 3. "CS" does not appear in JobModel.JobName at all.
+
+NOT RENAMED, DELIBERATELY: the subsystem name, the field path and the enable key all stay "TalentsCS". Those three are the one .cfg key this file declares, and check_schema.py asserts 43 cfg keys on disk against 43 declared across 43 schema files. Renaming any of them breaks that gate. The filename tag "cs" and the overlay filenames are likewise unchanged: the overlay dialect keys the target table off the filename.
+
+There is no cyberware pack. An earlier version of Phase 4 listed 12 packs and routed 9 EffectModel rules into EffectModel.cyberware.csv; that file does not exist and those 9 CritMultiBase rules are slot-8 implant effects, edited in the slot 8 implant table (tasks.md Phase 4's correction).
+
+THE KEY IS ON DISK; THE SLICE IS NOT. This file declares the key and nothing else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off while the slice has no file changes nothing, because there is no file for the verdict to close.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/EffectModel.cs.csv', 'ckf.hardmode.d/JobNodeModel.cs.csv', 'ckf.hardmode.d/TalentModel.cs.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] TalentsCS = true          ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.TalentsCS` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Cybersword Talent Balance | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.TalentsCS` | Turn this off and these rows are left exactly as the game ships them. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
+## TalentsCyberKnight
+
+**Cyber Knight Talent Balance** &nbsp;·&nbsp; `.cfg` section `[TalentsCyberKnight]` &nbsp;·&nbsp; declared in `schema/talentscyberknight.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+Arrives in Phase 4 of split-config-into-toggleable-slices.
+
+Files this toggle gates:
+
+```text
+  EffectModel.ck.csv
+  JobNodeModel.ck.csv
+  TalentModel.ck.csv
+```
+
+One of the 11 talent-balance class packs, 3 files behind this one toggle. 11 packs, 32 files, 236 rules in total (tasks.md Phase 4). Flipping this off skips every file listed above.
+
+The pack's filename tag is "ck". The class is Cyber Knight -- JobId 1, JobName "Cyber Knight" in sheets\raw\JobModel.csv. [measured 2026-09-14; the join is written out in the CORRECTION below.]
+
+CORRECTION, 2026-09-14. The tag-to-class pairing on this file had never been measured. This block used to read: "The tag-to-class pairing is positional: design.md section 2 lists the tags and section 12 lists the classes in the same order and the same count, and neither document pairs one with the other in words. [fitted -- the conversion script in Phase 4 is what settles it, by naming the rules it puts in each file.]" That was a guess off two same-length lists, and it is what produced the wrong class names. The pairing is measured now, by joins that never touch design.md:
+
+```text
+  1. Every JobNodeId in ckf.hardmode.d/JobNodeModel.ck.csv (5 of 5, its
+     first column) joins sheets\raw\JobNodeModel.csv on JobNodeId. Every
+     matched row carries JobId 1, which sheets\raw\JobModel.csv spells
+     JobName "Cyber Knight". No id failed to match.
+  2. Independently: every TalentId in ckf.hardmode.d/TalentModel.ck.csv
+     (3 of 3) resolves in sheets\raw\TalentModel.csv, and the only
+     JobNodeModel rows naming it in NodeTalent1Id carry that same JobId 1.
+```
+
+THE ORDER WAS RIGHT; THE NAMES WERE NOT. Re-checked against the two lists the guess used: design.md section 2 line 79 lists the tags as "sol wm sn sc vg hkr gs aex ck cs wg" and section 12's nav table lists the classes in the matching order, and the measurement above agrees with that order at all eleven positions. What was wrong was section 12's NAMES. Three of its eleven entries -- "Sawbones", "CS", "Wraith" -- are not JobModel.JobName values at all, and two more -- "AEX", "War Machine" -- are not the game's spelling. The fault was never the pairing; it was that nobody checked the list being paired against. design.md section 12 still carries those five names as of 2026-09-14 and is the upstream fix. [measured 2026-09-14] [measured 2026-09-14]
+
+The title and the toggle label are unchanged: "Cyber Knight Talent Balance" already matched JobName for JobId 1. What changed is the evidence behind it -- the pairing was [fitted] and is now [measured].
+
+NOT RENAMED, DELIBERATELY: the subsystem name, the field path and the enable key all stay "TalentsCyberKnight". Those three are the one .cfg key this file declares, and check_schema.py asserts 43 cfg keys on disk against 43 declared across 43 schema files. Renaming any of them breaks that gate. The filename tag "ck" and the overlay filenames are likewise unchanged: the overlay dialect keys the target table off the filename.
+
+There is no cyberware pack. An earlier version of Phase 4 listed 12 packs and routed 9 EffectModel rules into EffectModel.cyberware.csv; that file does not exist and those 9 CritMultiBase rules are slot-8 implant effects, edited in the slot 8 implant table (tasks.md Phase 4's correction).
+
+THE KEY IS ON DISK; THE SLICE IS NOT. This file declares the key and nothing else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off while the slice has no file changes nothing, because there is no file for the verdict to close.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/EffectModel.ck.csv', 'ckf.hardmode.d/JobNodeModel.ck.csv', 'ckf.hardmode.d/TalentModel.ck.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] TalentsCyberKnight = true ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.TalentsCyberKnight` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Cyber Knight Talent Balance | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.TalentsCyberKnight` | Turn this off and these rows are left exactly as the game ships them. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
+## TalentsGunslinger
+
+**Gunslinger Talent Balance** &nbsp;·&nbsp; `.cfg` section `[TalentsGunslinger]` &nbsp;·&nbsp; declared in `schema/talentsgunslinger.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+Arrives in Phase 4 of split-config-into-toggleable-slices.
+
+Files this toggle gates:
+
+```text
+  EffectModel.gs.csv
+  JobNodeModel.gs.csv
+  TalentModel.gs.csv
+```
+
+One of the 11 talent-balance class packs, 3 files behind this one toggle. 11 packs, 32 files, 236 rules in total (tasks.md Phase 4). Flipping this off skips every file listed above.
+
+The pack's filename tag is "gs". The class is Gunslinger -- JobId 14, JobName "Gunslinger" in sheets\raw\JobModel.csv. [measured 2026-09-14; the join is written out in the CORRECTION below.]
+
+CORRECTION, 2026-09-14. The tag-to-class pairing on this file had never been measured. This block used to read: "The tag-to-class pairing is positional: design.md section 2 lists the tags and section 12 lists the classes in the same order and the same count, and neither document pairs one with the other in words. [fitted -- the conversion script in Phase 4 is what settles it, by naming the rules it puts in each file.]" That was a guess off two same-length lists, and it is what produced the wrong class names. The pairing is measured now, by joins that never touch design.md:
+
+```text
+  1. Every JobNodeId in ckf.hardmode.d/JobNodeModel.gs.csv (4 of 4, its
+     first column) joins sheets\raw\JobNodeModel.csv on JobNodeId. Every
+     matched row carries JobId 14, which sheets\raw\JobModel.csv spells
+     JobName "Gunslinger". No id failed to match.
+  2. Independently: every TalentId in ckf.hardmode.d/TalentModel.gs.csv
+     (2 of 2) resolves in sheets\raw\TalentModel.csv, and the only
+     JobNodeModel rows naming it in NodeTalent1Id carry that same JobId 14.
+```
+
+THE ORDER WAS RIGHT; THE NAMES WERE NOT. Re-checked against the two lists the guess used: design.md section 2 line 79 lists the tags as "sol wm sn sc vg hkr gs aex ck cs wg" and section 12's nav table lists the classes in the matching order, and the measurement above agrees with that order at all eleven positions. What was wrong was section 12's NAMES. Three of its eleven entries -- "Sawbones", "CS", "Wraith" -- are not JobModel.JobName values at all, and two more -- "AEX", "War Machine" -- are not the game's spelling. The fault was never the pairing; it was that nobody checked the list being paired against. design.md section 12 still carries those five names as of 2026-09-14 and is the upstream fix. [measured 2026-09-14] [measured 2026-09-14]
+
+The title and the toggle label are unchanged: "Gunslinger Talent Balance" already matched JobName for JobId 14. What changed is the evidence behind it -- the pairing was [fitted] and is now [measured].
+
+NOT RENAMED, DELIBERATELY: the subsystem name, the field path and the enable key all stay "TalentsGunslinger". Those three are the one .cfg key this file declares, and check_schema.py asserts 43 cfg keys on disk against 43 declared across 43 schema files. Renaming any of them breaks that gate. The filename tag "gs" and the overlay filenames are likewise unchanged: the overlay dialect keys the target table off the filename.
+
+There is no cyberware pack. An earlier version of Phase 4 listed 12 packs and routed 9 EffectModel rules into EffectModel.cyberware.csv; that file does not exist and those 9 CritMultiBase rules are slot-8 implant effects, edited in the slot 8 implant table (tasks.md Phase 4's correction).
+
+THE KEY IS ON DISK; THE SLICE IS NOT. This file declares the key and nothing else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off while the slice has no file changes nothing, because there is no file for the verdict to close.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/EffectModel.gs.csv', 'ckf.hardmode.d/JobNodeModel.gs.csv', 'ckf.hardmode.d/TalentModel.gs.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] TalentsGunslinger = true  ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.TalentsGunslinger` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Gunslinger Talent Balance | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.TalentsGunslinger` | Turn this off and these rows are left exactly as the game ships them. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
+## TalentsHacker
+
+**Hacker Talent Balance** &nbsp;·&nbsp; `.cfg` section `[TalentsHacker]` &nbsp;·&nbsp; declared in `schema/talentshacker.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+Arrives in Phase 4 of split-config-into-toggleable-slices.
+
+Files this toggle gates:
+
+```text
+  JobNodeModel.hkr.csv
+  TalentModel.hkr.csv
+  MatrixEffectModel.hkr.csv
+```
+
+One of the 11 talent-balance class packs, 3 files behind this one toggle. 11 packs, 32 files, 236 rules in total (tasks.md Phase 4). Flipping this off skips every file listed above.
+
+The pack's filename tag is "hkr". The class is Hacker -- JobId 13, JobName "Hacker" in sheets\raw\JobModel.csv. [measured 2026-09-14; the join is written out in the CORRECTION below.]
+
+CORRECTION, 2026-09-14. The tag-to-class pairing on this file had never been measured. This block used to read: "The tag-to-class pairing is positional: design.md section 2 lists the tags and section 12 lists the classes in the same order and the same count, and neither document pairs one with the other in words. [fitted -- the conversion script in Phase 4 is what settles it, by naming the rules it puts in each file.]" That was a guess off two same-length lists, and it is what produced the wrong class names. The pairing is measured now, by joins that never touch design.md:
+
+```text
+  1. Every JobNodeId in ckf.hardmode.d/JobNodeModel.hkr.csv (11 of 11, its
+     first column) joins sheets\raw\JobNodeModel.csv on JobNodeId. Every
+     matched row carries JobId 13, which sheets\raw\JobModel.csv spells
+     JobName "Hacker". No id failed to match.
+  2. Independently: every TalentId in ckf.hardmode.d/TalentModel.hkr.csv
+     (3 of 3) resolves in sheets\raw\TalentModel.csv, and the only
+     JobNodeModel rows naming it in NodeTalent1Id carry that same JobId 13.
+```
+
+THE ORDER WAS RIGHT; THE NAMES WERE NOT. Re-checked against the two lists the guess used: design.md section 2 line 79 lists the tags as "sol wm sn sc vg hkr gs aex ck cs wg" and section 12's nav table lists the classes in the matching order, and the measurement above agrees with that order at all eleven positions. What was wrong was section 12's NAMES. Three of its eleven entries -- "Sawbones", "CS", "Wraith" -- are not JobModel.JobName values at all, and two more -- "AEX", "War Machine" -- are not the game's spelling. The fault was never the pairing; it was that nobody checked the list being paired against. design.md section 12 still carries those five names as of 2026-09-14 and is the upstream fix. [measured 2026-09-14] [measured 2026-09-14]
+
+The title and the toggle label are unchanged: "Hacker Talent Balance" already matched JobName for JobId 13. What changed is the evidence behind it -- the pairing was [fitted] and is now [measured].
+
+NOT RENAMED, DELIBERATELY: the subsystem name, the field path and the enable key all stay "TalentsHacker". Those three are the one .cfg key this file declares, and check_schema.py asserts 43 cfg keys on disk against 43 declared across 43 schema files. Renaming any of them breaks that gate. The filename tag "hkr" and the overlay filenames are likewise unchanged: the overlay dialect keys the target table off the filename.
+
+DO NOT READ THE CLASS OFF THE LEADING DIGITS OF AN ID. JobNodeId 31166 in JobNodeModel.hkr.csv ("Downed Shields 6") carries JobId 13, Hacker, not JobId 31. The digit prefix of a JobNodeId is NOT its JobId; only the join is. [measured 2026-09-14]
+
+There is no cyberware pack. An earlier version of Phase 4 listed 12 packs and routed 9 EffectModel rules into EffectModel.cyberware.csv; that file does not exist and those 9 CritMultiBase rules are slot-8 implant effects, edited in the slot 8 implant table (tasks.md Phase 4's correction).
+
+This pack is the one exception carrying MatrixEffectModel, 8 rules, and it has NO EffectModel file (tasks.md Phase 4).
+
+THE KEY IS ON DISK; THE SLICE IS NOT. This file declares the key and nothing else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off while the slice has no file changes nothing, because there is no file for the verdict to close.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/JobNodeModel.hkr.csv', 'ckf.hardmode.d/MatrixEffectModel.hkr.csv', 'ckf.hardmode.d/TalentModel.hkr.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] TalentsHacker = true      ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.TalentsHacker` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Hacker Talent Balance | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.TalentsHacker` | Turn this off and these rows are left exactly as the game ships them. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
+## TalentsSawbones
+
+**Scourge Talent Balance** &nbsp;·&nbsp; `.cfg` section `[TalentsSawbones]` &nbsp;·&nbsp; declared in `schema/talentssawbones.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+Arrives in Phase 4 of split-config-into-toggleable-slices.
+
+Files this toggle gates:
+
+```text
+  EffectModel.sc.csv
+  JobNodeModel.sc.csv
+  TalentModel.sc.csv
+```
+
+One of the 11 talent-balance class packs, 3 files behind this one toggle. 11 packs, 32 files, 236 rules in total (tasks.md Phase 4). Flipping this off skips every file listed above.
+
+The pack's filename tag is "sc". The class is Scourge -- JobId 15, JobName "Scourge" in sheets\raw\JobModel.csv. [measured 2026-09-14; the join is written out in the CORRECTION below.]
+
+CORRECTION, 2026-09-14. The tag-to-class pairing on this file had never been measured. This block used to read: "The tag-to-class pairing is positional: design.md section 2 lists the tags and section 12 lists the classes in the same order and the same count, and neither document pairs one with the other in words. [fitted -- the conversion script in Phase 4 is what settles it, by naming the rules it puts in each file.]" That was a guess off two same-length lists, and it is what produced the wrong class names. The pairing is measured now, by joins that never touch design.md:
+
+```text
+  1. Every JobNodeId in ckf.hardmode.d/JobNodeModel.sc.csv (7 of 7, its
+     first column) joins sheets\raw\JobNodeModel.csv on JobNodeId. Every
+     matched row carries JobId 15, which sheets\raw\JobModel.csv spells
+     JobName "Scourge". No id failed to match.
+  2. Independently: every TalentId in ckf.hardmode.d/TalentModel.sc.csv
+     (8 of 8) resolves in sheets\raw\TalentModel.csv, and the only
+     JobNodeModel rows naming it in NodeTalent1Id carry that same JobId 15.
+```
+
+THE ORDER WAS RIGHT; THE NAMES WERE NOT. Re-checked against the two lists the guess used: design.md section 2 line 79 lists the tags as "sol wm sn sc vg hkr gs aex ck cs wg" and section 12's nav table lists the classes in the matching order, and the measurement above agrees with that order at all eleven positions. What was wrong was section 12's NAMES. Three of its eleven entries -- "Sawbones", "CS", "Wraith" -- are not JobModel.JobName values at all, and two more -- "AEX", "War Machine" -- are not the game's spelling. The fault was never the pairing; it was that nobody checked the list being paired against. design.md section 12 still carries those five names as of 2026-09-14 and is the upstream fix. [measured 2026-09-14] [measured 2026-09-14]
+
+THE TITLE AND THE TOGGLE LABEL WERE WRONG AND ARE CORRECTED HERE. The title read "Sawbones Talent Balance" and the label read "Enable Sawbones Talent Balance". They now read "Scourge Talent Balance" and "Enable Scourge Talent Balance", which is the game's own spelling of JobName for JobId 15. "Sawbones" does not appear in JobModel.JobName at all.
+
+NOT RENAMED, DELIBERATELY: the subsystem name, the field path and the enable key all stay "TalentsSawbones". Those three are the one .cfg key this file declares, and check_schema.py asserts 43 cfg keys on disk against 43 declared across 43 schema files. Renaming any of them breaks that gate. The filename tag "sc" and the overlay filenames are likewise unchanged: the overlay dialect keys the target table off the filename.
+
+DO NOT READ THE CLASS OFF THE LEADING DIGITS OF AN ID. Every TalentId in TalentModel.sc.csv begins 16 and every JobNodeId in JobNodeModel.sc.csv begins 16, and JobId 16 is "Attack Hund". The owning JobId is 15, Scourge. The digit prefix of a TalentId or a JobNodeId is NOT its JobId; only the join is. [measured 2026-09-14]
+
+There is no cyberware pack. An earlier version of Phase 4 listed 12 packs and routed 9 EffectModel rules into EffectModel.cyberware.csv; that file does not exist and those 9 CritMultiBase rules are slot-8 implant effects, edited in the slot 8 implant table (tasks.md Phase 4's correction).
+
+THE KEY IS ON DISK; THE SLICE IS NOT. This file declares the key and nothing else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off while the slice has no file changes nothing, because there is no file for the verdict to close.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/EffectModel.sc.csv', 'ckf.hardmode.d/JobNodeModel.sc.csv', 'ckf.hardmode.d/TalentModel.sc.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] TalentsSawbones = true    ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.TalentsSawbones` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Scourge Talent Balance | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.TalentsSawbones` | Turn this off and these rows are left exactly as the game ships them. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
+## TalentsSniper
+
+**Sniper Talent Balance** &nbsp;·&nbsp; `.cfg` section `[TalentsSniper]` &nbsp;·&nbsp; declared in `schema/talentssniper.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+Arrives in Phase 4 of split-config-into-toggleable-slices.
+
+Files this toggle gates:
+
+```text
+  EffectModel.sn.csv
+  JobNodeModel.sn.csv
+  TalentModel.sn.csv
+```
+
+One of the 11 talent-balance class packs, 3 files behind this one toggle. 11 packs, 32 files, 236 rules in total (tasks.md Phase 4). Flipping this off skips every file listed above.
+
+The pack's filename tag is "sn". The class is Sniper -- JobId 11, JobName "Sniper" in sheets\raw\JobModel.csv. [measured 2026-09-14; the join is written out in the CORRECTION below.]
+
+CORRECTION, 2026-09-14. The tag-to-class pairing on this file had never been measured. This block used to read: "The tag-to-class pairing is positional: design.md section 2 lists the tags and section 12 lists the classes in the same order and the same count, and neither document pairs one with the other in words. [fitted -- the conversion script in Phase 4 is what settles it, by naming the rules it puts in each file.]" That was a guess off two same-length lists, and it is what produced the wrong class names. The pairing is measured now, by joins that never touch design.md:
+
+```text
+  1. Every JobNodeId in ckf.hardmode.d/JobNodeModel.sn.csv (5 of 5, its
+     first column) joins sheets\raw\JobNodeModel.csv on JobNodeId. Every
+     matched row carries JobId 11, which sheets\raw\JobModel.csv spells
+     JobName "Sniper". No id failed to match.
+  2. Independently: every TalentId in ckf.hardmode.d/TalentModel.sn.csv
+     (3 of 3) resolves in sheets\raw\TalentModel.csv, and the only
+     JobNodeModel rows naming it in NodeTalent1Id carry that same JobId 11.
+```
+
+THE ORDER WAS RIGHT; THE NAMES WERE NOT. Re-checked against the two lists the guess used: design.md section 2 line 79 lists the tags as "sol wm sn sc vg hkr gs aex ck cs wg" and section 12's nav table lists the classes in the matching order, and the measurement above agrees with that order at all eleven positions. What was wrong was section 12's NAMES. Three of its eleven entries -- "Sawbones", "CS", "Wraith" -- are not JobModel.JobName values at all, and two more -- "AEX", "War Machine" -- are not the game's spelling. The fault was never the pairing; it was that nobody checked the list being paired against. design.md section 12 still carries those five names as of 2026-09-14 and is the upstream fix. [measured 2026-09-14] [measured 2026-09-14]
+
+The title and the toggle label are unchanged: "Sniper Talent Balance" already matched JobName for JobId 11. What changed is the evidence behind it -- the pairing was [fitted] and is now [measured].
+
+NOT RENAMED, DELIBERATELY: the subsystem name, the field path and the enable key all stay "TalentsSniper". Those three are the one .cfg key this file declares, and check_schema.py asserts 43 cfg keys on disk against 43 declared across 43 schema files. Renaming any of them breaks that gate. The filename tag "sn" and the overlay filenames are likewise unchanged: the overlay dialect keys the target table off the filename.
+
+There is no cyberware pack. An earlier version of Phase 4 listed 12 packs and routed 9 EffectModel rules into EffectModel.cyberware.csv; that file does not exist and those 9 CritMultiBase rules are slot-8 implant effects, edited in the slot 8 implant table (tasks.md Phase 4's correction).
+
+THE KEY IS ON DISK; THE SLICE IS NOT. This file declares the key and nothing else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off while the slice has no file changes nothing, because there is no file for the verdict to close.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/EffectModel.sn.csv', 'ckf.hardmode.d/JobNodeModel.sn.csv', 'ckf.hardmode.d/TalentModel.sn.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] TalentsSniper = true      ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.TalentsSniper` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Sniper Talent Balance | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.TalentsSniper` | Turn this off and these rows are left exactly as the game ships them. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
+## TalentsSoldier
+
+**Soldier Talent Balance** &nbsp;·&nbsp; `.cfg` section `[TalentsSoldier]` &nbsp;·&nbsp; declared in `schema/talentssoldier.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+Arrives in Phase 4 of split-config-into-toggleable-slices.
+
+Files this toggle gates:
+
+```text
+  EffectModel.sol.csv
+  JobNodeModel.sol.csv
+  TalentModel.sol.csv
+```
+
+One of the 11 talent-balance class packs, 3 files behind this one toggle. 11 packs, 32 files, 236 rules in total (tasks.md Phase 4). Flipping this off skips every file listed above.
+
+The pack's filename tag is "sol". The class is Soldier -- JobId 7, JobName "Soldier" in sheets\raw\JobModel.csv. [measured 2026-09-14; the join is written out in the CORRECTION below.]
+
+CORRECTION, 2026-09-14. The tag-to-class pairing on this file had never been measured. This block used to read: "The tag-to-class pairing is positional: design.md section 2 lists the tags and section 12 lists the classes in the same order and the same count, and neither document pairs one with the other in words. [fitted -- the conversion script in Phase 4 is what settles it, by naming the rules it puts in each file.]" That was a guess off two same-length lists, and it is what produced the wrong class names. The pairing is measured now, by joins that never touch design.md:
+
+```text
+  1. Every JobNodeId in ckf.hardmode.d/JobNodeModel.sol.csv (7 of 7, its
+     first column) joins sheets\raw\JobNodeModel.csv on JobNodeId. Every
+     matched row carries JobId 7, which sheets\raw\JobModel.csv spells
+     JobName "Soldier". No id failed to match.
+  2. Independently: every TalentId in ckf.hardmode.d/TalentModel.sol.csv
+     (3 of 3) resolves in sheets\raw\TalentModel.csv, and the only
+     JobNodeModel rows naming it in NodeTalent1Id carry that same JobId 7.
+```
+
+THE ORDER WAS RIGHT; THE NAMES WERE NOT. Re-checked against the two lists the guess used: design.md section 2 line 79 lists the tags as "sol wm sn sc vg hkr gs aex ck cs wg" and section 12's nav table lists the classes in the matching order, and the measurement above agrees with that order at all eleven positions. What was wrong was section 12's NAMES. Three of its eleven entries -- "Sawbones", "CS", "Wraith" -- are not JobModel.JobName values at all, and two more -- "AEX", "War Machine" -- are not the game's spelling. The fault was never the pairing; it was that nobody checked the list being paired against. design.md section 12 still carries those five names as of 2026-09-14 and is the upstream fix. [measured 2026-09-14] [measured 2026-09-14]
+
+The title and the toggle label are unchanged: "Soldier Talent Balance" already matched JobName for JobId 7. What changed is the evidence behind it -- the pairing was [fitted] and is now [measured].
+
+NOT RENAMED, DELIBERATELY: the subsystem name, the field path and the enable key all stay "TalentsSoldier". Those three are the one .cfg key this file declares, and check_schema.py asserts 43 cfg keys on disk against 43 declared across 43 schema files. Renaming any of them breaks that gate. The filename tag "sol" and the overlay filenames are likewise unchanged: the overlay dialect keys the target table off the filename.
+
+There is no cyberware pack. An earlier version of Phase 4 listed 12 packs and routed 9 EffectModel rules into EffectModel.cyberware.csv; that file does not exist and those 9 CritMultiBase rules are slot-8 implant effects, edited in the slot 8 implant table (tasks.md Phase 4's correction).
+
+THE KEY IS ON DISK; THE SLICE IS NOT. This file declares the key and nothing else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off while the slice has no file changes nothing, because there is no file for the verdict to close.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/EffectModel.sol.csv', 'ckf.hardmode.d/JobNodeModel.sol.csv', 'ckf.hardmode.d/TalentModel.sol.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] TalentsSoldier = true     ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.TalentsSoldier` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Soldier Talent Balance | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.TalentsSoldier` | Turn this off and these rows are left exactly as the game ships them. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
+## TalentsVanguard
+
+**Vanguard Talent Balance** &nbsp;·&nbsp; `.cfg` section `[TalentsVanguard]` &nbsp;·&nbsp; declared in `schema/talentsvanguard.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+Arrives in Phase 4 of split-config-into-toggleable-slices.
+
+Files this toggle gates:
+
+```text
+  EffectModel.vg.csv
+  JobNodeModel.vg.csv
+  TalentModel.vg.csv
+```
+
+One of the 11 talent-balance class packs, 3 files behind this one toggle. 11 packs, 32 files, 236 rules in total (tasks.md Phase 4). Flipping this off skips every file listed above.
+
+The pack's filename tag is "vg". The class is Vanguard -- JobId 12, JobName "Vanguard" in sheets\raw\JobModel.csv. [measured 2026-09-14; the join is written out in the CORRECTION below.]
+
+CORRECTION, 2026-09-14. The tag-to-class pairing on this file had never been measured. This block used to read: "The tag-to-class pairing is positional: design.md section 2 lists the tags and section 12 lists the classes in the same order and the same count, and neither document pairs one with the other in words. [fitted -- the conversion script in Phase 4 is what settles it, by naming the rules it puts in each file.]" That was a guess off two same-length lists, and it is what produced the wrong class names. The pairing is measured now, by joins that never touch design.md:
+
+```text
+  1. Every JobNodeId in ckf.hardmode.d/JobNodeModel.vg.csv (9 of 9, its
+     first column) joins sheets\raw\JobNodeModel.csv on JobNodeId. Every
+     matched row carries JobId 12, which sheets\raw\JobModel.csv spells
+     JobName "Vanguard". No id failed to match.
+  2. Independently: every TalentId in ckf.hardmode.d/TalentModel.vg.csv
+     (4 of 4) resolves in sheets\raw\TalentModel.csv, and the only
+     JobNodeModel rows naming it in NodeTalent1Id carry that same JobId 12.
+```
+
+THE ORDER WAS RIGHT; THE NAMES WERE NOT. Re-checked against the two lists the guess used: design.md section 2 line 79 lists the tags as "sol wm sn sc vg hkr gs aex ck cs wg" and section 12's nav table lists the classes in the matching order, and the measurement above agrees with that order at all eleven positions. What was wrong was section 12's NAMES. Three of its eleven entries -- "Sawbones", "CS", "Wraith" -- are not JobModel.JobName values at all, and two more -- "AEX", "War Machine" -- are not the game's spelling. The fault was never the pairing; it was that nobody checked the list being paired against. design.md section 12 still carries those five names as of 2026-09-14 and is the upstream fix. [measured 2026-09-14] [measured 2026-09-14]
+
+The title and the toggle label are unchanged: "Vanguard Talent Balance" already matched JobName for JobId 12. What changed is the evidence behind it -- the pairing was [fitted] and is now [measured].
+
+NOT RENAMED, DELIBERATELY: the subsystem name, the field path and the enable key all stay "TalentsVanguard". Those three are the one .cfg key this file declares, and check_schema.py asserts 43 cfg keys on disk against 43 declared across 43 schema files. Renaming any of them breaks that gate. The filename tag "vg" and the overlay filenames are likewise unchanged: the overlay dialect keys the target table off the filename.
+
+There is no cyberware pack. An earlier version of Phase 4 listed 12 packs and routed 9 EffectModel rules into EffectModel.cyberware.csv; that file does not exist and those 9 CritMultiBase rules are slot-8 implant effects, edited in the slot 8 implant table (tasks.md Phase 4's correction).
+
+THE KEY IS ON DISK; THE SLICE IS NOT. This file declares the key and nothing else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off while the slice has no file changes nothing, because there is no file for the verdict to close.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/EffectModel.vg.csv', 'ckf.hardmode.d/JobNodeModel.vg.csv', 'ckf.hardmode.d/TalentModel.vg.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] TalentsVanguard = true    ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.TalentsVanguard` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Vanguard Talent Balance | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.TalentsVanguard` | Turn this off and these rows are left exactly as the game ships them. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
+## TalentsWarMachine
+
+**Warmachine Talent Balance** &nbsp;·&nbsp; `.cfg` section `[TalentsWarMachine]` &nbsp;·&nbsp; declared in `schema/talentswarmachine.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+Arrives in Phase 4 of split-config-into-toggleable-slices.
+
+Files this toggle gates:
+
+```text
+  EffectModel.wm.csv
+  JobNodeModel.wm.csv
+  TalentModel.wm.csv
+```
+
+One of the 11 talent-balance class packs, 3 files behind this one toggle. 11 packs, 32 files, 236 rules in total (tasks.md Phase 4). Flipping this off skips every file listed above.
+
+The pack's filename tag is "wm". The class is Warmachine -- JobId 2, JobName "Warmachine" in sheets\raw\JobModel.csv. [measured 2026-09-14; the join is written out in the CORRECTION below.]
+
+CORRECTION, 2026-09-14. The tag-to-class pairing on this file had never been measured. This block used to read: "The tag-to-class pairing is positional: design.md section 2 lists the tags and section 12 lists the classes in the same order and the same count, and neither document pairs one with the other in words. [fitted -- the conversion script in Phase 4 is what settles it, by naming the rules it puts in each file.]" That was a guess off two same-length lists, and it is what produced the wrong class names. The pairing is measured now, by joins that never touch design.md:
+
+```text
+  1. Every JobNodeId in ckf.hardmode.d/JobNodeModel.wm.csv (11 of 11, its
+     first column) joins sheets\raw\JobNodeModel.csv on JobNodeId. Every
+     matched row carries JobId 2, which sheets\raw\JobModel.csv spells
+     JobName "Warmachine". No id failed to match.
+  2. Independently: every TalentId in ckf.hardmode.d/TalentModel.wm.csv
+     (4 of 4) resolves in sheets\raw\TalentModel.csv, and the only
+     JobNodeModel rows naming it in NodeTalent1Id carry that same JobId 2.
+```
+
+THE ORDER WAS RIGHT; THE NAMES WERE NOT. Re-checked against the two lists the guess used: design.md section 2 line 79 lists the tags as "sol wm sn sc vg hkr gs aex ck cs wg" and section 12's nav table lists the classes in the matching order, and the measurement above agrees with that order at all eleven positions. What was wrong was section 12's NAMES. Three of its eleven entries -- "Sawbones", "CS", "Wraith" -- are not JobModel.JobName values at all, and two more -- "AEX", "War Machine" -- are not the game's spelling. The fault was never the pairing; it was that nobody checked the list being paired against. design.md section 12 still carries those five names as of 2026-09-14 and is the upstream fix. [measured 2026-09-14] [measured 2026-09-14]
+
+THE TITLE AND THE TOGGLE LABEL WERE WRONG AND ARE CORRECTED HERE. The title read "War Machine Talent Balance" and the label read "Enable War Machine Talent Balance". They now read "Warmachine Talent Balance" and "Enable Warmachine Talent Balance", which is the game's own spelling of JobName for JobId 2. The old text differed only in spacing; the game writes it as one word, "Warmachine".
+
+NOT RENAMED, DELIBERATELY: the subsystem name, the field path and the enable key all stay "TalentsWarMachine". Those three are the one .cfg key this file declares, and check_schema.py asserts 43 cfg keys on disk against 43 declared across 43 schema files. Renaming any of them breaks that gate. The filename tag "wm" and the overlay filenames are likewise unchanged: the overlay dialect keys the target table off the filename.
+
+There is no cyberware pack. An earlier version of Phase 4 listed 12 packs and routed 9 EffectModel rules into EffectModel.cyberware.csv; that file does not exist and those 9 CritMultiBase rules are slot-8 implant effects, edited in the slot 8 implant table (tasks.md Phase 4's correction).
+
+THE KEY IS ON DISK; THE SLICE IS NOT. This file declares the key and nothing else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off while the slice has no file changes nothing, because there is no file for the verdict to close.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/EffectModel.wm.csv', 'ckf.hardmode.d/JobNodeModel.wm.csv', 'ckf.hardmode.d/TalentModel.wm.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] TalentsWarMachine = true  ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.TalentsWarMachine` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Warmachine Talent Balance | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.TalentsWarMachine` | Turn this off and these rows are left exactly as the game ships them. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
+## TalentsWraith
+
+**Wireghost Talent Balance** &nbsp;·&nbsp; `.cfg` section `[TalentsWraith]` &nbsp;·&nbsp; declared in `schema/talentswraith.schema.json`
+
+Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice's file never enters RulePlan.
+
+A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack is two or three, because its rows are rows of two or three game tables and the overlay dialect keys the target table off the filename (design.md section 2).
+
+Arrives in Phase 4 of split-config-into-toggleable-slices.
+
+Files this toggle gates:
+
+```text
+  EffectModel.wg.csv
+  JobNodeModel.wg.csv
+```
+
+One of the 11 talent-balance class packs, 2 files behind this one toggle. 11 packs, 32 files, 236 rules in total (tasks.md Phase 4). Flipping this off skips every file listed above.
+
+The pack's filename tag is "wg". The class is Wireghost -- JobId 19, JobName "Wireghost" in sheets\raw\JobModel.csv. [measured 2026-09-14; the join is written out in the CORRECTION below.]
+
+CORRECTION, 2026-09-14. The tag-to-class pairing on this file had never been measured. This block used to read: "The tag-to-class pairing is positional: design.md section 2 lists the tags and section 12 lists the classes in the same order and the same count, and neither document pairs one with the other in words. [fitted -- the conversion script in Phase 4 is what settles it, by naming the rules it puts in each file.]" That was a guess off two same-length lists, and it is what produced the wrong class names. The pairing is measured now, by joins that never touch design.md:
+
+```text
+  1. Every JobNodeId in ckf.hardmode.d/JobNodeModel.wg.csv (3 of 3, its
+     first column) joins sheets\raw\JobNodeModel.csv on JobNodeId. Every
+     matched row carries JobId 19, which sheets\raw\JobModel.csv spells
+     JobName "Wireghost". No id failed to match.
+  2. There is no TalentModel.wg.csv -- this pack is 2 files, not 3 --
+     so the second join is unavailable here. The JobNodeModel join alone
+     settles it, and the three node names it returns ("Kill Switch 3",
+     "Manifest Trace 3", "Radio Silence 7") are Wireghost nodes.
+```
+
+THE ORDER WAS RIGHT; THE NAMES WERE NOT. Re-checked against the two lists the guess used: design.md section 2 line 79 lists the tags as "sol wm sn sc vg hkr gs aex ck cs wg" and section 12's nav table lists the classes in the matching order, and the measurement above agrees with that order at all eleven positions. What was wrong was section 12's NAMES. Three of its eleven entries -- "Sawbones", "CS", "Wraith" -- are not JobModel.JobName values at all, and two more -- "AEX", "War Machine" -- are not the game's spelling. The fault was never the pairing; it was that nobody checked the list being paired against. design.md section 12 still carries those five names as of 2026-09-14 and is the upstream fix. [measured 2026-09-14] [measured 2026-09-14]
+
+THE TITLE AND THE TOGGLE LABEL WERE WRONG AND ARE CORRECTED HERE. The title read "Wraith Talent Balance" and the label read "Enable Wraith Talent Balance". They now read "Wireghost Talent Balance" and "Enable Wireghost Talent Balance", which is the game's own spelling of JobName for JobId 19. "Wraith" does not appear in JobModel.JobName at all.
+
+NOT RENAMED, DELIBERATELY: the subsystem name, the field path and the enable key all stay "TalentsWraith". Those three are the one .cfg key this file declares, and check_schema.py asserts 43 cfg keys on disk against 43 declared across 43 schema files. Renaming any of them breaks that gate. The filename tag "wg" and the overlay filenames are likewise unchanged: the overlay dialect keys the target table off the filename.
+
+There is no cyberware pack. An earlier version of Phase 4 listed 12 packs and routed 9 EffectModel rules into EffectModel.cyberware.csv; that file does not exist and those 9 CritMultiBase rules are slot-8 implant effects, edited in the slot 8 implant table (tasks.md Phase 4's correction).
+
+This pack has NO TalentModel file, so it is two files, not three (tasks.md Phase 4).
+
+THE KEY IS ON DISK; THE SLICE IS NOT. This file declares the key and nothing else -- the rows arrive in the phase named above and are added to this same file then -- but the key itself is bound and written today: Slices.Init binds every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above the master-switch bail-out, so BepInEx writes the line on any launch and check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\gates-phase1b.txt]. Until that run the tag on this sentence read "[measured 2026-09-13]" when what had been measured was the C#, not the file.
+
+CORRECTION, 2026-09-13. This block used to read "NOT ON DISK, AND NEITHER IS THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin, so BepInEx binds nothing for this key and writes no line for it, and check_schema.py reports it MISSING until the plugin binds it and the game is launched." That was true when written and is false now. Plugin.cs no longer binds anything directly; the one Binds.Bind call site is in Slices.Init (Slices.cs).
+
+Turning this key off while the slice has no file changes nothing, because there is no file for the verdict to close.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Turn this off and these rows are left exactly as the game ships them.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+| `overlays` | `['ckf.hardmode.d/EffectModel.wg.csv', 'ckf.hardmode.d/JobNodeModel.wg.csv']` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] TalentsWraith = true      ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.TalentsWraith` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Wireghost Talent Balance | On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.TalentsWraith` | Turn this off and these rows are left exactly as the game ships them. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
 ## Progression
 
-**Team Power Level Award** &nbsp;·&nbsp; `ckf.hardmode.json#teampl` &nbsp;·&nbsp; declared in `schema/teampl.schema.json`
+**Team Power Level Award** &nbsp;·&nbsp; `.cfg` section `[Progression]` &nbsp;·&nbsp; declared in `schema/teampl.schema.json`
 
-> **RETROACTIVE CONTROLS IN THIS SUBSYSTEM.** `enabled` and `override` re-price existing save data. Changing one does not only affect what happens next; it rewrites what already happened, and the substituted figure persists into the save.
+> **RETROACTIVE CONTROL IN THIS SUBSYSTEM.** `override` re-prices existing save data. Changing one does not only affect what happens next; it rewrites what already happened, and the substituted figure persists into the save.
 
 CKF Hard Mode - Team Power Level award.
 
@@ -1024,19 +3933,19 @@ To tell it is working, look for the reconcile line in the log: before substituti
 
 | Role | File |
 |---|---|
-| `json` | `ckf.hardmode.json` |
+| `cfg` | `ckf.hardmode.cfg` |
+| `json` | `ckf.hardmode.d/teampl.json` |
 | `legacyJson` | `ckf.hardmode.teampl.json` |
-| `section` | `teampl` |
 
 ### Enable chain
 
 Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
 
 ```text
-  document "enabled": true                    ckf.hardmode.json#teampl — checked after the document loads
+  cfg      [Slices] Progression = true        ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
 ```
 
-**One gate.** 3.0 collapsed the chain: the `.cfg` key that used to gate this subsystem before its settings were read is gone, and `"enabled"` in its own section is the whole of it. One consequence worth holding: a `ckf.hardmode.json` that cannot be read costs this subsystem its switch as well as its values, and the log says which of the two it is rather than implying someone set a toggle.
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
 
 Outside every chain in this document sits `[General] Enabled`, which since 3.0 is the only key in `ckf.hardmode.cfg`. `general.schema.json` records that its bail-out sits above every subsystem init in `Plugin.Load()`, and that it used to sit underneath — which meant `Enabled = false` still let ModelRules rewrite every row and PowerLevelCap overwrite every calculation.
 
@@ -1046,15 +3955,15 @@ Outside every chain in this document sits `[General] Enabled`, which since 3.0 i
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| **`enabled`** | json | `bool` | `form` | `true` |  |  |  | **RETROACTIVE** | Enabled | Recompute Team Power Level from the 'override' section instead of the game's table. 3.0 moved this switch out of the cfg key [Progression] Enabled and into this section; it is the whole enable chain for this subsystem. ALWAYS RETROACTIVE: turning it on re-prices every past mission at load, and the substituted total persists into the save, so turning it back off leaves a modded figure behind. RetroactiveTable was removed in 2.12.0 — it was this subsystem's only mode, so it had nothing left to switch, and the other three levers (GainScalar, GainOverride and a 'remap' list, all of which worked by rewriting a row's join keys so the award had to snap to one of the 63 shipped cells) went in 2.11.0 (Progression.cs:49-60). HOW TO TELL IT IS WORKING: before substituting anything the plugin sums the GAME'S values over the same rows and compares them with what the game just returned, and logs 'Progression: reconciled <total> over <n> row(s).' when they agree. If that line does not appear, the plugin could not reproduce the game's own total and has left Team PL exactly as the game computed it — on purpose, not because the subsystem is off (Progression.cs:291-322). To watch the award itself, trace RPG.Database.GameDb.SumGameMissionScore; that setting belongs to the separate CKF Data Dump plugin's [Diagnostics] section, not to any key this schema declares (Plugin.cs:57-58). The victory screen is not evidence either way — it reads a different path at a different time. |
-| `table` | json | `table` | `readonly` | _none declared_ |  |  |  |  | Game's own table (reference) | The game's shipped values. The mod checks its own arithmetic against these before substituting. Editing changes no award and can make the reconcile fail, which silently disables the retroactive path. It ships 63 cells: classes 1-3 across MissionPowerLevel 0-10, plus a negative-level band from -1 to -10 whose fractions are negative. Regenerate it from the CKF Data Dump plugin's ckf-dump/MissionPowerLevelModel.csv if the game updates. [unverified: ckf.hardmode.teampl.json:97-98 records that no negative level has been seen on an awarded row and that their purpose is unknown; nothing in this repository confirms or explains them.] |
+| `Slices.Progression` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Team Power Level Award | Slice toggle. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice never enters RulePlan. THIS IS THE GATE. Slices.Init binds every key in Binds.All (Slices.cs) and is called from Plugin.Load (Plugin.cs), above the master-switch bail-out, so BepInEx writes the line whether the mod is on or off. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg is 3,238 bytes carrying [General] and [Slices] and all 43 keys, and check_schema.py --game printed "0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s)." at rc 0 [measured, Logs\\gates-phase1b.txt]. The tag on this sentence used to sit before that run: it read "[measured 2026-09-13]" when what had been measured was the C#, not the file. The file has now been measured too. CORRECTION, 2026-09-13: this doc used to say "the section's own \\"enabled\\" field is still on disk and is still the gate the plugin reads" and "NOT ON DISK ... check_schema.py reports it MISSING". Both were true when written and are false now. The section's "enabled" field is deleted from this schema and the gate is this key. The RETIRED KEY IS STILL PARSED, into a report-only bool? RetiredEnabled ([JsonPropertyName("enabled")]), because four subsystems refuse a whole section on an unknown key (ConfigDoc.ReadSection, ConfigDoc.cs) and an upgraded document would otherwise switch OFF. Slices.ReportRetiredGate (Slices.cs) names it: Warning normally, Error when the retired value is false and this key is not. Nothing branches on it -- grep RetiredEnabled finds one declaration and one report call per subsystem and no read. It is a migration report, not a second gate. The key is named for the subsystem, Progression, not for its document section, which is "teampl". FILES THIS TOGGLE GATES: ckf.hardmode.d/MissionPowerLevelModel.generated.json. That file is the victory-screen label mirror of this subsystem's own award. scripts/gen_teampl_labels.py writes it from teampl.override merged over teampl.table (the mirror invariant below, and gen_teampl_labels.py:24-36), and serve.py regenerates it inside the same save transaction (design.md section 1). It reaches the game through the overlay path, not through Progression: Overlays.cs:38-45 makes a .json in ckf.hardmode.d an ordinary rules file, so ModelRules postfixes the materialised MissionPowerLevelModel row the victory screen re-reads, while Progression postfixes GameDb.SumGameMissionScore, which is a SQL aggregate that materialises no row. Two layers, one number. WHY THE SLICE CLAIMS IT: leave it unclaimed and [Slices] Progression = false reverts the award to stock while the mirror still rewrites the label -- a stock award with a lying label, which is the exact half-applied state design.md section 3 exists to make unreachable and which this schema's own linkedEnable reason already names as logging nothing. CORRECTION, 2026-09-13: design.md section 2 lists this file in the "enemy gear, unchanged" block at lines 78-81, alongside ArmorModel.csv, WeaponModel.csv and MonsterTypeModel.csv. That grouping is wrong twice. It is not enemy gear -- no armour, weapon or monster row is involved -- and it is not unchanged: it is rewritten every time teampl.override is edited. The four files were grouped by what this change does not create, not by what their rows are. Sections 1 and 12 are the ones to follow: section 1 names this file as this subsystem's mirror, and section 12 puts Progression in Systems and leaves Enemy Gear uneditable. |
+| `table` | json | `table` | `readonly` | _none declared_ |  |  |  |  | Game's own table (reference) | The game's shipped values. The mod checks its own arithmetic against these before substituting. Editing changes no award and can make the reconcile fail, which silently disables the retroactive path. It ships 63 cells: classes 1-3 across MissionPowerLevel 0-10, plus a negative-level band from -1 to -10 whose fractions are negative. Regenerate it from D:\\ckf-data-modding\\sheets\\raw\\MissionPowerLevelModel.csv if the game updates. [unverified: ckf.hardmode.teampl.json:97-98 records that no negative level has been seen on an awarded row and that their purpose is unknown; nothing in this repository confirms or explains them.] |
 | **`override`** | json | `table` | `matrix` | _none declared_ |  |  |  | **RETROACTIVE**, matrix axes, over `table` | Award override | Per-cell replacement for the award. A cell absent here keeps its 'table' value, and a cell present here replaces it outright - the value is used verbatim, with no snapping to a shipped cell and no clamp of any kind in the code (Progression.cs:150-152, 340-342). A cell with no 'table' value works too: it simply contributes its own figure to the sum, and gen_teampl_labels.py emits its label rule marked '(no stock cell)'. THE RANGES BELOW ARE GUARD RAILS FOR THE EDITOR, NOT ENGINE LIMITS. ActionClass runs 0-3 because that is what the save files rows under; the shipped table has no class-0 band, so a class-0 override has no stock value behind it and re-prices every LEGWORK row from zero. PowerLevelFraction is allowed to go negative because the game's own table does. A worked example: an override cell of ActionClass 2, MissionPowerLevel 7, PowerLevelFraction 0.015 makes Treaty contracts at PL 7 pay a solo hack's rate, 0.03 down to 0.015, and setting the same cell to 0 stops that class and level advancing the team at all. |
 
 **What the config GUI shows for these fields.**
 
 | Field | GUI help |
 |---|---|
-| `enabled` | Recompute Team Power Level from the override grid instead of the game's table. |
+| `Slices.Progression` | Turn this off and this part of the mod does nothing; the game uses its own values. The master switch on the first page turns off everything at once. |
 | `table` | The game's shipped values. The mod checks its own arithmetic against these before substituting. |
 | `override` | Per-cell replacement of PL gains. A cell absent here keeps its reference value. I've picked the initial numbers to roughly have completionist playthroughs end around PL 10 and keep PL gains flat in order to have enemies continue scaling at a similar pace in the late game. |
 
@@ -1086,11 +3995,11 @@ On disk this is a JSON **array** of row objects. Matrix axes: rows are `ActionCl
 
 | | |
 |---|---|
-| Source | `ckf.hardmode.json#teampl.override[]` |
+| Source | `ckf.hardmode.d/teampl.json#override[]` |
 | Target | `ckf.hardmode.d/MissionPowerLevelModel.generated.json` |
 | Matched on | `ActionClass`, `MissionPowerLevel` |
 | Value column | `PowerLevelFraction` |
-| Merged with | `ckf.hardmode.json#teampl.table[]` |
+| Merged with | `ckf.hardmode.d/teampl.json#table[]` |
 | Target is machine-owned | yes — rewritten wholesale, never hand-edited |
 
 **Reason.** The award is a SQL aggregate that materialises no row; the victory screen re-reads the materialiser. Two layers, one number. The drift was measured: a rule set to 3.0 printed 'Team gained 3 PL' while the sum moved 0.015. scripts/gen_teampl_labels.py is what writes the target: regenerate it after editing 'override' and never hand-edit it. It emits a rule only for cells whose merged value differs from the game's own, so an unchanged run reproduces the file byte for byte.
@@ -1099,8 +4008,8 @@ On disk this is a JSON **array** of row objects. Matrix axes: rows are `ActionCl
 
 | | |
 |---|---|
-| Keys | `ckf.hardmode.json#teampl.enabled`, `ckf.hardmode.json#modelrules.enabled` |
+| Keys | `Slices.Progression`, `Slices.ModelRules` |
 
-**Reason.** Progression alone gives a correct award with a stock label; ModelRules alone gives a stock award with a lying label. Neither direction logs anything. 3.0 moved both switches out of the cfg and into the merged document, so the keys are file#path rather than Section.Key.
+**Reason.** Progression alone gives a correct award with a stock label; ModelRules alone gives a stock award with a lying label. Neither direction logs anything. 3.0 moved both switches out of the cfg and into the merged document, so the keys are file#path rather than Section.Key. CORRECTION, 2026-09-13: that move is reversed and so is the spelling. Phase 1 of split-config-into-toggleable-slices put both gates back in ckf.hardmode.cfg, and these keys are Section.Key again. They HAD to move with them: check_schema.py's inv_value reads the live document for a file#path key (check_schema.py:128-137), and the retired "enabled" keys are still on disk by design so an upgraded section is not refused for an unknown key, so the old spelling went on enforcing a pairing between two keys nothing reads -- and a half-on pair is INVARIANT, which serve.py's BLOCKING refuses a save on. Both spellings are supported by the same function: Section.Key resolves against load_cfg's dict (check_schema.py:138-140) and inv_bool coerces the raw string (check_schema.py:143-147). ONE COVERAGE LOSS, stated rather than hidden: under --no-cfg the cfg dict is empty (check_schema.py:199), inv_value returns not-found, and the group is skipped in silence rather than reported. The file#path spelling was checked under --no-cfg because the document is read either way. [measured 2026-09-13, fixture run of both spellings against check_schema.py]
 
 ---

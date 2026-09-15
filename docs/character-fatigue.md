@@ -9,7 +9,7 @@ Settings: `docs/config-reference.md` (Fatigue section), generated from
 
 **RUN44–RUN47** mark facts observed in a live save (2026-08-29/30); the rest are
 read off `global-metadata.dat`, the interop DLLs' `NativeMethodInfoPtr_*` field
-names, the `BepInEx/ckf-dump/` save CSVs and `en-US.json`. **[unverified]** marks
+names, the `D:\ckf-data-modding\sheets\raw-save\` save CSVs and `en-US.json`. **[unverified]** marks
 a claim never observed.
 
 ---

@@ -21,7 +21,7 @@ how the set was generated and the `_reference/` index.
 | Stats no column exists for — damage %, armour, evasion | `EffectModel`, a rule in `ckf.hardmode.rules.json` |
 | Who fills a roster slot, and how often | `MonsterGroupMemberModel`, a rule |
 
-**Column names come from `BepInEx/ckf-dump/<Table>.csv`, written by the live
+**Column names come from `D:\ckf-data-modding\sheets\raw\<Table>.csv`, written by the live
 game.** `Aug21Sheets/` is stale and has already put a wrong id in a config.
 
 Related: [`workflow.md`](workflow.md) for installing, dumping, validating and
@@ -77,7 +77,7 @@ damage of 144-500, which reads as percent. [unverified]
 Twenty blocks, twenty tiers each. `_reference/gear-tiers.csv` gives each
 tier's id (its `ProvidedBy` column names the per-family file from before the
 merge; in `WeaponModel.csv` the row's `_comment` names the block). The shipped
-PL 1-10 shape each new tier continues is in `BepInEx/ckf-dump/WeaponModel.csv`,
+PL 1-10 shape each new tier continues is in `D:\ckf-data-modding\sheets\raw\WeaponModel.csv`,
 which is the ground truth for it.
 
 The columns that carry a weapon: `BallisticDamage1`, `PhysicalDamage1`,

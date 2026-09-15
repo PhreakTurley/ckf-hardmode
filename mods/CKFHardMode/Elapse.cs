@@ -188,7 +188,17 @@ namespace CKFHardMode
 
         private sealed class Options
         {
-            [JsonPropertyName("enabled")]    public bool Enabled { get; set; } = true;
+            // RETIRED 2026-09-13. This used to be
+            //     [JsonPropertyName("enabled")] public bool Enabled { get; set; } = true;
+            // and Init branched on it. The gate is [Slices] Elapse in
+            // ckf.hardmode.cfg now (design.md section 3). Still parsed, into a
+            // bool?, so an existing document is not refused for a key that maps
+            // to no member; nothing branches on it.
+            //
+            // credits.enabled and stress.enabled are NOT retired. They gate
+            // blocks inside this subsystem rather than the subsystem, so they
+            // are settings.
+            [JsonPropertyName("enabled")]    public bool? RetiredEnabled { get; set; }
             [JsonPropertyName("logFirst")]   public int LogFirst { get; set; } = 40;
             [JsonPropertyName("tiers")]      public TiersBlock Tiers { get; set; }
             [JsonPropertyName("credits")]    public CreditsBlock Credits { get; set; }
@@ -263,23 +273,33 @@ namespace CKFHardMode
 
         public static void Init(Harmony harmony)
         {
-            // 3.0: one gate, not two. [Elapse] Enabled is gone from
-            // ckf.hardmode.cfg and "enabled" in the "elapse" section is the
-            // whole chain, so the file is read first and the switch is read out
-            // of it. logFirst came the same way; it used to be bound above this
-            // early return so BepInEx would keep writing the key into the cfg
-            // on the disabled path, and a JSON key needs nothing done to it to
-            // stay on disk.
+            // CORRECTION, 2026-09-13. This used to read "3.0: one gate, not
+            // two. [Elapse] Enabled is gone from ckf.hardmode.cfg and
+            // \"enabled\" in the \"elapse\" section is the whole chain, so
+            // the file is read first and the switch is read out of it. logFirst
+            // came the same way; it used to be bound above this early return so
+            // BepInEx would keep writing the key into the cfg on the disabled
+            // path, and a JSON key needs nothing done to it to stay on disk."
+            //
+            // It is still one gate, and it is the other one. [Slices] Elapse in
+            // ckf.hardmode.cfg is the whole chain, and it is read BEFORE the
+            // section (design.md section 3). logFirst stays a JSON setting. The
+            // note about BepInEx dropping an unbound key is why Slices.Init
+            // binds all 43 eagerly, above Plugin.Load's master-switch bail-out.
+            // This subsystem WRITES TO THE SAVE, so the ordering matters more
+            // here than anywhere else.
+            if (!Slices.On("Elapse"))
+            {
+                Plugin.Log.LogInfo(Slices.OffBecause("Elapse",
+                    "no hook is installed and nothing is written to the save."));
+                return;
+            }
+
             o = Load();
             if (o == null) return;                       // Load already said why
 
-            if (!o.Enabled)
-            {
-                Plugin.Log.LogInfo("Elapse: \"enabled\": false in the \"" + ConfigDoc.Elapse
-                                 + "\" section of " + ConfigDoc.FileName + " — no hook "
-                                 + "installed, nothing written.");
-                return;
-            }
+            Slices.ReportRetiredGate("Elapse", ConfigDoc.Elapse,
+                                     "Elapse", o.RetiredEnabled);
             logFirst = o.LogFirst;
             if (!Validate()) return;
 
@@ -332,16 +352,28 @@ namespace CKFHardMode
                     // AGENTS.md §3. "The section is not there" and "the document
                     // could not be read" are different findings: WhyNo says
                     // which, and the second is an Error, not a Warning.
-                    // 3.0: this used to say "restore it from the mod's
-                    // defaults" without saying where those were, because they
+                    // CORRECTION, 2026-09-13 (Phase 3). This comment used to
+                    // read: "3.0: this used to say 'restore it from the mod's
+                    // defaults' without saying where those were, because they
                     // did not exist. They are an EmbeddedResource now, so the
                     // instruction can be the actual one: delete the file and
-                    // the next launch writes the shipped copy back.
+                    // the next launch writes the shipped copy back." The second
+                    // half is false and had been since the defaults stopped
+                    // being embedded — Defaults.cs's own header records the
+                    // removal and Defaults.Install writes nothing. Telling a
+                    // player to delete the file would have cost them their
+                    // tuning with nothing able to restore it. The instruction
+                    // below is the one Defaults.Install already gives.
+                    //
+                    // The file named is this slice's own now, not the merged
+                    // document: Phase 3 of split-config-into-toggleable-slices.
                     var why = $"Elapse: {ConfigDoc.WhyNo(ConfigDoc.Elapse)}, so there are no "
                         + "amounts to work from. Doing nothing. To start again from the values "
-                        + "the mod ships, delete BepInEx/config/" + ConfigDoc.FileName
-                        + " and relaunch — it is written back whenever it is absent.";
-                    if (ConfigDoc.CouldNotRead) Plugin.Log.LogError(why);
+                        + "the mod ships, extract BepInEx\\config from the release zip over "
+                        + "your game folder; that is where "
+                        + ConfigDoc.DirName + "/" + ConfigDoc.FileFor(ConfigDoc.Elapse)
+                        + " comes from. Nothing writes it back on its own.";
+                    if (ConfigDoc.CouldNotRead(ConfigDoc.Elapse)) Plugin.Log.LogError(why);
                     else Plugin.Log.LogWarning(why);
                     return null;
                 }

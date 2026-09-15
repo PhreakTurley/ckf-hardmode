@@ -4,11 +4,14 @@ for Cyber Knights: Flashpoint
 
 WHAT IT IS
 
-A difficulty overhaul. It retunes the enemy, weapon and armour tables, changes
-how mission rewards and mission power level are calculated, and adds a merc
-fatigue system and a penalty for letting a mission's clock run down. Every
-number it uses is in a config file you can edit, and the editor in this zip is
-how you edit them.
+A difficulty overhaul. It retunes the enemy, weapon, armour, implant and
+consumable tables, changes how mission rewards and mission power level are
+calculated, and adds a merc fatigue system and a penalty for letting a
+mission's clock run down. Every number it uses is in a config file you can
+edit, and the editor in this zip is how you edit them.
+
+It is built in slices. Each part of the mod is one file and one on/off switch,
+so you can keep the parts you want and turn off the parts you don't.
 
 
 INSTALL
@@ -25,9 +28,42 @@ That is the whole install. The config files come out of the zip with everything
 else, so there is nothing to run first. Nothing is installed into Windows,
 nothing runs in the background, and nothing has to be run as administrator.
 
-UPDATING an install you already have: extract everything EXCEPT BepInEx\config,
-and the settings you have tuned stay as they are. Extract that folder too and
-they are replaced by the ones this version ships.
+
+UPGRADING FROM AN EARLIER VERSION -- READ THIS FIRST
+
+Extract this zip over your game folder and let it overwrite everything. You do
+not convert anything, you do not migrate anything, and you do not keep your old
+settings files. You get this version's tuning.
+
+Then do one thing by hand:
+
+    DELETE  BepInEx\config\ckf.hardmode.json
+
+Before or after extracting; either is fine. Delete it, don't rename it and
+don't leave it in that folder under another name ending in .json.
+
+WHY. Up to version 3, every setting lived in that one file, ckf.hardmode.json.
+From version 4 each part of the mod has its own file in BepInEx\config\
+ckf.hardmode.d\ instead. Extracting this zip puts the new files there -- but
+extracting never DELETES anything, so your old ckf.hardmode.json is still
+sitting beside them.
+
+If both are there, the mod refuses to run. It does not pick one. Two files
+holding the same settings means one of them is ignored, and quietly choosing
+which of your edits count is the one thing it will not do. So it stops, writes
+this into BepInEx\LogOutput.log, and the game runs completely unmodified:
+
+    ConfigDoc: BOTH CONFIG LAYOUTS ARE ON DISK.
+    Plugin: stopping here. The game runs UNMODIFIED this launch.
+
+That is safe -- nothing is damaged and nothing is lost. But the mod does nothing
+at all until you delete the old file. Delete it and relaunch.
+
+If you were on version 4 already, there is nothing to delete. Extract over the
+top and you are done.
+
+If you had retuned settings you want to keep, copy the whole BepInEx\config
+folder somewhere else BEFORE you extract. The zip's copy overwrites yours.
 
 
 THE FIRST LAUNCH TAKES A WHILE
@@ -48,6 +84,72 @@ It names every file it could not find. Extracting the zip's BepInEx\config
 folder over the game folder again puts them back.
 
 
+TURNING PARTS OF THE MOD ON AND OFF
+
+Open BepInEx\config\ckf.hardmode.cfg in Notepad, or use the editor.
+
+The first key, under [General], is the master switch:
+
+    Enabled = true
+
+Set it to false and the mod does nothing at all, without uninstalling it.
+
+Under it, [Slices] has one switch per part of the mod -- 42 of them. Set one to
+false and that part alone stops applying; everything else still runs. They are,
+in the order they appear in the file:
+
+    ConsumablesChems            chem consumables
+    ConsumablesDevices          device consumables
+    ConsumablesGrenades         grenade consumables
+    ConsumablesMatrix           matrix consumables
+    ConsumablesMedical          medical consumables
+    ConsumablesSploitkits       sploitkit consumables
+
+    CyberweaponsClaws           claw cyberweapons
+    CyberweaponsLasers          eye laser cyberweapons
+
+    Difficulty                  widens the game's own custom-difficulty
+                                sliders past their stock bounds
+    Elapse                      the mission elapse penalty -- what it costs to
+                                let a mission's clock run down
+    Fatigue                     mission fatigue: Running Empty and Off-Duty
+    GearClasses                 player weapon classes -- recoil and the rest
+
+    ImplantsGlobal              implant multipliers that apply across the board
+    ImplantsSlot01 .. Slot11    implant tuning, one switch per implant slot
+
+    MissionRewards              per-mission-type reward overrides
+    ModelRules                  the declarative row-by-row game table edits
+    PowerLevel                  the mission power level ceiling -- lets missions
+                                generate above PL 10
+    Progression                 the Team Power Level award, and the victory
+                                screen labels that mirror it
+    RewardCurve                 the baseline reward curve
+    RuleModel                   the game's own rule constants
+    SelfCheck                   OFF by default. A diagnostic that writes a
+                                report and changes nothing in the game
+
+The eleven talent switches are one per class. FIVE OF THEM ARE NAMED AFTER A
+CLASS THE GAME DOES NOT HAVE. The key names are older than the class names and
+they are kept exactly as they are, because renaming one would throw away the
+setting you had saved under it. Read this column, not the key:
+
+    TalentsAEX                  Agent EX
+    TalentsCS                   Cybersword
+    TalentsCyberKnight          Cyber Knight
+    TalentsGunslinger           Gunslinger
+    TalentsHacker               Hacker
+    TalentsSawbones             Scourge
+    TalentsSniper               Sniper
+    TalentsSoldier              Soldier
+    TalentsVanguard             Vanguard
+    TalentsWarMachine           Warmachine
+    TalentsWraith               Wireghost
+
+Relaunch the game to apply a change. Turning a slice off leaves its file alone
+-- turn it back on and your numbers are still there.
+
+
 CHANGING SETTINGS
 
 Double-click CKF-Config-Editor.exe.
@@ -65,29 +167,30 @@ On its first run the editor writes CKF-Config-Editor.settings.json next to
 itself. It holds the path to your game folder and nothing else. Deleting it is
 safe; the editor writes it again.
 
-To turn the whole mod off without uninstalling it, open
-BepInEx\config\ckf.hardmode.cfg in Notepad and set Enabled = false.
-
 
 THE CONFIG FILES
 
 They come out of this zip into BepInEx\config:
 
-    ckf.hardmode.json          everything the editor edits
-    ckf.hardmode.rules.json    the rule set
+    ckf.hardmode.cfg           the switches: [General] Enabled, plus one
+                               [Slices] key per part of the mod
     ckf.hardmode.selfcheck.csv the values the mod checks itself against
-    ckf.hardmode.cfg           one key, the master on/off switch
-    ckf.hardmode.d\            three table overlays and one generated file
+    ckf.hardmode.d\            one file per part of the mod, plus the table
+                               overlays and one generated file
 
-The mod does not write them. Delete one and it is gone: the mod reports it
-missing in the log and the part of the mod that reads it has nothing to work
-from. The exception is ckf.hardmode.cfg, which BepInEx owns and writes back
-itself. Extracting BepInEx\config from this zip over the game folder is the
+Everything the editor edits is in ckf.hardmode.d\. A .json there holds one
+part's settings; a .csv there is a table overlay, one line per game row
+changed. The editor edits both.
+
+The mod does not write these. Delete one and it is gone: the mod reports it
+missing in the log and that part of the mod has nothing to work from. The
+exception is ckf.hardmode.cfg, which BepInEx owns and rewrites itself on every
+launch. Extracting BepInEx\config from this zip over the game folder is the
 reset button, and it puts the shipped values back over your own.
 
-The three CSVs under ckf.hardmode.d are table overlays. The editor does not
-edit them. Open them in a spreadsheet if you want to change them; the copies in
-this zip are the originals to go back to.
+There is NO ckf.hardmode.json and NO ckf.hardmode.rules.json in this version.
+If either is in BepInEx\config, it is left over from an older install -- see
+UPGRADING above.
 
 
 BACK UP YOUR SAVES

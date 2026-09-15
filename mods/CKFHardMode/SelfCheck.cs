@@ -146,10 +146,14 @@ namespace CKFHardMode
         // the unknown-key report.
         private sealed class Options : ConfigDoc.IHasUnknownKeys
         {
-            // enabled defaults to false here and true everywhere else; that is
-            // deliberate — this is a diagnostic, not part of play — and the
-            // schema carries the same false.
-            [JsonPropertyName("enabled")] public bool Enabled { get; set; }
+            // RETIRED 2026-09-13. This used to be
+            //     [JsonPropertyName("enabled")] public bool Enabled { get; set; }
+            // defaulting to false here and true everywhere else, because this is
+            // a diagnostic rather than part of play. That default now lives on
+            // [Slices] SelfCheck, which Plugin.Binds.g.cs declares false while
+            // every other slice key is true. The key is still parsed so an
+            // existing document is not refused; nothing branches on it.
+            [JsonPropertyName("enabled")] public bool? RetiredEnabled { get; set; }
             [JsonPropertyName("file")]    public string File { get; set; } = "";
             [JsonPropertyName("output")]  public string Output { get; set; } = "";
             [JsonExtensionData] public Dictionary<string, JsonElement> Unknown { get; set; }
@@ -171,14 +175,26 @@ namespace CKFHardMode
             // document with no "selfcheck" section is an ordinary configuration
             // and says nothing about a mistake. An UNREADABLE document is still
             // an Error - the same split MissionRewards makes.
+            if (!Slices.On("SelfCheck"))
+            {
+                // Info, not Warning: this is the one slice that ships OFF, so
+                // its gate being false is the ordinary state and not a finding.
+                Plugin.Log.LogInfo(Slices.OffBecause("SelfCheck",
+                    "the regression suite does not run this launch and no report is written. "
+                    + "That is the shipped state of this slice."));
+                enabled = false;
+                return;
+            }
+
             var opt = ConfigDoc.ReadSection<Options>("SelfCheck", ConfigDoc.SelfCheck,
                 "The regression suite does not run this launch and no report is written, "
                 + "which is also what it does when it is simply switched off.",
                 absentIsOrdinary: true);
             if (opt == null) return;
 
-            enabled = opt.Enabled;
-            if (!enabled) return;
+            Slices.ReportRetiredGate("SelfCheck", ConfigDoc.SelfCheck,
+                                     "SelfCheck", opt.RetiredEnabled);
+            enabled = true;
 
             var path = string.IsNullOrWhiteSpace(opt.File)
                 ? Path.Combine(configDir, "ckf.hardmode.selfcheck.csv")
@@ -200,12 +216,13 @@ namespace CKFHardMode
                 enabled = false;
                 Plugin.Log.LogError($"SelfCheck: enabled, and {Wanted.Count} expectation(s) "
                     + "loaded, but it was handed no database types. Those come from ModelRules, "
-                    + "which resolves them only when \"enabled\" is true in the \""
-                    + ConfigDoc.ModelRules + "\" section of " + ConfigDoc.FileName + ", the "
+                    + "which resolves them only when [" + Slices.Section + "] ModelRules is "
+                    + "true in ckf.hardmode.cfg, its settings in " + ConfigDoc.DirName + "/"
+                    + ConfigDoc.FileFor(ConfigDoc.ModelRules) + " could be read, the "
                     + "rules file gives it something to hook, and its initialisation finished. "
                     + "Nothing will hand SelfCheck a database instance, so NOTHING IS CHECKED "
                     + "this launch and no report is written. There should be a line above "
-                    + "saying which of those three it was.");
+                    + "saying which of those four it was.");
                 return;
             }
 

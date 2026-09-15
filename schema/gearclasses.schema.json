@@ -1,0 +1,69 @@
+{
+  "subsystem": "GearClasses",
+  "title":     "Player Weapon Classes",
+  "targets":   {
+    "cfg": "ckf.hardmode.cfg",
+    "overlays": [
+      "ckf.hardmode.d/gear-classes.csv"
+    ]
+  },
+  "enable":    { "cfg": "Slices.GearClasses" },
+
+  "doc": [
+    "Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate",
+    "cannot live inside the file it gates and the .cfg is the one file that must",
+    "parse before any other loading happens (split-config-into-toggleable-slices",
+    "design.md section 3). Off means the slice's file never enters RulePlan.",
+    "",
+    "A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack",
+    "is two or three, because its rows are rows of two or three game tables and",
+    "the overlay dialect keys the target table off the filename (design.md",
+    "section 2).",
+    "",
+    "Arrives in Phase 5 of split-config-into-toggleable-slices.",
+    "",
+    "Files this toggle gates:",
+    "  gear-classes.csv",
+    "",
+    "Ten player weapon-class rows (tasks.md Phase 5). WeaponClass 9, 18 and 19",
+    "are drone classes and get no row: drones are out of scope for this change",
+    "(design.md, 'Decided, recorded so they are not re-opened').",
+    "",
+    "THE KEY IS ON DISK; THE SLICE IS NOT. This file declares the key and nothing",
+    "else -- the rows arrive in the phase named above and are added to this same",
+    "file then -- but the key itself is bound and written today: Slices.Init binds",
+    "every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above",
+    "the master-switch bail-out, so BepInEx writes the line on any launch and",
+    "check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch:",
+    "ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed",
+    "\"0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema",
+    "file(s).\" at rc 0 [measured, Logs\\gates-phase1b.txt]. Until that run",
+    "the tag on this sentence read \"[measured 2026-09-13]\" when what had",
+    "been measured was the C#, not the file.",
+    "",
+    "CORRECTION, 2026-09-13. This block used to read \"NOT ON DISK, AND NEITHER IS",
+    "THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin,",
+    "so BepInEx binds nothing for this key and writes no line for it, and",
+    "check_schema.py reports it MISSING until the plugin binds it and the game is",
+    "launched.\" That was true when written and is false now. Plugin.cs no",
+    "longer binds anything directly; the one Binds.Bind call site is in",
+    "Slices.Init (Slices.cs).",
+    "",
+    "Turning this key off while the slice has no file changes nothing, because",
+    "there is no file for the verdict to close."
+  ],
+
+  "uiDoc": [
+    "Turn this off and these rows are left exactly as the game ships them."
+  ],
+
+  "fields": [
+    {
+      "path": "Slices.GearClasses", "in": "cfg", "type": "bool",
+      "default": true, "ui": "form",
+      "label": "Enable Player Weapon Classes",
+      "doc": "On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. THIS SLICE IS A LEVER SHEET, NOT A DIRECT OVERLAY, and targets.overlays asserts nothing either way -- it claims the file and asserts it exists. gear-classes.csv has 10 rows and 24 columns and its first column is WeaponClass, carrying the ten class ids 1, 2, 3, 4, 5, 6, 10, 11, 12, 14 [measured 2026-09-13, the live file]. There is no game table called \"gear-classes\" and those are not row ids: one row names a CLASS, and the plugin expands it at load through GearClasses.cs into one rule per class with a WeaponClass selector and an enemy-id exclusion set. A direct overlay's filename names the game table and its first column is that table's id column (Overlays.cs's header comment; design.md section 1 is the distinction). Neither holds here. The 22 lever columns are WeaponModel column NAMES, which is what makes the file look like a direct overlay on a first read; what differs is the row, and the row is what the distinction is about.",
+      "uiDoc": "Turn this off and these rows are left exactly as the game ships them."
+    }
+  ]
+}

@@ -101,6 +101,27 @@ namespace CKFHardMode
         // row by one id, and carrying that as a column name and a long rather
         // than a JsonElement keeps a ten-thousand-line overlay to a few small
         // arrays per line instead of a retained JsonDocument each.
+        // ---- the gear partition ------------------------------------------
+        //
+        // Set ONLY by GearClasses.Expand, never by JSON: there is no
+        // [JsonPropertyName] on either, so no rules file and no overlay can
+        // carry one, and Rule.Unknown will name the spelling if someone tries.
+        // This is a SELECTOR, not a new operation — proposal.md's non-goal
+        // "no new rule-engine operators" is untouched; set, multiply, add,
+        // clampMin, clampMax, clone, as and serveOn are what they were.
+        //
+        // ExcludeIds is the MonsterTypeModel pointer set resolved at load, and
+        // ExcludeIdColumn names the column to test it against. Together with
+        // Where = { WeaponClass: N } they express "class N minus the enemy
+        // set" without a single hand-maintained id range.
+        [JsonIgnore] internal string ExcludeIdColumn { get; set; }
+        [JsonIgnore] internal HashSet<long> ExcludeIds { get; set; }
+
+        /// <summary>The WeaponClass this rule came from, for the log line and
+        /// the runtime census. Zero on every rule that is not a gear-class
+        /// rule.</summary>
+        [JsonIgnore] internal int GearClass { get; set; }
+
         [JsonIgnore] internal string OverlayKeyColumn { get; set; }
         [JsonIgnore] internal long OverlayKeyValue { get; set; }
 
@@ -421,7 +442,17 @@ namespace CKFHardMode
         // the unknown-key report rather than forty lines of it here.
         private sealed class Options : ConfigDoc.IHasUnknownKeys
         {
-            [JsonPropertyName("enabled")]              public bool Enabled { get; set; } = true;
+            // RETIRED 2026-09-13. This used to be
+            //     [JsonPropertyName("enabled")] public bool Enabled { get; set; } = true;
+            // and Init branched on it. The gate is [Slices] ModelRules in
+            // ckf.hardmode.cfg now, because a gate cannot live inside the file
+            // it gates (design.md section 3). The key is still PARSED, into a
+            // bool? so that "absent" and "false" stay different answers, purely
+            // so an existing ckf.hardmode.json is not refused for a key that
+            // maps to no member -- the same treatment Fatigue.cs gives the eight
+            // flat settings removed on 2026-09-07. NOTHING BRANCHES ON IT;
+            // Slices.ReportRetiredGate names it in the log and stops there.
+            [JsonPropertyName("enabled")]              public bool? RetiredEnabled { get; set; }
             [JsonPropertyName("traceRules")]           public int TraceRules { get; set; }
             [JsonPropertyName("probeWritableColumns")] public bool ProbeWritableColumns { get; set; }
             // A stringList is a JSON array once it is in the document; it was a
@@ -434,18 +465,24 @@ namespace CKFHardMode
 
         public static void Init(Harmony harmony, string rulesPath)
         {
+            // THE GATE IS READ FIRST, and it is read from ckf.hardmode.cfg. The
+            // section below is only settings now, so an unreadable document can
+            // no longer take this subsystem's switch with it.
+            if (!Slices.On("ModelRules"))
+            {
+                Plugin.Log.LogInfo(Slices.OffBecause("ModelRules",
+                    "no rule is loaded, nothing is hooked, no clone is served and the game's "
+                    + "data is left as it ships."));
+                return;
+            }
+
             var opt = ConfigDoc.ReadSection<Options>("ModelRules", ConfigDoc.ModelRules,
                 "The row-edit engine is OFF this launch: no rule is loaded, nothing is hooked, "
                 + "no clone is served and the game's data is left as it ships.");
             if (opt == null) return;
 
-            if (!opt.Enabled)
-            {
-                Plugin.Log.LogInfo("ModelRules: \"enabled\": false in the \""
-                    + ConfigDoc.ModelRules + "\" section of " + ConfigDoc.FileName
-                    + " — no rule loaded, nothing hooked, the game's data is left as it ships.");
-                return;
-            }
+            Slices.ReportRetiredGate("ModelRules", ConfigDoc.ModelRules,
+                                     "ModelRules", opt.RetiredEnabled);
 
             TraceLimit = Math.Max(0, opt.TraceRules);
 
@@ -457,6 +494,52 @@ namespace CKFHardMode
             LoadRules(rulesPath);
             Overlays.Load(Path.Combine(Path.GetDirectoryName(rulesPath) ?? ".",
                                        "ckf.hardmode.d"), Adopt);
+
+            // THE PLAN-WIDE TOTAL. Both halves of the mod-slices requirement
+            // "A disabled slice never enters the rule plan" are asserted here.
+            //
+            // The COUNT half: N is every rule that reached Adopt, from the rules
+            // file and from every overlay file that was opened. A disabled
+            // slice's file was never opened (Overlays.Load asks before the
+            // read), so its rows are not in N and allocated no Rule.Index --
+            // nextIndex, the one counter Adopt increments, is exactly N plus the
+            // clone rules and the rules dropped for having no "model", and it
+            // is printed so the two can be reconciled from the log alone.
+            //
+            // The ORDER half: indices are handed out in walk order, which is the
+            // rules file first and then the directory in Ordinal filename order.
+            // Dropping a file from that walk shifts the absolute index of
+            // everything after it and reorders nothing, so every surviving rule
+            // keeps the relative order it had when the slice was on.
+            //
+            // WHAT THIS CANNOT SAY: how many rules a skipped file would have
+            // contributed. Nothing opened it. The files are named instead, so
+            // "skipped" and "contributed nothing" stay distinguishable --
+            // AGENTS.md §3.
+            var skippedFiles = Overlays.SkippedFiles;
+            Plugin.Log.LogInfo($"ModelRules: loaded {ByModel.Values.Sum(v => v.Count)} rule(s) "
+                + $"across {ByModel.Count} model type(s)"
+                + (CloneRules.Count > 0 ? $", plus {CloneRules.Count} clone rule(s)" : "")
+                + $"; {nextIndex} load-order index(es) allocated, from "
+                // CORRECTION, 2026-09-14 (Phase 9). This clause used to read
+                //     "from ckf.hardmode.rules.json plus {Overlays.FilesRead} overlay file(s) read"
+                // unconditionally. ckf.hardmode.rules.json is deleted, so that
+                // named a file that is not there as a source of the plan on every
+                // launch -- the reader would have had to know the count could be
+                // zero to tell "contributed nothing" from "was not there".
+                // rulesFileRules is -1 until LoadRules sets it, so "not read at
+                // all" is a third answer rather than a zero.
+                + (rulesFileRules < 0
+                    ? "no rules-file read"
+                    : rulesFileRules == 0
+                        ? $"ckf.hardmode.rules.json (absent, 0 rule(s)) plus {Overlays.FilesRead} overlay file(s) read"
+                        : $"ckf.hardmode.rules.json ({rulesFileRules} rule(s)) plus {Overlays.FilesRead} overlay file(s) read")
+                + (skippedFiles.Count == 0
+                    ? ". No slice file was skipped."
+                    : $"; {skippedFiles.Count} file(s) NOT read because their slice is off: "
+                      + string.Join(", ", skippedFiles)
+                      + ". Their row counts are not included above and are not known — "
+                      + "nothing opened them."));
 
             if (TraceLimit > 0)
                 Plugin.Log.LogWarning($"ModelRules: traceRules = {TraceLimit}. Every rule logs "
@@ -566,23 +649,71 @@ namespace CKFHardMode
             {
                 if (!File.Exists(path))
                 {
-                    Directory.CreateDirectory(Path.GetDirectoryName(path));
-                    File.WriteAllText(path, DefaultRulesJson);
-                    Plugin.Log.LogInfo($"ModelRules: wrote a starter rules file to {path}");
-                    Plugin.Log.LogInfo("ModelRules: 'rules' is empty, so nothing is applied. Worked "
-                                     + "examples are under '_examples' in that file; copy the ones you "
-                                     + "want into 'rules'. Column names come from BepInEx/ckf-dump/.");
-                    return;   // nothing to load - the file we just wrote has no rules
+                    // CORRECTION, 2026-09-14 (Phase 9). These four lines used to be
+                    //
+                    //     Directory.CreateDirectory(Path.GetDirectoryName(path));
+                    //     File.WriteAllText(path, DefaultRulesJson);
+                    //     Plugin.Log.LogInfo($"ModelRules: wrote a starter rules file to {path}");
+                    //     Plugin.Log.LogInfo("ModelRules: 'rules' is empty, so nothing is applied. ...");
+                    //
+                    // and they WROTE THE FILE BACK. That was right while
+                    // ckf.hardmode.rules.json was the mod's content: a first launch
+                    // with no rules file got a commented starter one to edit. It is
+                    // wrong now and it is not a tidy-up -- the file was DELETED on
+                    // 2026-09-14 (its 269 rules are all in ckf.hardmode.d), and this
+                    // branch would have re-created it on the very next launch, at
+                    // Info, in the directory the deletion had just cleared. Defaults
+                    // would then have counted it present, and every later launch
+                    // would read a file the 4.0 layout says does not exist.
+                    //
+                    // Nothing else calls DefaultRulesJson now. It is left declared
+                    // (member DefaultRulesJson) rather than deleted, because it is
+                    // the only remaining description of the rules dialect in this
+                    // assembly and scripts/validate_rules.py grades against the same
+                    // grammar.
+                    //
+                    // THIS CLASS NO LONGER WRITES ANYTHING TO THE CONFIG DIRECTORY.
+                    Plugin.Log.LogInfo($"ModelRules: no {Path.GetFileName(path)} in "
+                        + $"{Path.GetDirectoryName(path)}; 0 rule(s) adopted from it. This is "
+                        + "the 4.0 layout and it is EXPECTED -- Plugin.Load has already said "
+                        + "so by name above. The file is NOT re-created: what it held is in "
+                        + ConfigDoc.DirName + ", which is walked next, and writing a starter "
+                        + "file back into a directory it was deleted from would make the next "
+                        + "launch read a layout this one says does not exist.");
+                    rulesFileRules = 0;
+                    return;   // nothing to load, and nothing written
                 }
 
                 var opts = new JsonSerializerOptions { ReadCommentHandling = JsonCommentHandling.Skip,
                                                        AllowTrailingCommas = true };
+                var before = nextIndex;
                 var file = JsonSerializer.Deserialize<RuleFile>(File.ReadAllText(path), opts);
                 foreach (var r in file?.Rules ?? new List<Rule>()) Adopt(r);
-                Plugin.Log.LogInfo($"ModelRules: loaded {ByModel.Values.Sum(v => v.Count)} rule(s) " +
-                                   $"across {ByModel.Count} model type(s)" +
-                                   (CloneRules.Count > 0
-                                        ? $", plus {CloneRules.Count} clone rule(s)." : "."));
+
+                // CORRECTION, 2026-09-13. This line used to be
+                //
+                //     "ModelRules: loaded {ByModel.Values.Sum(v => v.Count)} rule(s)
+                //      across {ByModel.Count} model type(s)" (+ the clone clause)
+                //
+                // and it was emitted HERE, which is before Overlays.Load runs.
+                // Its total was therefore never the plan: Run63.log lines 32-33
+                // read "ModelRules: loaded 293 rule(s) across 8 model type(s)."
+                // immediately followed by "Overlays: 4 file(s), 3022 row(s)
+                // merged, 372 of them inserts." [measured, Logs/Run63.log] --
+                // 293 counted ckf.hardmode.rules.json alone and excluded all
+                // 3022 overlay rows, with nothing saying so.
+                //
+                // The sentence the mod-slices spec pins, "ModelRules: loaded N
+                // rule(s) across M model type(s).", now lives at the end of
+                // Init, after the overlay directory has been walked, so N is
+                // the whole plan and excluding a slice from it means something.
+                // What is left here names only this file's own contribution.
+                rulesFileRules = nextIndex - before;
+                Plugin.Log.LogInfo($"ModelRules: {nextIndex - before} rule(s) adopted from "
+                    + $"{Path.GetFileName(path)} (load-order indices {before}"
+                    + (nextIndex > before ? $"-{nextIndex - 1}" : " onwards, none")
+                    + "). The overlay directory is walked next and the plan-wide total is "
+                    + "reported after it.");
             }
             catch (Exception e)
             {
@@ -593,6 +724,12 @@ namespace CKFHardMode
         // Position in load order, shared by the rules file and the overlay
         // directory so that Rule.Index still says which edit runs first.
         private static int nextIndex;
+
+        /// <summary>How many rules ckf.hardmode.rules.json contributed this
+        /// launch. -1 means LoadRules did not run at all, 0 means it ran and the
+        /// file was not there; the plan summary prints all three differently so
+        /// "absent" is never indistinguishable from "not looked at".</summary>
+        private static int rulesFileRules = -1;
 
         // Register one rule, wherever it was read from. The rules file is
         // adopted first and the overlay directory after it, so an overlay line
@@ -1047,8 +1184,45 @@ namespace CKFHardMode
         {
             var t = row.GetType();
 
-            // The overlay selector, tested first: it is one number compare and
-            // it is the most selective thing on the rule.
+            // THE GEAR PARTITION, tested before anything else and FAIL-CLOSED.
+            //
+            // A row whose id column cannot be read does NOT match. That is the
+            // safe direction and it is a deliberate choice: the alternative is
+            // that a row we could not classify gets tuned as player gear, which
+            // for a class enemies also carry means buffing the guards — and it
+            // would be silent, because the column reads fine for every other
+            // row. "Could not look" is not "not an enemy" (AGENTS.md §3).
+            //
+            // Matchable/Numeric already warn once per column per type, so a
+            // wholesale failure here is named rather than inferred from a rule
+            // that quietly stops firing.
+            if (rule.ExcludeIdColumn != null)
+            {
+                var idAcc = Matchable(t, rule.ExcludeIdColumn, "the gear-partition id column");
+                if (idAcc == null || !Numeric(idAcc, t, "the gear-partition id column"))
+                    return false;
+                double idv;
+                if (!idAcc.TryGetNumber(row, out idv)) return false;
+                var id = (long)Math.Round(idv);
+
+                // The census sees every row tested against a gear-class rule,
+                // which is the only sampling moment this instrument has. It
+                // dedupes on id, so the cost after a row's first sighting is
+                // one HashSet lookup.
+                GearClasses.Observe(row, t, id);
+
+                if (rule.ExcludeIds != null && rule.ExcludeIds.Contains(id)) return false;
+            }
+
+            // The overlay selector: one number compare, and the most selective
+            // thing on the rule.
+            //
+            // CORRECTION, 2026-09-13. This comment used to read "tested first".
+            // It is tested second now — the gear partition above runs ahead of
+            // it, because a rule that must not touch enemy gear has to decide
+            // that before it decides anything else. No overlay rule carries an
+            // ExcludeIdColumn, so for every rule that existed before this change
+            // the branch above is one null test and the order is unchanged.
             if (rule.OverlayKeyColumn != null)
             {
                 var k = Matchable(t, rule.OverlayKeyColumn, "the overlay id column");

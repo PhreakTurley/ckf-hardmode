@@ -1,8 +1,8 @@
 {
   "subsystem": "ModelRules",
   "title": "Declarative Row Edits",
-  "targets": { "json": "ckf.hardmode.json", "section": "modelrules", "legacyJson": null },
-  "enable": { "json": "enabled" },
+  "targets": { "cfg": "ckf.hardmode.cfg", "json": "ckf.hardmode.d/modelrules.json", "legacyJson": null },
+  "enable": { "cfg": "Slices.ModelRules" },
 
   "doc": [
     "CKF Hard Mode - declarative row edits.",
@@ -46,10 +46,11 @@
 
   "fields": [
     {
-      "path": "enabled", "in": "json", "type": "bool",
+      "path": "Slices.ModelRules", "in": "cfg", "type": "bool",
       "default": true, "ui": "form",
-      "label": "Apply rules",
-      "doc": "Apply declarative record edits from ckf.hardmode.rules.json - talents, equipment, monster and character base stats."
+      "label": "Enable Declarative Row Edits",
+      "doc": "Slice toggle. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice never enters RulePlan. THIS IS THE GATE. Slices.Init binds every key in Binds.All (Slices.cs) and is called from Plugin.Load (Plugin.cs), above the master-switch bail-out, so BepInEx writes the line whether the mod is on or off. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg is 3,238 bytes carrying [General] and [Slices] and all 43 keys, and check_schema.py --game printed \"0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s).\" at rc 0 [measured, Logs\\gates-phase1b.txt]. The tag on this sentence used to sit before that run: it read \"[measured 2026-09-13]\" when what had been measured was the C#, not the file. The file has now been measured too. CORRECTION, 2026-09-13: this doc used to say \"the section's own \\\"enabled\\\" field is still on disk and is still the gate the plugin reads\" and \"NOT ON DISK ... check_schema.py reports it MISSING\". Both were true when written and are false now. The section's \"enabled\" field is deleted from this schema and the gate is this key. The RETIRED KEY IS STILL PARSED, into a report-only bool? RetiredEnabled ([JsonPropertyName(\"enabled\")]), because four subsystems refuse a whole section on an unknown key (ConfigDoc.ReadSection, ConfigDoc.cs) and an upgraded document would otherwise switch OFF. Slices.ReportRetiredGate (Slices.cs) names it: Warning normally, Error when the retired value is false and this key is not. Nothing branches on it -- grep RetiredEnabled finds one declaration and one report call per subsystem and no read. It is a migration report, not a second gate.",
+      "uiDoc": "Turn this off and this part of the mod does nothing; the game uses its own values. The master switch on the first page turns off everything at once."
     },
     {
       "path": "traceRules", "in": "json", "type": "int",

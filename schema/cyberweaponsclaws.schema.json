@@ -1,0 +1,109 @@
+{
+  "subsystem": "CyberweaponsClaws",
+  "title":     "Claw Cyberweapons",
+  "targets":   {
+    "cfg": "ckf.hardmode.cfg",
+    "overlays": [
+      "ckf.hardmode.d/cyberweapons-claws.csv"
+    ]
+  },
+  "enable":    { "cfg": "Slices.CyberweaponsClaws" },
+
+  "doc": [
+    "Slice toggle only. One key per slice in ckf.hardmode.cfg, because a gate",
+    "cannot live inside the file it gates and the .cfg is the one file that must",
+    "parse before any other loading happens (split-config-into-toggleable-slices",
+    "design.md section 3). Off means the slice's file never enters RulePlan.",
+    "",
+    "A SLICE IS THE TOGGLE, NOT THE FILE. Most slices are one file; a talent pack",
+    "is two or three, because its rows are rows of two or three game tables and",
+    "the overlay dialect keys the target table off the filename (design.md",
+    "section 2).",
+    "",
+    "Arrives in Phase 6 of split-config-into-toggleable-slices.",
+    "",
+    "Files this toggle gates:",
+    "  cyberweapons-claws.csv",
+    "",
+    "16 rows, 12 columns (tasks.md Phase 6). All 16 claws and all 16 claw",
+    "talents are untouched by the mod today; the sheet presents them with",
+    "shipped values and no override (design.md section 6). These items are",
+    "ImplantClass 27, ImplantSlot 6.",
+    "",
+    "THE KEY IS ON DISK; THE SLICE IS NOT. This file declares the key and nothing",
+    "else -- the rows arrive in the phase named above and are added to this same",
+    "file then -- but the key itself is bound and written today: Slices.Init binds",
+    "every key in Binds.All (Slices.cs), called from Plugin.Load (Plugin.cs) above",
+    "the master-switch bail-out, so BepInEx writes the line on any launch and",
+    "check_schema.py finds it. CONFIRMED ON DISK 2026-09-13, after a launch:",
+    "ckf.hardmode.cfg carries all 43 keys and check_schema.py --game printed",
+    "\"0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema",
+    "file(s).\" at rc 0 [measured, Logs\\gates-phase1b.txt]. Until that run",
+    "the tag on this sentence read \"[measured 2026-09-13]\" when what had",
+    "been measured was the C#, not the file.",
+    "",
+    "CORRECTION, 2026-09-13. This block used to read \"NOT ON DISK, AND NEITHER IS",
+    "THE SLICE ... Plugin.cs:161 is the only Binds.Bind call site in the plugin,",
+    "so BepInEx binds nothing for this key and writes no line for it, and",
+    "check_schema.py reports it MISSING until the plugin binds it and the game is",
+    "launched.\" That was true when written and is false now. Plugin.cs no",
+    "longer binds anything directly; the one Binds.Bind call site is in",
+    "Slices.Init (Slices.cs).",
+    "",
+    "Turning this key off while the slice has no file changes nothing, because",
+    "there is no file for the verdict to close.",
+    "",
+    "REQUIRES Slices.ImplantsSlot06. design.md section 4 declares only the laser",
+    "pair and gives no rule for deriving others. This one is derived from the",
+    "dumps: TalentModel has exactly 33 rows with a non-zero Weapon, every one is",
+    "pointed at by an ImplantModel row's ImplantTalentId, and they split 17 from",
+    "ImplantClass 32 / ImplantSlot 8 and 16 from ImplantClass 27 / ImplantSlot 6",
+    "with nothing else contributing. All 16 claw talents' weapons are",
+    "WeaponClass 16 (Cyber Weapon Claws). So all 16 rows of",
+    "cyberweapons-claws.csv and all 16 ImplantClass 27 rows of",
+    "implants-slot06.csv are the same 16 items -- the claw sheet stands to slot 6",
+    "exactly as the laser sheet stands to slot 8, which design.md section 7",
+    "states for both slots and section 4 does not.",
+    "[measured 2026-09-13, sheets\\raw\\TalentModel.csv, ImplantModel.csv,",
+    "WeaponModel.csv]",
+    "",
+    "ONE ASYMMETRY, STATED RATHER THAN SMOOTHED OVER. The laser pair also",
+    "collides on an effect payload: 4 of the 17 lasers (Brightshot Optic 1-4)",
+    "carry an ImplantEffectId whose CritMultiBase the slot-8 slice edits. The",
+    "claw pair has no such collision -- every ImplantClass 27 row has",
+    "ImplantEffectId 0, and TargetEffect, SelfEffect and MatrixEffect are 0 on",
+    "all 16 claw talents. [measured 2026-09-13] So the half of design.md section",
+    "4's reason that says 'implant payloads' has no claw counterpart; what",
+    "carries the declaration here is item identity alone, plus Cost, Rarity and",
+    "PowerLevel appearing on both sides of the same item with different shipped",
+    "values (implant Cost 80/250/900/2400 against weapon Cost 110/220/400/700 on",
+    "Hand Blades 1-4, for one row family). [measured 2026-09-13]",
+    "",
+    "The declaration is enforceable now even though neither slice has a file yet:",
+    "it is a statement about two .cfg keys, and both keys are on disk. A run in",
+    "which it could not be compared prints a SKIPPED line and is counted on",
+    "check_schema.py's 'requires:' census line rather than passing in silence."
+  ],
+
+  "uiDoc": [
+    "Turn this off and these rows are left exactly as the game ships them."
+  ],
+
+  "fields": [
+    {
+      "path": "Slices.CyberweaponsClaws", "in": "cfg", "type": "bool",
+      "default": true, "ui": "form",
+      "label": "Enable Claw Cyberweapons",
+      "doc": "On applies this slice's rows; off skips its file entirely. Default true, which is what the rules in ckf.hardmode.rules.json do today. THIS SLICE IS A LEVER SHEET, NOT A DIRECT OVERLAY, and targets.overlays asserts nothing either way -- it claims the file and asserts it exists. The first column is WeaponName and it repeats: four each for Hand Blades, Hand Razors, Ripper Blades and Mono-Razors. There is no game table called \"cyberweapons-claws\", those are not row ids, and one row is a cyberweapon that Cyberweapons.cs splits at load into a WeaponModel rule and a TalentModel rule (design.md section 1). Same kind as gear-classes.csv.",
+      "uiDoc": "Turn this off and these rows are left exactly as the game ships them."
+    }
+  ],
+  "invariants": [
+    {
+      "kind": "requires",
+      "key": "ckf.hardmode.cfg#Slices.CyberweaponsClaws",
+      "needs": ["ckf.hardmode.cfg#Slices.ImplantsSlot06"],
+      "reason": "Claw combat rules and the slot-6 implant rows describe the same 16 items."
+    }
+  ]
+}

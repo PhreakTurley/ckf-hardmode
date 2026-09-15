@@ -108,9 +108,16 @@ namespace CKFHardMode
 
         private sealed class CurveFile
         {
-            // 3.0: both switches live here now. [RewardCurve] Enabled and
-            // LogEffectiveCurve are gone from ckf.hardmode.cfg.
-            [JsonPropertyName("enabled")]           public bool Enabled { get; set; } = true;
+            // RETIRED 2026-09-13. "enabled" used to be
+            //     [JsonPropertyName("enabled")] public bool Enabled { get; set; } = true;
+            // with the comment "3.0: both switches live here now. [RewardCurve]
+            // Enabled and LogEffectiveCurve are gone from ckf.hardmode.cfg."
+            // Half of that is reversed: the subsystem switch is back in
+            // ckf.hardmode.cfg, as [Slices] RewardCurve (design.md section 3).
+            // logEffectiveCurve is a setting rather than a gate and stays here.
+            // "enabled" is still parsed so an existing document is not refused;
+            // nothing branches on it.
+            [JsonPropertyName("enabled")]           public bool? RetiredEnabled { get; set; }
             [JsonPropertyName("logEffectiveCurve")] public bool LogEffectiveCurve { get; set; } = true;
             [JsonPropertyName("curve")] public List<Tier> Curve { get; set; } = new List<Tier>();
         }
@@ -122,10 +129,19 @@ namespace CKFHardMode
 
         public static void Init(Harmony harmony)
         {
-            // The section is read first now: it carries both switches as well
-            // as the tiers. LoadTable sets `enabled` and `logEffective`, and
-            // leaves `enabled` false if the section could not be read — which
-            // it says at Error rather than letting this read like a toggle.
+            // THE GATE IS READ FIRST, from ckf.hardmode.cfg. The section
+            // carries the tiers and logEffectiveCurve now, not the switch.
+            if (!Slices.On("RewardCurve"))
+            {
+                Plugin.Log.LogInfo(Slices.OffBecause("RewardCurve",
+                    "nothing is patched and the game's own reward curve stands."));
+                enabled = false;
+                return;
+            }
+
+            // LoadTable still sets `logEffective`, and still leaves `enabled`
+            // false when the section could not be read — which it says at Error
+            // rather than letting this read like a toggle.
             LoadTable();
             if (!enabled) return;                        // LoadTable said why
 
@@ -298,7 +314,8 @@ namespace CKFHardMode
                     var why = $"RewardCurve: {ConfigDoc.WhyNo(ConfigDoc.RewardCurve)}. Since 3.0 "
                         + "that section carries the subsystem switch as well as the tiers, so "
                         + "nothing is applied and nothing is patched.";
-                    if (ConfigDoc.CouldNotRead) Plugin.Log.LogError(why);
+                    if (ConfigDoc.CouldNotRead(ConfigDoc.RewardCurve))
+                        Plugin.Log.LogError(why);
                     else Plugin.Log.LogWarning(why);
                     return;
                 }
@@ -310,13 +327,9 @@ namespace CKFHardMode
                 };
                 var file = JsonSerializer.Deserialize<CurveFile>(text, opts);
 
-                if (file != null && !file.Enabled)
-                {
-                    Plugin.Log.LogInfo("RewardCurve: \"enabled\": false in the \""
-                        + ConfigDoc.RewardCurve + "\" section of " + ConfigDoc.FileName
-                        + " — nothing patched.");
-                    return;
-                }
+                if (file != null)
+                    Slices.ReportRetiredGate("RewardCurve", ConfigDoc.RewardCurve,
+                                             "RewardCurve", file.RetiredEnabled);
                 logEffective = file == null || file.LogEffectiveCurve;
                 enabled = true;
 
@@ -329,8 +342,7 @@ namespace CKFHardMode
                 }
 
                 Plugin.Log.LogInfo($"RewardCurve: read {file?.Curve?.Count ?? 0} tier row(s) "
-                                 + $"from the \"{ConfigDoc.RewardCurve}\" section of "
-                                 + ConfigDoc.FileName + ".");
+                                 + $"from {path}.");
             }
             catch (Exception e)
             {

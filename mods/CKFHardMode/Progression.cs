@@ -183,19 +183,36 @@ namespace CKFHardMode
 
         private sealed class FileShape
         {
-            // 3.0: the subsystem switch lives here now. [Progression] Enabled
-            // is gone from ckf.hardmode.cfg and this is the whole enable chain.
-            [JsonPropertyName("enabled")]  public bool Enabled { get; set; } = true;
+            // RETIRED 2026-09-13. This used to be
+            //     [JsonPropertyName("enabled")] public bool Enabled { get; set; } = true;
+            // with the comment "3.0: the subsystem switch lives here now.
+            // [Progression] Enabled is gone from ckf.hardmode.cfg and this is
+            // the whole enable chain." That is reversed: the switch is back in
+            // ckf.hardmode.cfg, as [Slices] Progression, because a gate cannot
+            // live inside the file it gates (design.md section 3). The key is
+            // still parsed so an existing document is not refused; nothing
+            // branches on it.
+            [JsonPropertyName("enabled")]  public bool? RetiredEnabled { get; set; }
             [JsonPropertyName("table")]    public List<Cell> Table { get; set; } = new List<Cell>();
             [JsonPropertyName("override")] public List<Cell> Override { get; set; } = new List<Cell>();
         }
 
         public static void Init(Harmony harmony)
         {
-            // The section is read first now: it carries the switch as well as
-            // the two grids. Load sets `enabled`, and leaves it false if the
-            // section could not be read — which it says at Error rather than
-            // letting this read like someone turned it off.
+            // THE GATE IS READ FIRST, from ckf.hardmode.cfg. The "teampl"
+            // section carries only the two grids now, so a document that could
+            // not be read can no longer take this subsystem's switch with it.
+            if (!Slices.On("Progression"))
+            {
+                Plugin.Log.LogInfo(Slices.OffBecause("Progression",
+                    "the sum is left exactly as the game computes it."));
+                enabled = false;
+                return;
+            }
+
+            // Load still leaves `enabled` false when the section could not be
+            // read — which it says at Error rather than letting this read like
+            // someone turned it off.
             Load();
             if (!enabled) return;                        // Load already said why
 
@@ -676,7 +693,7 @@ namespace CKFHardMode
                     var why = $"Progression: {ConfigDoc.WhyNo(ConfigDoc.TeamPl)}. It carries the "
                         + "game's own cell values, which this needs, and since 3.0 the subsystem "
                         + "switch as well. Doing nothing.";
-                    if (ConfigDoc.CouldNotRead) Plugin.Log.LogError(why);
+                    if (ConfigDoc.CouldNotRead(ConfigDoc.TeamPl)) Plugin.Log.LogError(why);
                     else Plugin.Log.LogWarning(why);
                     return;
                 }
@@ -692,13 +709,8 @@ namespace CKFHardMode
                     return;
                 }
 
-                if (!f.Enabled)
-                {
-                    Plugin.Log.LogInfo("Progression: \"enabled\": false in the \""
-                        + ConfigDoc.TeamPl + "\" section of " + ConfigDoc.FileName
-                        + " — the sum is left exactly as the game computes it.");
-                    return;
-                }
+                Slices.ReportRetiredGate("Progression", ConfigDoc.TeamPl,
+                                         "Progression", f.RetiredEnabled);
                 enabled = true;
 
                 foreach (var c in f.Table)

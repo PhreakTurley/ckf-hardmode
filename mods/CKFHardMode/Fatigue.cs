@@ -470,7 +470,19 @@ namespace CKFHardMode
 
         private sealed class Options
         {
-            [JsonPropertyName("enabled")]            public bool Enabled { get; set; } = true;
+            // RETIRED 2026-09-13. This used to be
+            //     [JsonPropertyName("enabled")] public bool Enabled { get; set; } = true;
+            // and Init branched on it. The gate is [Slices] Fatigue in
+            // ckf.hardmode.cfg now, because a gate cannot live inside the file
+            // it gates (design.md section 3). Still parsed, into a bool? so
+            // "absent" and "false" stay different answers, so an existing
+            // document is not refused for a key that maps to no member -- the
+            // same treatment LegacyKeys below gives the eight flat settings
+            // removed on 2026-09-07. Nothing branches on it.
+            //
+            // woundResist.enabled is NOT retired. It gates a block inside this
+            // subsystem rather than the subsystem, so it is a setting.
+            [JsonPropertyName("enabled")]            public bool? RetiredEnabled { get; set; }
             [JsonPropertyName("runningEmpty")]       public RunningEmptyBlock RunningEmpty { get; set; }
             [JsonPropertyName("offDuty")]            public OffDutyBlock OffDuty { get; set; }
             [JsonPropertyName("woundResist")]        public WoundResistBlock WoundResist { get; set; }
@@ -483,20 +495,29 @@ namespace CKFHardMode
 
         public static void Init(Harmony harmony)
         {
-            // 3.0: one gate, not two. [Fatigue] Enabled is gone from
-            // ckf.hardmode.cfg and "enabled" in the "fatigue" section is the
-            // whole chain, so the file is read first and the switch is read out
-            // of it.
+            // CORRECTION, 2026-09-13. This used to read "3.0: one gate, not
+            // two. [Fatigue] Enabled is gone from ckf.hardmode.cfg and
+            // \"enabled\" in the \"fatigue\" section is the whole chain, so
+            // the file is read first and the switch is read out of it."
+            //
+            // It is still one gate, and it is the other one. [Slices] Fatigue
+            // in ckf.hardmode.cfg is the whole chain, and it is read BEFORE the
+            // section, because a gate cannot live inside the file it gates and
+            // a syntax error in ckf.hardmode.json must not be able to take a
+            // switch with it (design.md section 3). This subsystem WRITES TO
+            // THE SAVE, so that ordering matters more here than anywhere else.
+            if (!Slices.On("Fatigue"))
+            {
+                Plugin.Log.LogInfo(Slices.OffBecause("Fatigue",
+                    "no hook is installed and nothing is written to the save."));
+                return;
+            }
+
             o = Load();
             if (o == null) return;                       // Load already said why
 
-            if (!o.Enabled)
-            {
-                Plugin.Log.LogInfo("Fatigue: \"enabled\": false in the \"" + ConfigDoc.Fatigue
-                                 + "\" section of " + ConfigDoc.FileName + " — no hooks "
-                                 + "installed, nothing written.");
-                return;
-            }
+            Slices.ReportRetiredGate("Fatigue", ConfigDoc.Fatigue,
+                                     "Fatigue", o.RetiredEnabled);
             if (!Validate()) return;
 
             int patched = Patch(harmony, GameDbTypeName, "InsertGameScore",
@@ -572,8 +593,9 @@ namespace CKFHardMode
                         + "odds and no durations to work from. Doing nothing. To start again "
                         + "from the values the mod ships, extract BepInEx\\config from the "
                         + "release zip over your game folder; that is where "
-                        + ConfigDoc.FileName + " comes from. Nothing writes it back on its own.";
-                    if (ConfigDoc.CouldNotRead) Plugin.Log.LogError(why);
+                        + ConfigDoc.DirName + "/" + ConfigDoc.FileFor(ConfigDoc.Fatigue)
+                        + " comes from. Nothing writes it back on its own.";
+                    if (ConfigDoc.CouldNotRead(ConfigDoc.Fatigue)) Plugin.Log.LogError(why);
                     else Plugin.Log.LogWarning(why);
                     return null;
                 }

@@ -10,7 +10,7 @@ All 76 rows. Every one has a human-readable `ConfigName` and a **writable
 ```
 
 Re-dump with CKF Data Dump to refresh; the live values are in
-`BepInEx/ckf-dump/RuleModel.csv`.
+`D:\ckf-data-modding\sheets\raw\RuleModel.csv`.
 
 ## COMBAT (17)
 
