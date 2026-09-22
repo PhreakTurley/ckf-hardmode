@@ -1,114 +1,112 @@
 # Writing Harmony patches for this game
 
-Rules for adding new C# to either plugin. Ignore them and the game
-stack-overflows during plugin loading, with a trace that points at somebody
-else's code.
+Rules for adding Harmony patches to either plugin. Breaking them can make the
+game stack-overflow during plugin loading, with a trace that points at someone
+else's code. Prefer data changes (rules, overlays) to new patches wherever the
+game already models the distinction you want.
 
-## The rule
+Choose in this order:
 
-> **Patch methods that do work. Never patch methods that do arithmetic.**
+1. Use a rule or overlay when a table already holds the value.
+2. Call and sweep a pure arithmetic function when observation is enough.
+3. Patch only a substantial method with a distinct job and body.
 
-In an IL2CPP release build the linker folds functions with identical machine
-code onto a single address, aggressively for small ones. **Patch a folded
-address and you have patched every method that shares it** — the trampoline that
-should reach "the original" reaches the detour instead, and recurses until the
-stack is gone.
+## Patch methods with unique work
 
-Three things make this nasty:
+> **Patch methods that do work. Never patch methods that only do arithmetic.**
 
-1. **Harmony reports success.** A `try`/`catch` around `harmony.Patch` catches a
-   *refused* patch, which is the benign failure. It does not catch this.
-2. **The blast radius is unrelated code.** A real occurrence had
-   `UnityEngine.GameObject.AddComponent` — called by a *different plugin* during
-   its own load — entering the detour installed for
-   `RulesUtil.CalculateMatrixLootAccountValue`. Nothing in our own logs pointed
-   at us.
-3. **It cannot be detected in advance from managed code.** The `MethodInfo`s are
-   genuinely distinct; only the code addresses coincide, and managed reflection
-   cannot see a code address.
+An IL2CPP release build folds functions with identical machine code onto one
+address, aggressively for small ones. Patch a folded address and you have
+patched every method that shares it: the trampoline meant to reach the original
+reaches the detour and recurses until the stack is gone.
 
-## Signs you are about to patch something unsafe
+- **Harmony reports success.** A `try`/`catch` around `harmony.Patch` catches a
+  refused patch, not this.
+- **The failure shows up in unrelated code.** One occurrence had
+  `UnityEngine.GameObject.AddComponent`, called by a different plugin during its
+  own load, entering the detour installed on
+  `RulesUtil.CalculateMatrixLootAccountValue`.
+- **Managed code cannot detect it in advance.** The `MethodInfo`s are distinct;
+  only the code addresses coincide, and reflection cannot see code addresses.
 
-- The body is plausibly one expression (`CalculateMissionPayment(long)`).
-- The signature is nothing but primitives.
-- There are sibling methods with an identical signature —
-  `CalcluateMatrixLootFileValue(long,long)` and
-  `CalculateMatrixLootAccountValue(long,long)` are the same shape, which is what
-  makes them folding candidates.
+Signs a target is unsafe:
 
-Safe targets look the opposite: a factory or assembly method with a substantial,
-unique body — `MissionFactory.ProcessMissionRequest`,
-`GameDifficultyModel.ReconfigureDifficulty`,
-`MissionFactory.BuildProcRequestFromDatabase`.
+- the body is plausibly one expression;
+- the signature is nothing but primitives;
+- sibling methods share the signature (`CalcluateMatrixLootFileValue(long,long)`
+  and `CalculateMatrixLootAccountValue(long,long)`).
 
-## What to do instead: call it
+Safe targets are the opposite: factory or assembly methods with substantial,
+unique bodies, such as `MissionFactory.ProcessMissionRequest` and
+`GameDifficultyModel.ReconfigureDifficulty`.
 
-A pure function of one or two integers needs no interception.
+Folding needs identical bodies. Hard Mode's `RewardCurve` patches
+`RulesUtil.CalculateMissionPayment`, `CalculateMissionExperience` and
+`CalculateMissionBonus` on that basis: each is a step table over different
+constants, so no two can compile to the same code. That is a reasoned
+exception, not a proof; see the header of `RewardCurve.cs`.
 
-```csharp
-public static long CalculateMissionPayment(long powerLevel)
-```
+## Call pure functions instead of patching them
 
-`CurveSweep.cs` invokes these at load and writes the whole table. The reward
-functions sweep power level 0 to `[Mission] CurveSweepMaxPowerLevel` (default
-25, but 10 in the shipped config); the two-argument valuers sweep
-`CurveSweepBaseValues` against power level; the hack-only pricer sweeps its two
-enum parameters instead. Calling is better on every axis:
+A pure function of one or two integers needs no interception. CKF Data Dump's
+`CurveSweep.cs` calls the reward functions at load over power levels 0 to
+`[Mission] CurveSweepMaxPowerLevel` (default 25), the two-argument valuers over
+`CurveSweepBaseValues` × power level, and writes the whole table. Calling:
 
-- It cannot crash the game — no detour exists to loop.
-- Coverage is complete. A postfix sees only the levels the game happened to
-  roll; a sweep gets the whole range, including levels above the PL 10 clamp
-  that a normal session never produces.
-- It needs a launch rather than a play session.
+- cannot crash the game, since no detour exists;
+- covers every level, including those above the PL 10 clamp that a session
+  never produces;
+- needs a launch, not a play session.
 
-**Exception: functions that are not pure.**
-`MissionFactory.ProcGenerateHackOnlyPriceAndTurns` has "ProcGenerate" in the
-name, and proc-gen routines here draw random numbers — calling it advances the
-RNG and changes which missions the save offers. It stays off by default
-(`CurveSweepIncludesProcGen`) — though check your own cfg, because the shipped
-one has it on. A read-only mod does not get to quietly change the game.
+Whether a sweep sees `RewardCurve`'s patch depends on plugin load order, which
+is not established [unverified]. Sweep with Hard Mode off for the stock curve;
+`RewardCurve` logs the patched curve itself (`logEffectiveCurve`).
 
-**And calling it does not work anyway.** With the switch on, all 36 sweep points
-returned the identical value `2185335553792` — `0x1fcd0263f00`, a heap pointer,
-not a number. The method returns a struct or tuple that the sweep renders as a
-long. So the switch costs RNG on a live save and yields nothing. Leave it off,
-and recover hack pricing from `_mission_generated.csv` instead.
+**Not for impure functions.** `MissionFactory.ProcGenerateHackOnlyPriceAndTurns`
+draws random numbers, so calling it advances the RNG and changes which missions
+the save offers. `CurveSweepIncludesProcGen` (default `false`) gates it. Its
+return value is also unusable: every sweep point returned the same value,
+`2185335553792` (`0x1fcd0263f00`), a heap pointer rather than a price
+[measured]. Leave it off and recover hack pricing from `_mission_generated.csv`.
 
-## Other things worth knowing
+## Follow the interop safety checklist
 
-**Two interop proxies can resolve to the same il2cpp method.** That case *is*
-detectable — read the `NativeMethodInfoPtr_*` static field on the generated
-type. `CKFDataDump`'s **mission probe** checks this before each of its own
-patches and refuses a collision loudly — the table dumper and tracer do not. It
-does **not** catch the folding case above; nothing managed does.
+- **Two interop proxies can resolve to one il2cpp method.** Reading the
+  `NativeMethodInfoPtr_*` static field on the generated type catches that case,
+  and `RewardCurve`, `MissionRewards`, `Fatigue`, `RowClone` and CKF Data Dump's
+  `MissionProbe` / `TraitProbe` check it before patching. It does not catch
+  folding: the field points at a `MethodInfo`, not at compiled code, and it
+  reads zero until the method has been called once.
+- **`const` fields cannot be patched.** IL2CPP inlines them. CKF Data Dump's
+  `[Diagnostics] DumpMembers` reports whether a member is `const`, static or
+  instance, and whether a property has a setter.
+- **`__result` on a `void` method is refused** with an IL compile error. Use a
+  prefix that takes the argument `ref`; the parameter name must match the game's.
+- **Resolve each type name once and cache it.** `AccessTools.TypeByName` walks
+  every loaded assembly, and `UnityEngine.CoreModule` throws
+  `ReflectionTypeLoadException` on each walk, so HarmonyX logs about fourteen
+  lines of noise per call.
+- **Resolve members reflectively**, not against compile-time types, so a game
+  update that renames something produces a warning instead of a crash.
+- **Adjust the game's inputs and let it compute.** The `ReconfigureDifficulty`
+  postfix writes onto the model the game reads; the `ProcessMissionRequest`
+  prefix adjusts the request before the payout is computed. Fighting a clamp
+  directly is harder and more fragile.
 
-**`const` fields cannot be patched at all.** IL2CPP inlines them at compile
-time. `[Diagnostics] DumpMembers` reports whether a member is `const`, static or
-instance, and whether a property has a setter — worth a run before designing
-around a member.
+## Validate a new patch
 
-**Prefer prefixes for `void` methods you want to influence.** Asking Harmony for
-`__result` on a `void` method is refused outright with an IL compile error. A
-prefix taking the argument `ref` works — that is how `Progression.cs` reaches
-`SetMissionPowerLevel(float)`. The parameter name must match the game's for
-Harmony to bind it.
+- Resolve the target and parameters reflectively; a missing member must warn and
+  leave the subsystem off rather than abort plugin loading.
+- Check `NativeMethodInfoPtr_*` for duplicate proxy targets where applicable.
+- Build the plugin, launch with the patch's slice enabled, and inspect the whole
+  plugin-load section of `LogOutput.log`, including errors attributed to other
+  plugins.
+- Exercise the target path in game. A successful `harmony.Patch` call is not a
+  runtime test.
 
-**`AccessTools.TypeByName` is expensive here.** Each call walks every loaded
-assembly calling `Assembly.GetTypes()`, and `UnityEngine.CoreModule` throws
-`ReflectionTypeLoadException` every time, so HarmonyX logs fourteen lines of
-noise per call. Ninety calls once made up most of a 4,900-line log and a visible
-chunk of startup time. **Resolve each type name once and cache it.**
+Build and launch commands are owned by [`workflow.md`](workflow.md).
 
-**Resolve members reflectively, not against compile-time types.** Both plugins
-do this so they build without exact signatures and degrade gracefully — a game
-update that renames something produces a warning rather than a crash.
+## Related
 
-**Let the game do its own arithmetic.** The pattern that works everywhere here
-is to adjust the *inputs* the game will use and let it compute:
-`ReconfigureDifficulty` postfix writes onto the model the game reads;
-`ProcessMissionRequest` prefix adjusts the request before the payout is
-computed. Fighting a clamp directly is both harder and more fragile.
-
-**And prefer a rule to a hook** whenever the game has already modelled the
-distinction you want. A `ckf.hardmode.rules.json` edit has no call-ordering
-assumptions and needs no rebuild.
+- [`gotchas.md`](gotchas.md)
+- [`../mods/CKFHardMode/README.md`](../mods/CKFHardMode/README.md)

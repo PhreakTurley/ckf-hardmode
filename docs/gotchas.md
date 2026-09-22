@@ -1,718 +1,178 @@
-# Gotchas
+# Avoid known failure modes
 
-Everything that has been tried and does not work, plus every setting or edit
-that fails silently. Read this before adding a lever; most of the ideas that
-look obvious are already on this page with a reason attached.
+Use this troubleshooting reference after you identify the subsystem you are changing. Each entry records a failure that is silent, destructive, misleading, or expensive to reproduce. Setting meanings belong in the [generated configuration reference](config-reference.md); procedures belong in the [workflow](workflow.md).
 
-Ordering is by area, not by severity. Sources are the mod sources, the live
-config under `BepInEx/config/`, and the run records this file replaces.
+## Game data & databases
 
----
+- **Never try to open the save or content databases.** They are SQLite SEE-encrypted, and `scripts/unlock_db.py` was retired on purpose (David's rule). `source: AGENTS.md`
+- **All edits happen in memory, after the game decrypts its rows.** A save slot snapshots the live `GameDb`, so an inserted row persists when progress does.
+- **The asset bundles hold no data tables.** Prefabs are art only; don't re-scan them. `source: scripts/inspect_bundles.py`
+- **Names live in `StreamingAssets/Locales/en-US.json`** (unencrypted, keyed by table ids). A cloned row has no name until you add one.
+- **Weapon class names come from `WeaponModel.WeaponClassName`.** `_id_constants.csv` has no `WeaponClass` constants, and `WeaponClassModModel` spells three differently; players see `WeaponModel`'s. [measured]
+- **Key on `(table, id)`, never on an id alone.** 130 ids are both an `EffectId` and a `MatrixEffectId`, 221 both a `TalentId` and an `EffectId`, 137 both a `MonsterTypeId` and a `WeaponId`. [measured]
+- **A `JobNodeId`'s digit prefix is not its `JobId`.** Every `sc` node starts `16`, but JobId 16 is "Attack Hund"; the owner is JobId 15 (Scourge). [measured]
+- **A movement penalty on a `TraitClass 6` trait can go in `MoveSpeed` or `MoveSpeedDebuff`. Both apply; they differ in two ways.** `MoveSpeedDebuff` is reduced by the merc's own `MoveSpeedMitigate` and shows on the character sheet. `MoveSpeed` is not mitigated by anything, and a negative one does not show on the sheet at all — the penalty still applies, the player just cannot see it; it may not display in either direction. So the choice is mitigatable and visible, or unmitigatable and silent. No shipped `TraitClass 6` row uses either column, so there is no in-data example to copy. [measured, in play] The mod writes `MoveSpeedDebuff`, which is David's ruling; see [limit-break-traits.md](limit-break-traits.md#what-the-mod-overlays). `source: sheets/raw/EffectModel.csv` for the columns themselves
+- **`RuleModel` RuleId 12 `AI Skip Turn Distance` (ships 30) is a presentation feature, not an AI decision.** It is how far an enemy has to be from the player or from a dead body before the game stops animating its travel and teleports it to its destination, on the grounds that the travel is not worth watching. The unit still takes its turn and still acts. `RPG.Control.AIController.CanSkipByDistanceToPlayerOrDeadBody(Vector3 rootPosition, Boolean allowSkip) -> Boolean` carries it, and `allowSkip` belongs to the same mechanic [measured, `FindMethods` at `LogOutput.log`]; the row lands in `RuleConfig.AISkipTurnDistance`. Do not reach for it when an enemy ends its turn without acting. `source: David`
+- **`RuleModel` RuleId 6 `AI Sleepy Distance` (ships 40) is a relevance pass, not a behaviour lever.** Guards beyond it do not render and do not take turns until something wakes them. It decides whether a unit is simulated at all, never what an awake unit chooses to do. The row lands in `RuleConfig.AIAsleepDistance`. `source: David`
+- **`RuleConfig`'s field order is `RuleModel`'s `RuleId` order, 1-76.** That is how a row reaches the constant the code reads; nothing else links them. [measured, `BepInEx/interop/CoreRPG_v1.dll` metadata, `RuleConfig`]
+- **Four `ImplantModel` oddities ship as they are. Don't "fix" them** (David's rule). Row 904 `Deactivated = 904` (itself); row 3801 `Deactivated = -2`; row 100 `MatrixEffectId 50014` resolves only in `EffectModel`; in slots 3 and 7 `ImplantLevel` is not a tier index, so those sheets use dump file order. [unverified]
 
-## The save and content databases
+- **The game prints a full, named AI turn log and it does not reach `LogOutput.log` by default.** Every enemy turn is written to the Unity log as `TURN LOG <n> for <Name> (<Archetype>) on INIT <n>` followed by its state lines and `-) Starting turn as <AiAlarmLevel>` / `-) Ending turn as <AiAlarmLevel>`. BepInEx forwards it to the console (`[Logging] UnityLogListening = true`) but `[Logging.Disk] WriteUnityLog` ships `false`, so the file keeps none of it and a capture taken from the file looks as if the game logs nothing. Turn it on before tracing anything AI-related; most of what a `TraceMethods` postfix can tell you is already in there, with the unit's name attached. `source: BepInEx/config/BepInEx.cfg`, [enemy-ai.md](enemy-ai.md)
 
-- **The content database is encrypted with SQLite SEE and cannot be edited on
-  disk.** Entropy 8.000, only bytes 16–23 readable, 12 reserved bytes per page.
-  This project does not pursue the key.
-- **Repairing the header does not open it.** Writing `SQLite format 3\0` over
-  the scrambled header gets `unsupported file format` back, because offset 44 is
-  garbage like the rest of the pages. Any extract → edit → repack workflow is
-  wrong at step one.
-- `scripts/unlock_db.py` was deliberately retired. Do not revisit it and do not
-  look for another way round. Save contents are answered by playing and
-  observing.
-- **All edits happen in memory**, after the game has decrypted its own rows.
-  That is what the rule engine and the overlays are.
-- A save slot is a snapshot of the live `GameDb`. An inserted row persists
-  exactly when the player's progress does.
+## Asset bundles & assemblies (IL2CPP, Harmony, reflection)
 
-## The asset bundles
+- **A method name is not evidence of a mechanism.** The interop assembly is marshalling stubs: no bodies, no caller graph. `RPG.Database.*` is in `BepInEx/interop/CoreRPG_v1.dll` (decodable offline with `dnfile`). `source: AGENTS.md`
+- **Never patch a method that only does arithmetic.** IL2CPP folds identical small bodies onto one address, so patching one patches all; the game stack-overflows on load with a trace pointing elsewhere, while every patch reports success. `source: patching-rules.md`, `mods/CKFDataDump/MissionProbe.cs`
+- **Never cache a database instance.** Always use the live `__instance`; a stale captured instance once hung a mission load.
+- **By-id readers behave differently when the id is missing.** `GameDb` ones throw (invisible to a postfix); `DataDb` ones return an all-default row, so non-null proves nothing. Check the row's id column; prefer zero-arg bulk readers. `source: SelfCheck.cs:ReadRow`, `RowClone.cs:ReadById`
+- **A joined property can be null, and null is not the same as empty.** `GameCharacterTraitModel.EffectData` is filled by the by-character reader only. Check, count and log nulls. `source: Fatigue.cs:ResistFor`
+- **Each `AccessTools.TypeByName` call logs a `ReflectionTypeLoadException`.** Resolve once and cache.
+- **Harmony limits:** `const` fields can't be patched. `__result` on a `void` method fails with an IL compile error; use a `ref` prefix instead, and its parameter name must match the original's.
+- **Two postfixes on `GameDb.GetRowGameMissionRewardModel` depend on their priorities.** `MissionRewards` is `Priority.First` (snapshots stock), `ModelRules` is `Priority.Last`; without both the result is stably wrong. `source: MissionRewards.cs:AfterGetRowMissionReward`, `ModelRules.cs:AfterGetRow`
 
-- **They hold no data tables.** 622 bundles and 1,826 MonoBehaviours scanned,
-  all negative. Do not re-scan them.
-- Equipment prefabs are pure art. One `Monster.prefab` serves all 144 enemies
-  with placeholder values overwritten at runtime, and weapon `AssetId` is `0` in
-  every instance.
-- `StreamingAssets/Locales/en-US.json` is *not* encrypted — 44,662 keys, keyed
-  by the same numeric ids as the tables. That is the name lookup.
+## BepInEx config
 
-## Assemblies and reflection
+- **BepInEx keeps keys it no longer binds.** An unbound key stays in the `.cfg` looking real; `check_schema.py` calls it `STALE`. `source: schema/check_schema.py`
+- **Deleting a key while its bind still exists brings it back at the code default.** For example, `[Slices]` keys default to `true` and `SelfCheck` defaults to `false`. `source: Slices.cs`
+- **Close the game before editing `ckf.hardmode.cfg`.** BepInEx rewrites it on exit, and the plugin reads it once per launch: an edit made while the game runs is neither seen nor reported. `source: Slices.cs` (header)
+- **An unreadable `[Slices]` key counts as on, not off** (logged at Error). `source: Slices.cs:Init`
 
-- **`RPG.Database.*` lives in `BepInEx/interop/CoreRPG_v1.dll`**, not
-  `Assembly-CSharp.dll`.
-- **The interop assembly contains marshalling stubs, not game logic.** There is
-  no method body to read and no caller graph to walk. A method name is not
-  evidence of a mechanism — this is the single most-broken rule in the repo.
-- `CoreRPG_v1.dll` is an ordinary managed assembly, so its method table and
-  signature blobs decode offline with `dnfile`; no launch needed.
-- **Never patch a method that only does arithmetic.** IL2CPP release linking
-  folds identical small function bodies onto one native address, so patching one
-  patches all of them and the game stack-overflows on load — with a trace
-  pointing at unrelated code in a different plugin. All 91 patches report
-  success and nothing is refused. See `patching-rules.md`.
-- **Never cache a database instance.** A captured instance that outlived its
-  moment caused the Log7 mission hang. The live `__instance` wins.
-- **A by-id reader that misses throws**, and a postfix cannot see the throw.
-  Prefer the zero-arg bulk readers.
-- `AccessTools.TypeByName` costs a `ReflectionTypeLoadException` from
-  `UnityEngine.CoreModule` per call — 90 calls once made most of a 4,900-line log.
-- `const` fields cannot be patched at all. `__result` on a `void` method is
-  refused with an IL compile error; the workaround is a `ref` prefix whose
-  parameter name must match.
+## Hard Mode config (slices, sidecars, overlays, rule engine, cloning)
 
-## BepInEx config mechanics
+Layout: `ckf.hardmode.cfg` holds `[General] Enabled` plus one `[Slices]` key per slice, and `ckf.hardmode.d/` holds the settings JSONs and the sheets. See [overlays.md](overlays.md) and [rule-engine.md](rule-engine.md).
 
-- **BepInEx preserves a key it did not bind.** Removing a `Config.Bind` orphans
-  the key in the `.cfg`; it does not delete it. A stale orphan reads exactly like
-  a real setting. This is why Phase 3 deleted the 21 moved keys from the live
-  `ckf.hardmode.cfg` by hand: unbinding them would have left all 21 sitting in
-  the file, each reading like a setting that does something.
-- **Deleting a key while its bind still exists brings it back at the code
-  default.** For the old `[Difficulty] MonsterHitPointScalar` that silently
-  restored a 2.0 enemy-HP multiplier on a live save.
-- **Close the game before editing `ckf.hardmode.cfg`.** BepInEx rewrites the file
-  on exit and will undo an edit made while it is running.
-- **Every `.cfg` value must sit on one line.** A comma-separated list split
-  across lines silently keeps only the first entry.
-  **Correction, 3.0.** No key this can bite is in the `.cfg` any more. The only
-  `stringList` there was, `[ModelRules] ProbeTables`, is `probeTables` in the
-  `modelrules` section of `ckf.hardmode.json` and is a JSON array. The rule is
-  kept here because it is a property of the file format, and the file still
-  exists.
-- `[Diagnostics]` belongs to CKF Data Dump. Nothing in CKF Hard Mode declares it.
+- **If both config layouts are present, Hard Mode applies nothing.** When the pre-4.0 `ckf.hardmode.json` sits next to any slice file, `ConfigDoc` logs `BOTH CONFIG LAYOUTS ARE ON DISK` and the game runs unmodified. Extracting a 4.0 zip over a 3.x install produces exactly this. Delete or rename `BepInEx\config\ckf.hardmode.json` (for example to `.pre-4.0-backup`). `source: ConfigDoc.cs:Ensure`, `Plugin.cs:Load`
+- **A leftover `ckf.hardmode.rules.json` is still read, and it is read first.** Any non-`set` rule in it applies on top of the sheet that replaced it (logged at Error). `source: Plugin.cs:Load (rulesPath)`
+- **A top-level `"enabled"` inside a slice JSON is dead.** Only the `[Slices]` key switches a slice. It is only logged (Error when `false` and the slice is on). The nested `credits.enabled`, `stress.enabled` (elapse) and `woundResist.enabled` (fatigue) are live settings. `source: Slices.cs:ReportRetiredGate`
+- **`[Slices] ModelRules = false` switches off every sheet-based slice** (talents, implants, consumables, cyberweapons, gear classes, `RuleModel`, enemy gear) and the Team PL label mirror `MissionPowerLevelModel.generated.json`, whatever their own keys say. `Progression`'s award itself still applies. An unreadable or invalid `modelrules.json` does the same for the launch. `source: ModelRules.cs:Init` (returns before `Overlays.Load`)
+- **A settings file older than `Defaults.DocVersion` is not filled in.** A missing key takes the built-in default. `source: ConfigDoc.cs:ReportStamps`
+- **A deleted slice file is not recreated.** `Defaults.Install` only reports it. `source: Defaults.cs:Install`
+- **Five keys' code defaults disagree with the schema in the shipped 4.0.0 DLL.** An absent key there gets the code value, not the schema value shown in config-reference.md: `fatigue.json` `logGrants` (schema false, DLL true), `elapse.json` `logFirst` (0 vs 40), `elapse.json` `stress.fallbackToRandom` (false vs true), `powerlevel.json` `logFirst` (0 vs 40), `rewardcurve.json` `logEffectiveCurve` (false vs true). Write these keys explicitly against that build. All five `Options` properties in the source now carry no initialiser, so they match their schema defaults from the next Release build on (tracked in `TASKS.md`). Nothing compares an initialiser with its schema default. `source:` each subsystem's `Options`
+- **A misspelled or duplicate top-level key is logged at Error and not applied** (duplicates: last wins). `elapse.json` and `fatigue.json` refuse the whole file, turning that feature off. Misspellings nested inside the other slices' objects are not checked. `source: ConfigDoc.cs:ReadOne`, `Elapse.cs:UnknownKeys`
+- **A new top-level key has to be added to two hand-kept lists, and each one fails differently.** `ConfigDoc.Declared[<slice>]` is transcribed from the schema's `fields`; a real key missing from it is reported at Error as a key "NOTHING READS IT" even though the subsystem does read it. The subsystem's own `[JsonExtensionData]` bag is the one that refuses the whole file and switches the feature off for the launch. Adding a key to `fatigue.schema.json` means adding it to `Fatigue.Options`, to `ConfigDoc.Declared[Fatigue]` and to `Fatigue.UnknownKeys`' walk. Nothing compares the lists. `source: ConfigDoc.cs:Declared`, `Fatigue.cs:Load`, `UnknownKeys`
+- **`ckf.hardmode.d/` loads `.json` files as well as `.csv` and `.tsv`.** A `.json` that `ConfigDoc` doesn't own is a rules file (e.g. `MissionPowerLevelModel.generated.json`). A file no slice claims (`ArmorModel.csv`, `WeaponModel.csv`, `MonsterTypeModel.csv`) has no switch and loads on every launch while `ModelRules` is on. Subfolders are ignored. `source: Overlays.cs:Load`, `Slices.cs:VerdictForOverlay`
+- **An overlay whose first column is not the id column is ignored** (one Error). `source: Overlays.cs:LoadTable`
+- **A non-numeric cell under an operator header (`Col*`) is warned and skipped; under a plain header it is written as a literal.** `source: Overlays.cs:BuildRule`
+- **Empty lever sheets are the editing surface, not dead files.** Many have no override filled in; don't delete them. A sheet with every lever blank emits zero rules, so a per-rule "unknown column" warning never fires for it. `source: scripts/validate_rules.py:load_consumable_sheet`
+- **A lever sheet has to be recognised before its filename is parsed.** `TableOf` takes the name up to the first dot, so an unrecognised `foo-bar.csv` becomes `foo-barModel` with only an orphan warning. `source: Overlays.cs:Load (GearClasses.Owns / Cyberweapons.Owns)`
+- **A blank overlay cell leaves the column alone. A filled cell is a write, and it beats anything merged after it.** A generator that emits every column it reads turns no-ops into writes; filter art and constant columns. `source: make_enemy_overlays.py:informative`, `consumables.py`
+- **Never derive a sheet's column set from the dump.** Its columns vary with settings and game state. Declare them (`SHEET_COLUMNS` + `EXCLUDED_COLUMNS`) and use the dump as a check. Key the exclusions on `(model, column)`: `EffectPurgeType` and `InitBonus` are excluded on `MatrixEffectModel` but are levers on `EffectModel`. `source: scripts/consumables.py`
+- **Build the gear-class partition from the post-overlay `ckf.hardmode.d/MonsterTypeModel.csv`, not from the shipped dump.** The shipped table misclassifies eight class-3 player ARs as enemy gear; both `GearClasses.cs` and `gear_classes.py` refuse rather than fall back. `source: GearClasses.cs` (header)
+- **Match rules on the domain id, not `Id`.** The inherited `Id` reads `-1`. Use `WeaponId`, `ArmorId`, `MonsterTypeId`, `ImplantTypeId` and so on.
+- **`multiply` compounds on `Game*` models.** `DataDb` rows are rebuilt fresh on every read, but `GameDb` rows come from the save. Use `set` or `clampMin` there.
+- **A SQL aggregate never builds a row, so a rule can't touch it.** The engine hooks `GetRow*Model`; `SumGameMissionScore` is computed in SQLite.
+- **Some columns are computed, and writes to them are silently ignored.** Unsuffixed weapon stats are aliases for the selected firing mode, and talent `Adjusted*` columns are derived. Write the suffixed columns, such as `BallisticDamage1`. See [tables.md](tables.md).
+- **`CharacterTypeModel` is the five player classes;** enemies are `MonsterTypeModel`.
+- **A clone pointer to a row that doesn't exist gives a black screen when the mission loads,** and Unity's exception never reaches `LogOutput.log`. Watch for `RowClone: <reader>(<id>) found nothing`; run `validate_rules.py` first. `source: RowClone.cs`
+- **Don't re-add bulk-read serving for clones.** Clones appended to `ReadArmors()` during a Data Dump sweep killed a mission load; zero-arg readers are skipped. `source: RowClone.cs` (reader selection)
+- **A Data Dump never shows clone rows.** It captures rows in a `GetRow*` postfix and a clone is appended after that returns. Confirm clones from the `RowClone: built` / `RowClone: served` log lines. `RowClone list:` call-shape lines appear only for tables that have a clone rule. `source: RowClone.cs` (header)
+- **Clone into the reserved `900000+` range.** The "unreferenced `EffectModel`" list is unproven: `SecurityDeckCardModel.CardEffectId` references 65001–65005. `WeaponId` 20010 and 20011 are safe to point at; 23097–23099 are developer work in progress. What the game derives from a new `MonsterSpawnModel` or `MonsterGroupModel` id is unknown. `source: RowClone.cs:ReservedFrom`, [cloning-rows.md](cloning-rows.md)
+- **A spawn pool's `MinPowerLevel` / `MaxPowerLevel` cannot be edited on a shipped row.** `ReadMonsterGroupMembersByGroup` takes `powerLevel` as an argument, so the band filter runs in the encrypted SQL before any row is materialized; a `GetRow*` rule rewriting those columns is too late and changes nothing. Measured in Run67: member 299 with `MinPowerLevel` 8 -> 25 still spawned twice at a mission PL far below 25. `WeightedRoll` on the same row did land, because the roll runs in managed code over the returned list. Band gates only work on a clone, where `RowClone.GatesPass` decides injection from the clone's own columns. `source: RowClone.cs:GatesPass`, [tuning-enemies.md](tuning-enemies.md#roster-pools-monstergroupmembermodel)
+- **A test that depends on a spawn roll is not a test. Force the unit.** Run75 spent a launch on whether editing a monster's cosmetic group works and measured nothing, because the target unit — WB FireCOM, `WeightedRoll` 2 against a slot total near 17 — never appeared. With the unit absent, "the row was never read" and "no unit needed it" are indistinguishable. `scripts/gen_force_spawn.py` emits a `MonsterGroupMemberModel` overlay that clones one member row per power level pointed at the target PowerGroup at a weight orders of magnitude above the rest of the slot, which is the same clone shape the production spawn-* sheets use and that Run72 proved serves. Note it must be a clone per PL: `MinPowerLevel`/`MaxPowerLevel` are filtered SQL-side and cannot be edited on a shipped row. `source: Run72/Run75`
+- **Editing a `CosmeticGroupModel` row never reaches a monster, and the reader trace will lie to you about why.** The three named readers log zero hits ever, but the table IS materialized — by raw SQL plus the static `GetRow*Model`, bypassing them — so trace the materializer, not the reader. It fires for the player's character on the safehouse screen and never for an enemy: Run76 forced ten WB FireCOMs, all wearing group 351, and the three unindexed edit rules on that group's rows produced zero trace lines across the entire mission. Every data column of both cosmetic tables is writable and none silently discards, so writability is not the obstacle — the rows are simply never read for enemies. Cloning a new GroupId is worse: nothing builds it and pointing `OutfitId` at one throws `NullReferenceException` at spawn and hangs the mission (Run72). **`MonsterTypeModel.OutfitId` repointed to one of the 321 shipped groups is the only lever**, and it is proven (Run68, Run70, Run73). `source: Run69-Run76`, [tuning-enemies.md](tuning-enemies.md#appearance-monstertypemodeloutfitid)
+- **`missions.json` has a fixed key set.** Other keys are dropped by `refresh_mission_roster.py` and by the next GUI save. `source: scripts/refresh_mission_roster.py:ENTRY_KEYS`
+- **In `missions.json`, `"-25"` adds −25; `"=-25"` sets it.** A bare `"40"` sets. `source: MissionRewards.cs:Adjust.Parse`
+- **A multiplier on a small integer can round to 0.** `"x0.4"` on a `MissionRewards` field holding `1` gives `0`. `source: MissionRewards.cs:Adjust.Apply`
 
-## Sidecar JSON
+## Power Level & progression
 
-- **Misspelled keys are accepted silently.** `"chancepercent"` (lowercase p)
-  leaves `chancePercent` at its default of 25 and the mod writes traits at five
-  times the intended rate, with no distinguishing log line. `"enabeld": false`
-  leaves credits being spent.
-- **`"x0.4"` on a `MissionRewards` field holding `1` gives `0`** — the bonus is
-  deleted. Every adjustment is forced through `long`, with banker's rounding.
-- **`byPowerLevel` keys `"1"` and `"01"` are distinct keys** that collapse to one
-  anchor, and the sort is unstable — the curve becomes non-deterministic across
-  runs.
-- **`"traitId": 20009` instead of `2009` passes validation** and persists a
-  dangling trait reference into the save.
-- ~~**`chancePercent: 0` does not switch fatigue off.**~~ Fixed in code before
-  2026-09-10: `ThresholdFor` returns 0 for any chance ≤ 0, whatever the resist.
-  This entry described the older floor arithmetic and was not updated when that
-  changed.
-- **A key the refresh script does not generate is no longer preserved.** Anything
-  hand-added to a row in the `missions` section is dropped on the next
-  `refresh_mission_roster.py` run and on the next GUI save.
-- Never hand-write the `teampl` section's `table` block. Corrupting it
-  makes the reconcile fail, sets `retroDead`, and silently reverts awards to
-  stock while the labels stay modded.
-- Never hand-edit `ckf.hardmode.d/MissionPowerLevelModel.generated.json`;
-  regenerate it with `scripts/gen_teampl_labels.py`.
-- **`Utf8JsonWriter` cannot reproduce `json.dumps` without help.** The config
-  document's on-disk shape is
-  `json.dumps(doc, indent=2, ensure_ascii=False) + "\n"`, and
-  `gui/serve.py --selftest` asserts a no-op save writes zero bytes — so anything
-  in C# that rewrites the file has to match it byte for byte. Two defaults get
-  in the way: the writer's indented output uses `Environment.NewLine`, which is
-  CRLF on Windows against Python's LF, and the default `JavaScriptEncoder`
-  escapes non-ASCII and `+`, of which the document has 126 bytes and 16
-  respectively. `Defaults.Render` set `UnsafeRelaxedJsonEscaping` and folded
-  CRLF to LF for exactly those two reasons.
-  **The CR half cannot be tested on Linux**, where `Environment.NewLine` is
-  already `\n`: `tests/defaults` asserts it, and only a Windows run gives that
-  assertion a sampling moment (AGENTS.md §3).
-  **Superseded, 2026-09-07.** `Defaults.Render` is gone with the rest of what
-  `Defaults.cs` wrote, so no C# in this mod rewrites the document and the two
-  defaults above cost nothing here today. The entry stays because the trap is a
-  property of `Utf8JsonWriter`, not of that one caller: the next thing in C#
-  that writes this file walks into both defaults again, and the zero-byte no-op
-  save assertion in `gui/serve.py --selftest` is still what would catch it.
+See [power-level.md](power-level.md).
 
-## The rule engine
+- **Rules on `MissionPowerLevelModel` change the victory-screen label, not the award.** The award is an INSERT into `GameMissionScoreModel`; Team PL is a SQL sum (mirrored in `CoreGameDataModel.PowerLevel`). `SetMissionPowerLevel` never fires. [measured] `source: Progression.cs` (header)
+- **The label and the award must be switched together.** `[Slices] Progression` without `ModelRules` gives a stock label; the reverse gives a stock award with a wrong label. Neither logs; `check_schema.py` flags it `INVARIANT`. `source: schema/teampl.schema.json (linkedEnable)`
+- **Never edit `MissionPowerLevelModel.generated.json` by hand.** Use `scripts/gen_teampl_labels.py` or the editor. Don't hand-write `teampl.json`'s `table` either: two failed reconciles turn retroactive mode off until a save load, so awards revert while labels stay modded. `source: Progression.cs:AfterSum`
+- **Overrides are retroactive, and `CoreGameDataModel.PowerLevel` saves the substituted total.** Turning it off leaves the modded figure in the save. `source: Progression.cs` (header)
+- **`GameDifficultyModel.CalculatePowerLevel` is the clamp itself.** It saturates at 10. `MatrixPowerLevelOffset` replaces `BasePowerLevelOffset`. Derived calls (`arg0 > 0`) must pass through; recomputing them turned a reward of 1 into 2. `source: PowerLevelCap.cs` (header)
+- **Raising the Power Level cap doesn't raise the reward cap.** The base curve flattens above PL 10 at 2800 credits and 500 XP, and only `rewardcurve.json` changes that. `source: RewardCurve.cs` (header)
+- **`rewardcurve.json` rows are looked up by exact PL.** No interpolation or carry-forward: each PL above 10 must be listed or the game's value stands. `source: RewardCurve.cs:Apply`
+- **`powerlevel.json` `logFirst: 0` also silences the only Team PL cross-check** (`TEAM PL MISMATCH`). `source: PowerLevelCap.cs:After`
+- **Above PL 10, shipped weapon damage flattens too.** Raising the cap alone gives sponges, not lethality. [measured]
 
-- **Match on the domain id, not `Id`.** Almost every model inherits an `Id` from
-  a UI row class that reads `-1`. The real key is `WeaponId`, `ArmorId`,
-  `MonsterTypeId`, `ImplantTypeId`, and so on.
-- **`multiply` compounds on `Game*` models.** `DataDb` rows are re-materialised
-  fresh on every read so `multiply` is safe there; `GameDb` rows come from the
-  save, so use `set` or `clampMin`.
-- **A SQL aggregate has no materialiser.** The engine hooks `GetRow*Model`.
-  Anything computed inside SQLite — `SumGameMissionScore` above all — never
-  builds a row, so a rule aimed at it does nothing.
-- **`"set": {"WeaponTypeId": "20020"}` — a JSON string — loads clean, matches
-  rows, changes nothing and reports nothing.** `null` and array values are
-  dropped the same way.
-- A `set` curve on a `string` column writes the literal; on a `bool` column any
-  non-zero writes `true`. The numeric check `Arith` performs is skipped.
-- Arithmetic overflow on an `int` column is silently dropped and the trace prints
-  `matched, nothing changed`.
-- `"model": "weaponmodel"` becomes `"weaponmodelModel"` and is reported as an
-  orphan — the lookup is an ordinal `EndsWith` against a case-insensitive
-  dictionary.
-- A rule whose every operation list is null (a misspelled `"mulitply"`) is
-  registered and matched per row for nothing. Nothing checks that a rule carries
-  at least one operation.
-- String `where` comparison uses the current culture. On a de-DE machine
-  `"where": {"SomeFloat": "1.5"}` never matches, with no diagnostic.
-- **Some columns are computed and silently ignore writes.** Unsuffixed weapon
-  stats are aliases for the selected firing mode and talent `Adjusted*` columns
-  are derived; neither is read-only, so nothing warns. Always write the suffixed
-  ones — `BallisticDamage1`, not `BallisticDamage`.
-- `CharacterTypeModel` is not an enemy table. It is five rows, the player
-  classes. `{"model":"CharacterTypeModel","multiply":{"HitPoints":2.0}}` —
-  including the one in the plugin's own starter rules file — does nothing. Enemy
-  archetypes are `MonsterTypeModel`.
+## Save-writing subsystems (Elapse, Fatigue)
 
-## Cloning and overlays
+See [mission-elapse-penalty.md](mission-elapse-penalty.md), [character-fatigue.md](character-fatigue.md) and [gamedb-write-surface.md](gamedb-write-surface.md).
 
-- **`Overlays.Load` takes `.json` as well as `.csv`.** `ckf.hardmode.d/` is not
-  a CSV directory: `Overlays.cs:88-90` globs `.csv`, `.tsv` AND `.json`, and a
-  `.json` there is loaded as an ordinary rules file. That is what
-  `MissionPowerLevelModel.generated.json` is, and it is why a good launch says
-  `Overlays: 4 file(s), 3022 row(s) merged` — three CSVs for 2992 rows and the
-  mirror for 30. Counting the directory as "the three overlay CSVs" undercounts
-  it by one file and 30 rules; Phase 4's embedded-defaults list was written that
-  way and had to be corrected. [measured, Run59 + `Overlays.cs`, 2026-09-03]
-  The list that made the mistake no longer exists — the embedded resources were
-  removed on 2026-09-07 — but the same undercount is available in its two
-  successors, `CONFIG_FILES` in `scripts/make_release.py` and `Expected` in
-  `Defaults.cs`, which each name all four files of `ckf.hardmode.d/` by hand.
-  Since 2026-09-11 `make_release.py` also ships any other `.csv`/`.tsv`/`.json`
-  it finds in the live `ckf.hardmode.d/`, so a fifth file reaches the zip
-  without an edit; `Expected` still has to be edited for the mod to report it
-  missing.
-- **The live `ckf.hardmode.rules.json` contains zero clone rules.** Every clone
-  in this project comes from the `_clone` column of a CSV in
-  `BepInEx/config/ckf.hardmode.d/`. An audit that reads only `rules.json` will
-  conclude cloning is dead. It is not.
-- **Enemy gear numbers live in the CSVs in `BepInEx/config/ckf.hardmode.d/`,
-  not in `rules.json`.** A gear rule added back to `rules.json` still runs, but
-  the overlays load after it and a `set` there wins, so the rule silently does
-  nothing. Player gear is the opposite: it stays a rule, marked with a `PLAYER`
-  comment prefix.
-- **Install `scripts/make_enemy_overlays.py`'s output `ckf.hardmode.rules.json`
-  *and* its CSVs, or neither.** The rewritten rules file no longer inserts the
-  tiers its pointers aim at, so installing it alone is a black screen. The live
-  `rules.json` and `ckf.hardmode.d/` are the same kind of pair, which is why
-  `make_release.py` requires both. (This entry used to name
-  `overlays/ckf.hardmode.rules.json`; that copy was deleted 2026-09-11.)
-- **A pointer aimed at a row that does not exist stops the mission loading** — a
-  black screen, not a degraded stat, and the game's own exception never reaches
-  `LogOutput.log`. Watch for `RowClone: <reader>(<id>) found nothing`.
-  `scripts/validate_rules.py` catches this before you launch. Run it.
-- **`CloneServeOnBulkReads` must stay off.** An append landing after the game has
-  already built from the list cost a mission load in Run 42.
-- **Do not run the dumper's sweep while cloning is on.** The sweep calls
-  `ReadArmors()`, the clones get appended to the returned list, and from then on
-  the game resolves armour from something built out of that list rather than by
-  id, and dies on a null. Set CKF Data Dump `[General] Enabled = false` before
-  testing gear.
-- **`DataDb.ReadWeapon` returns a defaulted row for an unknown id**, so a
-  SelfCheck expectation on a row that does not exist reports PASS.
-- **A cloned row has no locale name** until one is added to
-  `StreamingAssets/Locales/en-US.json`.
-- **Do not repurpose anything on the 74-row "unreferenced `EffectModel`" list.**
-  Rows 65001–65005 are referenced by `SecurityDeckCardModel.CardEffectId`, a
-  table the scan did not check. The whole list is unproven. Clone into the
-  reserved `900000+` range instead.
-- `WeaponId` 20010/20011 ship unreferenced as "Guard Rifle Lvl11/12" and are safe
-  to point at. `WeaponId` 23097–23099 are developer work in progress, not free
-  space.
-- Nothing establishes what the game derives from an id it has never seen.
-  `MonsterSpawnModel` and `MonsterGroupModel` clone rules will run, but what a
-  synthetic row means there is unknown. Work that out before relying on one.
-- **A ladder file's line count is not its block's size.** A 20-tier block can be
-  14 lines because 6 of its tiers are rows the game already ships.
+- **In `Elapse.Resolve`, the save writes happen inside the arguments to the log builder:** `summary.Add(SpendCredits(...))` and `summary.Add(ApplyStress(...))`. Deleting the list plumbing deletes both writes. Extract the call and discard the return; never delete the list. `source: Elapse.cs:Resolve`
+- **A trait with `ExpiresTurn = 0` is permanent.** Any grant path that can't set a duration must write nothing. `source: Fatigue.cs` (grant paths)
+- **Credits can't be written through `UpdateGameData`.** It returns true and the next tick restores the old value. Use `AddCredits`/`SpendCredits(long, string)`; `SpendCredits` returning `false` is the zero floor. `source: Elapse.cs` (header)
+- **A `GameCharacterModel` write persists, but the roster panel reads `SaveManager.playerCache[id].CharacterModel`.** Write both. `source: Elapse.cs`
+- **Written Stress is consumed by the limit break it triggers,** and `IsStatusLimitBreakReady()` is not the stress gate. [measured] See [gamedb-write-surface.md](gamedb-write-surface.md).
+- **Elapse's reload detection needs the save-load hook.** Without it, a reload onto the same or next turn looks continuous and stale state survives. `source: Elapse.cs` (header, REPLAY)
+- **Elapse keys its curves on `PowerLevelUnscaled`; Fatigue keys its curves on the effective `PowerLevel`.** `source: Elapse.cs:Resolve`, `Fatigue.cs`
+- **`stress.applyTierMultiplier` scales `mercCount`, not the Stress amount.** `source: Elapse.cs:Resolve`
+- **Fatigue has three `traitId`s and a typo in one is caught only if it lands in `900000+`.** `tier1`, `tier2` and `tier3`; any other wrong id writes a dangling trait into the save. They must also be distinct — two tiers sharing an id is refused, because the scan reads the merc on the lower one as already holding the higher and nobody would move past it. `source: Fatigue.cs:Validate`
+- **Fatigue does nothing on solo missions** (David's rule): no roll and no row, so a merc who goes out alone cannot move up a tier. `source: Fatigue.cs:Resolve`
+- **Fatigue's tiers stack and nothing deletes a trait row.** Don't look for a revoke path; `offDuty.clearsRunningEmpty` and the `Revoke` method are gone. Each row expires on its own `ExpiresTurn`, counted from the mission that granted it. `source: Fatigue.cs:Apply`
+- **Fatigue's `minAffected`/`maxAffected` bound the mission's TOTAL grants, across all three tiers.** There is one pool and one clamp, so a floor can force a merc up a tier and `maxAffected: 0` stops every grant on the mission — there is no second path past the clamp. `source: Fatigue.cs:Clamp`
+- **One save load fires both `LoadGame` and `LoadGameSlot`,** so every "a save was loaded" line from Elapse, Fatigue, MissionRewards and Progression appears twice. `source: MissionRewards.cs` (load hook comment)
+- **No dry runs** (David's rule). No `DryRun` defaults or logging-only sessions; review before the run instead. `source: AGENTS.md`
 
-## Team Power Level
+## Data Dump & diagnostics
 
-- **Rules on `MissionPowerLevelModel` change the victory-screen label, not the
-  award.** Set to 3.0, the screen printed "Team gained 3 PL" while the sum moved
-  0.015. The award and the label are separate edits to separate things, and
-  neither follows the other.
-- The 33 `MissionPowerLevelModel` rules are deliberate. An earlier note saying to
-  delete them was wrong.
-- `SetMissionPowerLevel` never fires. The award is an INSERT into
-  `GameMissionScoreModel`.
-- **Team PL is not in a database row.** `GameDb.GameDataModel` has no
-  `PowerLevel` column; `CoreGameDataModel.PowerLevel` is a mirror of the sum.
-  Team PL is `SUM(GameMissionScoreModel ⋈ MissionPowerLevelModel)`.
-- `teampl.enabled` without `modelrules.enabled` gives a correct award
-  with a stock label; the reverse gives a stock award with a lying label.
-  **Neither direction logs anything.**
-- `override[]` is retroactive and `CoreGameDataModel.PowerLevel` persists the
-  substituted total, so turning it back off leaves a modded figure in the save.
-- An override on `(ActionClass 0, MissionPowerLevel 0)` never takes effect for
-  the session — the game's own sum does not move, so the cache-invalidation guard
-  never fires. All 34 LEGWORK rows are `(0, 0)` and worth zero in the stock
-  table, so an override there re-prices every LEGWORK row from a base of zero.
-- `Progression.retroDead` is process-lifetime. One transient throw disables
-  retroactive Team PL until the game restarts, including across save loads.
+- **CKF Data Dump is not read-only, and `[General] Enabled` is not its master switch.** `[TraitProbe]` inserts and deletes traits and `[WriteProbe]` moves credits and writes `NegativeTraitValue` (both ship off). These, ElapseProbe and Trace start before the `Enabled` check, which gates only the table sweep and mission probes. `source: mods/CKFDataDump/Plugin.cs:Load`
+- **WriteProbe and ElapseProbe sample only on `SaveManager.ProcessTimelineToNextTurn`.** Loading a save without advancing time records nothing. `source: mods/CKFDataDump/WriteProbe.cs`
+- **Table CSVs are overwritten; probe CSVs append across sessions.** A probe CSV whose header changed is renamed `*.pre-<stamp>.csv`. `source: mods/CKFDataDump/MissionProbe.cs:CsvFile`
+- **The dumper under-reports failures.** `GameDb` readers swept at the menu can throw past the `catch` and still be `ok` in `_readers.csv`. Keep `Databases = DataDb` outside a mission. `source: mods/CKFDataDump/README.md`
+- **The dump doesn't dedupe on the domain id.**
+- **Dump columns come out untrimmed by default.** `ModelColumnsOnly`, `DropPresentationColumns` and `DropConstantColumns` all default to `false`. `ModelColumnsOnly` has never removed a column. `source: mods/CKFDataDump/Plugin.cs`
+- **`[Dump] Tables`, `Skip` and `Include` match names exactly.** `Weapon` doesn't match `WeaponModel`. `make_overlay.py` needs `--key` for tables outside its `KEYS` map. `source: mods/CKFDataDump/Plugin.cs`, `scripts/make_overlay.py`
+- **`--game` derives the dump as `BepInEx/ckf-dump`** in `make_overlay.py` and `validate_rules.py`. If `[Dump] OutputDirectory` points elsewhere, pass `--dump`; `validate_rules.py` exits 2 when the dump directory is missing. `source: scripts/validate_rules.py:main`, `scripts/make_overlay.py:main`
+- **`_reward_curve.csv` is not the effective curve.** Whether the sweep sees Hard Mode's `RewardCurve` postfix depends on plugin load order, which is not established [unverified]. Sweep with Hard Mode off for the stock curve; read the effective one from `rewardcurve.json`'s `logEffectiveCurve`. `source: mods/CKFDataDump/CurveSweep.cs`, `RewardCurve.cs`
+- **Silence from an instrument is not evidence.** Confirm it could have produced a row. `source: AGENTS.md`
+- **Don't reword a log line that `check_run.py` matches with a regex.** It breaks silently. Its `OVERLAY` regex still expects `Overlays: N file(s), M row(s) merged`, but `Overlays.Load` now prints `Overlays: N file(s) in the directory, …`. `source: scripts/check_run.py`, `Overlays.cs:Load`
+- **Leave SelfCheck (`[Slices] SelfCheck`) off except during a verification launch.** A stale baseline reports a retune as a regression: retune, turn on, regenerate, read, turn off. Never regenerate to clear a failure. "row not read" is not a pass. No fixtures on rows a clone copies. `source: SelfCheck.cs`
 
-## Power Level and difficulty
+## GUI editor
 
-- `GameDifficultyModel.CalculatePowerLevel` **saturates at 10 for every input** —
-  it is the clamp itself, not a passthrough.
-- `MinCap = 12, MaxCap = 20, MatrixMaxCap = 10` inverts the clamp and produces a
-  level above both the Matrix ceiling and the game's own stock clamp, unlogged.
-- `MatrixOffsetMode = Replace` is confirmed: the Matrix path uses
-  `MatrixPowerLevelOffset` *instead of* `BasePowerLevelOffset`, not on top.
-- `DerivedCallMode = Recompute` is what turned a reward of 1 into 2. PassThrough
-  is pinned.
-- **Lifting the Power Level cap does not lift the reward cap.** The base curve
-  flatlines above PL 10 at 2800 credits / 500 XP; the `rewardcurve` section is the only
-  thing that changes it.
-- Above PL 10 the shipped weapon damage flatlines too — median
-  `BallisticDamage1` is 255 at PL 10 and at PL 20, and the maximum *falls*
-  594→525. Raising the cap alone gives you sponges, not lethality.
+- **Only `RANGE` and `INVARIANT` problems block a save.** `MISSING`/`STALE` never refuse, so a false problem can show on every save. A check with the same count every run may be looking at the wrong files. `source: gui/serve.py:BLOCKING`, `files_check_schema_reads`
+- **A no-op save writes nothing.** `commit` skips any file whose bytes are unchanged, so the file's mtime doesn't move. Any `.pre-gui-backup` is from an older build. `source: gui/serve.py:commit`
+- **An unfinished save leaves `.ckf-gui-save-journal.json` behind.** `make_release.py` refuses to build until the editor has been started once to finish the save. `source: gui/serve.py:JOURNAL_NAME`, `scripts/make_release.py:config_sources`
+- **`serve.py --selftest --config` takes the config directory, not a file.** `validate_rules.py --game` wants the game root. `source: gui/serve.py:_sandbox`, `scripts/validate_rules.py`
+- **`--run-check-schema` must be `argv[1]`** (dispatched before argparse). `source: gui/serve.py:RUN_CHECK_SCHEMA`
+- **Frozen, the default game directory is the exe's folder only if `CyberKnights.exe` is beside it;** otherwise it is the hardcoded Steam path. `source: gui/serve.py:default_game_dir`
+- **Don't disable a slice checkbox because its key is absent from the `.cfg`.** Saving appends the key; disabling on absence greys out every slice toggle on a fresh install. `source: gui/app.html` (`cb.disabled`), `gui/serve.py:set_value`
+- **Keep `HIDDEN_COLUMNS` separate from the constancy rule.** Constancy exempts sheets with fewer than two rows; a declared hide applies everywhere. `source: gui/serve.py:overlay_hidden`, `overlay_constant`
+- **An absent cfg key counts as its schema default in the editor, while `check_schema.py` reports it `SKIPPED`.** The two can disagree on a fresh install. `source: gui/serve.py:requires_pass`
+- **Anything in C# that rewrites a config document must match `json.dumps(doc, indent=2, ensure_ascii=False) + "\n"` byte for byte.** `Utf8JsonWriter` defaults to CRLF on Windows and escapes non-ASCII and `+`. No C# writes it today; the selftest's zero-byte no-op save would catch it.
+- **The frozen exe finds its schemas two independent ways.** (`check_schema.py` shipped at `schema/`, and `--schema` passed explicitly). Remove both and every save is refused; removing one at a time shows nothing. `source: gui/serve.py:run_check_schema_entry`
+- **On Windows, poll to see whether a process has exited; don't check once.** `taskkill /F /T` returns before teardown ends; `tasklist /FI IMAGENAME` matches by name, so baseline first. `source: gui/serve.py:_procs_settle`
 
-## Elapse and Fatigue (the save-writing subsystems)
+## Schema checks
 
-- **THE TRAP.** In `Elapse.Resolve` the save writes are arguments to log-string
-  builders — `summary.Add(SpendCredits(...))`, `parts.Add(WriteStress(...))`.
-  Deleting the list plumbing deletes both save-write channels and leaves
-  `[Elapse] Enabled = true` doing nothing (the key that read is `elapse.enabled`
-  since 3.0). Refactor as extract-the-call,
-  discard-the-return. Never "delete the list".
-- **A reflection miss on `ExpiresTurn` leaves it 0, which this mod treats as
-  permanent.** Every merc that rolls a hit takes a permanent, save-resident
-  Running Empty or Off-Duty trait the mod cannot remove.
-- Credits are committed before Stress is attempted, with the replay guard already
-  set. A half-applied penalty is never retried and nothing signals it.
-- **Reloading onto the same or the next turn defeats Elapse's turn-discontinuity
-  fallback** — every mission expiry in the loaded save is then ignored for the
-  rest of the process. The load hook is not optional.
-- Elapse's log high-water mark advances before the row is classified, so a
-  transiently unreadable row is skipped forever and never logged as unmatched.
-- **`MissionRewards` static caches are keyed by save-local row ids and never
-  cleared.** Load save B in the same process and its rewards are scaled off save
-  A's base.
-- Two subsystems postfix `GameDb.GetRowGameMissionRewardModel` with no
-  `HarmonyPriority`. The result is stable-but-wrong (3× or 2×), not obviously
-  flapping.
-- `Fatigue`'s session state has no fallback reset; quitting to menu mid-mission
-  can escalate the wrong mercs on the wrong power-level curve.
-- `Writability`'s restore guarantee is not one — a setter that throws on the
-  second write leaves the probe value on the row for the session, unlogged.
-- **Credits cannot be written through `UpdateGameData`.** The call returns true
-  and the next turn tick restores the original, because
-  `GameManagerBase.GameData` is the live authority and writes down over the row.
-  Use `AddCredits(long, string)` / `SpendCredits(long, string) -> bool`, and take
-  `SpendCredits` returning `false` as the engine's own floor at zero.
-- **A `GameCharacterModel` column write persists, but the roster panel does not
-  read the row** — it reads `SaveManager.playerCache[id].CharacterModel`. Write
-  both or the change is invisible.
-- **Written Stress is consumed by the limit break it feeds.** `NegativeTraitValue`
-  written to 8 read 2 two ticks later, with a Vulnerable trait logged.
-- `IsStatusLimitBreakReady()` is **not** the stress gate — false for all 17 mercs
-  on all 8 ticks, including the tick a break fired.
-- **A joined content property can be null, and a null is not an empty.**
-  `GameCharacterTraitModel.EffectData` is filled by the by-character reader and
-  not by the by-id one (RUN44). The same property on implant, effect and
-  job-node rows was assumed filled and never checked, and Fatigue skipped a null
-  silently, so Run63 logged "no resist" for four mercs with nothing to say why.
-  Fatigue now looks the effect up in `DataDb` and prints per-reader counts on the
-  roll line. Any new reader of a joined property should do the same: check it,
-  count the nulls, and log them.
-- **Elapse keys its curves on `PowerLevelUnscaled`; Fatigue keys its on the
-  effective `PowerLevel`.** Same table name, same shape, different numbers.
-- `stress.applyTierMultiplier` scales **`mercCount`**, not the Stress amount.
-- **No dry runs.** Do not build a `DryRun` default of `true`, do not ask for a
-  logging-only session first, and do not gate a live test on one. `[Elapse]
-  DryRun`, `[MissionRewards] DryRun` and `[RewardCurve] DryRun` do not exist —
-  writing one into the `.cfg` gets you live credit spends and live
-  `NegativeTraitValue` writes.
-- `Status` decode: **5 = dead**, **7 = a side character, not selectable**, 4 not
-  established. `IsStatusSafehouseAliveAndActive()` is false for all three.
+See [SCHEMA-FORMAT.md](../schema/SCHEMA-FORMAT.md).
 
-## The injury route (shelved)
+- **Schema files must be strict JSON.** `gen_binds.py` uses `json.load`; `check_schema.py` and the editor accept comments and trailing commas. A comment passes the editor and breaks the bind generator. `source: scripts/gen_binds.py:collect`
+- **A numeric field with no `range` is not checked at all.** `source: schema/check_schema.py:check_range`
+- **`absent` does not imply `optional`.** Only `"optional": true` silences `MISSING`.
+- **`--no-cfg` skips every invariant that names a cfg key** (`SKIPPED`, exit 0).
+- **A `mirror` invariant whose `source` file is absent is skipped without a line;** an absent `mergeWith` file raises a traceback. `source: schema/check_schema.py:main` (mirror branch)
+- **`targets.json` must name a JSON file.** Pointed at a CSV, `check_schema.py` dies with `JSONDecodeError`; use `targets.overlays`.
+- **The stray top-level-key check is inactive.** It runs only for schemas declaring `targets.section`, and none do. Only the runtime (`ConfigDoc.ReadSection`) and the editor's ungraded "undeclared keys" banner see stray keys.
+- **The implant-slot schema docs are hand-copied from `Implants.SlotHelp`,** and nothing checks the copy. `source: scripts/implants.py:probe_help`
 
-Kept so it is not re-derived. `MedicalTurn > GameTurn` is the game's own
-out-of-action state, written with `MedicalTurn = GameTurn + days*4` then
-`GameDb.UpdateGameCharacter(model)`; `SaveManager.ProcessCharacterMedicalTurns`
-runs every turn and self-clears it.
+## Build & release
 
-- A future `MedicalTurn` also blocks cyber surgery, legwork, the Detox bench and
-  stress treatment. It does not block the medical bench.
-- A raw write bypasses `RuleModel` 40 Max Injury Time (100 turns / 25 days),
-  `GameSafehouseModel.GetInjuryTime`, `EffectSpecialCode 16 InjuryReduction` and
-  `GameDifficultyModel.GameSpeedScalar`.
-- `Status` 13 = `MedicalBench`, 14 = `CyberBench`; both bench-owned via
-  `LockedForTurns`.
+See [workflow.md](workflow.md).
 
-This route was rejected in favour of trait insertion. It was never built and
-never observed in game.
-
-## Dumping and diagnostics
-
-- **CKF Data Dump is not read-only.** `[TraitProbe]` inserts `GameCharacterTrait`
-  rows and `[WriteProbe]` calls `AddCredits`/`SpendCredits` and writes
-  `NegativeTraitValue`. Both ship disabled. `[General] Enabled` is the table-sweep
-  switch, not a master switch — `[Diagnostics]`, `[TraitProbe]`, `[WriteProbe]`
-  and `[ElapseProbe]` all initialise before it is checked.
-- **The dumper under-reports failures.** Four `GameDb` readers throw
-  `NullReferenceException` when swept at the main menu and `_readers.csv` records
-  all four as `ok` — the exception surfaces through the il2cpp trampoline, past
-  the sweep's `try`/`catch`. Use `[Dump] Databases = DataDb` unless you are in a
-  mission.
-- There is no dedupe on the domain id; Run 32's `WeaponModel.csv` carried
-  `WeaponId` 13000 twice.
-- **The dump stopped trimming columns on 2026-09-13, and that moved a decision
-  into every consumer.** `ModelColumnsOnly`, `DropPresentationColumns` and
-  `DropConstantColumns` now default to `false`: columns arrive exactly as they
-  sit in memory, constants and art references included. Only compiler
-  `<Name>_k__BackingField` duplicates and the Il2Cpp plumbing (`Pointer`,
-  `WasCollected`, `ObjectClass`, `ObjectBase`) are still filtered, and only
-  scalars are written at all. The trap is that **a blank overlay cell means
-  "leave this column alone" and a filled one is a write that beats anything
-  merged after it**, so a generator that emits every column it reads turns a
-  no-op into a real write. Three did: `make_enemy_overlays.py` would have
-  written an explicit `0` into `WeaponModel.PhysicalDamage2` on ~800 cells;
-  `implants.py` would have put `EffectModel.IconAsset` and `VFX` into the slot
-  lever sheets as numeric adjustment cells; and `consumables.py` — written the
-  same day, after the first two were fixed — carried 1 to 14 extra columns into
-  each of its six sheets and failed gate 15's P-MAP check against
-  `Consumables.cs` on all six. All three now filter for themselves:
-  `informative()`, `is_presentation()`, and in `consumables.py` both an art
-  clause and a constancy clause on `take()`.
-- **The trim had two dimensions, and a consumer needs both.** `consumables.py`
-  proved it. Of its extra columns, twelve were art references by name —
-  `ExtraAsset`, `AnimationKey`, `Vfx`, `SelfVfx`, `TokenVfx`, `IconPng`,
-  `EventSFX`, `GroupNameSFX`, `TypeSFX`, `Asset3DTypeId`, `IconAsset`,
-  `MatrixIconAsset` — and three were constants the old dump had removed:
-  `TalentModel.IsActiveForDisplay` = `True`, `TalentCyberEnabled` = `True` and
-  `TalentLevel` = `1`, each on all 384 rows [measured]. An art filter alone
-  leaves exactly those three behind on five of the six classes. `consumables.py`
-  had explicitly argued in a comment that no "or constant" clause was needed
-  "because the shipped cells are all blank" — sound only while the dump was
-  doing that job.
-- **`ModelColumnsOnly` has never removed anything.** `_dropped_columns.csv` from
-  2026-09-12 holds 1336 rows and **zero** with reason `inherited UI member`,
-  across all 54 captured tables. The inherited UI-row-class members are not
-  public scalar properties on the Il2Cpp side, or are declared on a
-  `...ModelBase` after all. The rule is kept in case a game update changes that.
-  Any doc claiming it cuts `WeaponModel` from 141 columns to 78 is wrong.
-- **Names in `[Dump] Tables`, `Skip` and `Include` are matched verbatim** since
-  2026-09-13. `Weapon` no longer finds `WeaponModel`; the suffix is part of the
-  name. A name that matches nothing is now named in a startup warning rather
-  than hooking silently. `make_overlay.py` lost the same auto-suffix, and its
-  positional `cols[0]` key fallback — a table outside its `KEYS` map needs
-  `--key`.
-- **The nine writing tables dump by default** as of 2026-09-13:
-  `BackstoryModel`, `BlockConditionModel`, `ContactBackstoryModel`,
-  `DialogModel`, `DialogQuipModel`, `JournalModel`, `MissionBlockModel`,
-  `StoryMatchModel`, `StoryNodeModel`. They are the bulk of the bytes.
-  `validate_rules.py` now validates rules that target them instead of handing
-  out an INFO "table not dumped" pass, so new WARNs there are real.
-- **`_reward_curve.csv` can never show a patched curve.** CKF Data Dump loads
-  first and sweeps before CKF Hard Mode patches (sweep at log line 4081, patch at
-  4548). Use `rewardcurve.logEffectiveCurve` instead.
-- `PreloadTables` / `DumpAllRows` were why every early dump was partial —
-  `GetRow<X>Model` fires only for rows the game reads. Twelve tables out of 192
-  passed for a complete capture across a dozen runs, and loot was never among
-  them.
-- Parsing `LogOutput.log` into sheets is obsolete; the dumper writes CSV.
-- **Unity exceptions never reach `LogOutput.log`.** A hung mission otherwise
-  leaves an empty log; the `RowClone` dangling-pointer warning is the only
-  pre-black-screen signal.
-- **An instrument's silence is not evidence.** Four documented incidents: a by-id
-  reader that throws where a postfix cannot see it; `[Diagnostics] FindMethods`
-  logging nothing because its call site sat below `if (!enabled) return;`;
-  `WriteProbe` sampling only on a turn advance, so a save loaded without
-  advancing time produced no row; `ElapseProbe`'s board diff deciding a mission
-  was deleted by not finding it.
-- Never delete or reformat a log line matched by one of `check_run.py`'s ten
-  regexes — it breaks the verifier silently.
-- Keep a copy of the **live** log. It carries Unity messages (`Restoring
-  Monster`, the spawn commands) that the saved copy does not.
-
-## SelfCheck
-
-- `selfcheck.enabled` ships **off** and should stay off outside a verification
-  launch. Against a stale baseline it reports a retune as a regression. The order
-  is: retune → turn on → regenerate → read → turn off.
-- Regenerating the baseline after a retune is the point. Regenerating to make a
-  failure go away is not.
-- SelfCheck is gated behind `modelrules.enabled` and reached through
-  `RowClone`. With `modelrules.enabled` false it is handed no database types,
-  says so at Error and checks nothing.
-  **Correction, 3.0.** This entry used to end "the whole `[SelfCheck]` section is
-  dropped from the `.cfg` as an orphan", which was the reason `SelfCheck.Init` is
-  called from `Plugin.Load` rather than from inside `ModelRules.Init`. That
-  failure mode is gone: the three keys are the `selfcheck` section of
-  `ckf.hardmode.json`, and a JSON key needs nothing done to it to stay on disk.
-  The call site did not move — a launch with ModelRules off is exactly the one
-  where this subsystem has something to say — but the reason it is there has
-  changed.
-- **Not judged is not passed.** A `row not read` result is not a pass.
-- A database is per *type*, not per table — a `GameDb` selfcheck run read only
-  `WeaponModel` and 96 checks came back "row not read".
-- Do not put a test fixture on a row that a clone rule copies.
-
-## Shipped-data anomalies in `ImplantModel`
-
-Four rows of the shipped `ImplantModel` do something the other 194 do not.
-**All four ship as-is, per David: no investigation, no `SelfCheck` row, no
-edit.** The eleven `implants-slotNN.csv` tables show each of them at its shipped
-value and `validate_rules.py` flags none of them. This section exists so the
-next agent does not re-derive them. Measured against `sheets\raw\` from the
-2026-09-12 dump; Phase 7 of `split-config-into-toggleable-slices`.
-
-- **`Deactivated = 904` on row 904, a self-pointer.** `ImplantTypeId` 904
-  `SAM-Matrix Link 5` (`ImplantClass` 9 MatrixLink, `ImplantSlot` 3) carries
-  `Deactivated = 904`, its own id. It is the only row in the table that does.
-  Ten rows carry a positive `Deactivated`; the other nine each name a
-  **different** `ImplantTypeId` that exists in the table and whose own
-  `Deactivated` is `-1` — 914 -> 915, 1904 -> 1905, 2850 -> 2853, 2851 -> 2854,
-  2852 -> 2855, 3004 -> 3005, 3217 -> 3218, 3606 -> 3607. 904 names itself, and
-  no other row of class 9 has `Deactivated = -1`. Whether that is a data error
-  or a convention nobody here has read is not established. `[unverified]` —
-  and it stays `[unverified]` rather than being explained, because what
-  `Deactivated` *does* is a code question and the interop assembly is
-  marshalling stubs with no bodies (`AGENTS.md` section 1). **Do not repoint
-  it**; a repoint would be a balance change on an unread mechanic.
-
-- **`Deactivated = -2` on row 3801.** `N-Filament SME Filter` (`ImplantClass`
-  37 Cyber Lung, `ImplantSlot` 10) uses `-2` where every other live row uses
-  `-1`. `-1` appears on exactly 8 rows, `-2` on exactly this one, `0` on the
-  other 180. It is also **the only one of the five Cyber Lung rows with
-  `ImplantTalentId` 0** — 3701, 3703, 3704 and 3800 carry talents 80000, 80001,
-  80002 and 80054. Whether the two facts are related is not established.
-  `[unverified]`. Ships as-is; no `SelfCheck` row, no edit.
-
-- **Quantum Rider's `MatrixEffectId` 50014 has no row in
-  `MatrixEffectModel`.** Row 100 `Quantum Rider` (`ImplantSlot` 11, the only
-  row in that slot) carries `MatrixEffectId = 50014`. `MatrixEffectModel` has
-  251 rows and 50014 is not one of them; the nearest ids it does have are 50000
-  and 50001. `EffectModel` **does** have a 50014, named `Quantum Rider`,
-  carrying `InitBonus 2` and nothing else. The contrast is sharper than the
-  bare fact: **20 implant rows carry a non-zero `MatrixEffectId`, and the other
-  19 — ids 70001-70019 — all resolve in `MatrixEffectModel` and none of them
-  exists in `EffectModel`.** Row 100 is the only one the other way round.
-
-  Whether the game resolves that field against `EffectModel` when
-  `MatrixEffectModel` misses is a **code** question, and the interop assembly
-  cannot answer it: it is marshalling stubs, not game logic, so there is no
-  body to read and no caller graph to walk (`AGENTS.md` section 1). No
-  explanation is offered here and none should be added without a reading.
-  `[unverified]`. **Do not "fix" it** — repointing 50014 at a
-  `MatrixEffectModel` row would be a balance change on an unread mechanic.
-
-- **`ImplantLevel` is not a tier index, and the slot tables use file order
-  because of it.** In slot 3 the four rows named `CombatLink 1` through
-  `CombatLink 4` (905-908) are all `ImplantLevel 1`, as are both rows named
-  `M-Grade CombatLink` (914, 915) — six class-16 rows at level 1 — and all five
-  `Cortex Wetgates` rows (909-913, `Cortex Wetware 1`-`4` plus
-  `MEK-Cortical Wetgate`). In slot 7, `SynthMuscle 3` and `SynthMuscle 4` (3002,
-  3003) are both level 3, and so are both `SynthBuilder ROM` rows (3004, 3005) —
-  four class-30 rows at level 3. No column orders those tiers, so
-  `implants-slot03.csv` and `implants-slot07.csv` present their rows in **dump
-  file order**, and the slot 3 and slot 7 help text says so, in case a player
-  reads the ordering as a tier ladder.
-
-  This is an observation about what the data contains, not a claim awaiting a
-  test, so it carries **no** `[unverified]` tag.
-
-  **A correction to `tasks.md` Phase 7's own wording, which said "All four
-  CombatLink rows and all four Cortex Wetware rows are level 1, and SynthMuscle
-  3 and 4 are both 3".** Every part of that is true and every count is low:
-  six class-16 rows, five class-41 rows, four class-30 rows. And the condition
-  is **not confined to slots 3 and 7** — duplicate `(ImplantClass,
-  ImplantLevel)` pairs occur in **nine of the eleven** character slots; only
-  slot 5 and the single-row slot 11 are free of them. In most of those the
-  duplication is benign (slot 6's class 27 is four claw families at four tiers
-  each, so level really is the tier). Slots 3 and 7 are where rows whose
-  **names** number 1..4 do not have levels 1..4, which is the case a player can
-  misread. [measured]
-
-## Settings that were removed or renamed
-
-**3.0 moved 21 of the 22 cfg keys, and it is a move rather than a removal.**
-`[General] Enabled` is the only key left in `ckf.hardmode.cfg`. Everything else
-lives in `ckf.hardmode.json` under its subsystem's section: `[PowerLevel] MaxCap`
-is `powerlevel.maxCap`, `[SelfCheck] Enabled` is `selfcheck.enabled`, and each
-subsystem's `Enabled` folded into its section's own `"enabled"` rather than
-becoming a second one. The rows below are keys that no longer exist anywhere;
-`docs/config-reference.md` is the current address of every key that does.
-
-Older logs and notes reference settings that no longer exist. The current surface
-is 22 `.cfg` keys in ten sections plus five sidecar JSONs, all declared in
-`schema/*.schema.json` and documented in `config-reference.md`.
-
-| Gone | Use instead |
-|---|---|
-| `[PowerLevel] ScalarOverride`, `UseOffsetOverride`, `OffsetOverride` | `[Difficulty] PowerLevelScalar`, `BasePowerLevelOffset`, `MatrixPowerLevelOffset` (the game's own sliders, widened) |
-| `[PowerLevel] ScaleDerivedCalls`, `TeamPowerLevelSource`, `ApplyMatrixOffset` | renamed; now hardcoded constants |
-| `[PowerLevel] TeamPowerLevelOverride` and the five DB-fallback keys | gone for good |
-| `[Progression] MinGain` | shape awards in the `teampl` section — its guard was `before > 0`, which skipped the floor in exactly the case it existed for |
-| `[Progression] GainScalar`, `GainOverride`, `RetroactiveTable` | retroactive is the subsystem's only mode; shape in the `teampl` section |
-| `[MissionRewards] SoloHackTeamPowerLevelScalar` and the six other bucket keys | per-type rows in the `missions` section; there is **no pattern layer**, one `MissionTypeId` per row, matched exactly |
-| The 20 `[Difficulty]` scalar knobs | the game's own custom-difficulty sliders, widened by `SliderRangeMultiplier` |
-| `[ModelRules] CompiledAccessors`, `EnableRowCloning`, `CloneServeById`, `CloneFreshInstances`, `CloneServeOnBulkReads` | hardcoded |
-| `[Elapse]/[MissionRewards]/[RewardCurve] DryRun`, the three `LogFirst` extras | gone |
+- **Nothing compares built bytes with disk bytes any more.** `serve.py --selftest --migration` was the only check that did, and it was deleted with the migration block: it converted the frozen 3.0 fixture and compared the result against the live config, which only held while that config was the shipped defaults. So a generator whose output drifts from the file on disk is caught by nothing. `source: gui/serve.py`, above `MIGRATION_DOC_VERSION`
+- **Keep the release's required-file list and the directory sweep separate.** `CONFIG_FILES` refuses when a file is absent. The sweep ships any other `.csv`, `.tsv` or `.json` but can't notice an absence. `Defaults.Expected` must still be edited by hand for the mod to report a missing file. `source: scripts/make_release.py:CONFIG_FILES`, `config_sources`; `Defaults.cs:Expected`
+- **Two version checks guard a release, and they are independent.** `Defaults.DocVersion` and every slice's `_version` must agree (`check_doc_version`); `Plugin.PluginVersion`, the csproj `<Version>` and the DLL metadata must agree (`check_versions`). Nothing compares the two groups, and since 4.1.0 they no longer hold the same string: `DocVersion` is the settings-layout stamp and bumps on a shape change alone, while the plugin version bumps on a public release. A layout bump restamps all ten slices together. The full bump list is in [workflow.md](workflow.md). `source: scripts/make_release.py`, `Defaults.cs:DocVersion`
+- **Expected non-zero gates; don't "fix" them.** `merge_overlays.py --check` exits 1 (`overlays/` has no top-level CSV and the script doesn't recurse); `merge_sidecars.py` and `rules_to_overlays.py` are retired and exit 1; `validate_rules.py --game` without a dump exits 2. `source: scripts/run_gates.cmd`
+- **`implants.py --selftest` and `consumables.py --selftest` need `--game`/`--dump`** like their `--check` runs, or they exit 2.
+- **A .NET version string's length-prefix byte can be an ASCII digit.** BepInEx's is 53 bytes, read as `5`. Anchor on the length byte. `source: scripts/make_release.py:be_version`
+- **BepInEx 6 IL2CPP ships its own .NET runtime in `dotnet\`.** Without it doorstop can't launch. First launch downloads Unity base libraries from `unity.bepinex.dev`, so offline machines stall. `source: scripts/make_release.py:doorstop_wants`, `release/README.txt.in`
+- **The sandbox can compile-check but not build the shipping net6.0 artifact.** `apt-get update && apt-get install -y dotnet-sdk-8.0` (the update is required), a `nuget.config` with `<clear />` sources, and a project copy with `TargetFramework` edited to net8.0 (`-p:TargetFramework` still restores net6.0 refs).
+- **An MSBuild comment can't contain `--`.** It is an XML comment, so the build fails before it starts.
+- **`tests/defaults` needs the BepInEx core DLLs listed in `deps.json`.** Copying them next to the test DLL is not enough. `source: tests/defaults/README.md`
 
 ## Working practice
 
-- Search the local dumps and logs before explaining a mechanic. If the search
-  comes up empty, report the observation and stop — a list of plausible
-  mechanisms is a guess wearing a lab coat.
-- Tag claims: `[measured]`, `[fitted]`, `[closed]`, `[unverified]`. An untagged
-  claim reads as established fact to the next reader.
-- Corrections stay visible. Do not quietly edit a wrong claim out.
-- **Run numbers and the files in `Logs/` are two independent schemes, and a
-  mismatch between them is not a finding.** Agents number their own runs; some
-  of those were direct reads of the live `BepInEx/LogOutput.log`, which is
-  overwritten on every launch and was not always saved into `Logs/`. So a
-  document citing "Run58" may mean a log that no file of that name contains.
-  This is settled — do not investigate it. Cite a log by its filename and a UTC
-  timestamp; if a run number is needed, say which of the two you mean.
-  [David, 2026-09-03] `[closed]`
-- Anything that writes to a save gets a review **before** it runs.
-- Hand over `cmd.exe` command lines with literal paths, never PowerShell `$VAR`
-  syntax, and make the config change on disk rather than listing keys to flip.
-- The sandbox can compile-check but cannot build the shipping artifact: only the
-  net8.0 targeting pack is available, and a `nuget.config` with
-  `<packageSources><clear /></packageSources>` is required or restore fails.
-  **The SDK is not in the image and has to be installed**, which is two
-  commands — `apt-get update` then `apt-get install -y dotnet-sdk-8.0` — and the
-  `apt-get update` is not optional: without it the dotnet packages 404. A Cowork
-  session's proxy denies `api.nuget.org`, which is why the cleared package
-  source matters and why `net6.0` cannot be restored at all.
-  **Correction, 2026-09-03:** the Phase 3 handoff said there was no C# compiler
-  in the container and that C# changes could only be reviewed by diff. That was
-  wrong — this bullet was already here and was not read. Phase 4's C# was
-  compiled, and `tests/defaults` ran 94 checks against the built DLL.
-- **An MSBuild comment cannot contain `--`.** It is an XML comment, so a
-  `.csproj` comment quoting a command line with a long flag is a parse error and
-  the build fails before it starts. Name the flag in prose or put the command
-  line in a Markdown file next to it.
-- **`-p:TargetFramework=net8.0` does not override the csproj's `net6.0` for the
-  sandbox verification build.** Restore still resolves `Microsoft.NETCore.App.Ref
-  6.0.36`, which the cleared package source cannot supply, and the build fails
-  before compiling anything. Copy the project to a scratch directory and edit
-  the `TargetFramework` element instead — that is what "a net8.0 verification
-  build, not the shipping artifact" means in practice. [measured 2026-09-04]
-- **`tests/defaults` needs the BepInEx core DLLs listed in `deps.json`, not just
-  present in the output directory.** `BepInEx.Paths`' static initializer pulls
-  in `SemanticVersioning.dll`, and a framework-dependent app resolves by
-  `deps.json` rather than by probing its own folder, so copying the core DLLs
-  next to `DefaultsTests.dll` is not enough: every scenario fails with
-  `TypeInitializationException`. `tests/defaults/README.md` has the fix.
-  [measured 2026-09-04, container]
-- **PyInstaller: two independent things make the frozen editor find its schemas,
-  and removing either one alone changes nothing.** `check_schema.py` shipped as
-  a data file at `schema/check_schema.py` puts the frozen module's `__file__` in
-  `<_MEIPASS>/schema`, so `check_schema`'s own `--schema` default resolves;
-  `run_check_schema_entry` passes `--schema` explicitly, so it resolves wherever
-  `__file__` lands. Drop both and the exe prints `no *.schema.json in <_MEIPASS>`
-  and every save is refused. A fault sweep that removes one at a time catches
-  neither — the sweep has to remove both. [measured 2026-09-04]
-- **A .NET version string in an assembly is length-prefixed, and the length byte
-  can itself be an ASCII digit.** `AssemblyInformationalVersion` is stored as a
-  SerString: one compressed-length byte, then UTF-8. BepInEx's is
-  `6.0.0-be.785+<40 hex commit>`, 53 bytes, and 53 is ASCII `5` — so a regex
-  reading `\d+` leftward swallows the length and reports the build as
-  `56.0.0-be.785`. Anchor on the length byte instead: trim leading digits until
-  the byte before the match equals the bytes remaining AND what is left still
-  matches the whole pattern. Walking the start forward one byte at a time
-  without that second condition reads `6.0.0-be.999+<40 a>` preceded by an `x`
-  as the build `-be.999`, because the fifth byte is an ASCII `0` and 48 bytes
-  follow it. `scripts/make_release.py:be_version` got this wrong twice.
-  [measured 2026-09-04, against `BepInEx/core/BepInEx.Core.dll`]
-- **`EmbeddedResource` is stored uncompressed, which makes "is this DLL stale"
-  a substring search.** Each embedded file's exact bytes appear verbatim in the
-  assembly that embedded it, so `open(src,'rb').read() in dll_bytes` is a
-  content comparison and needs no metadata parser. That was what
-  `make_release.py`'s `check_embedded` gate used instead of comparing mtimes,
-  because a timestamp is a fact about the filesystem and not about the artifact.
-  [measured 2026-09-04, all seven defaults found in the 814,592-byte Release
-  DLL]
-  **Superseded, 2026-09-07.** The seven `<EmbeddedResource>` entries were
-  removed from `CKFHardMode.csproj` and the config files now ship loose in the
-  zip, so there is nothing embedded left to go stale. `check_embedded` and the
-  `embedded_sources` table it walked are deleted from `make_release.py`. The
-  technique above is still correct about the CLI format and is kept here because
-  it is the cheap way to answer "does this assembly contain these exact bytes"
-  for any DLL that *does* embed something — it is no longer a check this repo
-  runs. What replaced it is `check_doc_version()`, which compares the `_version`
-  in the `ckf.hardmode.json` being packaged (since 2026-09-11 a snapshot of the
-  live config; before that `mods/CKFHardMode/defaults/`, now deleted) with the
-  `DocVersion` literal in `Defaults.cs`; the shipped file's own bytes need no
-  proving because the same file is what goes into the zip.
-- **`3.0.0` appears inside the 2.13.0 `CKFHardMode.dll` and it is not the
-  version.** It is the config document's LAYOUT version — it moves when the
-  layout does, not when the mod ships. Anything looking for the assembly's
-  version has to look for the length-prefixed form. [measured 2026-09-04]
-  **Correction, 2026-09-07.** This entry located the string as
-  "`Defaults.DocVersion`, inside the embedded `ckf.hardmode.json`", which is two
-  places at once. They were both in the DLL when it was measured, and only one
-  of them still is: `Defaults.DocVersion` is an `internal const string` in
-  `Defaults.cs` and still exists, while the embedded document that carried the
-  same number in its `"_version"` went with the rest of the embedded resources.
-  What form the const takes in a 3.0 assembly has not been measured — no build
-  was run for this correction — so treat the length-prefixed advice above as
-  covering the `AssemblyInformationalVersion` case it was measured against and
-  nothing more.
-- **Windows tears a process down asynchronously, so "is it still running?" has
-  to be polled, not sampled.** `taskkill /F /T` returns when it has issued the
-  terminations, not when they are complete, and `Popen.wait` covers only the
-  process this one owns. Asking `tasklist` once, immediately after the kill,
-  reports the application the bootloader launched as still running when it is
-  mid-teardown. `gui/serve.py`'s frozen-exe case did exactly that on the first
-  Windows run: **the "no process is left running" check FAILED while the "the
-  directory could be deleted" check beside it PASSED**, and a running exe
-  cannot be unlinked on Windows, so whatever it saw was gone within the
-  delete's own 30 seconds. `_procs_settle` polls on the same budget
-  `_rmtree_retry` already used. [measured, David's Windows run, 2026-09-04]
-- **`tasklist /FI "IMAGENAME eq X.exe"` matches by NAME, not by path.** Any
-  other copy of the same executable anywhere on the machine counts. A check
-  asking "did MY copy leak a process" has to take a baseline before it launches
-  anything and subtract it, or the answer is about the machine rather than
-  about the copy.
-- **BepInEx 6 for IL2CPP ships its own .NET runtime, and it is most of the
-  download.** `dotnet\` is 187 of the 232 files in `CKF-Hard-Mode-3.0.0.zip`
-  and 35 of its 43 MB. `doorstop_config.ini` names it — `coreclr_path =
-  dotnet\coreclr.dll`, `corlib_dir = dotnet` — so a BepInEx tree unpacked
-  without it extracts, installs, and does not launch: doorstop finds no
-  runtime. It belongs to BepInEx, not to the game: every file in the live
-  install's `dotnet\` carries the BepInEx extraction mtime (1785199898–99),
-  while `CyberKnights.exe` and `UnityPlayer.dll` are at 1775867726, ten million
-  seconds earlier. [measured 2026-09-04]
-- **A config file that reads back at its shipped default is not proof the
-  editor's save did nothing.** `serve.py`'s `commit` skips any file whose
-  proposed bytes equal what is on disk and returns `written: []` when that
-  leaves nothing, so a no-op save writes nothing and moves no mtime; and the
-  `.pre-gui-backup` is written only when one does not already exist, so a
-  second save keeps the first save's backup. A document sitting at its default
-  with a moved mtime and a default-valued backup beside it therefore means two
-  saves — one that put a value in and one that took it back — not a save that
-  failed. Read the mtimes and the backup together before concluding anything.
-  [measured 2026-09-07, from Run61/Run62's install]
-- **BepInEx's first launch downloads Unity base libraries over the network.**
-  `InteropManager] Downloading unity base libraries from
-  https://unity.bepinex.dev/libraries/<unity version>.zip`. It is the only
-  network access anything in the player zip makes, it happens once per Unity
-  version, and an offline or firewalled machine will not get past it.
-  `release/README.txt.in` says so. [measured, Run61 line 8]
-- **The editor's schema check ran against a staging directory with no lever
-  sheet in it, and reported 53 problems for files that were all present on
-  disk.** `files_check_schema_reads` in `gui/serve.py` derives the paths a
-  staging copy needs from the schemas rather than guessing them, and it returned
-  12 — the `.cfg` and the eleven sidecar JSONs — on the reading that
-  `check_schema` "opens" only the documents it parses. It does not only open: it
-  stats every declared overlay and grades an absent one `MISSING`, and it
-  censuses `ckf.hardmode.d\` for sheets no schema claims. `stage_and_validate`
-  copies exactly that list, so every validate and every save built a staging
-  directory holding no overlay CSV at all and got one `MISSING` back per
-  declared sheet. `MISSING` is not in `BLOCKING` — which is `RANGE` and
-  `INVARIANT` — so no save was ever refused by it: the editor showed 53 false
-  problems on every save and nothing failed, which is exactly why it survived
-  this long. The same omission kept the sheets out of `fingerprints`, so a sheet
-  edited on disk between the browser's read and the save could not be detected
-  either. `files_check_schema_reads` now returns 65 paths: the same 12 plus all
-  53 declared sheets. This is the `AGENTS.md` section 3 shape with the
-  instrument pointed at the wrong directory — it could not see its subject, and
-  what it said instead was a problem class nobody acted on, hidden behind a
-  severity that does not block. When a check reports the same count on every
-  run, confirm it is looking at the files it names.
-  [measured 2026-09-14: 53 problems, all kind `MISSING`, staging off the old
-  12-path list against the live config; 0 problems from the 65-path list against
-  that same config]
+- **Search the dumps and logs before explaining a mechanic.** If it finds nothing, report and stop. Tag claims `[measured]`, `[fitted]`, `[closed]` or `[unverified]`. `source: AGENTS.md`
+- **Run numbers and `Logs/` filenames are separate schemes.** A mismatch is not a finding; cite logs by filename and UTC time. [closed]
+- **Review anything that writes to a save before it runs.** Make config edits on disk yourself; hand over `cmd.exe` lines with literal paths. `source: AGENTS.md`
+- **Verify device file writes.** A same-path `device_commit_files` re-commit has reported `written` and left old bytes. Stage under a distinct name, commit with `expectedMtimeMs`, re-stage and hash. `/mnt/user-data/uploads/` accretes stale files: re-stage before reading; `device_list_dir` is the authority.
+- **Copy the whole repo to a quiet local mirror before running gates.** `serve.py --selftest`'s `copytree` races the staging layer's `.stage-tmp.*` files. Partial copies give false reds (a missing `docs/mission-reference.json`, `overlays/`, `release/*.in`), and false greens when both sides of a comparison come from the same partial source.
+- **There is no repo-wide line-ending convention.** `ConfigDoc.cs`, `Defaults.cs`, `Plugin.cs` and the csproj use CRLF; the other `.cs` files use LF. Don't normalise a file you are only editing.
+- **A marker scrape must require exactly one match.** `Implants.cs` has one `BEGIN LEVER MAP` and three `END LEVER MAP`, so a `find()`-based scrape passes while checking nothing. Copy `consumables.py`'s check. A converter's `--check` must list the directory. `source: scripts/implants.py:probe_map`
+- **`Cyberweapons.cs` contains a literal NUL byte (inside the string in `KeyOf`),** so `grep` treats the file as binary. Use `--binary-files=text`.
+- **Retiring a check doesn't mean deleting it.** A retired check stays runnable behind a flag and reports `NOT RUN` by name. Divergence from the 3.0 ruleset is not a defect. `source: AGENTS.md`

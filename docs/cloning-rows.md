@@ -1,114 +1,120 @@
 # Cloning rows: id policy and serving paths
 
-How to choose the id a `clone` inserts under, and which serving paths have
-actually been exercised.
-
-**The gear ladders are already built** and live as CSV in the live
-`BepInEx\config\ckf.hardmode.d\` (`ArmorModel.csv`, `WeaponModel.csv`).
-
-**Enemy gear is an overlay; player gear is a rule.** Overlays load after
-`ckf.hardmode.rules.json`, so where the two overlap the overlay wins — an enemy
-gear rule added back to `rules.json` still runs and then silently does nothing.
-`_reference/gear-tiers.csv` lists every tier and the file that provides it; look
-there before writing anything here.
-
-Syntax for `clone` / `as` / `serveOn` is in [`rule-engine.md`](rule-engine.md)
-§Clone syntax; overlay `_clone` lines are in [`overlays.md`](overlays.md); the
-failure modes are in [`gotchas.md`](gotchas.md); log reading and the validator
-are in [`workflow.md`](workflow.md); why PL 11–20 needs any of this is in
-[`tuning-enemies.md`](tuning-enemies.md).
-
----
-
-## 1. Choosing the id
-
-**The game is still being updated. A clone must sit where the developers would
-not put something, so that removing this mod's rules restores stock content and
-a future patch does not collide with an id we took.** In preference order:
-
-**1. The developer's own next slot, when one exists and is named for the
-purpose.** `WeaponId` 20010 and 20011 ship as "Guard Rifle Lvl11" and
-"Guard Rifle Lvl12", identical to Lvl10 and referenced by no monster. That is a
-slot the developers left for exactly this, so use it with an ordinary rule — no
-clone needed.
-
-This is a narrow category. "Unreferenced" is not the test; *named for the thing
-you want* is. The 74 unreferenced `EffectModel` rows and `WeaponId` 23097–23099
-are **developer work in progress, not free space** — see
+Which id a clone should be inserted under, which reader paths serve a clone and
+how far each is proven, and how spawn-pool clones are filtered. Clone syntax is
+in [`rule-engine.md`](rule-engine.md#clone-syntax) (JSON) and
+[`overlays.md`](overlays.md#clone-lines) (`_clone` lines); failure modes are in
 [`gotchas.md`](gotchas.md).
 
-**2. The free tail of the source row's own family block.** Enemy families are
-laid out with room after them:
+The enemy gear ladders already exist as clone lines in
+`ckf.hardmode.d/ArmorModel.csv` and `WeaponModel.csv`. Which id each tier uses
+is in [`gear-blocks.md`](../overlays/_reference/gear-blocks.md); check there
+before adding a tier. Why PL 11–20 needs clones is in
+[`tuning-enemies.md`](tuning-enemies.md).
 
-| Family | Block | Free tail |
+Use this page only after deciding that an existing row cannot represent the new
+tier. For syntax, use `rule-engine.md` or `overlays.md`; for the id and reader
+path, use this page.
+
+## Choosing the id
+
+The game is still being updated. A clone must sit where the developers would not
+put something, so that removing the mod restores stock content and a future patch
+does not collide with an id the mod took. In order of preference:
+
+1. **A developer slot named for the purpose.** `WeaponId` 20010 and 20011 ship
+   as "Guard Rifle Lvl11" / "Lvl12", identical to Lvl10 and referenced by no
+   shipped monster. Such a row can be edited in place with no clone. The test is
+   "named for the thing you want", not "unreferenced".
+2. **The free tail of the source row's own family block**, where the family has
+   room after it and nothing else starts there. The shipped ladders already used
+   these tails for Guard Rifle (`20012`+), Guard Shotgun (`22010`+), AI Standard
+   Bullpup (`23040`–`23049`; Corp SMG starts at `23050`), Guard Standard armour
+   (`22010`+) and Sniper Guard armour (`22106`+).
+3. **The reserved range, `900000` and up**, when the family sits inside a wider
+   block the developers would extend themselves. Guard Sniper's shipped tier-10
+   weapon is ScopeTek Headshot (`6016`), a player weapon inside the `6001`–`6023`
+   sniper block; `6024`+ is where a new player sniper would go. The same holds
+   for Monokill (`5016`) in `5001`–`5022`. `MonsterGroupMemberModel` ids run
+   `1`–`570` with no gaps, so every spawn-pool clone goes here.
+   `RowClone` treats any `set` of an id at or above `900000` that no clone
+   declares as an Error (`RowClone.ReservedFrom`).
+
+Not free space:
+
+- **Unreferenced rows are not spare rows.** `WeaponId` 23097–23099 are developer
+  work in progress. The list of 74 "unreferenced" `EffectModel` rows is
+  unproven: the scan that produced it did not check
+  `SecurityDeckCardModel.CardEffectId`, which references `65001`–`65005`. Do not
+  repurpose any row from that list until the scan is re-run across every table
+  holding an effect id; clone into the reserved range instead.
+- **Read ids from the current dump**, never from `Aug21Sheets/`, which is stale
+  and has put a wrong id in a config before.
+
+Every weapon in `20000`–`23999` is enemy gear, but ids outside that band include
+both player gear and enemy exceptions [measured]. Use the canonical partition in
+[`player-vs-enemy-gear.md`](../overlays/_reference/player-vs-enemy-gear.md), not
+one broad id predicate.
+
+## Serving paths
+
+`RowClone` hooks every reader that returns the table's row, on every database
+that declares one. A table is not owned by one database: `WeaponModel`'s
+materializer is on `DataDb`, but `GameDb` declares its own `ReadWeapon(long)`
+returning the same content model, and a mission reads enemy gear through that
+one. When adding a table, check both.
+
+| Table | Readers | State |
 |---|---|---|
-| Guard Rifle | `20000`–`20011` | `20012`+ |
-| WB Revolver | `21001`–`21010` | `21011`+ |
-| Guard Shotgun | `22000`–`22009` | `22010`+ |
-| AI Standard Bullpup | `23030`–`23039` | `23040`–`23049` (Corp SMG starts at 23050) |
-| Guard Standard armour | `21999`–`22009` | `22010`–`22099` |
-| Guard ADAPTIVE armour | `22200`–`22206` | `22207`–`22299` |
-| Sniper Guard armour | `22100`–`22105` | `22106`–`22199` |
-| Guard Heavy armour | `22300`–`22306` | `22307`–`22399` |
+| `WeaponModel` | `DataDb.ReadWeapon`, `GameDb.ReadWeapon` | [closed] Cloned tiers served; missions load. |
+| `ArmorModel` | `DataDb.ReadArmor` (no other reader returns a content `ArmorModel`) | [closed] Cloned tiers served on mission reload. |
+| `MonsterGroupMemberModel` | `DataDb.ReadMonsterGroupMembersByGroup(monsterGroupId, factionId, powerLevel, secLevel)` | [closed] End to end, and at scale: Run68 offered 751 clones across 13 groups to one call and served the 4 that passed both tests. See below. |
+| `MonsterTypeModel` | `DataDb.ReadMonsterType`, `ReadMonsterTypeByPowerGroupId` | Open. The list reader is live during encounter building; clone serving on it is unexercised. |
+| `MonsterTalentModel` | `DataDb.ReadMonsterTalents(monsterTalentGroup, powerLevel)` | Open. Unexercised. |
+| `EffectModel` | `DataDb.ReadEffect` | Open. Unexercised. |
+| `MonsterGroupModel` | `DataDb.ReadMonsterGroups`, `GameDb.ReadMonsterGroupsByGroup` | Open. Unexercised. |
 
-**3. The reserved range `900000`+**, when the family sits inside a wider block
-the developers would extend themselves. Guard Sniper's tier-10 weapon is
-ScopeTek Headshot (`6016`), a *player* weapon inside the `6001`–`6023` sniper
-block; `6024`+ is where a new player sniper would go, so it is not ours to take.
-Same for Monokill (`5016`) inside `5001`–`5022`.
+What the game derives from a `MonsterSpawnModel` or `MonsterGroupModel` id it
+has never seen is unknown [unverified].
 
-`MonsterGroupMemberModel` has no tails at all — ids run `1`–`570` with no gaps —
-so every spawn-pool clone uses the reserved range.
+Clones are built lazily, on the first read that needs one:
 
-**Always check the current dump, never a sheet in `Aug21Sheets/`.** Those are
-stale, and reading a weapon id off one has already put a wrong value in a config.
-`D:\ckf-data-modding\sheets\raw\<Table>.csv` is written by the live game.
+```
+RowClone: built  ArmorModel ArmorId 22017 from 22009 — ... 50 -> 80
+RowClone: served ArmorModel ArmorId 22017 from ReadArmor
+```
 
-Enemy weapons occupy `20000`+ and player weapons sit below it, and rules band on
-that boundary; a clone in the reserved range sits outside both. Whether the
-*game* reads anything into that boundary is **unverified**.
+`built` without `served` means the row exists and nothing reaches it. No line at
+all means nothing asked for it.
 
----
+## Spawn pools
 
-## 2. What each path rests on
+A cloned `MonsterGroupMemberModel` row is served into a filtered list, so
+`RowClone` decides whether it joins a roll; the game's SQL is inside the
+encrypted database and cannot be read. With `serveOn: auto` two tests apply:
 
-| Table | Serving path | State |
-|---|---|---|
-| `WeaponModel` | `DataDb.ReadWeapon`, `GameDb.ReadWeapon` | **Closed.** Built and served in Run 35; the mission loads. |
-| `ArmorModel` | `DataDb.ReadArmor` — no other reader anywhere returns a content `ArmorModel` | **Closed.** Built and served in Run 36, two families, on a mission reload. |
-| `MonsterGroupMemberModel` | `DataDb.ReadMonsterGroupMembersByGroup(monsterGroupId, factionId, powerLevel, secLevel)` | **Closed, end to end** (Run 40). See below. |
-| `MonsterTypeModel` | `DataDb.ReadMonsterType`, `ReadMonsterTypeByPowerGroupId` | **Open.** The list reader is confirmed live during encounter building; clone serving on it is unexercised. |
-| `MonsterTalentModel` | `DataDb.ReadMonsterTalents(monsterTalentGroup, powerLevel)` | **Open.** Unexercised. |
-| `EffectModel` | `DataDb.ReadEffect` | **Open.** Unexercised. |
-| `MonsterGroupModel` | `DataDb.ReadMonsterGroups`, `GameDb.ReadMonsterGroupsByGroup` | **Open.** Unexercised. |
+- **Provenance:** the list already contains the source row.
+- **Gate map** (`RowClone.GatesPass`), matched by parameter name:
 
-**A table is not owned by one database.** `WeaponModel`'s materializer is
-declared on `DataDb`, but `GameDb` declares its own `ReadWeapon(long)` returning
-the same content model, and that is the one a mission uses for enemy gear.
-RowClone hooks every reader returning the row on every database. When adding a
-table, check both — this cost a run.
+| Reader | Checked against the clone's columns |
+|---|---|
+| `ReadMonsterGroupMembersByGroup/4` | `monsterGroupId` = `MonsterGroupId`; `powerLevel` in `MinPowerLevel`–`MaxPowerLevel`; `secLevel` in `MinSecLevel`–`MaxSecLevel` |
+| `ReadMonsterTypeByPowerGroupId/1` | `PowerGroupId` |
+| `ReadMonsterTalents/2` | `MonsterTalentGroup`; `powerLevel` in `MinPowerLevel`–`MaxPowerLevel` |
 
-### Spawn pools: what the gate map covers
+A band bound of 0 is an open end. Any other filtered reader gets provenance only,
+logged once.
 
-A cloned `MonsterGroupMemberModel` row is served into a **filtered list**, not
-fetched by id, so whether it joins a roll is decided by RowClone, not by the
-game's SQL — which is inside the encrypted database and cannot be read. The test
-is provenance (the list already contains the source row) plus a hand-built gate
-map: `powerLevel` against `MinPowerLevel`/`MaxPowerLevel`, `secLevel` against
-`MinSecLevel`/`MaxSecLevel`.
+`factionId` is not in the map, so faction filtering rests on provenance. One
+data point: `ReadMonsterGroupMembersByGroup(40000, 4, 18, 0)` asked for faction 4
+and returned 8 rows that all carry `Faction` 0, so the argument is not a plain
+equality filter on that column [measured]. Whether 0 means "any" is
+[unverified].
 
-**`factionId` is not in that map** — it was left out rather than guessed at, so
-faction filtering currently rests on the provenance test alone. Run 37 gives one
-data point: the call `ReadMonsterGroupMembersByGroup(40000, 4, 18, 0)` asked for
-faction 4 and returned 8 rows that **all carry `Faction` 0**, so the second
-argument is not a plain equality filter on that column [measured]. Whether 0
-means "any", or the argument keys off something else entirely, is
-**unverified**.
-
-Run 37 also rejected all seven spawn clones with *"source row 292 is not in this
-list"*, correctly: member 292 carries `MaxPowerLevel` 5, so it is absent from a
-PL 18 call and a clone of it inherits that ceiling. Clone a row that is present
-in the calls you care about, and set the gates explicitly in `as`:
+A clone inherits its source's gates. Member 292 carries `MaxPowerLevel` 5, so it
+is absent from a PL 18 call, and every clone of it was rejected there with
+"source row 292 is not in this list" [measured]. Clone a row that is present in
+the calls you care about, and set the gates explicitly:
 
 ```json
 "as": { "MonsterGroupMemberId": 900007, "MonsterType": 1100,
@@ -116,13 +122,38 @@ in the calls you care about, and set the gates explicitly in `as`:
 ```
 
 When provenance fails, the log prints the clone's own gate columns next to the
-rejection, which is usually enough to see the cause.
+rejection.
 
-### The whole chain, proven
+### At scale, and the gate map is exact [closed]
 
-Run 40 closed it [closed]. A cloned member row carrying PowerGroup 300 at
-`WeightedRoll` 100 was served into `ReadMonsterGroupMembersByGroup(40000, 4, 18, 0)`,
-and then:
+Run68, one Warner-Braun mission at scaled PL 18. The reader was offered 751
+clones and took 4:
+
+```
+RowClone list: ReadMonsterGroupMembersByGroup(40000, 4, 18, 0) returned 12 row(s)
+  — 917018: SERVED; 917118: SERVED; 917218: SERVED; 930072: SERVED;
+    916001: source row 242 is not in this list [MonsterGroupId=25100 ...]; +745 more
+```
+
+Three facts fall out, all [measured]:
+
+- **The band gate is exact.** Two test clones of the same group differed only in
+  band: `930071` at PL 4–10 and `930072` at PL 11–20. At PL 18 the first was
+  built and never served, the second served. `RowClone.GatesPass` models the
+  game's own SQL filter correctly.
+- **One clone per power level works.** `917018` is the PL 18 member of a
+  twenty-clone ladder (`917010`–`917019`, each `MinPowerLevel` = `MaxPowerLevel`
+  = its own level). Exactly one was served.
+- **Provenance carries the rest.** The other 747 were rejected by name against
+  their own gate columns, not silently dropped.
+
+The 12 rows returned are 8 shipped plus 4 clones, and the roll matched the
+weights: WB FireCOM held 5400 of 6700 and took 8 of the 10 spawns.
+
+### The whole chain [closed]
+
+A cloned member row carrying PowerGroup 300 at `WeightedRoll` 100 was served into
+`ReadMonsterGroupMembersByGroup(40000, 4, 18, 0)`, and then:
 
 ```
 MonsterTypeModel[310] PL 11 ... MonsterTypeModel[319] PL 20   <- Guard Bladesman ladder
@@ -130,37 +161,52 @@ RowClone: served WeaponModel WeaponId 900001 from ReadWeapon  <- its cloned blad
 RowClone: served ArmorModel ArmorId 22207 from ReadArmor      <- its cloned armour
 ```
 
-PowerGroup 300 is **not** a member of group 40000 in the shipped data, so the
-only route into that roll was the cloned row. Zero errors. In the mission
-itself: almost exclusively Guard Bladesmen, as the weight demanded.
+PowerGroup 300 is not a member of group 40000 in the shipped data, so the cloned
+row was the only route into that roll. The mission spawned almost exclusively
+Guard Bladesmen. So: cloned member → pool → weighted roll → spawn → cloned weapon
+and armour resolved on the spawned enemy.
 
-So the full chain works — **cloned row → pool → weighted roll → spawn → cloned
-weapon and armour resolved on the spawned enemy.**
-
-**Served is not rolled.** `served ... into ReadMonsterGroupMembersByGroup` means
+"Served" is not "rolled". `served ... into ReadMonsterGroupMembersByGroup` means
 offered to the roll; an archetype of that PowerGroup being read means the roll
-took it. Run 39 had the first without the second at `WeightedRoll` 5, which is
-why the confirming test used 100.
+took it. At `WeightedRoll` 5 the first was seen without the second, which is why
+the confirming test used 100.
 
----
+## Extend at the tail, or rebuild in the reserved range
 
-## 3. Extend at the tail, or rebuild into the reserved range
+For a family the developers add in a patch, or a new spawn-pool member, the
+choice is who owns PL 1–10:
 
-What you would come back here for is a family the developers *add* in a patch,
-or a spawn-pool member. Two decisions, both settled by whose numbers should own
-PL 1-10:
+- **Extend at the tail.** Leave the shipped rows and add tiers after them. The
+  developers' PL 1–10 balance stands, their retunes reach players, and removing
+  the mod is a clean revert. Right when the shipped ladder only needs to
+  continue.
+- **Rebuild in the reserved range.** Own all twenty tiers: no seam at PL 10, but
+  the developers' numbers no longer reach those enemies. Right when a family
+  ships too few rows to extend; ADAPTIVE, Heavy and Drone Infantry armour went
+  this way (`901000`–`901079`).
 
-- **Extend at the family tail.** Leave the shipped rows alone and add tiers
-  after them. Their balance for PL 1-10 stands, a patch that retunes it reaches
-  your players, and removing the mod is a clean revert. Right when the shipped
-  ladder is fine and only needs to continue.
-- **Rebuild into the reserved range.** Own all twenty tiers. No seam at PL 10,
-  no inherited regressions, and families that never had ten tiers get twenty.
-  The cost is that the developers' numbers no longer reach those enemies at all.
-  Right when a family ships too few rows to extend — ADAPTIVE, Heavy and Drone
-  Infantry all went this way.
+Targets from the shipped ladders: across PL 1–10 weapon damage rises about 1.6x
+and armour about 1.75x [measured]. For percentage columns use `gapFrom`
+([`rule-engine.md`](rule-engine.md#gapfrom)) and see
+[`tuning-enemies.md`](tuning-enemies.md#armour).
 
-Two numbers to aim at, from the shipped ladders [measured]: across PL 1-10
-weapon damage rises about **1.6x** and armour about **1.75x**. For how to move a
-percentage column, see [`rule-engine.md`](rule-engine.md) §`gapFrom` and
-[`tuning-enemies.md`](tuning-enemies.md) §3.
+## Validate a clone
+
+Before launch, validate the enabled file set from the repository root:
+
+```text
+python scripts\validate_rules.py --game "<game root>" --dump "<dump dir>" --enabled-set
+```
+
+Resolve every `ERROR`, especially `clone source missing`, `id collision` and
+`dangling pointer`. After launch, read `LogOutput.log` for both `RowClone:
+built` and `RowClone: served`. `built` alone proves construction, not that a
+reader returned the clone; `served` into a spawn-pool list proves eligibility,
+not that the weighted roll selected it. The full test sequence and log paths are
+in [`workflow.md`](workflow.md).
+
+## Related
+
+- [`rule-engine.md`](rule-engine.md)
+- [`overlays.md`](overlays.md)
+- [`reinforcements.md`](reinforcements.md)

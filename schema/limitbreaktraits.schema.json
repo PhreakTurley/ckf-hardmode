@@ -1,0 +1,59 @@
+{
+  "subsystem": "LimitBreakTraits",
+  "title":     "Limit Break Traits",
+  "targets":   {
+    "cfg": "ckf.hardmode.cfg",
+    "overlays": [
+      "ckf.hardmode.d/EffectModel.limitbreak.csv"
+    ]
+  },
+  "enable":    { "cfg": "Slices.LimitBreakTraits" },
+
+  "doc": [
+    "Slice toggle. Off: Slices.VerdictForOverlay skips the file below before it",
+    "is opened, so none of its rows reach RulePlan. The file is loaded by the",
+    "row-edit engine, so it also has no effect while [Slices] ModelRules is off",
+    "(ModelRules.Init returns before Overlays.Load).",
+    "",
+    "Files this toggle gates:",
+    "  EffectModel.limitbreak.csv",
+    "",
+    "WHAT IT IS FOR. The shipped Stress Limit Break traits are TraitClass 6 rows",
+    "in TraitModel, and each one carries no numbers of its own: its effect is the",
+    "EffectModel row its EffectTypeId points at. This overlay edits those effect",
+    "rows, so it changes WHAT a limit-break trait does to the merc carrying it.",
+    "The subjects are the two traits the Fatigue track's lower tiers grant by",
+    "default, 2007 Checked Out (effect 10505) and 2009 Running Empty (effect",
+    "10507). 2014 Off-Duty (effect 10512) has no stat penalty to retune - it",
+    "carries SpecialCode 90 BlockMissions and nothing else - so it is not a",
+    "subject here. See docs/limit-break-traits.md for the shipped values and",
+    "what the file overlays onto them.",
+    "",
+    "INDEPENDENT OF [Slices] Fatigue, on purpose. That toggle decides WHO is",
+    "granted a fatigue trait and when; this one decides what the trait does once",
+    "a merc has it. They are separable because the game grants these same traits",
+    "through its own Stress Limit Break, with no help from this mod, so the",
+    "retune applies to a merc who limit-breaks whether or not mission fatigue is",
+    "running. Turning Fatigue off and leaving this on is a coherent",
+    "configuration, and so is the reverse.",
+    "",
+    "It is a direct overlay: the part of the filename before the first dot names",
+    "the game table, and \"limitbreak\" is the pack's filename tag."
+  ],
+
+  "uiDoc": [
+    "Turn this off and the mod skips this page's file, so nothing on this page is applied.",
+    "",
+    "This page changes what the limit-break traits DO to a merc who carries one. Which mercs get one, and when, is the Mission Fatigue page - the two are separate switches, because the game hands out these same traits through its own Stress Limit Break whether or not mission fatigue is running."
+  ],
+
+  "fields": [
+    {
+      "path": "Slices.LimitBreakTraits", "in": "cfg", "type": "bool",
+      "default": true, "ui": "form",
+      "label": "Enable Limit Break Traits",
+      "doc": "On applies this slice's file; off skips it before it is opened. Default true.",
+      "uiDoc": "Turn this off and the mod skips this page's file, so nothing on this page is applied."
+    }
+  ]
+}

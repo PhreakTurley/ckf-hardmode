@@ -10,12 +10,12 @@
 //   One row per schema field with "in": "cfg" -- section, key, CLR type and
 //   default. There is deliberately NO description argument. BepInEx writes a
 //   "## <description>" block into ckf.hardmode.cfg for every bound key, so
-//   binding without a description is what keeps the prose out of the file
-//   (docs/gui-plan.md section 3.2). The "# Setting type:" and
+//   binding without a description is what keeps the prose out of the file.
+//   The "# Setting type:" and
 //   "# Default value:" pair still appears: those two strings are literals
 //   inside BepInEx.Core.dll with no public switch, and are out of scope.
 //
-//   The prose itself now lives in the schema's `doc` arrays, rendered into
+//   The prose lives in the schema's `doc` arrays, rendered into
 //   docs/config-reference.md.
 //
 //   ONE KEY PER SLICE. A slice is a schema file declaring targets.cfg; its
@@ -24,27 +24,15 @@
 //   a slice with no key, a key with no slice, two keys in one slice, or an
 //   enable.cfg naming a key no schema declares as a field.
 //
-//   THE COUNT BELOW IS THE COUNT IN ckf.hardmode.cfg. Slices.Init binds every
+//   EVERY ROW BELOW IS A KEY IN ckf.hardmode.cfg. Slices.Init binds every
 //   row of this table (Slices.cs) and Plugin.Load calls it ABOVE the
 //   master-switch bail-out, so BepInEx writes a line for all of them on any
 //   launch, including one where the mod is switched off.
 //
-//   CORRECTION, 2026-09-13. This paragraph used to read "THE COUNT BELOW IS NOT
-//   THE COUNT IN ckf.hardmode.cfg. This table is a declaration; a key reaches
-//   the file only when something calls Bind for it, and Plugin.cs:161 is the
-//   only call site. Every other key here is declared and unbound, so BepInEx
-//   writes no line for it and schema/check_schema.py reports it MISSING until a
-//   caller exists and the game has been launched." It was true when written and
-//   is false now: Slices.cs was added and Plugin.cs no longer binds anything
-//   directly. It is quoted rather than deleted because it is the shape of claim
-//   that goes stale silently -- a statement about what some other file does, in
-//   a generated header nobody re-reads.
-//
-//   CITATIONS HERE NAME A MEMBER, NOT A LINE. The quoted paragraph above cited
-//   Plugin.cs:161, and that citation was stale within hours of being written
-//   because the line moved. A member name survives every edit to its file that
-//   does not rename it, and a rename makes the citation fail loudly under grep
-//   instead of silently pointing at whatever now occupies the line.
+//   CITATIONS HERE NAME A MEMBER, NOT A LINE. A member name survives every
+//   edit to its file that does not rename it, and a rename makes the citation
+//   fail loudly under grep instead of silently pointing at whatever now
+//   occupies the line.
 //
 // </auto-generated>
 
@@ -62,20 +50,17 @@ namespace CKFHardMode
     /// are stated once, here, and match the schema by construction.
     ///
     /// Bind is a real <c>ConfigFile.Bind</c> call, and every row of
-    /// <see cref="All"/> now gets one: <c>Slices.Init</c> walks the table at
+    /// <see cref="All"/> gets one: <c>Slices.Init</c> walks the table at
     /// startup (Slices.cs) and binds each key, so BepInEx writes the whole file
     /// rather than whichever keys a subsystem happened to reach.
     ///
-    /// CORRECTION, 2026-09-13. This paragraph used to end "BepInEx writes the
-    /// file from the set of keys actually bound, and a key nothing binds is
-    /// left in place as an orphan. Binding every key eagerly would change that,
-    /// so this class does not do it." The first sentence still holds; the last
-    /// one is reversed. Eager binding is now the point of the table, because a
-    /// toggle a player cannot see in ckf.hardmode.cfg is a toggle they cannot
-    /// use, and binding under the master-switch bail-out would have left a
-    /// fresh install with Enabled = false carrying no [Slices] lines at all.
-    /// The orphan rule is unchanged and is why the count matters: a key this
-    /// table stops declaring stays in the file until someone deletes the line.
+    /// Binding is eager because a toggle a player cannot see in
+    /// ckf.hardmode.cfg is a toggle they cannot use, and binding under the
+    /// master-switch bail-out would leave an install with Enabled = false
+    /// carrying no [Slices] lines at all. BepInEx writes the file from the set
+    /// of keys actually bound and leaves a key nothing binds in place as an
+    /// orphan, so a key this table stops declaring stays in the file until
+    /// someone deletes the line.
     ///
     /// The one call site is the <c>Binds.Bind</c> in <c>Slices.Init</c>.
     /// </summary>
@@ -114,7 +99,7 @@ namespace CKFHardMode
             internal override Type ValueType { get { return typeof(T); } }
         }
 
-        /// <summary>Every key in ckf.hardmode.cfg, 43 of them.</summary>
+        /// <summary>Every key in ckf.hardmode.cfg, 45 of them.</summary>
         internal static readonly Def[] All =
         {
             new Def<bool>("General", "Enabled",               true),
@@ -143,6 +128,7 @@ namespace CKFHardMode
             new Def<bool>("Slices",  "ImplantsSlot09",        true),
             new Def<bool>("Slices",  "ImplantsSlot10",        true),
             new Def<bool>("Slices",  "ImplantsSlot11",        true),
+            new Def<bool>("Slices",  "LimitBreakTraits",      true),
             new Def<bool>("Slices",  "MissionRewards",        true),
             new Def<bool>("Slices",  "ModelRules",            true),
             new Def<bool>("Slices",  "PowerLevel",            true),
@@ -150,6 +136,7 @@ namespace CKFHardMode
             new Def<bool>("Slices",  "RewardCurve",           true),
             new Def<bool>("Slices",  "RuleModel",             true),
             new Def<bool>("Slices",  "SelfCheck",             false),
+            new Def<bool>("Slices",  "SpawnWeights",          true),
             new Def<bool>("Slices",  "TalentsAEX",            true),
             new Def<bool>("Slices",  "TalentsCS",             true),
             new Def<bool>("Slices",  "TalentsCyberKnight",    true),
@@ -180,7 +167,7 @@ namespace CKFHardMode
         /// is a defect in this file or in the caller -- not a configuration the
         /// player can reach. It logs and throws rather than handing back
         /// default(T), because a wrong-typed default that silently works is
-        /// exactly the class of bug AGENTS.md section 3 is about: the caller
+        /// exactly the class of bug AGENTS.md warns about: the caller
         /// would read a plausible number and have no way to tell it apart from
         /// a real one.
         /// </summary>

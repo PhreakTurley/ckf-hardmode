@@ -107,6 +107,10 @@ ImplantsSlot11 = true
 
 # Setting type: Boolean
 # Default value: true
+LimitBreakTraits = true
+
+# Setting type: Boolean
+# Default value: true
 MissionRewards = true
 
 # Setting type: Boolean
@@ -132,6 +136,10 @@ RuleModel = true
 # Setting type: Boolean
 # Default value: false
 SelfCheck = false
+
+# Setting type: Boolean
+# Default value: true
+SpawnWeights = true
 
 # Setting type: Boolean
 # Default value: true

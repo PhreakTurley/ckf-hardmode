@@ -4,67 +4,51 @@
 //
 // A DIRECT OVERLAY's rows are rows of a game table: the filename names the
 // table, the header names game columns, the first column is the table's id
-// column. Overlays.cs already parses those and Phase 4 added thirty-three of
-// them without one line of loader code.
+// column. Overlays.cs parses those with no per-table loader code.
 //
-// A LEVER SHEET's rows are player concepts. `gear-classes.csv` has ten rows,
-// one per tuned player weapon class, and twenty-two columns that are tuning
-// levers rather than game columns. One row expands into writes across every
-// player weapon of that class. That expansion happens HERE, in the plugin, at
-// load — never in the editor. design.md section 1, "Why the mod expands, not
-// the GUI", is settled: a compiled mirror beside the sheet would be a second
-// file that can disagree with the first, and it would mean hand-editing the
-// CSV does nothing until someone opens the GUI and presses Save. Editing the
-// sheet in a spreadsheet with the game and the editor closed has to work.
+// A LEVER SHEET's rows are player concepts. `gear-classes.csv` has one row per
+// tuned player weapon class (LeverClasses) and one column per tuning lever
+// (Levers), not game columns. One row expands into writes across every player
+// weapon of that class. That expansion happens HERE, in the plugin, at load —
+// never in the editor. A compiled mirror beside the sheet would be a second
+// file that can disagree with the first, and hand-editing the CSV would do
+// nothing until someone opened the GUI and pressed Save. Editing the sheet in
+// a spreadsheet with the game and the editor closed has to work.
 //
-// WHAT IT REPLACES
+// WHY NO IDS
 //
-// Sixteen hand-maintained `whereMin`/`whereMax` pairs in
-// ckf.hardmode.rules.json, each `multiply RecoilRate2 x1.8`, copied out of
-// overlays/_reference/player-vs-enemy-gear.md. They are byte-identical to that
-// document's sixteen pairs [measured] and they drifted in BOTH directions:
-//
-//   - they caught 30 drone weapons at ids 26000-26029 that did not exist when
-//     the list was written, multiplying a `RecoilRate2` nobody asked to move;
-//   - they missed 10 player assault rifles that BECAME player gear when the
-//     borrowed enemy ladders were split out into 900160-900199 and every
-//     archetype was repointed. The list was never regenerated.
-//
-// Regenerating that list by hand on each game update is the same mechanism
-// with a shorter fuse. So this file holds no ids at all. It derives the
+// A hand-maintained list of player-weapon id ranges drifts in BOTH directions
+// on a game update or an overlay change: it catches new rows nobody asked to
+// move (e.g. drone weapons at ids 26000-26029) and misses rows that become
+// player gear when borrowed enemy ladders are split out into 900160-900199 and
+// archetypes are repointed. So this file holds no ids at all. It derives the
 // partition from the pointer data on every launch.
 //
 // THE PARTITION, AND WHICH MonsterTypeModel IS THE RIGHT ONE
 //
 // `WeaponModel` has no column marking a row player or enemy — `ServiceOptionId`,
 // `FactionId`, `Rarity`, `Cost`, `PowerLevel` and `Locked` were each checked
-// and each fails [measured, design.md section 5]. The canonical definition is
+// and each fails [measured]. The canonical definition is
 // overlays/_reference/player-vs-enemy-gear.md: a row is enemy gear when
 // `MonsterTypeModel` points at it, and the player set is everything else.
 //
 // WHICH TABLE, THOUGH. This is the load-bearing decision in the file.
 //
-//   The SHIPPED MonsterTypeModel has 208 distinct `WeaponTypeId` values and
-//   puts class 3 at 25 player / 51 enemy. [measured]
+// The stock MonsterTypeModel and the one after this mod's own enemy overlay
+// give different partitions [measured]: the overlay repoints archetypes at the
+// split-out ladders, which moves player-vs-enemy counts per class. The set that
+// matters is the POST-OVERLAY one — what enemies actually carry once this mod
+// has loaded — and it is read from ckf.hardmode.d/MonsterTypeModel.csv, a file
+// this plugin already owns.
 //
-//   MonsterTypeModel AFTER this mod's own enemy overlay has 405 and puts
-//   class 3 at 33 / 43. [measured]
-//
-// design.md section 5 states class 3 = 33/43 and class 10 = 33/40. Only the
-// second reading reproduces BOTH, and the difference is exactly the ladder
-// split-out described above. So the set that matters is the POST-OVERLAY one —
-// what enemies actually carry once this mod has loaded — and it is read from
-// ckf.hardmode.d/MonsterTypeModel.csv, a file this plugin already owns.
-//
-// WHY NOT READ THE GAME TABLE. Two reasons, both recorded rather than assumed.
-// RowClone.cs says it outright — "Do not serve into a whole-table read … Nothing
-// during play enumerates a whole table" — after Run 42, where a bulk
-// ReadArmors() call ended in a mission dying on a null armour. And at the
+// WHY NOT READ THE GAME TABLE. Two reasons. A bulk read during play is
+// dangerous (RowClone.cs: a bulk ReadArmors() call ended in a mission dying on
+// a null armour). And at the
 // moment this runs there is no database instance to call a bulk reader on:
 // the materializers are static, and the only way the diagnostic plugin ever
 // gets one is by patching instance Read* methods and waiting for the game.
 //
-// AN UNREADABLE POINTER FILE IS NOT AN EMPTY ONE. AGENTS.md section 3. If
+// AN UNREADABLE POINTER FILE IS NOT AN EMPTY ONE (AGENTS.md). If
 // MonsterTypeModel.csv is missing, has no `WeaponTypeId` column, or has a row
 // with a blank one, this file emits NO RULES AT ALL and says why. The
 // alternative — an empty enemy set — silently turns every class lever into a
@@ -88,18 +72,19 @@ namespace CKFHardMode
         internal const string PointerCol  = "WeaponTypeId";
         internal const string Model       = "WeaponModel";
 
-        // design.md section 5. Ten of the sixteen classes get a lever row.
+        // Ten of the sixteen weapon classes get a lever row.
         internal static readonly int[] LeverClasses = { 1, 2, 3, 4, 5, 6, 10, 11, 12, 14 };
 
         // Six do not, and each says why in one string that reaches the log. The
         // assertion that no rule names a weapon in these is made over the
         // GENERATED RULES (see the census below), not by reading the sheet.
         //
-        // CORRECTION, carried. An earlier version of this task said "14 player
-        // class rows" and asked whoever ran it to name "the two classes with no
-        // player rows". All sixteen classes have player rows — the smallest is
-        // class 7 at one and the largest class 1 at sixty-one. [measured] The
-        // gap between 16 and 10 is a scope decision, not a data gap.
+        // All sixteen classes have player rows — the smallest is class 7 at one
+        // and the largest class 1 at sixty-one [measured, stock dump]. The gap
+        // between 16 and 10 is a scope decision, not a data gap.
+        //
+        // The strings are transcribed in scripts/gear_classes.py
+        // EXCLUDED_CLASSES; nothing compares the two.
         internal static readonly Dictionary<int, string> ExcludedClasses =
             new Dictionary<int, string>
         {
@@ -111,8 +96,8 @@ namespace CKFHardMode
             { 19, "DroneERifle — drones are out of scope (proposal.md non-goals)" },
         };
 
-        // design.md section 5, in its order. Every one is present in the
-        // 2026-09-12 WeaponModel header and not one is an unsuffixed alias.
+        // Every one is present in the dumped WeaponModel header and not one is
+        // an unsuffixed alias.
         // docs/gotchas.md, "Some columns are computed and silently ignore
         // writes": the unsuffixed twins are aliases for the selected firing
         // mode, neither is read-only, and a write to one is taken and
@@ -225,8 +210,8 @@ namespace CKFHardMode
             Plugin.Log.LogInfo($"GearClasses: {PointerFile} — {rows} monster row(s) read, "
                 + $"{ids.Count} distinct {PointerCol} value(s). This is the POST-OVERLAY "
                 + "pointer set: what enemies carry once this mod's own enemy-gear overlay "
-                + "has repointed the ladders. Reading the game's shipped table instead would "
-                + "classify eight player assault rifles as enemy gear (design.md section 5).");
+                + "has repointed the ladders. Reading the game's stock table instead would "
+                + "classify some player weapons as enemy gear.");
             return ids;
         }
 
@@ -272,8 +257,9 @@ namespace CKFHardMode
                 if (h.Length == 0 || h == ClassColumn || LeverSet.Contains(h)) continue;
                 if (h.StartsWith("_", StringComparison.Ordinal)) continue;
                 Plugin.Log.LogWarning($"GearClasses: {SheetName} header column '{h}' is not "
-                    + "one of the 22 levers and is not a control column; it is ignored. "
-                    + "Check the spelling against design.md section 5.");
+                    + "one of the " + Levers.Length + " levers and is not a control column; it "
+                    + "is ignored. Check the spelling against the header the config editor "
+                    + "writes for this sheet.");
             }
 
             int rows = 0, emitted = 0, cells = 0, refused = 0;
@@ -343,10 +329,8 @@ namespace CKFHardMode
                         // THREE-STATE, and this is the branch that makes it worth
                         // it: a cell like "1.8x" parses to "no operation" under a
                         // two-state reader and is indistinguishable from a blank.
-                        // Overlays.BuildRule grew a LineResult for the same
-                        // reason in Phase 4. Named with sheet, row and column,
-                        // which is what the spec's SaveRefused scenario asks the
-                        // editor to do on the other side.
+                        // Overlays.BuildRule has a LineResult for the same
+                        // reason. Named with sheet, row and column.
                         Plugin.Log.LogWarning($"GearClasses[{SheetName}:{i + 1}]: class "
                             + $"{cls}, column {col}: '{c[h]}' is not an adjustment — expected "
                             + "blank, =N, +N, -N or xN. The cell is ignored; the rest of the "

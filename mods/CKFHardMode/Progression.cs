@@ -1,7 +1,7 @@
 // Progression — control the Team Power Level a completed mission awards.
 //
-// HOW THE AWARD ACTUALLY WORKS (traced + reconciled against the save, 23 Aug)
-// ---------------------------------------------------------------------------
+// HOW THE AWARD ACTUALLY WORKS [measured: traced and reconciled against a save]
+// ------------------------------------------------------------------------------
 // Team Power Level is not a stored counter and it is not a number anything
 // writes. It is a sum over the save's own mission log:
 //
@@ -10,18 +10,17 @@
 //   = SUM over GameMissionScoreModel rows of
 //         MissionPowerLevelModel.PowerLevelFraction[ActionClass, MissionPowerLevel]
 //
-// Verified exactly, not approximately. GameMissionScoreModel.csv holds 127
-// rows; summing that lookup over all of them gives 7.7075, and over the first
-// 126 gives 7.6925 — the two numbers the trace printed either side of the
-// insert:
+// Verified exactly, not approximately. On the traced save, summing that lookup
+// over all 127 GameMissionScoreModel rows gives 7.7075, and over the first 126
+// gives 7.6925 — the two numbers the trace printed either side of the insert:
 //
 //     TRACE GameDb.SumGameMissionScore()      -> 7.6925
 //     TRACE GameDb.InsertGameMissionScore(...) -> 127
 //     TRACE GameDb.SumGameMissionScore()      -> 7.7075
 //
 // Rows whose (ActionClass, MissionPowerLevel) has no cell contribute nothing.
-// All 34 LEGWORK rows are (0, 0) and there is no class-0 band, which is why
-// the arithmetic lands on the nose.
+// LEGWORK rows are (0, 0) and there is no class-0 band, which is why the
+// arithmetic lands on the nose.
 //
 // THE ROW CARRIES NO NUMBER
 // -------------------------
@@ -29,45 +28,31 @@
 //
 //     Id, MissionTypeId, MissionPowerLevel, ActionClass, GameTurn, MissionSuccessful
 //
-// There is no fraction on the row. An earlier version of this file tried to
-// rewrite one and would have found nothing to write. The award is entirely a
-// function of the two join keys, so THE KEYS ARE THE LEVER: change what
-// (ActionClass, MissionPowerLevel) the row is filed under and the award, the
-// running total, and every future sum all follow.
+// There is no fraction on the row. The award is entirely a function of the two
+// join keys.
 //
-// This also explains the 3.0 experiment. Writing 3.0 into MissionPowerLevelModel
-// through ckf.hardmode.rules.json made the victory screen say "Team gained 3 PL"
-// while the sum moved 0.015. The screen goes through the materialiser the rule
-// engine patches; the sum reads the table underneath it. Same table, two paths,
-// and only one of them is hookable.
+// The victory screen and the sum read MissionPowerLevelModel by two paths:
+// the screen goes through the materialiser the rule engine patches; the sum
+// reads the table underneath it. A rule on MissionPowerLevelModel alone makes
+// the screen say "Team gained 3 PL" while the sum moves 0.015 [measured]. Only
+// the screen's path is hookable by a rule, so the sum is replaced here and the
+// screen is kept in step by MissionPowerLevelModel.generated.json (generated
+// by scripts/gen_teampl_labels.py from this file's grids).
 //
-// ONE LEVER: "override" IN THE "teampl" SECTION OF ckf.hardmode.json
-// -------------------------------------------------
-//   "teampl": { "enabled": true, "table": [ ... ], "override": [ ... ] }
+// SETTINGS: ckf.hardmode.d/teampl.json (the switch is [Slices] Progression in
+// ckf.hardmode.cfg):
 //
-// 3.0 moved the switch out of [Progression] Enabled in ckf.hardmode.cfg and
-// into this section, beside the grids it gates.
+//   { "_version": ..., "table": [ ... ], "override": [ ... ] }
 //
-// That is the whole section. RetroactiveTable went 2026-08-31: with the other
-// three levers gone it was the subsystem's only mode, so a switch that turned
-// it off left [Progression] Enabled with nothing to enable.
+// "table" is the game's own MissionPowerLevelModel and is reference only: it
+// is what the reconcile check below is measured against. "override" is where
+// the edits go: exact, per (ActionClass, MissionPowerLevel) cell. A cell
+// absent from "override" keeps its "table" value. This is the only lever;
+// nothing rewrites the inserted row, so InsertGameMissionScore is not patched.
 //
-// There used to be four ways to change an award — GainScalar, GainOverride, a
-// "remap" list, and the "override" table — three of which worked by rewriting
-// the inserted row's (ActionClass, MissionPowerLevel) keys so the award had to
-// snap to one of the 63 shipped cells. All three are gone
-// (docs/deprecation-plan.md §7.3). "override" is exact, per-cell, and already
-// canonical for the generated victory-screen labels, so it is the only one
-// left. The row-key rewrite went with them, and with it the whole prefix on
-// InsertGameMissionScore: nothing remains for it to change.
-//
-// the "teampl" section of BepInEx/config/ckf.hardmode.json. "table" is the game's own
-// MissionPowerLevelModel and is reference only — it is what the reconcile
-// check below is measured against. "override" is where the edits go.
-//
-// ACCEPTED COST: every Team PL edit is retroactive from here on. There is no
-// way to change future awards without re-pricing past ones, and the
-// substituted total persists into the save. See the warning below.
+// ACCEPTED COST: every Team PL edit is retroactive. There is no way to change
+// future awards without re-pricing past ones, and the substituted total
+// persists into the save. See the warning below.
 //
 // ACTIONCLASS — SETTLED BY THE SAVE, NOT INFERRED
 // -----------------------------------------------
@@ -79,17 +64,13 @@
 //   3  solo hacks — every HackCPU / HackFile / HackLoot, whatever generated it
 //
 // Class 3 wins over its source: M_PGenPower_Icarus_M1_HackCPU is class 3, not
-// class 1, and M_PGenTreaty_HackCPU is class 3, not class 2. The old guess in
-// the docs — 1 = story, 2 = proc-gen, 3 = solo hack — was half right and is
-// now replaced.
+// class 1, and M_PGenTreaty_HackCPU is class 3, not class 2.
 //
 // RETROACTIVE MODE — replacing the table the sum reads
 // ----------------------------------------------------
-// This subsystem postfixes
-// SumGameMissionScore and recomputes the whole total from the "override"
-// section of the "teampl" block, so every past mission re-prices at once
-// and arbitrary values become reachable — the snapping limit does not apply,
-// because nothing has to be stored in a row.
+// This subsystem postfixes SumGameMissionScore and recomputes the whole total
+// from "override" merged over "table", so every past mission re-prices at once
+// and arbitrary values are reachable: nothing has to be stored in a row.
 //
 // It works by enumerating GameMissionScoreModel through GameDb's own bulk
 // reader and summing our table over the row keys. The reader is found by shape
@@ -109,28 +90,27 @@
 //
 // At the main menu there are no rows to enumerate and the game returns 0, which
 // is not something to reconcile against; that case says "nothing to reconcile
-// yet" and the line above still follows once a save is open. An earlier version
-// counted the empty case as a successful reconcile and then stayed quiet for the
-// real one.
+// yet" and the line above still follows once a save is open. The empty case is
+// never counted as a successful reconcile.
 //
 // A cache is kept and rebuilt whenever EITHER the game's own answer stops
 // matching the cached row set OR the number of rows changes. The row count is
 // the second signal because the first cannot see a new row that is worth zero in
-// the stock table — every LEGWORK row is (0, 0) and worth nothing — so a
-// LEGWORK mission used to leave the cache stale for the rest of the session.
+// the stock table — every LEGWORK row is (0, 0) and worth nothing — so without
+// it a LEGWORK mission would leave the cache stale for the rest of the session.
 //
 // Loading a save also drops all of it, through the same
 // ViewModel_GameManagement.LoadGame / .LoadGameSlot seam Elapse and Fatigue use.
 //
-// > WARNING: the substituted total is what the game then persists. Line 4720 of
-// > the 23 Aug log shows CoreGameDataModel.PowerLevel holding 7.7075, the same
-// > number the sum returned. Turning this off later leaves that mirror holding
-// > a modded figure until something recomputes it. This is a save-affecting
-// > setting, and the only mode this subsystem now has.
+// > WARNING: the substituted total is what the game then persists. A traced
+// > log shows CoreGameDataModel.PowerLevel holding the same number the sum
+// > returned [measured]. Turning this off later leaves that mirror holding a
+// > modded figure until something recomputes it. This is a save-affecting
+// > setting, and the only mode this subsystem has.
 //
 // VERIFYING
 // ---------
-// [Diagnostics] TraceMethods = RPG.Database.GameDb.SumGameMissionScore
+// CKF Data Dump: [Diagnostics] TraceMethods = RPG.Database.GameDb.SumGameMissionScore
 // The difference across the insert is the award. The victory screen is not
 // evidence: it reads a different path at a different time.
 
@@ -161,8 +141,8 @@ namespace CKFHardMode
         private const string GameManagementTypeName = "ViewModel_GameManagement";
 
         // A row filed under a class with no band contributes nothing to the sum.
-        // Demonstrated: all 34 LEGWORK rows are (0,0) and the total reconciles
-        // to the traced figure only if they are worth zero.
+        // [measured] LEGWORK rows are (0,0) and the total reconciles to the
+        // traced figure only if they are worth zero.
 
         private static bool enabled;
         // The game's MissionPowerLevelModel, as loaded from the config file.
@@ -183,15 +163,10 @@ namespace CKFHardMode
 
         private sealed class FileShape
         {
-            // RETIRED 2026-09-13. This used to be
-            //     [JsonPropertyName("enabled")] public bool Enabled { get; set; } = true;
-            // with the comment "3.0: the subsystem switch lives here now.
-            // [Progression] Enabled is gone from ckf.hardmode.cfg and this is
-            // the whole enable chain." That is reversed: the switch is back in
-            // ckf.hardmode.cfg, as [Slices] Progression, because a gate cannot
-            // live inside the file it gates (design.md section 3). The key is
-            // still parsed so an existing document is not refused; nothing
-            // branches on it.
+            // RETIRED gate. The switch is [Slices] Progression in
+            // ckf.hardmode.cfg, because a gate cannot live inside the file it
+            // gates. "enabled" is still parsed so a file carrying it is not
+            // refused; nothing branches on it.
             [JsonPropertyName("enabled")]  public bool? RetiredEnabled { get; set; }
             [JsonPropertyName("table")]    public List<Cell> Table { get; set; } = new List<Cell>();
             [JsonPropertyName("override")] public List<Cell> Override { get; set; } = new List<Cell>();
@@ -199,9 +174,9 @@ namespace CKFHardMode
 
         public static void Init(Harmony harmony)
         {
-            // THE GATE IS READ FIRST, from ckf.hardmode.cfg. The "teampl"
-            // section carries only the two grids now, so a document that could
-            // not be read can no longer take this subsystem's switch with it.
+            // THE GATE IS READ FIRST, from ckf.hardmode.cfg. teampl.json carries
+            // only the two grids, so a file that could not be read cannot take
+            // this subsystem's switch with it.
             if (!Slices.On("Progression"))
             {
                 Plugin.Log.LogInfo(Slices.OffBecause("Progression",
@@ -210,17 +185,17 @@ namespace CKFHardMode
                 return;
             }
 
-            // Load still leaves `enabled` false when the section could not be
-            // read — which it says at Error rather than letting this read like
-            // someone turned it off.
+            // Load leaves `enabled` false when the file could not be read, which
+            // it says at Error rather than letting this read like someone turned
+            // it off.
             Load();
             if (!enabled) return;                        // Load already said why
 
             if (Cells.Count == 0)
             {
-                Plugin.Log.LogError("Progression: no \"table\" in the \"teampl\" section of "
-                    + "ckf.hardmode.json. Without the game's own cell values there is nothing to snap to and no way "
-                    + "to tell what an award is worth. Regenerate it from "
+                Plugin.Log.LogError("Progression: no \"table\" in "
+                    + ConfigDoc.Where(ConfigDoc.TeamPl) + ". Without the game's own cell values "
+                    + "there is no way to tell what an award is worth. Regenerate it from "
                     + "ckf-dump/MissionPowerLevelModel.csv. Doing nothing.");
                 return;
             }
@@ -232,9 +207,7 @@ namespace CKFHardMode
                 return;
             }
 
-            // Always retroactive. It is the subsystem's only mode since §7.3 —
-            // there is nothing left for [Progression] Enabled to switch on if
-            // this does not run.
+            // Always retroactive: it is the subsystem's only mode.
             PatchSum(harmony, t);
         }
 
@@ -258,9 +231,9 @@ namespace CKFHardMode
         {
             if (Overrides.Count == 0)
             {
-                Plugin.Log.LogWarning("Progression: enabled, but the \"override\" "
-                    + "section of the \"teampl\" block in ckf.hardmode.json is empty. Nothing "
-                    + "would change, so the sum is left alone.");
+                Plugin.Log.LogWarning("Progression: enabled, but \"override\" in "
+                    + ConfigDoc.Where(ConfigDoc.TeamPl) + " is empty. Nothing would change, "
+                    + "so the sum is left alone.");
                 return;
             }
 
@@ -328,8 +301,8 @@ namespace CKFHardMode
 
             // Everything cached below belongs to ONE save: the row histogram,
             // the reconcile, and the run of failures that can switch retroactive
-            // mode off. None of it was ever reset, so a different playthrough
-            // was summed against the previous one's state. Same seam Elapse and
+            // mode off. It is reset on load, or a different playthrough would be
+            // summed against the previous one's state. Same seam Elapse and
             // Fatigue use, and the same warning when it does not take.
             loadHooked = PatchLoadHooks(harmony) > 0;
             if (!loadHooked)
@@ -358,9 +331,9 @@ namespace CKFHardMode
         // Everything this session remembers that belonged to the save that was
         // open. The histogram is that save's rows and the reconcile is that
         // save's arithmetic, so both go. retroDead and the failure counters go
-        // too: a transient throw during the transition INTO this load is exactly
-        // the thing that used to switch the subsystem off permanently, and a
-        // freshly loaded save deserves a fresh attempt.
+        // too: a transient throw during the transition INTO this load must not
+        // switch the subsystem off permanently, and a freshly loaded save
+        // deserves a fresh attempt.
         //
         // announcedEmpty is deliberately NOT reset. It suppresses a repeated
         // message rather than carrying state; clearing it would put the same
@@ -441,16 +414,14 @@ namespace CKFHardMode
 
                 // TWO independent invalidation signals. The drift test alone
                 // cannot see a new row that is worth ZERO in the game's own
-                // table: all 34 LEGWORK rows are (ActionClass 0,
-                // MissionPowerLevel 0) and there is no class-0 band, so
-                // completing a LEGWORK mission moves the game's sum by 0.0. The
-                // cached histogram then stayed stale for the rest of the
-                // session and an override on that cell never reached the new
-                // row. The ROW COUNT moves whether the row is worth anything or
-                // not, so it is checked as well.
+                // table: LEGWORK rows are (ActionClass 0, MissionPowerLevel 0)
+                // and there is no class-0 band, so completing a LEGWORK mission
+                // moves the game's sum by 0.0. The cached histogram would then
+                // stay stale for the rest of the session and an override on that
+                // cell would never reach the new row. The ROW COUNT moves whether
+                // the row is worth anything or not, so it is checked as well.
                 //
-                // COST: the bulk read now runs once per SumGameMissionScore
-                // call, where before it ran only when the drift test tripped.
+                // COST: the bulk read runs once per SumGameMissionScore call.
                 // The per-row reflective walk — two property reads per row — is
                 // still done only when a signal trips; reading Count off the
                 // list the reader already returned is what buys that.
@@ -490,12 +461,11 @@ namespace CKFHardMode
 
                     // A ZERO-ROW enumeration is not a reconcile. At the main menu
                     // nothing is enumerated and the game returns 0, so check ==
-                    // __result holds trivially — the old code took that as proof
-                    // and printed the confidence line, then never printed it
-                    // again for the real rows once a save was loaded, which is
-                    // the one line the header tells the operator to watch for.
-                    // Require at least one row before claiming the arithmetic
-                    // reproduces the game's.
+                    // __result holds trivially. Taking that as proof would print
+                    // the confidence line once and never again for the real rows,
+                    // and it is the one line the header tells the operator to
+                    // watch for. Require at least one row before claiming the
+                    // arithmetic reproduces the game's.
                     long got = Total(counts);
                     if (got == 0)
                     {
@@ -538,9 +508,8 @@ namespace CKFHardMode
 
         // One throw is not evidence the subsystem is broken. A bulk read can
         // fail while a save is being swapped in underneath it and succeed on the
-        // next call; the old code killed retroactive mode for the whole process
-        // on the first one, and nothing reset that, so loading a known-good save
-        // afterwards did nothing at all. Three consecutive failures with no
+        // next call, so the first one must not kill retroactive mode for the
+        // whole process. Three consecutive failures with no
         // successful call in between is the threshold: high enough that a single
         // load transition cannot reach it, low enough that a reader which is
         // genuinely gone is off long before it can matter.
@@ -679,7 +648,7 @@ namespace CKFHardMode
             catch { return IntPtr.Zero; }
         }
 
-        // 3.0: the text comes from ConfigDoc. Only the source moved.
+        // The text comes from ConfigDoc (teampl.json).
         private static void Load()
         {
             var path = ConfigDoc.Where(ConfigDoc.TeamPl);
@@ -688,11 +657,10 @@ namespace CKFHardMode
                 var text = ConfigDoc.SectionText(ConfigDoc.TeamPl);
                 if (text == null)
                 {
-                    // AGENTS.md §3: an absent section and an unreadable document
-                    // are different findings and do not share a log level.
+                    // An absent file and an unreadable file are different
+                    // findings and do not share a log level (AGENTS.md).
                     var why = $"Progression: {ConfigDoc.WhyNo(ConfigDoc.TeamPl)}. It carries the "
-                        + "game's own cell values, which this needs, and since 3.0 the subsystem "
-                        + "switch as well. Doing nothing.";
+                        + "game's own cell values, which this needs. Doing nothing.";
                     if (ConfigDoc.CouldNotRead(ConfigDoc.TeamPl)) Plugin.Log.LogError(why);
                     else Plugin.Log.LogWarning(why);
                     return;

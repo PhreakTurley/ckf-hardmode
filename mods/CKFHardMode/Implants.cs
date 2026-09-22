@@ -2,23 +2,22 @@
 //
 // WHY ELEVEN TABLES AND NOT ONE
 //
-// ImplantModel is 198 rows. 178 of them sit in character slots 1-11 and the
-// other 20 are drone modules in slots 100-107, which get NO TABLE at all: per
-// David, drones are not in the game yet, so collateral effect on them is
-// accepted and the question is revisited when they ship (design.md section 7).
+// Stock ImplantModel is 198 rows. 178 of them sit in character slots 1-11 and
+// the other 20 are drone modules in slots 100-107, which get NO TABLE at all:
+// drones are not in the game yet, so collateral effect on them is accepted
+// (David's rule) and the question is revisited when they ship.
 //
 // One table would be about two thirds empty, because the live columns follow
 // the slot and barely overlap. ArmorRestriction is live ONLY in slot 1.
 // BackstoryGroup only in slot 5. ImplantConflictId only in slots 2 and 4.
 // MatrixEffectId only in 1, 3, 4 and 11. InstallJobId only in 1-4 and 11.
-// [measured, sheets\raw 2026-09-12] The lever-sheets spec forbids a column
-// dead for its own rows, so the slot is the table.
+// [measured, sheets\raw] A lever sheet carries no column dead for its own
+// rows, so the slot is the table.
 //
 // ImplantSlot is the table key; ImplantClass is a COLUMN. The two are not the
 // same cut: EVERY slot holds more than one class — slot 2 holds seven of them
-// — and one class, 16 "E-Inhibitor", spans two slots. See the correction in
-// scripts\implants.py's header; design.md section 7 states the relation the
-// wrong way round and the sheets follow the measurement.
+// — and one class, 16 "E-Inhibitor", spans two slots [measured; see
+// scripts\implants.py's header].
 //
 // ONE ROW IS TWO ROWS IN TWO TABLES
 //
@@ -29,7 +28,7 @@
 // becomes an ImplantModel rule keyed on ImplantTypeId and an EffectModel rule
 // keyed on that row's ImplantEffectId, and a row that sets nothing on one side
 // emits only the other. A row whose ImplantEffectId is 0 has no second half at
-// all — 79 of the 178 are like that — and a payload cell on such a row is
+// all — 79 of the 178 stock rows are like that — and a payload cell on such a row is
 // REFUSED rather than written somewhere, because there is nowhere to write it.
 //
 // NO TalentModel COLUMN IS HERE AND THAT IS DELIBERATE
@@ -39,91 +38,50 @@
 // the subjects of cyberweapons-claws.csv and cyberweapons-lasers.csv. The
 // columns do not collide because the split is by MEANING: the implant table
 // carries install economics and the implant-side effect, the cyberweapon
-// sheets carry the WeaponModel and TalentModel combat stats (design.md section
-// 7). `Cost` exists in both and means different things — the implant's clinic
+// sheets carry the WeaponModel and TalentModel combat stats. `Cost` exists in both and means different things — the implant's clinic
 // price runs 80-10200, the weapon's valuation 50-700 — so the GUI labels this
 // one "Install cost" and the cyberweapon one "Item value".
 //
-// A TalentModel column here would be worse than redundant. The five
-// TalentModel rules that reach implant talents (80007-80010, 80027-80038) are
-// already the laser sheet's rows, claimed there, and two sheets writing one
-// (model, id) is load order, not a merge.
+// A TalentModel column here would be worse than redundant. The implant
+// talents (80007-80010, 80027-80038) are the laser sheet's rows, claimed
+// there, and two sheets writing one (model, id) is load order, not a merge.
 //
-// THE NINE CritMultiBase RULES LIVE IN SLOT 8
+// CritMultiBase ON IMPLANT EFFECTS IS A SLOT 8 MATTER
 //
-// Display-Link, Combat DisplayLink, Target Optimizer, Apex DisplayLink, Apex
-// Optimizer and Brightshot Optic 1-4. Each sets EffectModel CritMultiBase from
-// a shipped 25 to 0 and leaves CritRate and RangedAttack alone. [measured]
-// AFTER THEY RUN, CritMultiBase IS ZERO ON EVERY IMPLANT EFFECT IN THE GAME,
-// because those nine were the only implant effects that had one — exactly nine
-// of the 98 referenced effects carry a non-zero CritMultiBase and all nine are
-// these [measured]. That sentence is not visible from the nine rows, so it is
-// in the slot 8 help text as well as here.
+// In the stock game exactly nine of the 98 referenced implant effects carry a
+// non-zero CritMultiBase (25), and all nine are slot 8: Display-Link, Combat
+// DisplayLink, Target Optimizer, Apex DisplayLink, Apex Optimizer and
+// Brightshot Optic 1-4 [measured]. Setting those nine to 0 leaves CritMultiBase
+// zero on every implant effect in the game. That is not visible from the nine
+// rows, so it is in the slot 8 help text as well as here.
 //
-// Three rows keep a crit multiplier and the sheets SHOW them rather than
-// leaving them as an absence: Range Finder at CritMultiStealth 25 (slot 8),
-// Chameleon Sheathe at 20 and Chameleon S-Mesh at 25 (slot 1). CritMultiStealth
-// is carried by both tables, so all three are visible with their values.
+// Three stock rows carry CritMultiStealth: Range Finder at 25 (slot 8),
+// Chameleon Sheathe at 20 and Chameleon S-Mesh at 25 (slot 1). It is carried by
+// both tables, so all three are visible with their values.
 //
-// PHASE 9, RESOLVED — THE GLOBAL BLOCK IS APPLIED NOW, AND THIS CLASS STILL
-// SAYS SO BY NAME. The heading and the three paragraphs below it are LEFT
-// STANDING, verbatim, because they are the reason RefuseGlobal existed and a
-// reader who meets ExpandGlobal needs what it replaced. Read them with these
-// four corrections:
+// THE GLOBAL BLOCK (implants-global.json)
 //
-//   * "ckf.hardmode.rules.json is not deleted until Phase 9" — the one
-//     unscoped ImplantModel rule IS deleted, in the SAME COMMIT that turned
-//     RefuseGlobal into ExpandGlobal. The two halves are not separable:
-//     `multiply` is not idempotent, so rule + emitter applies x0.5 twice and
-//     rule-gone + refusal applies it zero times. Only the pair leaves every
-//     shipped value where it was. That file went 270 rules to 269 [measured].
-//   * "RefuseGlobal below emits nothing and LOGS THAT IT EMITTED NOTHING" —
-//     the method is ExpandGlobal, it emits ONE unscoped ImplantModel rule
-//     carrying the three multipliers, and it logs the three numbers it read.
-//   * "ITS REACH IS ACCEPTED, NOT FIXED" is UNCHANGED and still binding. The
-//     emitted rule carries no `where` either, so it reaches the same 198 rows
-//     including the 20 drone modules. Scoping it would be a FIFTH balance
-//     deviation and there are exactly four.
-//   * "AND THE clampMin IS GONE ON PURPOSE" is UNCHANGED and still binding.
-//     ExpandGlobal does not emit it. That is sanctioned deviation D3, the
-//     floor binds on 0 of the 198 rows, and scripts\implants.py's D-CLAMP
-//     re-derives that measurement on every run rather than trusting this.
+// ExpandGlobal emits ONE unscoped ImplantModel rule carrying the three
+// multipliers (costMultiply, installTimeMultiply, implantStressMultiply) and
+// logs the three numbers it read. That file is their only source. They are
+// MULTIPLY rules and `multiply` is not idempotent, so the same multipliers must
+// never also arrive from another rules file.
 //
-// WHAT IS NOT CORRECTED, because it did not change: the numbers themselves.
-// Cost x0.5, InstallTime x0.5, ImplantStress x3 on all 198 rows, before and
-// after. Only where they come from moved.
-//
-// THE GLOBAL BLOCK IS STILL NOT APPLIED, AND THIS CLASS SAYS SO BY NAME
-//
-// implants-global.json carries the three multipliers from the ONE unscoped
-// ImplantModel rule in ckf.hardmode.rules.json. That rule is a MULTIPLY, and
-// ckf.hardmode.rules.json is not deleted until Phase 9, so anything emitted
-// here would be applied on top of it: Cost and InstallTime would land on x0.25
-// and ImplantStress on x9, across all 198 rows. That is a balance change on
-// every implant in the game and proposal.md's non-goals allow four, all spoken
-// for. So RefuseGlobal below emits nothing and LOGS THAT IT EMITTED NOTHING,
-// with the precondition named — a file that is read and not applied, silently,
-// is the instrument AGENTS.md section 3 is about.
-//
-// ITS REACH IS ACCEPTED, NOT FIXED. The rule has no `where`, so it reaches all
-// 198 rows INCLUDING THE 20 DRONE MODULES NO TABLE SHOWS. Adding
+// ITS REACH IS ACCEPTED, NOT FIXED. The rule has no `where`, so it reaches
+// every ImplantModel row INCLUDING THE DRONE MODULES NO TABLE SHOWS. Adding
 // `where ImplantSlot <= 11` would change Cost, InstallTime and ImplantStress on
-// 20 rows that ship today, which is a balance change on rows nobody can play
-// with yet. Do not scope it (design.md section 7, tasks.md Phase 7).
+// rows nobody can play with yet. Do not scope it.
 //
-// AND THE clampMin IS GONE ON PURPOSE. The shipped rule carries
-// `clampMin ImplantStress 1`. It NEVER BINDS: ImplantStress is 1 on 197 rows
-// (1 -> 3) and 5 on Quantum Rider (5 -> 15), so nothing lands below 1 for it to
-// lift [measured]. David removed it from implants-global.json and PHASE 9'S
-// MIGRATOR MUST NOT CARRY IT ACROSS. The measurement, not the preference, is
-// what makes dropping it safe, and scripts\implants.py's D-CLAMP re-derives it
-// on every run rather than trusting this comment.
+// THERE IS NO clampMin, ON PURPOSE. A floor of ImplantStress 1 never binds:
+// stock ImplantStress is 1 on 197 rows and 5 on Quantum Rider, and a multiplier
+// of 1 or more lands nothing below 1 [measured]. implantStressClampMin is
+// parsed and ignored (see GlobalOptions). scripts\implants.py's D-CLAMP
+// re-derives the measurement on every run rather than trusting this comment.
 //
 // KEYS ARE (table, id), NEVER id ALONE. EffectModel 80007 and TalentModel
-// 80007 are different rows, and the laser sheet owns the second one.
-// design.md section 11 names three such pairs and Phase 6 found a fourth;
-// table-wide the overlap is 221 ids between TalentModel and EffectModel and
-// 130 between EffectModel and MatrixEffectModel. [measured]
+// 80007 are different rows, and the laser sheet owns the second one. Table-wide
+// the overlap is 221 ids between TalentModel and EffectModel and 130 between
+// EffectModel and MatrixEffectModel. [measured, stock dump]
 
 using System;
 using System.Collections.Generic;
@@ -152,18 +110,17 @@ namespace CKFHardMode
         // These are the CANDIDATE levers. Which of them a given sheet actually
         // carries is decided per slot by the generator from that slot's own
         // rows and arrives here as the file header — there is no hand list per
-        // slot, because a hand list is the failure mode Phase 5 deleted. This
+        // slot, because a hand list drifts. This
         // class reads the header it is given and only needs to know which side
         // of the split each name is on.
         //
-        // ImplantStress IS HERE AND IT IS CONSTANT IN THE SHIPPED DATA — 1 on
+        // ImplantStress IS HERE AND IT IS CONSTANT IN THE STOCK DATA — 1 on
         // 197 of the 198 rows, so constant inside every slot. "No column dead
-        // for its own rows" would drop it, and dropping it would hide the only
-        // ImplantModel lever the mod actually pulls. That requirement is about
-        // a column carrying no lever; A COLUMN BEING CONSTANT SAYS NOTHING
-        // ABOUT WHETHER A RULE WRITES IT. Phase 6 nearly shipped a 16-column
-        // laser sheet on exactly this mistake. Cost and InstallTime are in the
-        // same position and are varied enough to survive anyway.
+        // for its own rows" would drop it, and dropping it would hide a lever
+        // the global multipliers act on. That requirement is about a column
+        // carrying no lever; A COLUMN BEING CONSTANT SAYS NOTHING ABOUT
+        // WHETHER A RULE WRITES IT. Cost and InstallTime are in the same
+        // position and are varied enough to survive anyway.
         /// <summary>Keys the ImplantModel rule.</summary>
         internal const string ImplantKey = "ImplantTypeId";
         /// <summary>The sheet column that names this row's effect. It keys the
@@ -182,9 +139,8 @@ namespace CKFHardMode
 
         // Identity: shown, NEVER parsed as an adjustment — which is why an
         // ImplantTypeId of 3200 does not become "set ImplantTypeId to 3200".
-        // Phase 6 hit that trap the other way round: the editor's first count
-        // of "override cells filled" on the claw sheet came back 32 and they
-        // were all identity.
+        // The same trap the other way round: a count of "override cells
+        // filled" that includes identity columns counts ids, not overrides.
         internal static readonly string[] Identity =
         {
             "ImplantName", ImplantKey, "ImplantClass", EffectKey,
@@ -201,9 +157,9 @@ namespace CKFHardMode
         internal const string SlotColumn = "ImplantSlot";
 
         // EffectModel identity. EffectClassification is 7 on all 98 referenced
-        // effects and carries no information; design.md section 7 names it with
-        // Duration, Instant, EffectHealType and Heals, and those four are
-        // dropped by the ordinary all-zero test rather than by being listed.
+        // stock effects and carries no information. Duration, Instant,
+        // EffectHealType and Heals are likewise uninformative and are dropped
+        // by the ordinary all-zero test rather than by being listed.
         internal static readonly string[] EffectIdentity =
         {
             "EffectName", EffectIdColumn, "EffectClassification",
@@ -218,16 +174,18 @@ namespace CKFHardMode
         // design document they do not have.
         //
         // THE SCHEMA OWNS THE OTHER HALF. schema\*.schema.json's `doc` array is
-        // what the config editor renders as help, and schema\ is not this
-        // phase's directory to write (separate agents own it). These strings
-        // are the text that belongs there, verbatim, so the schema owner
-        // transcribes rather than re-derives.
+        // what the config editor renders as help. These strings are the text
+        // that belongs there, so the schema is transcribed from them rather
+        // than re-derived. scripts\implants.py's P-HELP checks key sentences.
+        //
+        // Every statement here is about the STOCK game data, never about what
+        // a sheet currently sets.
         internal static readonly Dictionary<int, string> SlotHelp = new Dictionary<int, string>
         {
             { 1, "Slot 1 is the only slot where ArmorRestriction is live (6 of the 198 "
-               + "rows carry a 1; all of them are here). Two rows KEEP a crit multiplier "
-               + "and no rule touches either: Chameleon Sheathe at CritMultiStealth 20 "
-               + "and Chameleon S-Mesh at 25. Dermal Plating 1's effect row, EffectModel "
+               + "stock rows carry a 1; all of them are here). Two stock rows carry a "
+               + "crit multiplier: Chameleon Sheathe at CritMultiStealth 20 and "
+               + "Chameleon S-Mesh at 25. Dermal Plating 1's effect row, EffectModel "
                + "50000, is SHARED with all 20 drone modules, which have no table — an "
                + "edit to its payload reaches them too. That marker informs; it does not "
                + "block, because there is only one editable owner and divergence is "
@@ -248,28 +206,25 @@ namespace CKFHardMode
                + "in slots 1, 3, 4 and 11 only." },
             { 5, "BackstoryGroup is live in slot 5 and nowhere else — exactly one row of "
                + "the 198 carries a 1. No row in this slot has a talent." },
-            { 6, "These 25 rows include the 16 cyberweapon claws (ImplantClass 27). The "
+            { 6, "This slot includes the 16 cyberweapon claws (ImplantClass 27). The "
                + "claws are ALSO in cyberweapons-claws.csv, and the columns do not "
                + "collide: this table carries the install economics and the implant-side "
                + "effect, that sheet carries the weapon and talent combat stats. Cost "
                + "here is the CLINIC PRICE (80-10200 across the table); Cost there is the "
                + "item's valuation (50-700). Every class-27 row has ImplantEffectId 0, so "
-               + "its payload cells are blank and there is nothing here to edit for a "
-               + "claw's effect." },
+               + "there is no effect row here to edit for a claw, and a payload cell on "
+               + "one is refused." },
             { 7, "ImplantLevel IS NOT A TIER INDEX HERE either, so these rows are in dump "
                + "file order. SynthMuscle 3, SynthMuscle 4 and both SynthBuilder ROM rows "
                + "are all ImplantLevel 3. Do not read the order as a ladder." },
-            { 8, "THE NINE CritMultiBase CELLS SET TO 0 ARE THE WHOLE OF THE MOD'S CRIT "
-               + "DAMAGE REMOVAL. Display Link, Combat DisplayLink, Target Optimizer, "
-               + "Apex DisplayLink, Apex Optimizer and Brightshot Optic 1-4 each ship "
-               + "CritMultiBase 25 and are set to 0; CritRate and RangedAttack are left "
-               + "alone. AFTER THEY RUN, CritMultiBase IS ZERO ON EVERY IMPLANT EFFECT IN "
-               + "THE GAME — those nine were the only implant effects in the whole table "
-               + "that had one, and that is not visible from these nine rows. Range "
-               + "Finder is the exception that survives: it keeps CritMultiStealth 25 and "
-               + "no rule touches it. These 26 rows include the 18 optical lasers "
-               + "(ImplantClass 32), which are also in cyberweapons-lasers.csv; Cost here "
-               + "is the clinic price, Cost there is the item's valuation." },
+            { 8, "Display Link, Combat DisplayLink, Target Optimizer, Apex DisplayLink, "
+               + "Apex Optimizer and Brightshot Optic 1-4 are the only implant effects in "
+               + "the stock game with a CritMultiBase (25 each). Setting these nine to 0 "
+               + "leaves CritMultiBase ZERO ON EVERY IMPLANT EFFECT IN THE GAME, which is "
+               + "not visible from these rows. Range Finder carries CritMultiStealth 25 "
+               + "instead. This slot includes the 18 optical lasers (ImplantClass 32), "
+               + "which are also in cyberweapons-lasers.csv; Cost here is the clinic "
+               + "price, Cost there is the item's valuation." },
             { 9, "MatrixEffectId, InstallJobId, ImplantConflictId, ArmorRestriction and "
                + "BackstoryGroup are all zero on every row of this slot and are not "
                + "shown. 14 of the 18 rows have ImplantEffectId 0." },
@@ -279,15 +234,10 @@ namespace CKFHardMode
                 + "IS VACUOUS AT ONE ROW: every column is trivially constant, so the "
                 + "usual 'omit a column constant across the table's own rows' rule would "
                 + "empty this table entirely. Only the all-zero test is applied here, and "
-                + "that exemption is unchanged. CORRECTION, 2026-09-14: this sentence read "
-                + "\"One row, so this renders as a form rather than a grid\", and the "
-                + "editor drew the row as a stack of labelled values instead of a table. "
-                + "David opened the editor in a browser on 2026-09-14, looked at the page "
-                + "that produced, and overruled it; slot 11 is a table like the other ten. "
-                + "THE ONE-ROW CONSTANCY EXEMPTION IS A DIFFERENT RULE AND SURVIVES THE "
-                + "REVERSAL -- constant across one row is arithmetic, not an observation. "
-                + "See docs\\gotchas.md for Quantum Rider's MatrixEffectId 50014, which "
-                + "has no MatrixEffectModel row and ships as-is." },
+                + "that exemption applies because constant across one row is arithmetic, "
+                + "not an observation. See docs\\gotchas.md for Quantum Rider's "
+                + "MatrixEffectId 50014, which has no MatrixEffectModel row and ships "
+                + "as-is." },
         };
 
         internal static readonly Dictionary<string, string> RefusedControl =
@@ -295,8 +245,8 @@ namespace CKFHardMode
         {
             { "_clone", "a clone is never emitted from a lever sheet. RowClone.cs is "
                       + "the path that produces a mission that will not load, and "
-                      + "design.md section 11 makes splitting a shared row an explicit "
-                      + "per-row opt-in that this dialect does not carry." },
+                      + "splitting a shared row needs an explicit per-row opt-in that "
+                      + "this dialect does not carry." },
             { "_serveOn", "serveOn belongs to a clone rule, and these sheets emit none." },
         };
 
@@ -515,18 +465,16 @@ namespace CKFHardMode
 
             // ---- reconcile the payload halves that share an effect row -------
             //
-            // implants-slot03.csv ships exactly this: CombatLink 4 (908) and
-            // M-Grade CombatLink (915) both carry ImplantEffectId 50126, so
-            // their payload halves are TWO EDITORS OF ONE EffectModel ROW.
+            // The stock case: CombatLink 4 (908) and M-Grade CombatLink (915),
+            // both in slot 3, both carry ImplantEffectId 50126, so their payload
+            // halves are TWO EDITORS OF ONE EffectModel ROW.
             //
             // Reconciled HERE, before any rule is built, rather than by letting
             // the (model, id) registry reject whichever row arrived second:
             // that would make the surviving edit depend on row order, and it
-            // could not name both owners, which is what design.md section 11
-            // requires the refusal to do.
+            // could not name both owners, which the refusal must do.
             //
-            // Identical payloads — including both blank, which is today — are
-            // NOT divergence. One rule is emitted and the sharing is marked.
+            // Identical payloads — including both blank — are NOT divergence. One rule is emitted and the sharing is marked.
             var byEffect = new Dictionary<long, List<Parsed>>();
             foreach (var p in parsed)
             {
@@ -553,10 +501,10 @@ namespace CKFHardMode
                         + $"SHARED by {kv.Value.Count} rows of this sheet ({owners}) and they "
                         + $"DIVERGE on {string.Join(", ", divergent)}. One EffectModel row "
                         + "cannot hold two payloads, so NO EffectModel rule is emitted for "
-                        + $"{kv.Key} at all — neither owner's version wins. Splitting it is "
-                        + "an explicit per-row _clone opt-in (design.md section 11) and "
-                        + "nothing has opted in; _clone in this header refuses the whole "
-                        + "file. The ImplantModel halves of both rows still apply: they are "
+                        + $"{kv.Key} at all — neither owner's version wins. Splitting it "
+                        + "needs an explicit per-row _clone opt-in and nothing has opted in; "
+                        + "_clone in this header refuses the whole file. The ImplantModel "
+                        + "halves of both rows still apply: they are "
                         + "different rows and do not collide.");
                     refused++;
                 }
@@ -642,15 +590,14 @@ namespace CKFHardMode
                     + "for it.");
 
             if (rows > 0 && blankRows == rows)
-                Plugin.Log.LogInfo($"Implants: {name} produced NO RULE AT ALL, and that is "
-                    + $"the intended state: all {rows} row(s) are present with their shipped "
-                    + "values in _comment and no override set. The mod does not tune these "
-                    + "today and a shipped override would be a balance change (proposal.md "
-                    + "non-goals). Said rather than left as a silent zero — a file that "
-                    + "contributed nothing cannot otherwise be told from a file nothing read.");
+                Plugin.Log.LogInfo($"Implants: {name} produced NO RULE AT ALL: all {rows} "
+                    + "row(s) were read and every lever cell was blank, which means 'leave "
+                    + "that column alone'. Said rather than left as a silent zero — a file "
+                    + "that contributed nothing cannot otherwise be told from a file nothing "
+                    + "read.");
 
             Plugin.Log.LogInfo($"Implants: {name} — WHAT THIS CANNOT SEE, said rather than "
-                + "left blank: sharing that exists in the SHIPPED data between a row of this "
+                + "left blank: sharing that exists in the stock data between a row of this "
                 + "sheet and a row NO SHEET SHOWS. EffectModel 50000 is Dermal Plating 1's "
                 + "and all 20 drone modules', and the drone modules have no table, so there "
                 + "is ONE editable owner, divergence is impossible and nothing here can or "
@@ -662,23 +609,23 @@ namespace CKFHardMode
 
         // ---- the blanket implant multipliers -----------------------------
         //
-        // THREE NUMBERS, NOT FOUR. See the PHASE 9, RESOLVED banner in the
-        // header and implants-global.json's own _doc.
+        // THREE NUMBERS. See THE GLOBAL BLOCK in the header.
         //
-        // implantStressClampMin IS DECLARED HERE AND IS NEVER APPLIED. The
-        // shipped file does not carry it and schema\implantsglobal.schema.json
-        // does not declare it, but ConfigDoc.Declared (ConfigDoc.cs line 191)
-        // still lists it among this slot's legal top-level keys, so a file left
-        // over from before it was removed passes ConfigDoc's stray-key guard
-        // without a word. A key that passes that guard and then makes
-        // ConfigDoc.ReadSection refuse the WHOLE file would switch the three
-        // multipliers off over a key the player was just told was fine. So it
-        // is parsed, named at Warning, and not applied -- the same treatment
-        // PowerLevelCap.Options gives its retired "enabled" (PowerLevelCap.cs
-        // line 198).
+        // implantStressClampMin IS DECLARED HERE AND IS NEVER APPLIED.
+        // schema\implantsglobal.schema.json does not declare it, but
+        // ConfigDoc.Declared still lists it among this slot's legal top-level
+        // keys, so a file carrying it passes ConfigDoc's stray-key guard. A key
+        // that passes that guard and then makes ConfigDoc.ReadSection refuse the
+        // WHOLE file would switch the three multipliers off over a key the
+        // player was just told was fine. So it is parsed, named at Warning, and
+        // not applied — the same treatment the retired "enabled" key gets in
+        // PowerLevelCap.Options.
         //
         // "_doc" is the file's own prose block. It is declared for the same
         // reason: it is a legal key there and it maps to no setting.
+        //
+        // Initialisers match schema\implantsglobal.schema.json's defaults and
+        // apply only when a key is absent from the file.
         private sealed class GlobalOptions : ConfigDoc.IHasUnknownKeys
         {
             [JsonPropertyName("_doc")]
@@ -709,25 +656,16 @@ namespace CKFHardMode
         /// ONE unscoped ImplantModel rule. Returns the number of RULES emitted:
         /// 1, or 0 when the slice is off or the file could not be read.
         ///
-        /// WAS RefuseGlobal UNTIL PHASE 9, and the old name's reason is still in
-        /// the header rather than deleted. RefuseGlobal emitted nothing because
-        /// the same three multipliers were live as one unscoped rule in
-        /// ckf.hardmode.rules.json and `multiply` is not idempotent. That rule
-        /// is deleted, in this same commit; emitting here is what keeps the
-        /// numbers applied ONCE rather than zero times.
+        /// These multipliers are MULTIPLY rules and `multiply` is not
+        /// idempotent, so this file must be their only source.
         ///
-        /// NO `where` CLAUSE, DELIBERATELY. The deleted rule had none, so it
-        /// reached all 198 ImplantModel rows including the 20 drone modules in
-        /// slots 100-107 that no table shows; this one reaches the same 198.
+        /// NO `where` CLAUSE, DELIBERATELY. It reaches every ImplantModel row,
+        /// including the drone modules in slots 100-107 that no table shows.
         /// Scoping it to ImplantSlot &lt;= 11 would move Cost, InstallTime and
-        /// ImplantStress on those 20 rows, which is a balance change, and
-        /// proposal.md's non-goals allow four (design.md section 7).
+        /// ImplantStress on the drone rows. See the header.
         ///
-        /// NO clampMin, DELIBERATELY. The deleted rule carried
-        /// clampMin ImplantStress 1 and it binds on 0 of the 198 rows:
-        /// ImplantStress ships as 1 on 197 (1 -&gt; 3) and 5 on Quantum Rider
-        /// (5 -&gt; 15), so nothing lands below 1 for the floor to lift
-        /// [measured]. Dropping it is sanctioned deviation D3 and
+        /// NO clampMin, DELIBERATELY. A floor of ImplantStress 1 binds on no
+        /// stock row (1 on 197, 5 on Quantum Rider) [measured];
         /// scripts\implants.py's D-CLAMP re-derives the measurement every
         /// run.</summary>
         internal static int ExpandGlobal(string dir, Action<Rule> adopt)
@@ -747,21 +685,13 @@ namespace CKFHardMode
                     + $"resolved on its own. {walked} was NOT read. On an ordinary launch "
                     + "these are one file; here they are two.");
 
-            // THE GATE IS NEWLY LIVE, AND THAT IS SAID OUT LOUD. Until Phase 9
-            // these multipliers arrived as a rule in ckf.hardmode.rules.json,
-            // which [Slices] ImplantsGlobal never gated -- switching this key
-            // off changed nothing at all. It gates them now. The shipped value
-            // is true (Plugin.Binds.g.cs line 134), so no default launch moves.
+            // The gate: [Slices] ImplantsGlobal. Its default is in the schema.
             if (!Slices.On("ImplantsGlobal"))
             {
                 Plugin.Log.LogInfo(Slices.OffBecause("ImplantsGlobal",
                     "the blanket implant multipliers in " + GlobalFile + " are NOT applied "
                     + "this launch: all " + ImplantModel + " rows keep the " + CostColumn
-                    + ", " + InstallTimeColumn + " and " + StressColumn + " the game ships. "
-                    + "THIS KEY ONLY STARTED GATING ANYTHING IN PHASE 9 -- before that the "
-                    + "same three multipliers came from an unscoped rule in "
-                    + "ckf.hardmode.rules.json that this key did not reach, so turning it "
-                    + "off used to do nothing."));
+                    + ", " + InstallTimeColumn + " and " + StressColumn + " the game ships."));
                 return 0;
             }
 
@@ -776,11 +706,9 @@ namespace CKFHardMode
                 Plugin.Log.LogWarning($"Implants: {parsed} still carries "
                     + "\"implantStressClampMin\": "
                     + opt.RetiredClampMin.Value.ToString("R", CultureInfo.InvariantCulture)
-                    + ". IT IS READ AND NOT APPLIED. That is not the key being dropped by "
-                    + "accident: the floor it asks for binds on 0 of the 198 rows, because "
-                    + StressColumn + " ships as 1 on 197 of them and 5 on Quantum Rider, so "
-                    + "after the stress multiplier the lowest value is already above it "
-                    + "[measured]. Delete the key; no value moves either way.");
+                    + ". IT IS READ AND NOT APPLIED. The floor it asks for binds on no stock "
+                    + "row, because " + StressColumn + " ships as 1 on 197 of them and 5 on "
+                    + "Quantum Rider. Delete the key.");
 
             var cost    = opt.CostMultiply.ToString("R", CultureInfo.InvariantCulture);
             var install = opt.InstallTimeMultiply.ToString("R", CultureInfo.InvariantCulture);
@@ -788,7 +716,7 @@ namespace CKFHardMode
 
             // NO Where, NO WhereMin/WhereMax: ModelRules.Matches returns true on
             // a rule with no selector, so this reaches every row of the model.
-            // That is the deleted rule's shape, kept exactly.
+            // That is intended; see the header.
             adopt(new Rule
             {
                 Model   = ImplantModel,
@@ -807,19 +735,10 @@ namespace CKFHardMode
             Plugin.Log.LogInfo($"Implants: {GlobalFile} — ONE unscoped {ImplantModel} rule "
                 + $"emitted: {CostColumn} x{cost}, {InstallTimeColumn} x{install}, "
                 + $"{StressColumn} x{stress}. It carries NO 'where', so it reaches EVERY "
-                + $"{ImplantModel} row -- 198 in the shipped data: the 178 in character "
-                + "slots 1-11 that the eleven sheets show AND the 20 drone modules in slots "
-                + "100-107 that no table shows and the editor does not render [measured, "
-                + "sheets\\raw 2026-09-12]. That reach is ACCEPTED, not a bug and not to be "
-                + "fixed (design.md section 7).");
-            Plugin.Log.LogInfo($"Implants: those three numbers are applied ONCE. The unscoped "
-                + $"{ImplantModel} rule that used to carry them was deleted from "
-                + "ckf.hardmode.rules.json in the same commit that made this line possible, "
-                + "because multiply is not idempotent: with both in place Cost and "
-                + "InstallTime would land on x0.25 and ImplantStress on x9 across all 198 "
-                + "rows. Its clampMin " + StressColumn + " 1 was NOT carried across -- it "
-                + "binds on 0 of the 198 rows and dropping it moves no value (sanctioned "
-                + "deviation D3; scripts\\implants.py's D-CLAMP re-derives it every run).");
+                + $"{ImplantModel} row: the ones in character slots 1-11 that the eleven "
+                + "sheets show AND the drone modules in slots 100-107 that no table shows "
+                + "and the editor does not render. That reach is ACCEPTED, not a bug. These "
+                + "are multipliers, so they must not also arrive from another rules file.");
             return 1;
         }
 

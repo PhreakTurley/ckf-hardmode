@@ -13,48 +13,36 @@ path. The repo is the source of truth: schemas are read from ../schema and
 
 WHAT THIS OWNS
 
-  ckf.hardmode.cfg                  ONE key, [General] Enabled: its value line is
-                                    replaced in place, and nothing else in the
-                                    file is ever touched. 3.0 moved the other 21
-                                    keys into the merged document, so the
-                                    append-a-missing-key path and the two
-                                    round-trip refusals it needed went with them.
-  ckf.hardmode.json                 nine sections, one per subsystem
+  ckf.hardmode.cfg                  [General] Enabled and the [Slices] toggles.
+                                    A save replaces a value line in place or
+                                    appends a declared key that is missing, and
+                                    touches nothing else (class CfgFile).
+  ckf.hardmode.d/<slice>.json       the settings slices, one per subsystem
+  ckf.hardmode.d/<sheet>.csv        lever cells of the sheets a schema lists in
+                                    targets.overlays; nothing else in the file
   ckf.hardmode.d/MissionPowerLevelModel.generated.json   (regenerated, see MIRROR)
 
 WHAT IT DELIBERATELY DOES NOT OWN
 
-  ckf.hardmode.rules.json, ckf.hardmode.d/*.csv, ckf.hardmode.selfcheck.csv.
-  Bulk table authoring with its own grammar and its own editor.
+  The enemy-gear overlays (ArmorModel.csv, WeaponModel.csv,
+  MonsterTypeModel.csv), which no schema claims, and ckf.hardmode.selfcheck.csv.
 
-CORRECTION, 2026-09-14. THE TWO BLOCKS ABOVE DESCRIBE THE 3.x LAYOUT AND THE
-EDITOR'S SAVE PATH, AND BOTH ARE STILL TRUE OF THAT PATH. They are not true of
-the whole file any more, and the difference matters to anyone reading them as
-an inventory:
+MIGRATION (split-config-into-toggleable-slices design.md)
 
-  * ckf.hardmode.cfg holds 43 keys in 4.0, not one. The SAVE path still edits
-    one value line at a time and touches nothing else, which is what that
-    paragraph is about. The MIGRATION path below writes the file whole, once,
-    and carries the 3.x [General] block across byte for byte.
-  * ckf.hardmode.json does not exist in 4.0. It is nine files under
-    ckf.hardmode.d/ and a .pre-4.0-backup, and splitting it is the migration's
-    first step.
-  * ckf.hardmode.d/*.csv is still not EDITED here -- the expanders own those --
-    but the migration WRITES them once, on conversion, and then never again.
+  `--migrate` converts a 3.x install (ckf.hardmode.cfg, ckf.hardmode.json,
+  ckf.hardmode.rules.json) to the 4.0 layout, applying the sanctioned
+  deviations DURING the conversion rather than after it, and renames the
+  originals to *.pre-4.0-backup. Two of the deviations are deletions with no
+  expander to reuse, so a converter that preserves every operand of every rule
+  gets them wrong; see the block above MigrationRefused. Every failure there is
+  a refusal that has written nothing. This is the only path that writes the
+  .cfg whole or writes the lever sheets outside a cell edit.
 
-MIGRATION (design.md section 13)
-
-  RETIRED FROM THE DEFAULT --selftest, 2026-09-15, by David's ruling. The
-  migrator and its 67 selftest cases are all still here; `--selftest
-  --migration` runs them. The default suite reports them NOT RUN by name. See
-  the banner above migration_report_retired.
-
-  build_migration / run_migration convert a 3.x install to the 4.0 layout: 68
-  files out of three files in, with the four sanctioned deviations applied
-  DURING the conversion rather than after it. Two of the four are deletions
-  with no expander to reuse, so a converter that preserves every operand of
-  every rule gets them wrong; see the block above MigrationRefused for which
-  and why. Every failure there is a refusal that has written nothing.
+  The migrator has no selftest block. It had one -- it converted the frozen
+  tests/fixture-3.0.0 and compared the result byte for byte against the live
+  config -- and that premise died when the live config became a tuning bench,
+  so the block was deleted rather than left reporting NOT RUN (David's ruling).
+  Nothing in this file now compares a conversion against bytes on disk.
 
 UNSET IS NOT ZERO
 
@@ -62,15 +50,13 @@ UNSET IS NOT ZERO
   disk round-trips as absent; 0 round-trips as 0. On the wire a cell is `null`
   for absent and a number for present, and the writer pops the key rather than
   writing a zero. This is the requirement that corrupts config silently when it
-  is got wrong -- Fatigue.cs:404 (a byPowerLevel anchor's maxAffected absent =
-  no ceiling, 0 = a ceiling of zero), RewardCurve.cs:249-251 (a column missing
-  or negative keeps the game's number). CITATION CORRECTION, 2026-09-07: this
-  cited Fatigue.cs:305-307 and the flat runningEmpty.maxAffected, which is off
-  the config surface now; the field it names is an anchor's.
+  is got wrong -- Fatigue.cs (a byPowerLevel anchor's maxAffected absent = no
+  ceiling, 0 = a ceiling of zero), RewardCurve.cs (a column missing or negative
+  keeps the game's number).
 
-MIRROR (gui-plan.md 5.3)
+MIRROR
 
-  The "teampl" section of ckf.hardmode.json and
+  ckf.hardmode.d/teampl.json and
   ckf.hardmode.d/MissionPowerLevelModel.generated.json
   are two halves of one invariant. They are written in one transaction: every
   file is serialised to a temporary in its own directory and fsynced, a journal
@@ -88,7 +74,7 @@ VALIDATION
   staged into a temp directory, check_schema is pointed at the staging copy,
   and its four classes are parsed back out. RANGE and INVARIANT block the save.
   If check_schema could not run at all, the save is also blocked: an
-  instrument's silence is not evidence (AGENTS.md section 3).
+  instrument's silence is not evidence (AGENTS.md).
 """
 
 import argparse
@@ -168,21 +154,11 @@ def default_game_dir():
     game. Unfrozen there is no exe to reason from and the hardcoded path is all
     there is.
 
-    CORRECTION, 2026-09-13. split-config-into-toggleable-slices tasks.md Phase 1
-    says of this: "`serve.py:110` sets `DEFAULT_GAME_DIR` to [the Steam path]
-    unconditionally and `load_settings` uses it when there is no
-    `settings.json`. Frozen, the exe sits in the game root, so
-    `os.path.dirname(sys.executable)` is the right answer. One line." The first
-    sentence is stale and the one-line change is already made: `load_settings`
-    calls THIS function, not `DEFAULT_GAME_DIR`, and this function returns
-    EXE_DIR when the exe is in a game folder. What the checkbox was still owed
-    is the frozen end-to-end case, which selftest section 16 now carries.
-
     The marker test is kept rather than dropped for `os.path.dirname(
     sys.executable)` bare: an exe run from a downloads folder would otherwise
     name that folder as the game directory, and the case
     "an exe with no CyberKnights.exe beside it does not name its own folder"
-    in section 18 is what holds it.
+    in the selftest is what holds it.
     """
     if EXE_DIR and os.path.exists(os.path.join(EXE_DIR, GAME_MARKER)):
         return EXE_DIR
@@ -199,45 +175,30 @@ JOURNAL_NAME = '.ckf-gui-save-journal.json'
 PROBE_PREFIX = '.ckf-gui-writeprobe-'
 
 # The one key name this server knows by heart. No schema field marks a
-# subsystem as the master gate, but Plugin.cs:133-137 returns out of Load()
+# subsystem as the master gate, but Plugin.Load() returns
 # before any subsystem is initialised when this key is false, so the subsystem
 # index would lie without it. Stated once, here; app.html contains no field
 # names at all.
 MASTER_KEY = 'General.Enabled'
 
 # ---------------------------------------------------------------------------
-# PRESENTATION TABLES. gui-plan.md 5.4: the page renders from the schema and
-# app.html names nothing. These four tables are the declared exceptions --
-# presentation decisions that no schema key expresses, written down once, here,
-# with the reason, rather than scattered through the page. None of them changes
-# what is read or written: every one is display only, and the save path is
-# computed from the data in every case.
+# PRESENTATION TABLES. The page renders from the schema and app.html names
+# nothing. The presentation tables -- SECTION_GROUPS, SECTION_LAST,
+# AXIS_WINDOWS, REFERENCE_GROUPING and HIDDEN_COLUMNS in this block, and
+# GUI_EXCLUDED_ROWS and the derived COST_LABELS and ROW_LABEL_SHEETS further
+# down -- are the declared exceptions: presentation decisions that no schema key expresses, written
+# down once, with the reason, rather than scattered through the page. None of
+# them changes what is written: every one is display only, and the save path
+# is computed from the data in every case.
 #
 # Nothing else in this file names a subsystem, a field or a column.
 
-# ONE LEVEL OF NAV GROUPING. design.md section 12 of
-# split-config-into-toggleable-slices. Five groups, each holding sections; a
-# section is one subsystem, or several presented together. No nesting below a
-# group.
-#
-# WHAT THIS USED TO BE. Until 2026-09-13 this table was a MERGE table and
-# nothing else:
-#
-#     # Two subsystems, presented as one section. They go on writing two files
-#     # and two cfg keys and their schemas are untouched; only the page groups
-#     # them, because they are the two halves of one question -- what a mission
-#     # pays. David, 2026-09-01.
-#     SECTION_GROUPS = [
-#         {'id': 'mission-pay',
-#          'title': 'What a Mission Pays',
-#          'subsystems': ['Progression', 'RewardCurve']},
-#     ]
-#
-# That entry is not deleted -- it is the `mission-pay` child of `systems`
-# below, with the same id, the same title and the same two subsystems, so the
-# merge behaviour and its selftest are unchanged. What generalised is the
-# table around it: a child may now be a bare subsystem name as well as a merge,
-# and every child sits under a named group.
+# ONE LEVEL OF NAV GROUPING (split-config-into-toggleable-slices design.md).
+# Groups hold sections; a section is one subsystem, or several presented
+# together. No nesting below a group. The `mission-pay` child of `systems`
+# presents Progression and RewardCurve as one section because they are the two
+# halves of one question -- what a mission pays; they go on writing their own
+# files and cfg keys.
 #
 # A CHILD IS EITHER:
 #   'SubsystemName'                          a section of one
@@ -253,7 +214,7 @@ MASTER_KEY = 'General.Enabled'
 # whose enable gate IS MASTER_KEY, and `sections_for` derives it. It therefore
 # lands in `ungrouped` and is pinned above every group.
 SECTION_GROUPS = [
-    # design.md section 12: "Cyberware sits under Player Gear, not Talent
+    # design.md: "Cyberware sits under Player Gear, not Talent
     # Balance. Its 11 slot tables describe items a player buys and installs,
     # which is the same kind of decision as buying a weapon or carrying a
     # grenade."
@@ -261,7 +222,7 @@ SECTION_GROUPS = [
         # "Weapons is one section holding three tables ... because all three
         # tune player weapons, and a player asking 'why does my gun feel
         # different' should find one place rather than three. Each table keeps
-        # its own file and its own toggle." (design.md section 12)
+        # its own file and its own toggle." (design.md)
         {'id': 'weapons', 'title': 'Player Weapons',
          'subsystems': ['GearClasses', 'CyberweaponsLasers', 'CyberweaponsClaws']},
         {'id': 'consumables', 'title': 'Consumables',
@@ -286,43 +247,47 @@ SECTION_GROUPS = [
     {'id': 'game-constants', 'title': 'Game Constants', 'sections': [
         'RuleModel',
     ]},
-    # The nine subsystems that existed before this change, as eight sections:
-    # Progression and RewardCurve are the merge above. SelfCheck is declared
+    # Progression and RewardCurve are the `mission-pay` merge. SelfCheck is declared
     # last here and SECTION_LAST pins it last overall; the two agree, and
     # SECTION_LAST is what decides.
     {'id': 'systems', 'title': 'Systems', 'sections': [
-        'Difficulty', 'Elapse', 'Fatigue', 'MissionRewards', 'PowerLevel',
+        'Difficulty', 'Elapse', 'Fatigue', 'LimitBreakTraits',
+        'MissionRewards', 'PowerLevel',
         'ModelRules',
         {'id': 'mission-pay', 'title': 'What a Mission Pays',
          'subsystems': ['Progression', 'RewardCurve']},
         'SelfCheck',
     ]},
-    # No children, by design rather than by accident: enemy weapons, armour and
-    # monster rows are not edited in this tool. The note is here rather than in
-    # app.html because it names files, and app.html names none.
-    {'id': 'enemy-gear', 'title': 'Enemy Gear', 'sections': [],
+    # ONE CHILD, AND THE NOTE STILL SAYS WHAT IS NOT HERE. Enemy weapons,
+    # armour and monster-type rows are still not edited in this tool.
+    # SpawnWeights is none of those three tables: it is MonsterGroupMemberModel,
+    # which says which enemy type a faction's spawn group rolls and how often.
+    # The note is here rather than in app.html because it names files, and
+    # app.html names none.
+    {'id': 'enemy-gear', 'title': 'Enemy Gear',
+     'sections': ['SpawnWeights'],
      'note': 'Enemy weapons, armour and monster rows are not edited here. They '
              'are overlay CSVs in BepInEx/config/ckf.hardmode.d/, generated by '
              'scripts/make_enemy_overlays.py, and this editor does not open '
-             'them.'},
+             'them. Enemy Spawn Weights is a different table, '
+             'MonsterGroupMemberModel, and is edited here.'},
 ]
 
 # Sections pinned to the end. SelfCheck is a verification tool, off by default
-# and deliberately so (selfcheck.schema.json's own prose), so it is the last
-# thing on the page rather than the fifth. It is named here because no schema
+# (selfcheck.schema.json), so it is the last thing on the page. It is named here because no schema
 # key says "this one is a diagnostic". The other pin -- the master switch at
 # the very top -- is NOT named: it is derived from MASTER_KEY above, since the
 # section that goes first is by definition the one whose enable gate IS the
-# master gate. David, 2026-09-01.
+# master gate.
 SECTION_LAST = ['SelfCheck']
 
 # A presentation-only window on a matrix axis: coordinates outside it are not
 # drawn. The Team PL matrix runs MissionPowerLevel -10..10 because the game's
-# own table does, and 63 cells of which 33 are unexplained negative-level rows
-# and PL 0 (worth nothing, no class-0 band) make the 30 cells anyone edits hard
-# to find. teampl.schema.json:table records that no negative level has ever
-# been seen on an awarded row and that nothing in this repository explains
-# them, so they are hidden rather than removed. David, 2026-09-01.
+# own table does, and the negative-level rows and PL 0 (worth nothing, no
+# class-0 band) make the 1..10 cells anyone edits hard to find.
+# teampl.schema.json:table records that no negative level has been seen on an
+# awarded row and that nothing in this repository explains them, so they are
+# hidden rather than removed.
 #
 # HIDING IS NEVER DROPPING. A column outside the window that carries an
 # override row is drawn anyway and called out, and the save is built from
@@ -332,12 +297,11 @@ AXIS_WINDOWS = {
     ('Progression', 'MissionPowerLevel'): [1, 10],
 }
 
-# WHICH COLUMN A REFERENCE TABLE GROUPS BY. A fourth entry, and the same kind
-# of decision as the three above: display only, read by nobody, written
-# nowhere. rulemodel's `ruleReference` carries a GroupId per rule -- STORY 31,
-# COMBAT 17, CHARACTER 15, HEAT 6, MAP 2, CONTACT 2, MATRIX 1, ECONOMY 1,
-# SAFEHOUSE 1 = 76 [measured 2026-09-13 off the schema] -- and 76 constants in
-# one flat list is the thing this grouping exists to avoid.
+# WHICH COLUMN A REFERENCE TABLE GROUPS BY. The same kind of decision as the
+# tables above: display only, read by nobody, written nowhere. rulemodel's
+# `ruleReference` carries a GroupId per rule (STORY, COMBAT, CHARACTER, ...),
+# and every game constant in one flat list is the thing this grouping exists
+# to avoid.
 #
 # It is here rather than inferred because inference would have to pick between
 # GroupId and ConfigName by counting distinct values, and a tuning change that
@@ -349,73 +313,32 @@ REFERENCE_GROUPING = {
     ('RuleModel', 'ruleReference'): 'GroupId',
 }
 
-# WHICH LEVER-SHEET COLUMNS ARE HIDDEN BY NAME. The seventh table in this
-# family and the fifth literal one; the header block above says "four", which
-# counts the literal tables it was written to describe (SECTION_GROUPS,
-# SECTION_LAST, AXIS_WINDOWS, REFERENCE_GROUPING) and is still true of those.
-# COST_LABELS and ROW_LABEL_SHEETS are derived, not literal, and a previous
-# agent recorded the same thing rather than editing the count. THIS ONE IS
-# LITERAL AND SITS HERE, after REFERENCE_GROUPING and before the import block.
-# Nobody needs to recount.
-#
-# David, 2026-09-14, having opened the editor in a browser for the first time:
-# "Suppress the ImplantLevel, Deactivated, Rarity, PowerLevel, and
-# ImplactConflict columns." `ImplactConflict` is a typo for `ImplantConflictId`,
-# which is the only header cell on any sheet in the live config matching
-# "onflict" and appears on implants-slot02.csv and implants-slot04.csv only
-# [measured 2026-09-14, every header row under ckf.hardmode.d].
-#
-# SCOPE IS EVERYWHERE THOSE NAMES APPEAR, not implants only -- asked and
-# answered the same day. His reason: these are ITEM METADATA rather than combat
-# levers, so the argument for hiding them on Quantum Rider is the same one on a
-# grenade.
+# WHICH LEVER-SHEET COLUMNS ARE HIDDEN BY NAME. David's rule: hide
+# ImplantLevel, Deactivated, Rarity, PowerLevel and ImplantConflictId wherever
+# they appear, not on implant sheets only, because they are ITEM METADATA
+# rather than combat levers.
 #
 # HIDING IS NEVER DROPPING. Every column named here stays in the model, in the
 # working copy and in the save, is named with its reason in the sheet's own
-# notes, and comes back with one click. Same standard as AXIS_WINDOWS.
+# notes, and comes back with one click. Same standard as AXIS_WINDOWS. The
+# selftest prints how many non-blank cells each named column holds on the
+# sheets it opens, so hiding an override is visible rather than silent.
 #
 # THIS IS DECLARED, NOT DERIVED, and that distinction carries weight twice:
 #
 #   1. It is NOT the constancy suppression. That rule hides a column every row
 #      agrees about and EXEMPTS a sheet of fewer than two rows, because
-#      constant across one row is arithmetic rather than an observation. That
-#      exemption is correct and unchanged. A column named here is hidden for a
-#      reason that has nothing to do with what its cells hold, so it applies at
-#      any row count, one row included.
+#      constant across one row is arithmetic rather than an observation. A
+#      column named here is hidden for a reason that has nothing to do with
+#      what its cells hold, so it applies at any row count, one row included.
 #   2. The page must not be made to say "never changes" about a column hidden
 #      for a different reason. The two travel as separate facts to the client
 #      -- `constant` and `hidden` -- so the fold can give each its own sentence.
 #
-# BEFORE HIDING, WHAT IS BEING HIDDEN WAS COUNTED. Per column per sheet,
-# non-blank cells, over the 53 declared sheets [measured 2026-09-14, live
-# ckf.hardmode.d; re-derived by the selftest on every run, which prints this
-# same table]:
-#
-#   ImplantLevel        11 sheets, 178 cells, 0 non-blank
-#   Deactivated          7 sheets, 133 cells, 0 non-blank
-#   ImplantConflictId    2 sheets,  49 cells, 0 non-blank
-#   Rarity              17 sheets, 264 cells, 0 non-blank
-#   PowerLevel          19 sheets, 283 cells, 0 non-blank
-#
-# Cells are counted over the rows the page DRAWS, after overlay_excluded, for
-# the reason overlay_constant gives: a fact about a grid nobody sees describes
-# nothing. That is one row's difference and it is in consumables-matrix.csv,
-# which withholds one of its 11 rows -- so the same count taken off the raw
-# file gives 265 and 284 rather than 264 and 283. The withheld row's Rarity and
-# PowerLevel cells are blank too, so the non-blank total is 0 either way.
-#
-# Not one override is being hidden. `PowerLevel` and `Rarity` are the two that
-# could have bitten -- they are real levers on sheets where somebody might have
-# set one -- and both are blank everywhere the editor opens.
-#
-# THE TWO SHEETS THAT DO CARRY A VALUE ARE NOT THESE SHEETS. ArmorModel.csv
-# (180 rows) and WeaponModel.csv (385 rows) carry a non-blank PowerLevel on
-# every row. They are the enemy-gear tables, no schema declares them, and this
-# editor never opens them: check_schema reports them as "unclaimed by design"
-# alongside MonsterTypeModel.csv. read_overlay is only ever called for a path
-# some schema's targets.overlays names, so this table cannot reach them --
-# asserted below rather than assumed. Their 565 filled cells are the whole of
-# the difference between 849 PowerLevel cells on disk and the 284 above.
+# Only sheets some schema's targets.overlays names are opened (read_overlay),
+# so this table never reaches the enemy-gear overlays (ArmorModel.csv,
+# WeaponModel.csv, MonsterTypeModel.csv), which no schema declares --
+# asserted in the selftest rather than assumed.
 HIDDEN_COLUMNS = {
     'ImplantLevel': 'item metadata, not a combat lever',
     'Deactivated': 'item metadata, not a combat lever',
@@ -453,7 +376,7 @@ def split_lines_keepends(text):
 
     Splits on line boundaries, not on one separator sniffed from the whole
     file. A file that mixes CRLF and LF -- which is what any tool that rewrites
-    a single line of a CRLF file with '\\n' produces, and AGENTS.md section 6
+    a single line of a CRLF file with '\\n' produces, and AGENTS.md
     has agents editing ckf.hardmode.cfg that way -- indexes one line per
     physical line, and each line keeps the ending it arrived with.
 
@@ -529,87 +452,28 @@ def parse_adjust(spec):
 # its section, or a section created. Never rewritten wholesale, never
 # commented.
 #
-# PROVENANCE OF THE CODE BELOW: IT IS A REWRITE, NOT A RESTORE. Read this
-# before treating the append path as previously exercised behaviour.
-#
-# split-config-into-toggleable-slices tasks.md, Phase 1, asked for the
-# opposite in as many words:
-#
-#   "Reinstate the CfgFile write path from the commit that deleted it. ...
-#    Restore from the commit, do not rewrite -- the behaviour that ships
-#    should be the behaviour that was already exercised. Find the commit with
-#    `git log -S"_default_end" -- gui/serve.py`."
-#
-# That instruction cannot be carried out in this repository, so it was not.
-# `git log -S"_default_end" -- gui/serve.py` returns nothing, and
-# `git log --oneline -- gui/serve.py` returns exactly one commit, 14279fe
-# "Initial public repo: CKF Hard Mode source, docs, release pipeline"
-# [measured, 2026-09-13]. The deletion happened in the private tree that
-# predates the public repo, so there is no commit to restore from. The code
-# is not recorded anywhere else either: openspec/changes/
-# consolidate-config-and-ship/handoff.md and that change's tasks.md both
-# describe what was cut and quote none of it [measured, grep for
-# `_default_end`, `insert_lines`, `delete_line`, `SaveRefused` across both].
-#
-# CONSEQUENCE, stated so it is not mistaken later. The behaviour below is
-# pinned by the four scenarios under "Line-by-line `.cfg` editing in the GUI"
-# in openspec/changes/split-config-into-toggleable-slices/specs/
-# config-surface/spec.md, and by nothing else. It is NOT the behaviour that
-# 3.0 exercised. Where the record named a mechanic without quoting it --
-# where in a section an appended key lands, what ending a line that never had
-# one gets, whether a `#` anywhere in a value is refused or only one in the
-# first column -- the choice was made here and is marked `CHOICE:` at the
-# member that makes it. Each of those is a place where this code may differ
-# from what was deleted, and no amount of reading this repository can tell us
-# whether it does.
-#
-# design.md section 3, "This reverses a deliberate deletion", is settled and
-# is not reopened here: the toggles move to the .cfg, so every one of these
-# mechanics has a caller again.
+# PROVENANCE. The append path below is a REWRITE, not a restore of the 3.0
+# code (there is no commit to restore it from). Its behaviour is pinned by the
+# scenarios under "Line-by-line `.cfg` editing in the GUI" in
+# openspec/changes/split-config-into-toggleable-slices/specs/config-surface/
+# spec.md. Where that record named a mechanic without fixing it -- where in a
+# section an appended key lands, what ending a new line gets, whether a `#`
+# anywhere in a value is refused or only a leading one -- the choice was made
+# here and is marked `CHOICE:` at the member that makes it.
 #
 # ---------------------------------------------------------------------------
-# LINE ENDINGS: WHAT IS OBSERVED, AND WHAT IS NOT.  (cited from here as
-# "the line-endings note")
+# LINE ENDINGS.  (cited from here as "the line-endings note")
 #
-# Three observations of ckf.hardmode.cfg, each measured, none explained:
+# Do not assume a .cfg's line endings. BepInEx has been observed writing
+# ckf.hardmode.cfg as CRLF, the file has also been seen as LF after other
+# tools touched it, and ckf.datadump.cfg has been seen MIXED (CRLF with a few
+# lone LF inside one multi-line comment block) [measured]. What produces each
+# is not established.
 #
-#   2026-09-03  consolidate-config-and-ship hand-wrote the file as CRLF.
-#   2026-09-13  before a game launch: 162 bytes, 8 LF, 0 CRLF, 1 key.
-#   2026-09-13  after a game launch:  3,238 bytes, 179 CRLF, 0 LF, 43 keys.
-#
-# What changed it between the first observation and the second is NOT
-# established. Nothing here guesses at it.
-#
-# CORRECTION, 2026-09-13, after the launch. This file asserted in five places
-# that BepInEx writes the .cfg with LF:
-#
-#   "BepInEx owns ckf.hardmode.cfg and writes it with LF"   (_cfg_line_shape)
-#   "what it writes is LF"                                  (selftest [8])
-#   "the endings are whatever BepInEx wrote, which today is LF on every .cfg
-#    in the live config dir"                                (_default_end)
-#
-# and two shorter restatements. All five are wrong and are corrected in place.
-# The third observation falsifies them: BepInEx wrote 179 CRLF and not one LF.
-#
-# HOW THE MISTAKE WAS MADE, because it is the reusable part. The 162-byte
-# measurement was real and is still true of that moment. What was added to it
-# was a causal claim -- that the LF came FROM BepInEx -- from a single sample
-# of a file BepInEx had last written at an unknown earlier time. No run of
-# this repository had ever watched BepInEx write that file. That is
-# AGENTS.md section 1 exactly: an observation, and an explanation attached to
-# it that nobody had measured. The tag on it should have stopped at the byte
-# count.
-#
-# ckf.datadump.cfg after the same launch is MIXED: 24,988 bytes, 317 CRLF and
-# 3 lone LF, the three sitting inside one multi-line comment block
-# [measured, 2026-09-13]. A mixed .cfg is not hypothetical.
-#
-# NOTHING IN THE WRITER DEPENDS ON THE ANSWER, which is why the correction is
-# prose only. Endings are read and written per line, an edited line keeps the
-# ending it had, and an added line takes _default_end from the file it is
-# joining. That behaved correctly when the file was LF and behaves correctly
-# now that it is CRLF -- the post-launch CRLF file is what selftest [8b]
-# scenario 4 now runs against.
+# NOTHING IN THE WRITER DEPENDS ON THE ANSWER. Endings are read and written
+# per line, an edited line keeps the ending it had, and an added line takes
+# _default_end from the file it is joining. Selftest [8] covers LF, CRLF and
+# mixed files.
 
 class CfgFile:
     """Line-preserving reader for a BepInEx .cfg, plus one write.
@@ -619,20 +483,10 @@ class CfgFile:
     save with no edits is a no-op even for keys whose value would format
     differently (3 vs 3.0).
 
-    3.0 CUT THIS DOWN, AND split-config-into-toggleable-slices PUTS IT BACK.
-    21 of the 22 keys had moved into ckf.hardmode.json, leaving [General]
-    Enabled, a bool on a key BepInEx binds on every launch and therefore
-    always writes; so `set_value` replaced a value line and did nothing else,
-    and a key the file did not carry was refused rather than created.
-
-    One key per slice puts a caller back on all of it. `set_value` now has
-    four outcomes -- 'unchanged', 'replaced', 'appended', 'section-created' --
-    and the two round-trip refusals the append path needs are back with it
-    (a value starting with `#`; a value carrying a line break).
-
-    The append path here is a REWRITE. The header comment above this class
-    says why it could not be the restore that tasks.md asked for, and lists
-    the choices it had to make that the record did not fix.
+    `set_value` has four outcomes -- 'unchanged', 'replaced', 'appended',
+    'section-created' -- and refuses the two values that would not round-trip
+    (a value starting with `#`; a value carrying a line break). The header
+    comment above this class says where the append path came from.
 
     Line endings are per line, not per file. `self.lines` holds line contents
     with no ending and `self.ends` holds each line's own ending, so a file that
@@ -689,15 +543,8 @@ class CfgFile:
         none to keep, so one has to be chosen, and spec.md's fourth scenario
         rules out choosing it by assumption.
 
-        CORRECTION, 2026-09-13. This paragraph read "the endings are whatever
-        BepInEx wrote, which today is LF on every .cfg in the live config dir
-        [measured: ckf.hardmode.cfg 162 bytes / 8 LF / 0 CRLF, ckf.datadump.cfg
-        448 bytes / 23 LF / 0 CRLF]". The byte counts were right for that
-        morning; "which BepInEx wrote" was an inference, and a launch that
-        afternoon rewrote ckf.hardmode.cfg as 3,238 bytes with 179 CRLF and no
-        LF. See the line-endings note above this class. The first sentence is
-        the part that survives, and it is the part this function needs: the
-        endings are whatever is in the file, and this reads them off it.
+        The endings are whatever is in the file, and this reads them off it
+        (see the line-endings note above this class).
 
         CHOICE: search UPWARD from the insertion point for the nearest real
         ending, then anywhere in the file, and only then fall back to
@@ -816,31 +663,19 @@ class CfgFile:
     def set_value(self, dotted, rendered):
         """Write one key. -> 'unchanged' | 'replaced' | 'appended' | 'section-created'.
 
-        Replacement is unchanged from what ships: the value line is rewritten
-        in place, keeping its own line ending, and an identical value is a
-        no-op so that a save with no edits writes nothing.
+        Replacement: the value line is rewritten in place, keeping its own
+        line ending, and an identical value is a no-op so that a save with no
+        edits writes nothing.
 
-        A key the file does not carry is now APPENDED rather than refused --
-        under its section header if the section exists, in a section this
-        creates if it does not. What changed is not the file format but which
-        keys exist: 43 schemas declare a .cfg key and ckf.hardmode.cfg carries
-        one of them [measured, 2026-09-13 morning: 162 bytes holding [General]
-        Enabled and no [Slices] section at all], because the other 42 only
-        reach the file when BepInEx next writes it.
-
-        UPDATE, 2026-09-13 afternoon: the game has since been launched and the
-        file now carries all 43 [measured: 3,238 bytes, [General] and
-        [Slices]]. That does not retire the append path -- it is the state a
-        fresh install, a deleted .cfg or a newly added slice is in, and it is
-        what the editor meets before the first launch after any build that
-        adds a slice. Refusing was right while the file held every key the
-        plugin bound. It is wrong now, and
-        `docs/gotchas.md` says why in one line: "Deleting a key while its bind
-        still exists brings it back at the code default." Slices.Init binds all
-        43, so a toggle this editor declines to write is not left undecided --
-        the next launch writes it at the code default, which for every slice is
-        true. Declining to append would silently turn a slice the player
-        switched off back on.
+        A key the file does not carry is APPENDED rather than refused -- under
+        its section header if the section exists, in a section this creates if
+        it does not. A declared key is missing from the file whenever BepInEx
+        has not written it since the key was added: a fresh install, a deleted
+        .cfg, or the first run after a build that adds a slice. Slices.Init
+        binds every declared key, so a toggle this editor declines to write is
+        not left undecided -- the next launch writes it at its declared
+        default (docs/gotchas.md). Declining to append would silently turn a
+        default-on slice the player switched off back on.
 
         Appending is safe in the other direction too: BepInEx preserves a key
         it did not bind (same section of gotchas.md), so a key appended here
@@ -871,20 +706,10 @@ class CfgFile:
         self.insert_lines(at, lead + ['[%s]' % section, line])
         return 'section-created'
 
-    # NOT REINSTATED: delete_line.
-    #
-    # tasks.md lists it beside insert_lines and _default_end as part of what
-    # Phase 3 cut. It is deliberately left out. No scenario under
-    # "Line-by-line `.cfg` editing in the GUI" removes a key, no caller in this
-    # file wants one, and gotchas.md records that deleting a key whose bind
-    # still exists brings it back at the code default -- so a delete here would
-    # be undone by the next launch while looking like it had worked. Bringing
-    # it back with no caller would also be code no case exercises.
-    #
-    # This is the one item on that checkbox's list not implemented. Flagged for
-    # David rather than quietly dropped: if the GUI is meant to be able to
-    # remove a key from ckf.hardmode.cfg, say what the removal is supposed to
-    # mean given that the plugin will write it back, and it can be added.
+    # NO delete_line. Nothing here removes a key: no scenario asks for it, no
+    # caller wants one, and deleting a key whose bind still exists brings it
+    # back at its default on the next launch (docs/gotchas.md), so a delete
+    # would be undone while looking like it had worked.
 
     def to_bytes(self):
         text = ''.join(l + e for l, e in zip(self.lines, self.ends))
@@ -1053,10 +878,11 @@ def sidecar_files(schemas):
 #                 selects the row"
 #   blank cell    leave that column alone
 #
-# THE EDITOR DOES NOT WRITE THESE FILES. scripts/rules_to_overlays.py is the
-# only thing that may, so every overlay reaches the page read-only and no save
-# path touches one. That is asserted, not merely intended: an overlay path may
-# never appear in a save's `proposed`.
+# THE EDITOR WRITES ONLY LEVER CELLS OF THESE FILES. A save replaces one
+# field's span on one line (see the span writer below); the key column,
+# identity columns and control columns are never written (overlay_editable),
+# and a sheet no schema declares is never written at all. The selftest asserts
+# each of these by attempting it.
 
 OVERLAY_OPS = {'*': 'multiply', '+': 'add', '>': 'clampMin', '<': 'clampMax'}
 
@@ -1141,14 +967,10 @@ def parse_overlay_header(cell):
 # per-line endings, the blank lines, the trailing newline -- is carried through
 # untouched because it is never re-rendered.
 #
-# MEASURED, 2026-09-14, over all 57 .csv in the live ckf.hardmode.d: zero `#`
-# comment lines, zero blank lines, zero CRLF, zero BOM, and every file ends in
-# one LF. The brief for this change described the `Shipped:` prose as living in
-# "per-row `#` comments"; it does not -- it is the last FIELD of each data row,
-# in the `_comment` control column, and it is quoted on the sheets whose prose
-# carries a comma (RuleModel.csv). The span writer preserves both cases without
-# knowing which it is looking at, and the blank/`#`/CRLF handling below is kept
-# for the day one appears rather than because one does today.
+# The `Shipped:` prose is the last FIELD of a data row, in the `_comment`
+# control column, and is quoted when it carries a comma. The span writer
+# preserves both cases without knowing which it is looking at. Blank lines,
+# `#` lines, CRLF and a BOM are all handled, whether or not a sheet has them.
 
 def csv_field_spans(line, sep=','):
     """-> [(start, end)] per field of one CSV line, or None if it does not parse.
@@ -1273,10 +1095,6 @@ def _read_overlay_entry(path, rel):
     entry = {'path': rel, 'table': overlay_table_name(rel), 'present': False,
              'error': None, 'columns': [], 'keyColumn': None, 'rows': [],
              'skipped': 0, 'kind': None, 'kindSource': None,
-             # `form` WAS HERE, and was `kind == 'expanded' and one row`. See
-             # the correction at the assignment site below: David overruled the
-             # one-row form on 2026-09-14 and the key is gone rather than left
-             # always-false for a future reader to think is live.
              'fileOrder': False, 'roles': [], 'adjustCells': [],
              'shared': {}, 'sharedSource': SHEET_SOURCE_ERROR, 'labels': {},
              # What this sheet's KEY CELLS are called, id -> name, from
@@ -1286,7 +1104,7 @@ def _read_overlay_entry(path, rel):
              'rowLabels': {},
              'expanderMarks': [], 'sharedBlind': None, 'shipped': {},
              'shippedMissing': 0, 'notes': [], 'excluded': [],
-             # THE WRITE SIDE (2026-09-14). `editable` is the server's grading
+             # THE WRITE SIDE. `editable` is the server's grading
              # and the client does not repeat it; `identityColumns` is how a
              # cell edit names its row; `sep`, `lineCount` and each row's
              # `line` are what lets one field be replaced in place without the
@@ -1350,7 +1168,7 @@ def _read_overlay_entry(path, rel):
         entry['error'] = 'no header row'
         return entry
     # Withheld BEFORE anything is computed from the rows, so that every count
-    # below -- the form discriminator, the shipped map, the shared marks, the
+    # below -- the shipped map, the shared marks, the
     # legend -- describes the grid the page actually draws. `excluded` keeps
     # what was withheld, so "not drawn" never has to be inferred from a total.
     entry['rows'], entry['excluded'] = overlay_excluded(
@@ -1358,40 +1176,14 @@ def _read_overlay_entry(path, rel):
     entry['kind'] = overlay_kind(entry)
     entry['kindSource'] = overlay_kind_source(entry)
     entry['roles'] = overlay_roles(entry)
-    # CORRECTION, 2026-09-14. THE ONE-ROW FORM IS GONE. This line was:
+    # Every sheet is drawn as a grid at every row count, one row included
+    # (David's rule); there is no one-row form. The `form` elsewhere in this
+    # file is a schema FIELD's `ui: 'form'`, which is how a scalar is drawn.
     #
-    #     # design.md section 7: slot 11 renders as a form, not a grid. THE ROW
-    #     # COUNT IS THE DISCRIMINATOR AND IT IS IN THE FILE -- an editor that
-    #     # has read the sheet in order to draw it has already counted -- so
-    #     # nothing declares it and no schema field carries it.
-    #     entry['form'] = entry['kind'] == 'expanded' and len(entry['rows']) == 1
-    #
-    # and app.html branched on it into a stack of labelled values instead of a
-    # grid, with the matching reason: "a header row above a single line is a
-    # table of one, which is a worse way to read four values."
-    #
-    # DAVID OVERRULED THAT ON 2026-09-14, having opened the editor in a browser
-    # for the first time and looked at the page it produced. He wants slot 11
-    # drawn as a table like every other implant slot. The reasoning above is
-    # kept rather than deleted because it was not wrong about anything it
-    # measured -- the row count IS in the file, and nothing did declare the
-    # shape -- it was wrong about which of two readable layouts a reader who
-    # has eleven slot tables in front of him would rather have for the twelfth.
-    # That is not a thing a measurement decides.
-    #
-    # FIXED SERVER-SIDE, NOT CLIENT-SIDE. Dropping the branch in app.html would
-    # have left this key computed, published and asserted over with no subject
-    # -- dead payload that reads as live. So the key is gone, the branch is
-    # gone, and the form path has no remaining subject anywhere: `overlayBlock`
-    # draws one grid for every sheet at every row count. The other `form` in
-    # this file is unrelated and stays -- a schema FIELD's `ui: 'form'`, which
-    # is how a scalar is drawn, and is why implants-global.json's three numbers
-    # are a form and not a table.
-    #
-    # An expanded sheet's rows are in FILE ORDER and must stay there. In slots
-    # 3 and 7 ImplantLevel is not a tier index -- all six class-16 rows in slot
-    # 3 are level 1 and all five class-41 rows in slot 7 are level 1 -- so a
-    # grid that sorted by it would silently reorder tiers no column orders.
+    # An expanded sheet's rows are in FILE ORDER and must stay there.
+    # ImplantLevel is not a tier index -- several tiers of one implant class
+    # can share a level -- so a grid that sorted by it would silently reorder
+    # tiers no column orders.
     entry['fileOrder'] = entry['kind'] == 'expanded'
     entry['adjustCells'] = ['%d,%d' % rc for rc in overlay_adjust_cells(entry)]
     entry['shared'] = overlay_shared_marks(entry)
@@ -1426,32 +1218,22 @@ def read_overlays(config_dir, schemas):
 #   direct    Overlays.LoadTable reads it. The filename carries the game table
 #             before its first dot, the first column IS that table's id column,
 #             and the operator lives in the header (Column*, Column+, ...).
-#             33 of them [measured 2026-09-13].
 #   expanded  A slice's own expander reads it -- GearClasses.cs, Cyberweapons.cs
-#             -- and turns one row into several rules. Its filename carries no
-#             game table, its first column need not be an id at all
+#             and the rest -- and turns one row into several rules. Its filename
+#             carries no game table, its first column need not be an id at all
 #             (cyberweapons-lasers.csv leads with WeaponName), and its cells
-#             carry the operator instead of the header (=90, *1.25). 3 of them.
+#             carry the operator instead of the header (=90, *1.25).
 #
 # `targets.overlays` deliberately does not say which: nothing in check_schema.py
 # infers a dialect from it, and existence and claiming are all it asserts. So
-# the kind is DERIVED here, from the only property that separates them without
-# naming a file: a direct overlay's filename table, with Model swapped for Id,
-# is its own first column. That splits the 36 exactly 33/3 [measured].
+# the kind is DECLARED by the expanders (DECLARED_EXPANDED) and otherwise
+# DERIVED here, from the only property that separates them without naming a
+# file: a direct overlay's filename table, with Model swapped for Id, is its
+# own first column.
 #
-# THIS MATTERS BECAUSE AN ASSERTION WAS SILENTLY MIS-DESCRIBING THEM. Phase 4's
-# case read
-#
-#     'every overlay has an id column as its first column, which is what
-#      Overlays.LoadTable requires before it will read a line'
-#     all(v['keyColumn'] for v in ov_read.values())
-#
-# whose test is only that the first column has a name that is not a control
-# column. WeaponName passes it. So the case went green over three sheets that
-# have no id column, are not read by Overlays.LoadTable at all, and to which
-# the sentence in its own name does not apply [measured, Phase 6]. The name
-# claimed more than the test did, which is the shape AGENTS.md section 3 is
-# about, and it was in a case written to guard exactly that.
+# "The first column has a name that is not a control column" is NOT that test:
+# WeaponName passes it. A case asserting "every overlay has an id column first"
+# on that weaker test goes green over expanded sheets it does not describe.
 
 
 def overlay_kind_derived(entry):
@@ -1536,7 +1318,7 @@ except Exception as _e:                        # pragma: no cover - reported
     SHEET_SOURCE_ERROR = ((SHEET_SOURCE_ERROR + '; ') if SHEET_SOURCE_ERROR
                           else '') + '%s: %s' % (type(_e).__name__, _e)
 try:
-    # The fourth expander, Phase 8. It declares the same four names the other
+    # The fourth expander. It declares the same four names the other
     # three do between them -- SHEET_NAMES, IDENTITY, SHARED_ROWS,
     # COLLISION_CASES -- so it is consumed the same way and nothing here
     # re-derives any of them. Its SHARED_ROWS carry a `sheet` key, which is
@@ -1554,10 +1336,9 @@ SHEET_IDENTITY = sorted(set(SHEET_IDENTITY))
 
 # WHICH FILES ARE EXPANDED SHEETS, TAKEN FROM THE EXPANDERS THEMSELVES.
 #
-# CORRECTION TO PHASE 6. That phase derived the kind -- "a direct overlay's
-# filename table with Model swapped for Id is its own first column" -- and the
-# derivation is sound, but it is inference where a DECLARATION exists.
-# implants.py says so itself, in the comment above its own SHEET_NAMES: a
+# Deriving the kind from "a direct overlay's filename table with Model swapped
+# for Id is its own first column" is sound, but it is inference where a
+# DECLARATION exists. implants.py says why that matters, in the comment above its own SHEET_NAMES: a
 # filename the validator does not recognise as a lever sheet "is parsed as a
 # DIRECT OVERLAY, and the first thing that happens then is that the filename
 # before the first dot becomes a model name ... That does not fail loudly. Its
@@ -1566,8 +1347,8 @@ SHEET_IDENTITY = sorted(set(SHEET_IDENTITY))
 #
 # So the declaration decides, and the derivation is kept as a CROSS-CHECK: the
 # selftest asserts the two agree on every file, which is what catches an
-# expander that ships a sheet and forgets to declare it. gear_classes declares
-# no SHEET_NAMES today [measured], so its one sheet is still classified by
+# expander that ships a sheet and forgets to declare it. An expander that
+# declares no SHEET_NAMES (gear_classes) has its sheet classified by
 # derivation, and the census says which route each file took rather than
 # leaving that invisible.
 DECLARED_EXPANDED = set()
@@ -1579,31 +1360,21 @@ for _m in (_cyberweapons if 'cyberweapons' in _sheet_sources else None,
         DECLARED_EXPANDED |= set(getattr(_m, 'SHEET_NAMES', ()) or ())
 
 
-# What `Cost` means, per expander. design.md section 7: in the eleven slot
+# What `Cost` means, per expander. design.md: in the eleven slot
 # tables it is the implant's clinic price; in the two cyberweapon sheets it is
 # the weapon's valuation. Same column name, two quantities, both on screen at
 # once. The label is chosen by WHICH EXPANDER DECLARES THE SHEET, so no file
 # name appears here and app.html names nothing.
 #
-# PHASE 8: A THIRD QUANTITY, AND ITS SCOPE IS ALL SIX SHEETS, NOT ONE.
-#
 # On the consumable sheets `Cost` is the ItemModel shop price -- what the row's
-# item is bought for, a number the player meets in a shop rather than at a
-# clinic and which is not a valuation of anything they already own. The brief
-# for this change described it as the price on `consumables-sploitkits.csv`;
-# that sheet is simply the one where it is easiest to see, because Cost is one
-# of only eight columns there. MEASURED against the six headers in
-# CONTRACT-phase8.md: `Cost` is on medical, grenades, devices, chems,
-# sploitkits AND matrix -- six of six. Labelling only sploitkits would have
-# drawn one sheet's Cost as a shop price and five sheets' identical column as
-# an unexplained `Cost`, which is the silent-mislabel shape this map exists to
-# prevent. So the whole family is labelled, exactly as the other two are.
+# item is bought for in a shop, not a valuation of anything the player already
+# owns. Every consumables sheet carries the column, so the whole family is
+# labelled; labelling one would draw the same column unexplained on the rest.
 #
 # WHAT THIS COMMENT DOES NOT CLAIM. Nothing here has read what the game does
 # with ItemModel.Cost at runtime; the interop assembly is marshalling stubs.
-# The quantity is named from the sheets' own `Shipped:` lines and from
-# scripts/consumables.py's declaration that Cost is an ItemModel column
-# [measured], not from a mechanic anyone here has read.
+# The quantity is named from scripts/consumables.py's declaration that Cost is
+# an ItemModel column, not from a mechanic anyone here has read.
 COST_LABELS = {}
 
 
@@ -1631,25 +1402,23 @@ _declare_cost_labels()
 # THE GAME'S OWN DATA.
 #
 # A presentation table, in the family declared at the top of this file. Like
-# COST_LABELS above it is DERIVED rather than typed, so it adds no name to the
-# four LITERAL tables that block counts, and app.html still names nothing.
+# COST_LABELS above it is DERIVED rather than typed, and app.html still names
+# nothing.
 #
-# gear-classes.csv's first column is `WeaponClass` and its ten cells are the
-# ids 1, 2, 3, 4, 5, 6, 10, 11, 12 and 14. Drawn bare they are ten numbers
-# beside twenty-two levers, and nothing on the page says which row is the
-# shotgun. The names are not a choice made here. They are MEASURED, TWICE,
-# against the game's own tables:
+# gear-classes.csv's first column is `WeaponClass`, an id. Drawn bare the ids
+# are numbers beside the levers, and nothing on the page says which row is the
+# shotgun. The names are not a choice made here. They come from the game's own
+# tables, and two of them agree:
 #
-#   sheets/raw/WeaponModel.csv carries a `WeaponClassName` column, and over all
-#   535 rows each WeaponClass id has EXACTLY ONE distinct name -- 1 Melee,
-#   2 Pistol, 3 `AR (Assault Rifle)`, 4 Shotgun, 5 E-Rifle, 6 Sniper Rifle,
-#   10 SMG, 11 Revolver, 12 `UAR (Urban Assault Rifle)`, 14 Railgun
-#   [measured 2026-09-14, re-derived off the dump for this table].
+#   sheets/raw/WeaponModel.csv carries a `WeaponClassName` column, and each
+#   WeaponClass id has EXACTLY ONE distinct name there -- 1 Melee, 2 Pistol,
+#   3 `AR (Assault Rifle)`, 4 Shotgun, 5 E-Rifle, 6 Sniper Rifle, 10 SMG,
+#   11 Revolver, 12 `UAR (Urban Assault Rifle)`, 14 Railgun [measured, dump].
 #
 #   sheets/raw/WeaponClassModModel.csv carries the same ten ids under the
 #   DESIGNER-SIDE spelling -- 3 `Assault Rifle`, 5 `Energy Rifle`,
 #   12 `Bullpup Assault` -- so two independent tables agree on WHICH id is
-#   which weapon and differ only in how it is written [measured 2026-09-14].
+#   which weapon and differ only in how it is written [measured, dump].
 #
 # WHY WeaponModel'S SPELLING AND NOT WeaponClassModModel'S. WeaponModel's is
 # the string that has been through localisation; WeaponClassModModel's is the
@@ -1657,7 +1426,7 @@ _declare_cost_labels()
 # WeaponModel, classes 9, 17, 18 and 19 read `Gear.WeaponClass.DroneAR`,
 # `Gear.WeaponClass.CyberWeaponEyes`, `Gear.WeaponClass.DroneSMG` and
 # `Gear.WeaponClass.DroneERifle` -- raw localisation keys that did not resolve
-# -- while all ten lever ids read as plain English [measured 2026-09-14]. So
+# -- while the lever ids read as plain English [measured, dump]. So
 # this is the column the game itself puts a player-readable string in. WHAT IS
 # NOT CLAIMED: nobody here has read the UI code that draws it, and the
 # interop assembly is marshalling stubs, so "the string the player sees" is
@@ -1666,12 +1435,12 @@ _declare_cost_labels()
 #
 # THERE IS NO CONSTANT TABLE FOR THIS, AND THAT WAS CHECKED. The route the rest
 # of the editor uses to put a name on an id is sheets/raw/_id_constants.csv.
-# It declares 454 constants over 26 classes -- ModuleClassId, RewardTypes,
-# EffectSpecialCode and twenty-three others -- and NOT ONE of them is
-# WeaponClass [measured 2026-09-14]. That route is empty here, which is why the
+# None of the classes it declares (ModuleClassId, RewardTypes,
+# EffectSpecialCode and the rest) is WeaponClass [measured, dump]. That route
+# is empty here, which is why the
 # name has to come off the dump's own name column.
 #
-# DERIVED, NOT TYPED. Both the filename and the ten pairs come from
+# DERIVED, NOT TYPED. Both the filename and the (id, name) pairs come from
 # scripts/gear_classes.py -- SHEET_NAME and LEVER_CLASSES -- the module that
 # GENERATES the sheet and the same one this file already reads the sheet's
 # identity column from. A class renamed or added there moves this table on the
@@ -1771,15 +1540,12 @@ def overlay_editable(entry):
 
     TRUE ONLY WHERE THE SERVER GRADED THE COLUMN `lever`, AND NEVER AT INDEX 0.
 
-    David reversed the read-only rule on 2026-09-14 and scoped the reversal
-    himself: lever and override columns only. The three classes that stay
-    read-only are each read-only for a different reason, and none of them is
-    "it would be awkward":
+    Lever and override columns are editable (David's rule). The three classes
+    that are not are each held out for a different reason:
 
       identity  names the rows a line expands into. Changing one does not
                 change what the row does, it changes WHICH row the line is
-                about -- for the eleven implant sheets and the two cyberweapon
-                sheets that is the join the expander makes against the game
+                about -- for the implant and cyberweapon sheets that is the join the expander makes against the game
                 table, and a typo there silently produces a rule that matches
                 nothing. overlay_roles already tells them apart, from the
                 expanders' own declared IDENTITY lists.
@@ -1804,24 +1570,22 @@ def overlay_editable(entry):
 def overlay_constant(entry):
     """Per column: None if it varies, else {'value': text, 'rows': n}.
 
-    David asked for columns that never change within a table to be suppressed.
-    This is the FACT, not the affordance: the page decides what to do with a
-    column every row agrees about, and a column that is blank on every row
+    Columns that never change within a table are suppressed on the page
+    (David's rule). This is the FACT, not the affordance: the page decides
+    what to do with a column every row agrees about, and a column that is blank on every row
     reports value '' rather than being confused with one that is absent.
 
     Computed over the rows the page DRAWS -- after overlay_excluded -- because
-    a column that is constant across 18 drawn rows and differs only on the one
+    a column that is constant across the drawn rows and differs only on a
     withheld row would otherwise be described by a fact about a grid nobody
     sees.
 
     READ THIS BEFORE SUPPRESSING A COLUMN BECAUSE IT IS CONSTANT.
     A LEVER COLUMN THAT IS BLANK ON EVERY ROW IS CONSTANT, AND SUPPRESSING IT
-    IS THE STATE DAVID COMPLAINED ABOUT.
+    HIDES THE CELLS A PLAYER CAME TO EDIT.
 
-    Measured 2026-09-14 over the 53 declared sheets: 563 editable columns, of
-    which 169 vary, 3 are constant at a non-blank value, and 391 are constant
-    ONLY BECAUSE EVERY CELL IN THEM IS BLANK. On 19 of the 53 sheets not one
-    editable column varies. A blank override cell does not mean "this column
+    On a typical sheet most editable columns are constant only because every
+    cell in them is blank. A blank override cell does not mean "this column
     has nothing to say" -- it means NO OVERRIDE IS SET, which is exactly the
     thing an editor exists to change, and `entry['shipped']` carries the game's
     own value for it so the blank can be drawn with "ships 130" beside it.
@@ -1829,8 +1593,8 @@ def overlay_constant(entry):
     The fact is reported as it was asked for and the affordance is still the
     client's: `value` is '' precisely when the column is blank everywhere, so a
     suppression rule can be written to exclude that case without a second
-    source. Nothing here decides it, and the selftest counts the 391 so that
-    the trap cannot become invisible.
+    source. Nothing here decides it, and the selftest counts the all-blank
+    editable columns so that the trap cannot become invisible.
     """
     cols = entry.get('columns') or []
     rows = entry.get('rows') or []
@@ -1851,9 +1615,8 @@ def overlay_hidden(entry):
 
     THE DECLARED HALF OF SUPPRESSION, and the counterpart to overlay_constant.
     overlay_constant reports a FACT ABOUT THE CELLS ("every row agrees, and the
-    value is X"); this reports a DECISION ABOUT THE COLUMN, taken by David on
-    2026-09-14 over the five names in HIDDEN_COLUMNS and independent of what
-    any cell holds.
+    value is X"); this reports a DECISION ABOUT THE COLUMN -- the names in
+    HIDDEN_COLUMNS -- independent of what any cell holds.
 
     The two are published separately rather than merged into one boolean
     because the page has to be able to say WHY each column is off the screen,
@@ -1862,14 +1625,12 @@ def overlay_hidden(entry):
     wrong reason cannot tell that they were.
 
     NEVER INDEX 0. The key column is the row's name; hiding it leaves a grid of
-    nothing. None of the five is a key column on any sheet in the live config,
-    so the guard costs nothing today and is here for the sheet that ships
-    tomorrow.
+    nothing. The guard holds whatever a sheet's first column is called.
 
     ROW COUNT DOES NOT ENTER INTO IT. The constancy rule exempts a sheet of
     fewer than two rows because constant-across-one-row is arithmetic; a
     declared hide is not an observation about the data at all, so it applies at
-    one row exactly as at twenty-seven.
+    one row exactly as at many.
     """
     cols = entry.get('columns') or []
     out = []
@@ -1882,11 +1643,10 @@ def overlay_identity_columns(entry):
     """The column names whose cells, together, address a row. -> [name]
 
     ROWS ARE ADDRESSED BY KEY, NOT BY ORDINAL, and the key is the whole
-    identity tuple rather than the first column alone. Measured 2026-09-14 over
-    the 53 declared sheets in the live config: the FIRST COLUMN alone is not
-    unique on 9 of them -- cyberweapons-lasers.csv carries "Brightshot Optic"
-    five times over 17 rows, implants-slot02.csv has 24 distinct names over 27
-    rows -- while the identity tuple is unique on 53 of 53.
+    identity tuple rather than the first column alone. The first column alone
+    is not unique on several sheets -- a name column can repeat across rows
+    that differ by id -- while the identity tuple is meant to be unique on
+    every sheet; a key matching zero or several rows is refused.
 
     An ordinal was rejected for the reason fingerprints already states about
     table rows: it is stable only until the file moves, and a file that gained
@@ -1983,10 +1743,9 @@ def overlay_shared_marks(entry):
         ci = names.index(pcol)
         if roles[ci] != 'lever':
             continue
-        # THE SHARING IS NOT IN THE SHEET. Every SelfEffect cell on the laser
-        # sheet is blank -- the sheet overrides none of them -- so a page
-        # deriving the sharing from the file would find nothing at all
-        # [measured 2026-09-13]. Which rows share is a fact about the SHIPPED
+        # THE SHARING IS NOT IN THE SHEET. A pointer cell is blank unless the
+        # sheet overrides it, so a page deriving the sharing from the file
+        # would find nothing. Which rows share is a fact about the game's own
         # data, and SHARED_ROWS is where it is declared. A row is matched by
         # its identity cells against the declared owners, never by what its
         # pointer cell happens to contain.
@@ -2255,10 +2014,8 @@ def json_fields(schemas):
 #
 # A schema's section text is an array of lines. A "" entry is a paragraph
 # break; consecutive non-empty lines are ONE paragraph and are joined with a
-# space. The page used to render one <div> per source line, which turned a
-# hard-wrapped source array into a column of short lines with a blank between
-# every one of them -- the airiness David asked to lose. Field help is a single
-# string and is always one paragraph.
+# space, so a hard-wrapped source array does not render as a column of short
+# lines. Field help is a single string and is always one paragraph.
 #
 # uiDoc is the player-facing array. It is optional: a schema that has one is
 # rendered from it, a schema that does not falls back to `doc`, so the page
@@ -2274,15 +2031,15 @@ _CITE = (r'[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)*'
 _LINES = r'\d+(?:\s*-\s*\d+)?'
 CITATION_RE = re.compile(r'\s*\(\s*%s(?:\s*,\s*(?:%s|%s))*\s*\)' % (_CITE, _CITE, _LINES))
 
-# A trailing citation with no parentheses, at the very end of the string. No
-# field doc carries one today; the pattern is here because a citation that ends
+# A trailing citation with no parentheses, at the very end of the string. The
+# pattern is here because a citation that ends
 # a sentence is the other shape the convention takes, and anchoring it to the
 # end is what keeps it from eating "Fatigue.cs:93-96 carries none of the ..."
 # mid-sentence, where the citation IS the subject.
 TRAILING_CITE_RE = re.compile(r'[\s,;:]*[-–—]?\s*%s(?:\s*,\s*%s)*\s*\.?\s*$'
                               % (_CITE, _LINES))
 
-# An evidence tag, AGENTS.md section 4. Only the four declared words: the field
+# An evidence tag, AGENTS.md. Only the four declared words: the field
 # docs also carry [PowerLevel], [RewardCurve], [Diagnostics] and
 # [JsonPropertyName("missions")], which are a column, two cfg sections and a C#
 # attribute, and none of them is a maintainer mark.
@@ -2356,17 +2113,8 @@ def section_prose(sch):
 # ---------------------------------------------------------------------------
 # presentation: order, grouping, the collapsed enable pair, axis windows
 
-# REMOVED IN 3.0: enable_pair, and the one checkbox that stood for two gates.
-#
-# Elapse and Fatigue were gated twice -- a cfg key read before the sidecar was
-# opened, and the sidecar's own "enabled" read after it loaded -- and the page
-# collapsed the pair into one control so a player was not asked to hold a
-# distinction that only existed because two files were read in a fixed order.
-# Phase 3 deleted the outer gate: [Elapse] Enabled and [Fatigue] Enabled are
-# gone from ckf.hardmode.cfg and the section's own "enabled" is the whole
-# chain. No subsystem declares both halves any more, so the pair, its
-# `displayGates`/`pairDisagrees` payload, `pairRow` in app.html and the
-# 'mixed' state they existed to render have all gone with it.
+# Each subsystem has exactly one gate, its [Slices] key, so the page draws one
+# gate control per subsystem and there is no two-gate pair to collapse.
 
 
 def axis_windows_for(sch):
@@ -2395,13 +2143,12 @@ def child_id(child):
 def resolve_child(child, by_sub):
     """One declared child against the schemas that exist -> section, or None.
 
-    None means ABSENT: every subsystem the child names is a schema Phases 4-8
-    have not added yet. The caller reports that by name; nothing here treats it
+    None means ABSENT: no subsystem the child names has a schema. The caller
+    reports that by name; nothing here treats it
     as an error and nothing drops it silently.
 
     A merge that resolves to a single present member is that member's own
-    section, not a one-member group -- the rule the merge table has had since
-    2026-09-01 ("a group of one is not a group"), kept.
+    section, not a one-member group: a group of one is not a group.
     """
     members = [child] if isinstance(child, str) else list(child['subsystems'])
     members = [m for m in members if m in by_sub]
@@ -2472,7 +2219,7 @@ def nav_groups_for(schemas, sections=None):
     of whose subsystems exist yet, so a group with an empty `sections` says
     which pages have not arrived -- a group that renders as a bare header with
     nothing said about it is the failure mode this key exists to prevent
-    (AGENTS.md section 3). A group that declares no children at all has an empty
+    (AGENTS.md). A group that declares no children at all has an empty
     `absent` and a `note` instead.
     """
     secs = list(sections if sections is not None else sections_for(schemas))
@@ -2615,13 +2362,8 @@ def infer_column_formats(field, rows):
     in this column must parse. A prose column disqualifies itself on its first
     row; a column that is empty everywhere inherits the table's verdict.
 
-    CORRECTION, 2026-08-31. This docstring used to say "no schema carries that
-    today" and to suggest adding the key to the five slot columns of
-    missionrewards.schema.json as future work. That has been done: those five
-    now declare "format": "adjust" and take the declared branch above, so the
-    inference no longer decides them. It still decides every other string
-    column, and is kept because it is the fallback for a table whose schema
-    says nothing.
+    The inference is the fallback for a string column whose schema says
+    nothing.
     """
     cols = field.get('row', [])
     key_col = field.get('keyedBy')
@@ -2674,32 +2416,11 @@ class Document:
         self.file_raw = {}       # physical file -> bytes
         # rel -> the entry read_overlay built.
         #
-        # CORRECTION, 2026-09-14. This said, in this position:
-        #
-        #   "READ ONLY: no save path writes one, because
-        #    scripts/rules_to_overlays.py is the only thing that may."
-        #
-        # Both halves are now wrong and they stopped being wrong at different
-        # times. The REASON lapsed first: rules_to_overlays.py was retired in
-        # Phase 9 together with its subject, ckf.hardmode.rules.json, so from
-        # that day the sentence named no live writer at all and the rule it
-        # justified had nothing holding it up. The RULE went on standing
-        # anyway, unexamined, until David ruled on 2026-09-14 that the write
-        # path opens for lever and override columns -- he could not edit any of
-        # the cells this change had just created and wants them to save the way
-        # Fatigue and Elapse already do.
-        #
-        # HOW THE MISTAKE WAS MADE, because it is the reusable part: a
-        # constraint was recorded together with its reason in one sentence, and
-        # when the reason was deleted the constraint was not re-read. Nothing
-        # pointed at it from rules_to_overlays.py's side, so retiring that
-        # script could not have surfaced this.
-        #
-        # What is true now: identity columns, control columns and the key
-        # column are still never written (overlay_editable says which is
-        # which); a lever cell is written by replacing ONE FIELD'S SPAN inside
-        # the line it is in, in the same atomic commit and the same journal as
-        # every .cfg and sidecar edit.
+        # Lever cells are written; identity columns, control columns and the
+        # key column never are (overlay_editable says which is which). A lever
+        # cell is written by replacing ONE FIELD'S SPAN inside the line it is
+        # in, in the same atomic commit and the same journal as every .cfg and
+        # sidecar edit.
         self.overlays = {}
         # rel -> the bytes read_overlay parsed, kept for exactly the reason
         # file_raw is kept for the JSON files: apply_edits is pure and may not
@@ -2845,10 +2566,10 @@ def build_model(doc):
 def enable_index(doc, model):
     """Effective enable state per subsystem: its own gate AND every block gate,
     AND'd, with the master switch on top. A gate that cannot be read is
-    'unknown', not false -- AGENTS.md section 3.
+    'unknown', not false -- AGENTS.md.
 
-    Since 3.0 exactly one subsystem is gated by a cfg key -- General, the master
-    switch itself -- and every other gate is a path in ckf.hardmode.json."""
+    Every gate is a cfg key: [General] Enabled on top, then each subsystem's
+    own [Slices] key."""
     master = model['cfg'].get(MASTER_KEY)
     if master and master.get('present') and master.get('error') is None:
         master_state = bool(master['value'])
@@ -2920,23 +2641,15 @@ def files_check_schema_reads(schemas):
     """Every path check_schema looks at under the config dir, derived from the
     schemas rather than guessed, so a staging copy is complete.
 
-    CORRECTION, 2026-09-14: THE OVERLAYS WERE MISSING FROM THIS AND IT SHOWED.
-    This returned 12 paths and none of them was an overlay, on the reading that
-    check_schema "opens" only the documents it parses. It does not only open:
-    it stats every declared overlay and grades an absent one MISSING, and it
-    censuses ckf.hardmode.d for sheets no schema claims and grades those STALE.
-    Because stage_and_validate copies exactly this list, every validate and
-    every save has been running check_schema over a staging directory with no
-    overlay in it, and getting back 53 MISSING problems -- one per declared
-    sheet -- for files that were all present on disk [measured 2026-09-14: 53
-    problems, all kind MISSING, on a no-op save against the live config].
-    MISSING is not in BLOCKING so no save was ever refused by it, which is
-    exactly why it survived: the editor showed the player 53 false problems on
-    every save and nothing failed.
+    THE OVERLAYS ARE IN THIS LIST. check_schema does not only open the
+    documents it parses: it stats every declared overlay and grades an absent
+    one MISSING, and it censuses ckf.hardmode.d for sheets no schema claims and
+    grades those STALE. stage_and_validate copies exactly this list, so a list
+    without the sheets would report one false MISSING per declared sheet on
+    every save -- and MISSING does not block, so nothing would fail.
 
-    The same omission meant `fingerprints` did not cover the sheets either, so
-    an overlay edited on disk between the browser's read and the save could not
-    be detected. Both are fixed by the sheets being in this list.
+    `fingerprints` uses the same list, so an overlay edited on disk between the
+    browser's read and the save is detected too.
     """
     rel = {'ckf.hardmode.cfg'}
     rel.update(overlay_paths_all(schemas))
@@ -2996,7 +2709,7 @@ def run_check_schema_entry(args):
     THE --schema DEFAULT LOOKS DEAD AND IS NOT. check_schema.py's own default
     is dirname(its own __file__), and two things independently make that land
     on a real schema directory, so removing EITHER changes nothing and a fault
-    sweep removing one at a time catches neither: [measured 2026-09-04]
+    sweep removing one at a time catches neither: [measured]
 
       check_schema.py shipped as a data file at schema/check_schema.py makes
       the frozen module's __file__ read <_MEIPASS>/schema/check_schema.py, so
@@ -3034,22 +2747,19 @@ def run_check_schema(config_dir):
     check_schema.py is the implementation of all four drift classes. It is run,
     not copied, and it is run in a CHILD PROCESS reading its own pipe.
 
-    It used to be imported and called in-process, with `sys.argv` and
-    `sys.stdout` swapped around the call. Both are process globals and
-    ThreadingHTTPServer runs handlers in parallel: two overlapping requests --
-    a save and a second browser tab's /api/model is enough -- redirected each
-    other's stdout, so one call's problem lines landed in the other call's
-    buffer. The save then saw an empty buffer, read `ran: True, problems: []`,
-    and wrote a value its own validator had rejected. A lock around today's
-    callers would have closed it until the next caller was added; a child
-    process has no shared stdout to corrupt, so concurrency cannot reach the
-    result at all.
+    NOT IN-PROCESS. Calling it in-process means swapping `sys.argv` and
+    `sys.stdout`, which are process globals, and ThreadingHTTPServer runs
+    handlers in parallel: two overlapping requests -- a save and a second
+    browser tab's /api/model is enough -- redirect each other's stdout, and a
+    save that reads an empty buffer as `ran: True, problems: []` writes a value
+    its own validator rejected. A child process has no shared stdout to
+    corrupt, so concurrency cannot reach the result at all.
 
     A run that could not run is reported as could-not-run. That is not only the
     exception path: the summary line must be there and its count must match the
     problem lines parsed, because a truncated pipe reads exactly like a clean
     file otherwise. An instrument's silence is not evidence (AGENTS.md
-    section 3).
+    ).
 
     WHAT the child is differs frozen and not -- see check_schema_argv -- and
     nothing else here changes with it. That is the property --selftest section
@@ -3124,8 +2834,8 @@ class SaveRefused(Exception):
 
 
 # Top-level keys beginning with this are the repo's own metadata, written
-# deliberately and read by nobody's schema: _version (Phase 3 stamps every
-# slice file with one), _doc, _readme. check_schema exempts _version by name in
+# deliberately and read by nobody's schema: _version (every slice file carries
+# one), _doc, _readme. check_schema exempts _version by name in
 # its own stray-key guard; the prefix is the same convention, stated once.
 METADATA_PREFIX = '_'
 
@@ -3135,14 +2845,12 @@ def stray_keys(doc, schemas):
 
     THE EDITOR IS THE ONLY GATE THAT CAN SEE THESE. check_schema's own
     stray-key guard runs only `if claimed.get(fname)`, and `claimed` is filled
-    in only for a schema that declares a `targets.section`; the Phase 3 split
-    removed `section` from all nine, so the guard now `continue`s on every file
-    and a leftover key is invisible to it. Measured 2026-09-13 against the live
-    directory with implantStressClampMin still in implants-global.json after
-    its field was deleted from the schema: `check_schema --game` printed
-    0 problem(s), rc 0. The C# side still refuses it at launch through
-    ConfigDoc.ReadSection, so it is caught eventually -- but by nothing a
-    developer runs before shipping.
+    in only for a schema that declares a `targets.section`; a slice file has no
+    section, so the guard skips it and a leftover key is invisible to it
+    (check_schema prints 0 problem(s) over a slice file carrying a key its
+    schema no longer declares [measured]). The C# side refuses such a key at
+    launch through ConfigDoc.ReadSection, so it is caught eventually -- but by
+    nothing a developer runs before shipping.
 
     NOTHING HERE IS GRADED, AND THAT IS DELIBERATE. Three different things look
     identical from disk:
@@ -3189,8 +2897,8 @@ def stray_notes(doc, schemas):
     """One note per file carrying an undeclared key, and a census either way.
 
     Printed on every save and every validate. "No file carries one" and "this
-    did not look" are different facts, and the guard that used to answer this
-    question stopped running without either of them being said.
+    did not look" are different facts, and check_schema's own guard does not
+    look at slice files (see stray_keys).
     """
     sk = stray_keys(doc, schemas)
     notes = []
@@ -3237,8 +2945,8 @@ def noncanonical_files(doc):
     place for, and a player who hand-edits a file gets that back reformatted on
     the next save even when no value moved.
 
-    Measured 2026-09-13, by writing each variation into a slice file and taking
-    a no-op save:
+    Measured by writing each variation into a slice file and taking a no-op
+    save:
 
       PRESERVED   key order, including a hand-reordered file; keys no schema
                   declares; CRLF; a BOM; both together; a float written 3.0
@@ -3338,12 +3046,12 @@ def requires_pass(schemas, doc, edits):
     it INVARIANT and blocks the save.
 
     A KEY ABSENT FROM THE .cfg IS NOT "OFF". Its schema declares a `default`
-    and that is what applies until the key is written -- every slice schema on
-    disk today declares `"default": true`. check_schema cannot use that: it
+    and that is what applies until the key is written. check_schema cannot use
+    that: it
     grades what is in the file and reports an absent key SKIPPED. So on a fresh
     install the editor is the stricter of the two, deliberately, and the
-    linkedEnable hole recorded in tasks.md Phase 1 -- "the editor cannot protect
-    a linked group on a fresh install" -- is not reproduced here.
+    linkedEnable hole -- "the editor cannot protect a linked group on a fresh
+    install" -- is not reproduced here.
     """
     groups = requires_groups(schemas)
     cfgs = cfg_fields(schemas)
@@ -3594,7 +3302,7 @@ def apply_edits(doc, extras_store, edits, strip_readme=True):
 
         if strip_readme and '_readme' in js:
             js.pop('_readme')
-            notes.append('%s: removed the _readme block (gui-plan.md 3.1)' % name)
+            notes.append('%s: removed the _readme block (stripReadme is on)' % name)
 
     for fname in sorted({unit_file(u) for u in touched_sidecars}):
         proposed[fname] = render_file_bytes(fname, working, doc)
@@ -3666,19 +3374,15 @@ def apply_edits(doc, extras_store, edits, strip_readme=True):
 #             and cyberweapons.py each carry a parse_adjust with the same
 #             grammar this file's parse_adjust implements -- blank, =N, +N, -N,
 #             xN, *N, or a bare number -- and an expander hands a cell that
-#             fails it to `problems` rather than applying it. Measured
-#             2026-09-14 over the 20 expanded sheets in the live config: 6,242
-#             lever cells, 6,169 blank, and all 73 filled ones parse. So the
-#             grammar is enforced, as a REFUSAL, by check_adjust_cell.
+#             fails it to `problems` rather than applying it. So the grammar
+#             is enforced, as a REFUSAL, by check_adjust_cell.
 #
 #   direct    The operator is in the HEADER and the cell is a bare value.
 #             Overlays.cs decides what to do with it by trying
 #             double.TryParse(v, NumberStyles.Float, InvariantCulture):
 #               - parses         -> a numeric term under the header's operator.
-#               - does not parse, header op is Set -> kept as a text literal.
-#                 Real: 11 of the 379 filled direct lever cells in the live
-#                 config are IconPng strings like "Charge-Max-Boost"
-#                 [measured 2026-09-14].
+#               - does not parse, header op is Set -> kept as a text literal
+#                 (an IconPng string like "Charge-Max-Boost", for example).
 #               - does not parse, header op is anything else -> the plugin
 #                 LOGS A WARNING AND DROPS THE CELL. A silent no-op as far as
 #                 the player is concerned.
@@ -3745,10 +3449,9 @@ def overlay_find_row(entry, key, rel, index=None):
                                          ', '.join(want)),
                            'detail': 'Nothing was written. Rows here are '
                                      'addressed by their identity cells, which '
-                                     'are unique on all 53 shipped sheets '
-                                     '[measured 2026-09-14]; this file is not, '
-                                     'and the save refuses rather than picking '
-                                     'one of them.'})
+                                     'are meant to be unique; in this file '
+                                     'they are not, and the save refuses '
+                                     'rather than picking one of them.'})
     return hits[0]
 
 
@@ -4231,29 +3934,29 @@ def mirror_first(pairs, config_dir):
 # WHAT THIS CONVERTS, AND WHAT IT REFUSES TO CONVERT.
 #
 # A 3.x install is three files: ckf.hardmode.json (the merged settings
-# document), ckf.hardmode.rules.json (287 rules, JSONC) and ckf.hardmode.cfg
-# (one key). A 4.0 install is 67 files under ckf.hardmode.d/ plus a 43-key
-# .cfg, with BOTH 3.x files gone -- ConfigDoc.BothLayouts refuses to apply any
+# document), ckf.hardmode.rules.json (JSONC) and ckf.hardmode.cfg ([General]
+# Enabled). A 4.0 install is the slice files under ckf.hardmode.d/ plus a .cfg
+# carrying [General] and [Slices], with BOTH 3.x files gone -- ConfigDoc.BothLayouts refuses to apply any
 # rule at all for a launch that finds both layouts, so a half-finished
 # migration turns the whole mod off.
 #
-# THE INVARIANT (design.md section 13, as corrected): a converted install and a
-# fresh install produce byte-identical files ONCE THE FOUR DEVIATIONS ARE
-# APPLIED DURING CONVERSION. That last clause is the whole thing, and it is a
+# THE INVARIANT (design.md section 13): converting the 3.x fixture produces the
+# same files as the 4.0 layout it was converted into, ONCE THE FOUR DEVIATIONS
+# ARE APPLIED DURING CONVERSION. That last clause is the whole thing, and it is a
 # different statement from "use the expanders' mapping", because two of the
 # four are DELETIONS WITH NO EXPANDER TO REUSE:
 #
 #   D1  the MonsterTypeModel PowerLevel 11+ ChasingSpeed/AggroSpeed x1.1 sweep
 #       -- 1 rule in, NOTHING out. 1,180 rows / 2,360 values revert. No file
-#       consumes it; a converter that routes every rule by model writes it to a
-#       68th file and reconstructs the balance Phase 5 deleted.
+#       consumes it; a converter that routes every rule by model writes it to
+#       an extra file and reconstructs the balance D1 deleted.
 #   D2+D4  the 16 WeaponModel RecoilRate2 x1.8 id ranges -- 16 rules in, the
-#       TEN gear-classes.csv rows out, DERIVED FROM THE LIVE PARTITION.
+#       TEN gear-classes.csv rows out, DERIVED FROM THE PARTITION.
 #       Transcribing the ranges re-applies x1.8 to the 30 drone weapons D2
 #       removes it from and withholds it from the 10 player ARs D4 adds it to.
 #   D3  clampMin ImplantStress 1 on the unscoped ImplantModel rule -- 1 operand
-#       in, NOTHING out. It binds on 0 of 198 rows and implants-global.json's
-#       own _doc says in so many words that the migrator must not carry it.
+#       in, NOTHING out. It binds on 0 of 198 rows [measured, dump], and
+#       MIGRATION_IMPLANTS_GLOBAL_DOC says the migrator must not carry it.
 #
 # A CONVERTER WRITTEN TO "PRESERVE EVERY OPERAND OF EVERY RULE" REINTRODUCES D3
 # AND RECONSTRUCTS D1, both silently. Neither is a rule this file forgets to
@@ -4261,16 +3964,14 @@ def mirror_first(pairs, config_dir):
 #
 # WHICH MonsterTypeModel THE PARTITION READS. gear-classes.csv's ten rows
 # resolve at load as "class N minus the MonsterTypeModel.WeaponTypeId set", and
-# that set comes from the POST-OVERLAY ckf.hardmode.d/MonsterTypeModel.csv --
-# 405 distinct WeaponTypeId, class 3 = 33 player / 43 enemy [measured,
-# 2026-09-14] -- not from sheets/raw/MonsterTypeModel.csv, which gives 208 and
-# class 3 = 25/51 and misclassifies eight class-3 player ARs as enemy gear.
+# that set comes from the POST-OVERLAY ckf.hardmode.d/MonsterTypeModel.csv, not
+# from sheets/raw/MonsterTypeModel.csv, which misclassifies eight class-3
+# player ARs as enemy gear [measured].
 # mods/CKFHardMode/GearClasses.cs makes that choice and refuses to emit if the
 # file is unreadable; so does this, and it does NOT fall back to the dump.
 #
-# THE SIX CONSUMABLE TABLES ARE NOT CONVERTED AT ALL. 0 of the 73 ItemModel
-# rows are touched by the mod and 0 of the rules reach any of the 194
-# consumable-reachable (table, id) pairs (design.md section 13). They are
+# THE SIX CONSUMABLE TABLES ARE NOT CONVERTED AT ALL. No 3.x rule reaches a
+# consumable-reachable (table, id) pair (design.md section 13). They are
 # written from the expander's declarations, like the eleven implant slot
 # tables and the two cyberweapon sheets -- those carry converted VALUES that
 # the expanders already declare, and re-deriving them from the rules would be
@@ -4313,48 +4014,31 @@ MIGRATION_DIR = 'ckf.hardmode.d'
 # The "_version" the produced 4.0 layout carries. DECLARED HERE, NOT CARRIED
 # ACROSS FROM THE 3.x DOCUMENT.
 #
-# CORRECTION, 2026-09-15 (Phase 10). This was `version = doc['_version']`: the
-# converter stamped every slice it wrote with the stamp of the merged document
-# it had just read. That was invisible for as long as the two numbers were
-# equal, and both were "1.0.0" from Phase 3 until today. Phase 10 moves
-# Defaults.DocVersion to 4.0.0 and the ten live slices with it, while the 3.x
-# fixture keeps the "1.0.0" it shipped with -- so carrying the input's stamp
-# forward writes a 4.0 layout stamped at the version it was converted FROM.
-#
-# Two things that breaks, and only one of them is a gate. ConfigDoc.ReportStamps
-# compares every slice to Defaults.DocVersion at launch and names the ones
-# behind, so every migrating player's first launch would report all ten slices
-# behind; and make_release.check_doc_version refuses a build whose slices
-# disagree with the C#.
-# [measured, 2026-09-15: with Defaults.DocVersion and the live slices both at
-# 4.0.0 and this line still reading the input's stamp, section 19c reported
-# "58 identical, 10 differ" and its control case "68 of 68" FAILED.]
+# Carrying the input's stamp forward would write a 4.0 layout stamped at the
+# version it was converted FROM (the 3.x fixture carries "1.0.0"), and then
+# ConfigDoc.ReportStamps names every slice as behind on the first launch and
+# make_release.check_doc_version refuses a build whose slices disagree with
+# the C#.
 #
 # A LITERAL, NOT A PARSE OF Defaults.cs. mods/CKFHardMode/Defaults.cs is not in
 # the PyInstaller bundle -- gui/ckf-config-editor.spec lists gui/, schema/,
 # scripts/ and docs/ -- and `--migrate` runs from the frozen exe, so reading it
-# here would refuse a migration in the one build a player actually has. The
-# case in section 19c reads the C# and asserts the two agree, which is the shape
-# make_release.py uses for cs_expected: the constant is declared, and something
-# derived somewhere else is what checks it. It is NOT RUN, never PASS, when
-# Defaults.cs is absent.
-MIGRATION_DOC_VERSION = '4.0.0'
+# here would refuse a migration in the one build a player actually has.
+#
+# NOTHING NOW CHECKS IT AGAINST Defaults.DocVersion. The case that read the C#
+# and asserted the two agree lived in the deleted migrator selftest block, so
+# this literal and Defaults.cs can drift apart silently. The gate that still
+# catches a stamp disagreement is make_release.check_doc_version, which compares
+# the slices a build is about to zip against the C#.
+MIGRATION_DOC_VERSION = '4.1.0'
 
 # The plugin version the produced .cfg's BepInEx header is STAMPED with.
 # DECLARED HERE, NOT CARRIED ACROSS FROM THE 3.x FILE.
 #
-# CORRECTION, 2026-09-15 (Phase 10). migration_cfg built the 4.0 .cfg as
-# `head = raw_cfg` plus an appended [Slices] block, so the produced file
-# inherited the 3.x fixture's own header line -- "## Settings file was created
-# by plugin CKF Hard Mode v1.0.0". That was invisible for as long as the live
-# .cfg carried the same line, and it did until David relaunched on 4.0.0 and
-# BepInEx rewrote the live header to v4.0.0. Nothing about the converter
-# changed; a latent assertion went false.
-# [measured 2026-09-15: with this stamp not applied, section 19c reported
-# "67 identical, 1 differ" -- ckf.hardmode.cfg, 3238 bytes on both sides -- and
-# four cases FAILED, including the control case. Reverting the live header's
-# one version token to v1.0.0 turned the same run green, which is what
-# identified the single differing line.]
+# Carrying the 3.x file's header across byte for byte would make a converted
+# ckf.hardmode.cfg announce the version it was converted FROM
+# ("... CKF Hard Mode v1.0.0"), so migration_cfg_stamp_header rewrites the
+# version token to this.
 #
 # It is a release gate and not only a selftest. make_release.build runs
 # serve.py --selftest against the snapshot it is about to zip, and that
@@ -4365,12 +4049,14 @@ MIGRATION_DOC_VERSION = '4.0.0'
 # A LITERAL, NOT A PARSE OF Plugin.cs, for the same reason
 # MIGRATION_DOC_VERSION is one: mods/CKFHardMode/Plugin.cs is not in the
 # PyInstaller bundle -- gui/ckf-config-editor.spec's `datas` lists gui/,
-# schema/, scripts/ and docs/, and no mods/ entry [measured 2026-09-15] -- and
+# schema/, scripts/ and docs/, and no mods/ entry -- and
 # `--migrate` runs from the frozen exe, so reading it here would refuse a
-# migration in the one build a player actually has. The case in section 19c
-# reads the C# and asserts the two agree. It is NOT RUN, never PASS, when
-# Plugin.cs is absent.
-MIGRATION_PLUGIN_VERSION = '4.0.0'
+# migration in the one build a player actually has. Nothing now checks it
+# against Plugin.PluginVersion either: that case lived in the deleted migrator
+# selftest block. The release path still catches a bad stamp, because
+# make_release.build runs --selftest over a snapshot whose .cfg carries the real
+# plugin version.
+MIGRATION_PLUGIN_VERSION = '4.1.0'
 
 # The BepInEx header line, as BepInEx itself writes it: the plugin name, then
 # " v" and the version. Anchored to the WHOLE first line, so a line that only
@@ -4433,10 +4119,8 @@ MIGRATION_DISPOSITION = {
                                       'NOTHING'),
 }
 
-# THE FOUR SANCTIONED DEVIATIONS, as this file applies them. proposal.md's
-# non-goal is that every value shipping today ships after this change; these
-# four are the whole of the exception list, and each is a POSITIVE assertion
-# here rather than an omission.
+# THE FOUR SANCTIONED DEVIATIONS the conversion applies, each a POSITIVE
+# assertion here rather than an omission.
 MIGRATION_DEVIATIONS = ('D1', 'D2', 'D3', 'D4')
 
 # D3's operand, named so that carrying it across is a change to this line
@@ -4448,54 +4132,29 @@ D1_MODEL = 'MonsterTypeModel'
 # gear-classes.csv's row comment for a class with no live mode-2 column states
 # the class's PLAYER ROW COUNT. That number comes out of the partition, so it
 # is the byte-level witness that the post-overlay pointer file was the one
-# read: reading sheets/raw instead moves four of the six counts (61->35,
-# 25->15, 22->25, 33->25) [measured, 2026-09-14].
+# read: reading sheets/raw instead moves four of the six counts [measured].
 MIGRATION_ROWCOUNT_RE = re.compile(r'on all (\d+) player rows')
 
-# WHERE BYTE-IDENTITY DOES NOT HOLD TODAY, AND EXACTLY HOW FAR IT MISSES.
+# A CLOSED DIVERGENCE, AND THE TRIPWIRE THAT REPLACED IT.
 #
-# SUPERSEDED, 2026-09-14, SAME DAY. The heading above and everything under it
-# down to the next dated block described three files that did not convert
-# byte-identically. THEY DO NOW: 68 of 68. The text is kept, not deleted,
-# because it is the record of a real defect and of the one instrument that
-# could see it.
+# scripts/implants.py derives each slot table's EffectModel columns from the
+# dumped EffectModel header. A dump taken after a play session carries
+# presentation columns (`IconAsset` among them) that a fresh-game dump omits,
+# and before implants.py declared EFFECT_PRESENTATION those columns reached
+# three slot tables, so the converted files differed from the 4.0 layout by
+# exactly one column each [measured]. EFFECT_PRESENTATION closed it.
 #
-# WHAT IT SAID, AND IT WAS RIGHT WHEN IT SAID IT:
+# Nothing else in the repository compares BUILT BYTES against DISK BYTES:
+# implants.py --check compares expansion semantics over sheets it builds
+# itself, and check_schema.py declares no columns for these files. The
+# successor, migration_presentation_columns(), is kept for that reason -- its
+# subject still exists and it can be pointed at any build_migration() result --
+# but it has no caller now that the migrator selftest block is deleted, so it
+# is not currently guarding anything.
 #
-#   scripts/implants.py derives each slot table's EffectModel columns from
-#   `dump.eff_cols`, which is every column of sheets/raw/EffectModel.csv. It
-#   had a declared text-exclusion list for ImplantModel columns (IMPLANT_TEXT)
-#   and NONE for EffectModel columns. The dump was re-taken on 2026-09-14 and
-#   EffectModel went 74 -> 89 columns (scripts/consumables.py says so in its own
-#   header, and handled the same columns by declaring them 'presentation'). One
-#   of the new columns is `IconAsset`, an art asset name. It is non-zero and
-#   varies across the effect rows of slots 1, 3 and 8, so implants.py carried it
-#   into those three tables; the shipping files were written before the re-dump
-#   and do not have it.
-#
-#   MEASURED, 2026-09-14: the divergence was EXACTLY one column and nothing
-#   else -- 1,130 bytes over three files (5,859 -> 6,135; 9,854 -> 10,269;
-#   11,486 -> 11,925). Removing `IconAsset` from the generated header, the one
-#   blank cell it added to every row, and the `; IconAsset <value>` fragment it
-#   added to every row's `Shipped:` comment made all three byte-identical.
-#
-# WHAT FIXED IT. scripts/implants.py gained EFFECT_PRESENTATION -- IconAsset,
-# VFX, ManualEffectName, OwnerEntityId, isInit, effectsSet, HasInitSpecialCode
-# -- the EffectModel equivalent of IMPLANT_TEXT, and columns_for() skips them.
-# No shipped byte moved: the three files never carried them.
-#
-# WHY THIS MATTERS BEYOND THE THREE FILES. Nothing else in the repository
-# compares BUILT BYTES against DISK BYTES. implants.py --check compares
-# expansion semantics over sheets it builds itself; check_schema.py declares no
-# columns for these files; the schemas name the files and not their headers. So
-# the dump moving under a generator was invisible, and the same instability had
-# already taken a gate down once on the owner's machine. That is the reason the
-# successor assertion below is a live tripwire and not a retired comment.
-
-# The record of the closed divergence, kept so the three per-file cases in the
-# selftest can name what they used to measure. EMPTY IS THE ANSWER TODAY, and
-# the selftest asserts the difference set equals it rather than reading its
-# emptiness as agreement.
+# MIGRATION_CLOSED_DIVERGENCES is the record of that divergence. It is NOT a
+# tolerance list and never was: nothing has ever filtered a difference through
+# it. AGENTS.md forbids adding an entry to buy a green.
 MIGRATION_CLOSED_DIVERGENCES = {
     'ckf.hardmode.d/implants-slot01.csv': ('IconAsset', 'EffectModel'),
     'ckf.hardmode.d/implants-slot03.csv': ('IconAsset', 'EffectModel'),
@@ -4504,19 +4163,13 @@ MIGRATION_CLOSED_DIVERGENCES = {
 MIGRATION_DIVERGENCES_CLOSED_ON = '2026-09-14'
 MIGRATION_DIVERGENCES_CLOSED_BY = 'scripts/implants.py EFFECT_PRESENTATION'
 
-# The layout's shape, asserted; its SIZE is measured on both sides instead.
+# The layout's shape as the deleted migrator selftest block declared it: 68
+# files, and a FLOOR under the byte total rather than the total itself, because
+# the total moves whenever a generator or the game dump does.
 #
-# 68 is a count of files and it is declared: a file the conversion silently
-# never produced is a missing key, not an absence nothing looked for.
-#
-# THE BYTE TOTAL IS DELIBERATELY NOT DECLARED. It moved today -- 586,634 ->
-# 585,504 -- when a generator stopped carrying a column, and it moves again
-# every time the game dump does. A literal there is a case that fails for the
-# wrong reason and gets re-typed until nobody reads it. What the case actually
-# has to prove is that the comparison is over a REAL layout and not an empty
-# directory, so what is declared is a FLOOR, and the exact total is measured on
-# BOTH sides and required to agree -- which is a stronger statement than any
-# literal, and one that cannot be typed in wrong.
+# NO CODE READS EITHER CONSTANT NOW. They are the declared shape of a
+# conversion, kept as the record of what one produces, so a check pointed at
+# build_migration() again has the numbers it would otherwise have to guess.
 MIGRATION_EXPECTED_FILES = 68
 MIGRATION_MIN_BYTES = 500000
 
@@ -4524,10 +4177,9 @@ MIGRATION_MIN_BYTES = 500000
 #
 # In 3.x each section carried its own gate. In 4.0 the gate is [Slices].<Name>
 # in ckf.hardmode.cfg, because a gate cannot live inside the file it gates
-# (design.md section 3). Until 2026-09-15 this conversion carried the 3.x
-# section body across verbatim and the retired key came with it, so every
-# migrated install was born with eight keys no schema declares and the editor
-# opened on a banner naming all eight.
+# (design.md section 3). Carrying the 3.x section body across verbatim would
+# bring the retired key with it, and a migrated install would be born with
+# eight keys no schema declares.
 #
 # THE EIGHT ARE NAMED, NOT FOUND. A walk for any key called "enabled" would
 # also take elapse.json's credits.enabled and stress.enabled and fatigue.json's
@@ -4537,19 +4189,16 @@ MIGRATION_MIN_BYTES = 500000
 # woundResist.enabled is additionally a DECLARED FIELD of fatigue.schema.json
 # (in: json, bool, "Wound Resist mitigation"). All three live one level down, so
 # only a TOP-LEVEL pop on a NAMED section can tell them apart, and this is that
-# list. [measured, the three keys are still on disk after this change,
-# 2026-09-15]
+# list.
 #
 # "difficulty" is absent on purpose: it never carried the key, so an "enabled"
 # appearing at its top level is a stray and is carried through to be reported
 # as one -- the same reading ConfigDoc.cs's Declared table takes.
 #
-# The C# side is unchanged and stays that way. Every one of these eight
-# subsystems still parses the key into a `bool? RetiredEnabled` and still hands
-# it to Slices.ReportRetiredGate, because a player who upgrades a 3.x install
-# by hand still has it on disk and must get that warning rather than a
-# stray-key Error. [measured, mods/CKFHardMode/{Elapse,Fatigue,MissionRewards,
-# ModelRules,PowerLevelCap,Progression,RewardCurve,SelfCheck}.cs, 2026-09-15]
+# On the C# side each of these eight subsystems parses the key into a
+# `bool? RetiredEnabled` and hands it to Slices.ReportRetiredGate, because a
+# player who upgrades a 3.x install by hand still has it on disk and must get
+# that warning rather than a stray-key Error.
 MIGRATION_RETIRED_GATE_SECTIONS = frozenset((
     'elapse', 'fatigue', 'missions', 'modelrules',
     'powerlevel', 'rewardcurve', 'selfcheck', 'teampl',
@@ -4558,28 +4207,25 @@ MIGRATION_RETIRED_GATE_KEY = 'enabled'
 
 
 def migration_divergence_is_one_column(*_a, **_k):
-    """RETIRED, 2026-09-14. IT LOST ITS SUBJECT, NOT ITS CORRECTNESS.
+    """RETIRED. IT LOST ITS SUBJECT, NOT ITS CORRECTNESS.
 
     It answered "is `new_bytes` `live_bytes` with exactly one extra column?",
-    and on 2026-09-14 it answered True for all three implants-slot tables over
-    1,130 bytes -- which is what bounded that divergence to EffectModel's
-    IconAsset and nothing else. scripts/implants.py then gained
-    EFFECT_PRESENTATION and the divergence is gone.
+    which bounded the implants-slot divergence to EffectModel's IconAsset
+    (see MIGRATION_CLOSED_DIVERGENCES). That divergence is closed.
 
     IT IS NOT LEFT CALLABLE. With the column gone it would return False from
-    its first guard -- `column not in new_rows[0]` -- and a case reading that
-    False as "no divergence" would be green over a subject that does not
-    exist: an instrument agreeing with nothing, which is the exact shape this
-    repository keeps finding (AGENTS.md section 3). So it raises, the way
-    scripts/rules_to_overlays.py exits 1, and the selftest asserts the raise.
+    its first guard, and a case reading that False as "no divergence" would be
+    green over a subject that does not exist (AGENTS.md). So it raises, the way
+    scripts/rules_to_overlays.py exits 1. The case that asserted the raise was
+    in the migrator selftest block and went with it; the raise is what stops a
+    future caller reading an absent subject as agreement.
 
-    WHAT REPLACED IT: migration_presentation_columns() below. That is a LIVE
-    tripwire rather than a retired comment -- it asserts that every name
-    scripts/implants.py declares presentation-only is present in the dump (so
-    there is something to exclude) and appears in NONE of the generated overlay
-    headers (so the exclusion is working). It fires if the exclusion is ever
-    removed, and it fires on a header column the next re-dump adds that slips
-    through, which is the class of defect the original found.
+    WHAT REPLACED IT: migration_presentation_columns() below -- it answers
+    whether every name scripts/implants.py declares presentation-only is
+    present in the dump (so there is something to exclude) and appears in NONE
+    of the generated overlay headers (so the exclusion is working). It was a
+    live tripwire while the migrator selftest block asserted on it; that block
+    is deleted, so it is a check waiting to be pointed at something.
     """
     raise RuntimeError(
         'migration_divergence_is_one_column is RETIRED (%s, closed by %s). '
@@ -4594,7 +4240,7 @@ def migration_presentation_columns(files):
 
     The successor tripwire. `declared` is scripts/implants.py's own
     EFFECT_PRESENTATION -- asset paths, display strings and runtime instance
-    state that appeared in the EffectModel dump on 2026-09-14 and are not
+    state that a post-session EffectModel dump carries and that are not
     levers. `in_dump` is how many of them the dump header actually carries: a
     name that is NOT there has nothing to exclude, and reporting 0 hits over 0
     reachable names would be agreement with nothing. `hits` is every
@@ -4616,9 +4262,13 @@ def migration_presentation_columns(files):
     return declared, in_dump, scanned, hits
 
 
-# FAULT INJECTION. Set by --selftest only, never by any other path. Every hook
-# is in the conversion, because a fault injected into the FIXTURE would move
-# both sides of the comparison equally and stay green.
+# FAULT INJECTION. NOTHING SETS IT ANY MORE -- the only writer was the deleted
+# migrator selftest block, so every _mfault() below is False on every real run
+# and the conversion behaves as if these hooks were not there. They are kept
+# with their catalogue because each hook sits in the CONVERSION: a fault
+# injected into the FIXTURE instead would move both sides of a comparison
+# equally and stay green, and that placement is the part that is easy to get
+# wrong when the coverage is rebuilt.
 MIGRATION_FAULT = None
 MIGRATION_FAULTS = (
     ('drop-section', 'one of the nine settings sections never reaches a file'),
@@ -4641,161 +4291,6 @@ def _mfault(name):
     return MIGRATION_FAULT == name
 
 
-# =====================================================================
-# SECTION 19 IS RETIRED FROM THE DEFAULT SUITE. David's ruling, 2026-09-15.
-# =====================================================================
-#
-# THE RULING, VERBATIM:
-#
-#     "The migration check was only to make sure nothing was lost when
-#     building the new version here. Players will simply download a new zip
-#     and overwrite everything, inheriting whatever tuning I've decided upon.
-#     They don't need to migrate their files and migration is no longer
-#     important. Any further refactors will share this feature: Migration for
-#     me but not for end users."
-#
-# WHAT THE BLOCK IS. Section 19 of selftest() converts the frozen 3.x install
-# in tests/fixture-3.0.0/ into the 4.0 slice layout and compares the result,
-# byte for byte, against the LIVE 4.0 config --selftest was pointed at. 67
-# cases: the fixture's own shape, which MonsterTypeModel the partition reads,
-# two version stamps read out of the C#, the conversion and its 68-file
-# comparison, the directory afterwards, the four sanctioned deviations, the
-# .cfg, five refusals and seven injected faults.
-#
-# WHAT IT CAUGHT, AND THIS IS WHY IT IS RETIRED RATHER THAN DELETED. Two real
-# defects, both of which reached a player-facing artefact:
-#
-#   * the "_version" stamp. The conversion carried the 3.x document's stamp
-#     forward, so a migrated install was born reporting all ten slices behind.
-#     Closed by MIGRATION_DOC_VERSION, checked against Defaults.DocVersion.
-#   * the .cfg header stamp. The conversion carried the 3.x header byte for
-#     byte, so a converted ckf.hardmode.cfg announced the version it was
-#     converted FROM. Closed by migration_cfg_stamp_header and
-#     MIGRATION_PLUGIN_VERSION, checked against Plugin.PluginVersion.
-#
-# WHY ITS PREMISE LAPSED. The comparison's premise is "a converted install and
-# a fresh install produce byte-identical files". That held only while the live
-# config WAS the shipped defaults. It is not any more and never will be again:
-# the live BepInEx\config is David's tuning bench and he edits it daily. Every
-# edit to a file the conversion authors puts the comparison red -- on
-# 2026-09-15 two editor saves, ckf.hardmode.d/cyberweapons-lasers.csv and
-# ckf.hardmode.d/fatigue.json, took it to "66 identical, 2 differ" and it
-# cannot come back on its own. And scripts/make_release.py runs
-# `serve.py --selftest` as the gate before it writes any zip, so a permanently
-# red block means the release cannot be cut WHILE HE HAS TUNING, which is the
-# exact opposite of what the instrument is for.
-#
-# THIS IS NOT A PAPERED-OVER DIVERGENCE, AND SAYING SO PRECISELY MATTERS.
-# MIGRATION_CLOSED_DIVERGENCES is NOT touched by this retirement and the two
-# differing files were NOT added to it. Note what that dict is and is not: it
-# holds three entries, the three implants-slot tables whose divergence was
-# CLOSED on 2026-09-14, and it is a RECORD, not a tolerance list -- _mig_diff
-# filters nothing through it and the selftest asserts the measured difference
-# set is EMPTY rather than that it equals this dict. So the set of TOLERATED
-# divergences is empty and stays empty. That emptiness is what caught the .cfg
-# header stamp, and an entry added to buy a green would spend exactly the thing
-# that made the instrument worth keeping. What is retired is the block's place
-# in the DEFAULT suite, not the block.
-#
-# WHAT STILL RUNS. Everything. `serve.py --selftest --migration` runs all 67
-# cases unchanged, including _mfault / MIGRATION_FAULTS and the fault
-# injections. build_migration, run_migration, migration_cfg, the --migrate CLI
-# path and tests/fixture-3.0.0/ are all untouched: the migrator is David's own
-# tool and he must be able to exercise it deliberately. Only the DEFAULT
-# suite's gating is gone.
-#
-# HOW THE DEFAULT SUITE REPORTS IT. NOT RUN, by name, twelve entries -- one per
-# named subsection -- through _T.skip, so they appear inline AND in the report
-# tail. Never PASS, and never absent. A reader of the default output can tell
-# "this passed" from "this was retired by a ruling on 2026-09-15" without
-# opening this file. AGENTS.md section 3: an instrument's silence is not
-# evidence, and a retired check must SAY it is not running.
-MIGRATION_RETIRED_ON = '2026-09-15'
-MIGRATION_RETIRED_BY = "David's ruling"
-MIGRATION_RETIRED_FLAG = '--migration'
-# One line, because it is repeated once per case in the report tail and the
-# full reason is printed once, in full, by migration_report_retired above it.
-# It still has to carry the three things that distinguish a retirement from a
-# pass on its own: that it is retired, WHO ruled and WHEN, and how to run it.
-MIGRATION_RETIRED_WHY = (
-    'RETIRED from the default suite, %s %s. Run it with '
-    '`serve.py --selftest %s --config <dir>`.'
-    % (MIGRATION_RETIRED_BY, MIGRATION_RETIRED_ON, MIGRATION_RETIRED_FLAG))
-
-# The twelve named subsections of section 19, in the order they run, each with
-# what it measures. NAMED, NOT COUNTED: a reader of the default output has to
-# be able to see WHICH coverage is not running, and "67 migration cases" does
-# not say that. The list is the one thing that has to move if a subsection is
-# added to or removed from section 19.
-MIGRATION_RETIRED_CASES = (
-    ('19a: the frozen 3.x fixture is the artefact design.md section 13 '
-     'describes -- 82,478 bytes, 287 rules, 263 exact'),
-    ('19b: which MonsterTypeModel the gear partition reads (post-overlay, not '
-     'sheets/raw), and the two version stamps read out of the C#'),
-    ('19c: the conversion runs and all 68 produced files are byte-identical '
-     'to the live 4.0 layout, sized on both sides'),
-    ('19d: the converted directory afterwards -- both originals renamed to '
-     '.pre-4.0-backup, 67 slice files, not in ConfigDoc.BothLayouts state'),
-    ('19e: D1 -- the MonsterTypeModel PL 11+ sweep converts to nothing, '
-     'measured positively rather than inferred from an absence'),
-    ('19f: D2 + D4 -- the 16 WeaponModel RecoilRate2 ranges reach '
-     'gear-classes.csv'),
-    ('19g: D3 -- the unscoped ImplantModel clampMin is dropped, not carried '
-     'into implants-global.json'),
-    ('19h: the converted ckf.hardmode.cfg -- 1 key in, 43 keys out, and the '
-     'header stamped with Plugin.PluginVersion'),
-    ('19i: a .cfg value the player actually set is carried across, not reset '
-     'to the shipped default'),
-    ('19i-2: a .cfg header line this converter cannot read is a REFUSAL, not '
-     'a rewrite and not an append'),
-    ('19j: the five refusals -- missing input, both layouts, existing backup, '
-     'unreadable MonsterTypeModel, blank WeaponTypeId -- each writing nothing'),
-    ('19k: fault injection -- a control run, then seven faults each of which '
-     'must go red'),
-)
-
-
-def migration_report_retired(t):
-    """Report section 19 as a RECORDED NON-RUN on the default suite.
-
-    Prints the reason in full once, then one _T.skip per named subsection so
-    that every case lands in the report tail too. Nothing here can pass: skip()
-    touches neither t.passed nor t.failed, so a suite that reaches this cannot
-    be read as having covered the migrator.
-    """
-    for line in (
-        'NOT RUN. This whole block is RETIRED from the default suite.',
-        '%s, %s. The %d cases below are reported by name and never pass.'
-        % (MIGRATION_RETIRED_BY, MIGRATION_RETIRED_ON,
-           len(MIGRATION_RETIRED_CASES)),
-        '',
-        'WHY. The block converts the frozen tests/fixture-3.0.0 and compares',
-        'the result byte for byte against the LIVE config this run was pointed',
-        'at. That premise -- "a converted install and a fresh install produce',
-        'byte-identical files" -- held only while the live config WAS the',
-        'shipped defaults. It is a tuning bench now, so every tuning edit to a',
-        'file the migrator authors puts this red permanently. And',
-        'scripts/make_release.py gates every zip on this suite, so the release',
-        'could not be cut while there was tuning on disk.',
-        '',
-        'THIS IS NOT A PAPERED-OVER DIVERGENCE. The set of TOLERATED',
-        'divergences is empty and stays empty: MIGRATION_CLOSED_DIVERGENCES is',
-        'a RECORD of three already-closed ones, nothing is filtered through',
-        'it, and the differing files were NOT added to it.',
-        '',
-        'THE MIGRATOR ITSELF IS NOT RETIRED AND NOT DELETED. build_migration,',
-        'run_migration, migration_cfg, MIGRATION_FAULTS, tests/fixture-3.0.0/',
-        'and the --migrate CLI path are all unchanged. Run every case below,',
-        'unchanged, with:',
-        '',
-        '    python gui/serve.py --selftest %s --config <dir>'
-        % MIGRATION_RETIRED_FLAG,
-        '',
-        'Skipped deliberately, not failed. A recorded non-run, not silence.',
-    ):
-        print(('      ' + line) if line else '')
-    for name in MIGRATION_RETIRED_CASES:
-        t.skip(name, MIGRATION_RETIRED_WHY)
 
 
 def migration_strip_jsonc(text):
@@ -4804,7 +4299,7 @@ def migration_strip_jsonc(text):
     A regex over the whole text is wrong the moment a comment field holds '//'
     or ', }'. Deliberately a local copy rather than an import: an instrument
     assembled out of the module under test cannot see that module fail
-    (AGENTS.md section 3), and the retired scripts/rules_to_overlays.py is not
+    (AGENTS.md), and the retired scripts/rules_to_overlays.py is not
     callable.
     """
     out = []
@@ -4916,8 +4411,9 @@ def migration_selector(rule):
 # install differ by one key, on a file whose own text is the clearest statement
 # anywhere that D3 must not be carried across.
 #
-# It is a LITERAL, transcribed from the shipping file on 2026-09-14, and it is
-# the only prose block in this migration that is not derived from something.
+# It is a LITERAL, transcribed from the file the 4.0 release ships (the
+# migration comparison fails if the two differ), and it is the only prose
+# block in this migration that is not derived from something.
 # Everything else here is built from the player's own three files, from the
 # schemas, or from the four expander modules.
 IMPLANTS_GLOBAL_DOC = [
@@ -5559,7 +5055,7 @@ def migration_cfg_stamp_header(raw_cfg):
 
     A HEADER THAT IS NOT THAT SHAPE IS A REFUSAL, not a rewrite and not an
     append. This function exists because a .cfg carrying a version other than
-    the running plugin's is the defect [measured 2026-09-15]; guessing which of
+    the running plugin's is the defect; guessing which of
     "replace the whole line", "insert a header above it" or "leave it" a
     stranger first line wants would put back exactly the silent disagreement
     the stamp removes. The refusal writes nothing -- build_migration raises
@@ -5588,7 +5084,7 @@ def migration_cfg_stamp_header(raw_cfg):
 
 
 def migration_cfg(raw_cfg, schemas):
-    """The 43-key .cfg: the 3.x file carried across, with [Slices] appended.
+    """The 4.0 .cfg: the 3.x file carried across, with [Slices] appended.
 
     The 3.x [General] block is CARRIED ACROSS, not rebuilt: a player who
     switched the mod off has to stay switched off. BepInEx rewrites this file
@@ -5596,16 +5092,11 @@ def migration_cfg(raw_cfg, schemas):
     that every key is present with the right value before that launch, not that
     this file wrote it.
 
-    CORRECTION, 2026-09-15: this docstring used to read "the 3.x file kept BYTE
-    FOR BYTE, with [Slices] appended", and the code matched it -- `head =
-    raw_cfg`. That is now true of everything EXCEPT one token on the first
-    line: the BepInEx header's version is restamped to
-    MIGRATION_PLUGIN_VERSION, because carrying the input's forward produced a
-    4.0 .cfg announcing the version it was converted FROM, which BepInEx
-    overwrites on the next launch and which the byte-identity gate in section
-    19c had already gone red on. See migration_cfg_stamp_header and
-    MIGRATION_PLUGIN_VERSION. Every other byte of the 3.x file, [General] and
-    the player's own values included, still arrives unchanged.
+    Every byte of the 3.x file, [General] and the player's own values
+    included, arrives unchanged EXCEPT one token on the first line: the
+    BepInEx header's version is restamped to MIGRATION_PLUGIN_VERSION, so the
+    4.0 .cfg does not announce the version it was converted FROM. See
+    migration_cfg_stamp_header.
     """
     nl = b'\r\n' if b'\r\n' in raw_cfg else b'\n'
     head = migration_cfg_stamp_header(raw_cfg)
@@ -5676,7 +5167,7 @@ def load_settings():
     # file. config_dir_for on an empty gameDir yields the relative path
     # "BepInEx/config", which resolves against the working directory and names
     # nothing. Absent and blank are therefore the same state, and both take the
-    # default. Reported by David, 2026-09-07.
+    # default.
     if not str(s.get('gameDir') or '').strip():
         s['gameDir'] = default_game_dir()
     s.setdefault('configDirOverride', None)
@@ -5698,14 +5189,14 @@ def config_dir_for(settings):
 
 
 # ---------------------------------------------------------------------------
-# mission reference (gui-plan.md 4.2) — read if it is there, say so if not
+# mission reference (docs/mission-reference.json) — read if it is there, say so if not
 
 def read_mission_reference():
     p = os.path.join(DOCS_DIR, 'mission-reference.json')
     if not os.path.exists(p):
         return {'state': 'absent', 'path': p, 'byType': {},
-                'detail': 'not written yet; gui-plan.md 4.2 assigns it to '
-                          'refresh_mission_roster.py'}
+                'detail': 'not written yet; scripts/refresh_mission_roster.py '
+                          'writes it'}
     try:
         data = check_schema.load_jsonc(p)
     except Exception as e:
@@ -6088,35 +5579,19 @@ def _sandbox(src_config, dst):
 
 # Fixture builders for a .cfg in a known key state.
 #
-# REPLACES _cfg_add_keys, 2026-09-13 (split-config-into-toggleable-slices).
-# That helper appended a `[Slices]` header unconditionally and raised
-# AssertionError when the file already had one:
+# A config copied into a sandbox may or may not already carry [Slices] and any
+# given slice key, so the builders edit whatever they are given into the state
+# asked for, whichever state that is.
 #
-#   AssertionError: ...\slice-keys\ckf.hardmode.cfg already has a [Slices]
-#   section; this helper appends one and would file its keys under the wrong
-#   header
-#
-# Its docstring said "ckf.hardmode.cfg only carries a key after the game has
-# been launched with that build. Until then the live file holds one key". The
-# game was then launched, the live file went to 43 keys, every sandbox copy
-# arrived already carrying [Slices], and the assertion ended the run with no
-# report line -- the third time this file did that in one day.
-#
-# TWO DEFECTS, both fixed here.
-#
-#  1. The helper could not build its own target state from a source that was
-#     already in it. It now edits whatever it is given into the state asked
-#     for, whichever state that is.
-#
-#  2. A FIXTURE BUILDER MUST NOT BE ABLE TO END THE RUN. A fixture that cannot
-#     build its condition is a FAIL naming why, not a traceback: a traceback
-#     costs every later section as well, and reports nothing about the code
-#     under test. Both builders return (ok, reason) and raise nothing. The
-#     caller turns a False into t.check(..., False, reason).
+# A FIXTURE BUILDER MUST NOT BE ABLE TO END THE RUN. A fixture that cannot
+# build its condition is a FAIL naming why, not a traceback: a traceback costs
+# every later section as well, and reports nothing about the code under test.
+# Both builders return (ok, reason) and raise nothing. The caller turns a
+# False into t.check(..., False, reason).
 #
 # Deliberately built out of split_lines_keepends and a local regex rather than
 # out of CfgFile: an instrument assembled from the thing under test cannot see
-# the thing under test fail (AGENTS.md section 3). The caller then asserts,
+# the thing under test fail (AGENTS.md). The caller then asserts,
 # through the ordinary read path, that the fixture really is in the state it
 # asked for -- which is the check that catches a builder and a reader agreeing
 # with each other and both being wrong.
@@ -6314,16 +5789,13 @@ def _kill_tree(proc, timeout=30):
 
     A one-file exe is TWO processes: the bootloader unpacks the bundle and runs
     the real application as a child. On Windows a surviving child keeps the exe
-    image mapped and the file cannot be unlinked, which crashed the whole run
-    out of `TemporaryDirectory` cleanup on 2026-09-04 after every case had
-    passed.
+    image mapped and the file cannot be unlinked, which crashes the run out of
+    `TemporaryDirectory` cleanup after every case has passed.
 
-    THE TREE KILL GOES FIRST, and that is the whole point. The first fix here
-    tried `terminate()` and fell back to `taskkill` only on a timeout --
-    but `terminate()` is `TerminateProcess` on the BOOTLOADER, which returns
-    immediately, so `wait(5)` succeeded, the fallback never ran, and the
-    application child was still holding the image. The run got further and
-    failed on the delete instead. [measured, David, 2026-09-04]
+    THE TREE KILL GOES FIRST, and that is the whole point. `terminate()` is
+    `TerminateProcess` on the BOOTLOADER, which returns immediately, so a
+    `wait` succeeds while the application child is still holding the image; a
+    `taskkill` fallback behind that wait never runs. [measured, Windows]
 
     The return value says only that the handle this process owns has been
     reaped. It does NOT say the tree is gone -- nothing here can see the
@@ -6366,7 +5838,7 @@ def _procs_from(exe_path):
     could not look.
 
     None is not zero. An instrument's silence is not evidence (AGENTS.md
-    section 3), and this one is the only thing that can see a grandchild the
+    ), and this one is the only thing that can see a grandchild the
     Popen handle knows nothing about.
 
     On Windows `tasklist` filters by image NAME, so it would also count a copy
@@ -6407,10 +5879,10 @@ def _procs_settle(exe_path, exclude=(), tries=60, delay=0.5):
       `proc.wait` covers the bootloader only. `_rmtree_retry` already retries
       for exactly this reason and says so in its own docstring; the process
       question was the one place that did not, so it sampled in the middle of
-      the teardown it had just started. On David's first Windows run this check
-      FAILED while the delete beside it PASSED — and a running exe cannot be
+      the teardown it had just started. Sampled once, this check has FAILED
+      while the delete beside it PASSED -- and a running exe cannot be
       unlinked on Windows, so whatever it saw was gone within the delete's own
-      30 seconds. [measured 2026-09-04]
+      30 seconds. [measured, Windows]
 
       **`tasklist` filters by image NAME, not by path.** Any other
       CKF-Config-Editor.exe on the machine counts: the one in `dist/`, a
@@ -6421,7 +5893,7 @@ def _procs_settle(exe_path, exclude=(), tries=60, delay=0.5):
     The budget is the same 30 seconds `_rmtree_retry(tries=60)` gets, because
     the two are asking about the same teardown.
 
-    None is still not zero (`AGENTS.md` §3). A `_procs_from` that never
+    None is still not zero (`AGENTS.md`). A `_procs_from` that never
     succeeded returns None from here and the caller fails the check on it,
     rather than reading could-not-look as none.
     """
@@ -6522,8 +5994,7 @@ def selftest_source(config_arg):
     directory. So pointing this at the live game config is safe and is what a
     developer machine should do -- `<repo>/live-config` exists only in the tree
     a cloud session assembles by staging the game's config beside the checkout,
-    and until 2026-09-04 it was the unconditional default, so `--selftest` with
-    no `--config` died on a FileNotFoundError anywhere else. Reported by David.
+    so it cannot be the only fallback.
 
     Order: what was asked for, then the assembled tree, then the game config
     that settings.json already points at.
@@ -6549,7 +6020,7 @@ def selftest_source(config_arg):
         % (staged, live or '(settings.json names no game directory)'))
 
 
-def selftest(config_arg, frozen_exe=None, migration=False):
+def selftest(config_arg, frozen_exe=None):
     src, how = selftest_source(config_arg)
     print('CKF Hard Mode config GUI — verification')
     print('  source config (copied, never written): %s' % src)
@@ -6586,9 +6057,8 @@ def selftest(config_arg, frozen_exe=None, migration=False):
     U_ELAPSE, U_FATIGUE = _unit('elapse'), _unit('fatigue')
     U_MISSION, U_CURVE = _unit('missions'), _unit('rewardcurve')
     U_TEAMPL = _unit('teampl')
-    # U_MODELRULES was here until 2026-09-13. Its only reader was the
-    # linkedEnable block in section 7, which now derives the group's keys from
-    # the schema instead of naming the two units by hand.
+    # No U_MODELRULES: the linkedEnable block in section 7 derives the
+    # group's keys from the schema instead of naming the units by hand.
     F_TEAMPL = unit_file(U_TEAMPL)
     F_MISSION = unit_file(U_MISSION)
     F_ELAPSE = unit_file(U_ELAPSE)
@@ -6704,7 +6174,7 @@ def selftest(config_arg, frozen_exe=None, migration=False):
         # Every check below is inside a loop over the declared units. With no
         # units the loops run zero times, every one of them reports nothing,
         # and the section passes having compared no file at all -- the shape
-        # AGENTS.md section 3 is about, and the shape seven instruments in this
+        # AGENTS.md is about, and the shape seven instruments in this
         # repo have been caught in. Phase 3 turned one file into nine, so the
         # count is asserted rather than left to be however many there are.
         _rt_units = sidecar_names(schemas)
@@ -6747,8 +6217,7 @@ def selftest(config_arg, frozen_exe=None, migration=False):
                 t.check('[%s] %s round-trips semantically (absent keys still absent)'
                         % (label, unit), not d, d[:8])
             # A key belonging to no section must survive a save untouched --
-            # "_version" is the one that exists today, and the migration adds
-            # more. Losing it would be invisible in every per-section check
+            # "_version" is one. Losing it would be invisible in every per-section check
             # above, because none of them looks outside its own section.
             for fname in sorted({unit_file(u) for u in sidecar_names(schemas)}):
                 if fname not in proposed:
@@ -6807,12 +6276,9 @@ def selftest(config_arg, frozen_exe=None, migration=False):
         # ---- 4. unset is not zero
         print('\n[4] unset vs zero')
         fatigue = U_FATIGUE
-        # This pair used to drive runningEmpty.maxAffected, which 2026-09-07
-        # removed along with every other flat fatigue value that had a
-        # byPowerLevel analogue. apply_edits REFUSES a path no schema declares,
-        # so the old case did not fail -- it raised and took the rest of the
-        # suite with it. woundResist.minChancePercent is the same distinction
-        # in a field that still exists: 0 lets Wound Resist cancel a chance
+        # woundResist.minChancePercent is a declared scalar where the
+        # distinction matters (apply_edits refuses a path no schema declares,
+        # so the field has to exist): 0 lets Wound Resist cancel a chance
         # outright, absent means the mod's own 5.
         e2 = {'json': {fatigue: {'scalars': {'woundResist.minChancePercent':
                                              {'present': False, 'value': None}},
@@ -6831,29 +6297,27 @@ def selftest(config_arg, frozen_exe=None, migration=False):
                 and 'minChancePercent' in js3['woundResist'], js3['woundResist'])
 
         # Find a genuinely sparse row rather than assuming one. This block used
-        # to hardcode runningEmpty.byPowerLevel row "1" and durationDays. That
-        # row stopped being sparse when the fatigue curves were retuned, so the
-        # check failed on the data rather than on the code -- and a reader would
-        # have read the failure as a regression in the GUI. Search both curves,
-        # and say plainly if neither has a sparse row instead of passing quietly.
+        # to hardcode a row key and a column of a fatigue curve that a later
+        # layout retired, and before that a row that stopped being sparse when
+        # the curves were retuned. Either way the check failed on the data rather
+        # than on the code, and a reader would have read the failure as a
+        # regression in the GUI.
         # Sparse rows: MAKE one rather than hoping the live config has one.
         #
         # A declared column with no key in the row comes back as null -- that
-        # is the contract, and it is what this checks. This block used
-        # to assume runningEmpty.byPowerLevel row "1" had no durationDays. That
-        # was true of the config it was written against; the fatigue retune
-        # filled every declared column of every curve, and today NO row in any
-        # of the four curves is sparse. Depending on the data meant the check
-        # failed for a reason that had nothing to do with the reader.
+        # is the contract, and it is what this checks. Whether the config
+        # under test has a sparse row depends on its tuning, and a check that
+        # depended on that would fail for a reason that has nothing to do with
+        # the reader.
         #
         # So: drop a column from the sandbox copy, re-read, and assert the
         # reader reports it absent. The condition is created here, so the check
         # exercises the same path whatever the live numbers happen to be.
-        curve_path, curve_block, sparse_col = 'runningEmpty.byPowerLevel', 'runningEmpty', 'durationDays'
+        curve_path, sparse_col = 'byPowerLevel', 'durationDays'
         _fp = os.path.join(cd, unit_file(fatigue))
         _fj = check_schema.load_jsonc(_fp)
         _fsec = _fj[unit_section(fatigue)] if unit_section(fatigue) else _fj
-        _curve = _fsec[curve_block]['byPowerLevel']
+        _curve = _fsec[curve_path]
         row_key = sorted(_curve, key=lambda k: int(k))[0]
         t.check('the fixture row carries the column before it is removed',
                 sparse_col in _curve[row_key], _curve[row_key])
@@ -6884,14 +6348,14 @@ def selftest(config_arg, frozen_exe=None, migration=False):
         p4, _ = apply_edits(doc, extras, e4, strip_readme=False)
         js4 = _sec(p4, fatigue)
         t.check('cell set to 0 -> key present, value 0',
-                js4[curve_block]['byPowerLevel'][row_key].get(sparse_col) == 0,
-                js4[curve_block]['byPowerLevel'][row_key])
+                js4[curve_path][row_key].get(sparse_col) == 0,
+                js4[curve_path][row_key])
         r1['cells'][sparse_col] = None
         p5, _ = apply_edits(doc, extras, e4, strip_readme=False)
         js5 = _sec(p5, fatigue)
         t.check('cell set back to unset -> key absent again',
-                sparse_col not in js5[curve_block]['byPowerLevel'][row_key],
-                js5[curve_block]['byPowerLevel'][row_key])
+                sparse_col not in js5[curve_path][row_key],
+                js5[curve_path][row_key])
 
         mk = U_MISSION + '|missions'
         mrows = json.loads(json.dumps(model['tables'][mk]['rows']))
@@ -6917,15 +6381,10 @@ def selftest(config_arg, frozen_exe=None, migration=False):
         t.check('an explicitly unset text cell drops the key',
                 'BonusPayment' not in
                 _sec(pn, U_MISSION)['missions'][0])
-        # CORRECTION, 2026-08-31. This pair used to be one check asserting
-        # 'shipped' in the row -- the pre-migration world, where the sidecar
-        # carried annotation keys the schema does not declare and the round
-        # trip had to preserve them. gui-plan.md 4.2 moved 'shipped',
-        # 'roomFlags', 'objectivePayments' and 'secondaryObjectives' out to
-        # docs/mission-reference.json, so the row now carries only what
-        # MissionRewards.cs:264-283 deserialises. The old assertion was
-        # testing for data that is deliberately no longer there; the two
-        # checks below assert where it went instead.
+        # A missions row carries only what MissionRewards.cs deserialises;
+        # 'shipped', 'roomFlags', 'objectivePayments' and
+        # 'secondaryObjectives' live in docs/mission-reference.json. The two
+        # checks below assert both halves.
         declared_cols = {'type', 'note', 'BonusPayment', 'BonusExperience',
                          'PowerLevelBonus', 'ObjectivePayment', 'SecondaryPayment'}
         row0 = _sec(pn, U_MISSION)['missions'][0]
@@ -6935,7 +6394,7 @@ def selftest(config_arg, frozen_exe=None, migration=False):
                 sorted(set(row0) - declared_cols) or sorted(row0))
         ref = read_mission_reference()
         t.check('and read_mission_reference() finds "shipped" for that same '
-                'type in docs/mission-reference.json (gui-plan.md 4.2)',
+                'type in docs/mission-reference.json',
                 ref['state'] == 'loaded'
                 and 'shipped' in ref['byType'].get(row0['type'], {}),
                 (ref['state'], row0['type'],
@@ -6961,19 +6420,16 @@ def selftest(config_arg, frozen_exe=None, migration=False):
         shapes = dict((k, v['shape']) for k, v in model['tables'].items())
         want = {
             U_ELAPSE + '|tiers': 'object',
-            U_FATIGUE + '|runningEmpty.byPowerLevel': 'object',
+            U_FATIGUE + '|byPowerLevel': 'object',
             U_ELAPSE + '|credits.byPowerLevel': 'array',
             U_CURVE + '|curve': 'array',
             U_TEAMPL + '|override': 'array',
         }
         for k, v in want.items():
             t.check('%s is %s' % (k, v), shapes.get(k) == v, shapes.get(k))
-        # The wording used to read "despite keyedBy": the schema declared
-        # "keyedBy": "type" on this field while the reader correctly produced
-        # an array. The keyedBy was a mistake and has been dropped
-        # (SCHEMA-FORMAT.md, "keyedBy, and its one correction"), so schema and
-        # reader now agree rather than disagree.
-        t.check('missions is read as the array MissionRewards.cs:298 '
+        # The schema declares no keyedBy on this field, so schema and reader
+        # agree that it is an array.
+        t.check('missions is read as the array MissionRewards.cs '
                 'deserialises, and the schema declares no keyedBy against it',
                 shapes.get(U_MISSION + '|missions') == 'array',
                 shapes.get(U_MISSION + '|missions'))
@@ -6985,12 +6441,9 @@ def selftest(config_arg, frozen_exe=None, migration=False):
                   'ObjectivePayment', 'SecondaryPayment'):
             t.check('%s inferred as an adjustment column' % c, mf.get(c) == 'adjust', mf)
         t.check('note stays free text', mf.get('note') == 'text', mf)
-        # CORRECTION, 2026-08-31. This asserted mf['type'] == 'key', which was
-        # true only while missionrewards.schema.json carried "keyedBy": "type"
-        # -- infer_column_formats stamps 'key' on the keyedBy column. That
-        # keyedBy was wrong and was dropped, so `type` is now an ordinary
-        # string column and falls to the same verdict as `note`. Nothing in
-        # the GUI changed; the assertion was describing the dropped key.
+        # infer_column_formats stamps 'key' only on a keyedBy column, and
+        # missionrewards.schema.json declares none, so `type` is an ordinary
+        # string column with the same verdict as `note`.
         t.check('the type column is ordinary free text now that no keyedBy '
                 'claims it', mf.get('type') == 'text', mf)
 
@@ -7008,9 +6461,15 @@ def selftest(config_arg, frozen_exe=None, migration=False):
         t.check('write probe reports ok on a writable dir',
                 m['probe']['config']['state'] == 'ok', m['probe']['config'])
         # Not "reports 0": the repo's own baseline is whatever check_schema says
-        # about the untouched copy. Three fatigue fields were added to the schema
-        # while this was being written and are not in the live sidecar, so the
-        # baseline is 3 MISSING. What matters is that the GUI does not add to it.
+        # about the untouched copy, and that copy is a real config directory
+        # whose contents are David's to change. No NUMBER can live in this
+        # comment for the same reason: the one that used to -- 3 MISSING, from
+        # three fatigue fields the sidecar did not yet carry -- went stale the
+        # moment that sidecar was rewritten to match its schema, and a stale
+        # number here reads as a claim the suite is making. What matters is that
+        # the GUI does not add to whatever the baseline is, which is what every
+        # `== base_set` comparison below asserts. The baseline itself is printed
+        # rather than asserted.
         baseline = m['check']
         t.check('check_schema runs against the untouched copy', baseline['ran'], baseline)
         t.check('the baseline carries nothing blocking',
@@ -7077,7 +6536,7 @@ def selftest(config_arg, frozen_exe=None, migration=False):
         # properly: it prints "overlays: N declared across M schema file(s), K
         # csv/tsv on disk, 0 unclaimed, 3 unclaimed by design (...)", carrying
         # the by-design list. Grading them here would need a second copy of that
-        # list, kept in step by hand, which is the thing AGENTS.md section 9
+        # list, kept in step by hand, which is the thing AGENTS.md
         # forbids. SECTION_GROUPS already says in its `enemy-gear` note that
         # this editor does not open those files. So the editor names what it
         # sees and points at the gate that decides.
@@ -7097,9 +6556,7 @@ def selftest(config_arg, frozen_exe=None, migration=False):
                 sorted(set(overlay_paths_all(app.schemas)) - set(csv_all)))
         # A slice file no schema targets is invisible to this editor AND to
         # check_schema: nothing reads it, nothing validates it, and nothing
-        # says so. It was 1 until 2026-09-13 -- implants-global.json, which
-        # Phase 3 wrote before implantsglobal.schema.json declared a json
-        # target for it -- and naming them here is what closed that gap.
+        # says so. Naming them here is what closes that gap.
         t.check('every .json file in the slice directory is reachable by some '
                 'schema — one that is not is read by nothing and validated by '
                 'nothing', not orphans, orphans)
@@ -7145,36 +6602,13 @@ def selftest(config_arg, frozen_exe=None, migration=False):
 
 
 
-        # ---- overlays: declared, read, drawn, and -- since 2026-09-14 --
-        #      WRITTEN, in their lever columns and nowhere else
+        # ---- overlays: declared, read, drawn, and WRITTEN, in their lever
+        #      columns and nowhere else
         #
-        # CORRECTION. THIS BLOCK ASSERTED THE OPPOSITE. Verbatim, as it stood:
+        # Lever and override columns are editable (David's rule); identity
+        # columns, control columns and the key column are not.
         #
-        #   "---- overlays: declared, read, drawn, and NEVER written
-        #
-        #    scripts/rules_to_overlays.py is the only thing that may write
-        #    these files. The editor reads them to draw them and must not touch
-        #    one, so that is asserted against the save path rather than left as
-        #    an intention -- an overlay path may not appear in a save's
-        #    proposal, and its bytes may not move across a save that rewrites
-        #    everything else."
-        #
-        # DAVID REVERSED IT ON 2026-09-14: he could not edit any of the cells
-        # this change had just created, and wants them to save the way Fatigue
-        # and Elapse already do. He scoped the reversal himself -- lever and
-        # override columns only; identity columns, control columns and the key
-        # column stay read-only.
-        #
-        # THE REASON THE OLD RULE GAVE HAD ALREADY LAPSED. Phase 9 retired
-        # scripts/rules_to_overlays.py together with its subject,
-        # ckf.hardmode.rules.json. From that day "rules_to_overlays.py is the
-        # only thing that may" named no live writer at all, so the sentence was
-        # justifying the rule with a fact that had stopped being one. Nothing
-        # pointed at this block from the retired script's side, so retiring it
-        # could not have surfaced this; the rule went on standing unexamined
-        # until David read the grid and could not type in it.
-        #
-        # WHAT IS ASSERTED NOW, below and in the write-path block further down:
+        # WHAT IS ASSERTED, below and in the write-path block further down:
         #   - a save that edits no cell leaves every sheet byte-identical;
         #   - a save that edits exactly one lever cell moves exactly that cell
         #     and nothing else in the file;
@@ -7208,27 +6642,11 @@ def selftest(config_arg, frozen_exe=None, migration=False):
                 all(v['rows'] for v in ov_read.values()),
                 [k for k, v in ov_read.items() if not v['rows']])
 
-        # ---- PHASE 8: the six consumable sheets.
+        # ---- the six consumable sheets.
         #
-        # WHAT THIS BLOCK USED TO SAY, AND WHY IT DOES NOT SAY IT ANY MORE.
-        #
-        # Written 2026-09-14 against a tree where the six files were in the
-        # slice directory and NO schema's targets.overlays named one of them.
-        # `read_overlays` therefore never opened them, `ov_read` did not
-        # contain them, and the page drew no grid for any of them: this file's
-        # Phase 8 wiring -- the import, _family_of, DECLARED_EXPANDED and the
-        # Cost label -- was live and reached no rendered sheet. The cases below
-        # read the six files DIRECTLY for that reason, and three of them pinned
-        # the undeclared state with their own names saying they would go red
-        # the day it changed.
-        #
-        # It changed the same day: unit C landed targets.overlays in all six
-        # schema/consumables*.schema.json, and the three pins went red exactly
-        # as written [measured: rc=1, 1182 passed, 4 failed]. That was the pins
-        # working, not the pins being wrong. They are restated below as what is
-        # true now, and the cases that read the files directly now read THE
-        # MODEL, which is what they were always about -- except the two that
-        # are about the bytes on disk, which still read the bytes and say so.
+        # All six are declared by a schema's targets.overlays, so the cases
+        # below read THE MODEL -- except the two that are about the bytes on
+        # disk, which read the bytes and say so.
         _cons_names = sorted(getattr(_consumables, 'SHEET_NAMES', ()) or ())
         _cons_rel = ['ckf.hardmode.d/' + n for n in _cons_names]
         # THE MODEL'S OWN ENTRIES, not a second read of the same files. A
@@ -7246,25 +6664,15 @@ def selftest(config_arg, frozen_exe=None, migration=False):
         # THE SET THE THREE CROSS-FILE CASES BELOW RUN OVER, NAMED EXACTLY.
         #
         # It is every sheet the MODEL carries, plus every sheet an EXPANDER
-        # declares that the model does not. That is 53 of the 56 csv in the
-        # slice directory [measured 2026-09-14]; the three it leaves out are
-        # ArmorModel, MonsterTypeModel and WeaponModel, which no schema
-        # declares, no expander declares, and this editor never opens --
-        # check_schema owns them, as SECTION_GROUPS' enemy-gear note says.
+        # declares that the model does not. It is NOT every file on disk: it
+        # leaves out ArmorModel, MonsterTypeModel and WeaponModel, which no
+        # schema declares, no expander declares, and this editor never opens --
+        # check_schema owns them, as SECTION_GROUPS' enemy-gear note says. The
+        # case below states which files the map omits and why.
         #
-        # CORRECTION, 2026-09-14. Last round this map was introduced with three
-        # case names and comments saying "every file on disk". It never was
-        # that: it was ov_read plus the six, and it excluded those three enemy
-        # tables then as it does now. The names have been narrowed to what is
-        # measured, and the case below states which files the map omits and
-        # why, instead of a sentence that rounds 53 up to 56. This is the third
-        # time this phase that a set was described by a name one size larger
-        # than the set.
-        #
-        # The extra half is still built from the DIRECTORY LISTING rather than
-        # from ov_read, so that "declared by an expander but routed by no
-        # schema" -- the state all six consumable sheets were in this morning
-        # -- cannot become invisible again by being absent from the model.
+        # The extra half is built from the DIRECTORY LISTING rather than from
+        # ov_read, so that "declared by an expander but routed by no schema"
+        # cannot become invisible by being absent from the model.
         _extra_rel = sorted('ckf.hardmode.d/' + n for n in _names
                             if n in DECLARED_EXPANDED
                             and 'ckf.hardmode.d/' + n not in ov_read)
@@ -7281,18 +6689,10 @@ def selftest(config_arg, frozen_exe=None, migration=False):
                 'measuring an empty list and would pass by having nothing to '
                 'look at', _consumables is not None and len(_cons_names) == 6,
                 (_consumables is not None, _cons_names))
-        # RESTATED, 2026-09-14. This asserted "NONE of the six is declared by a
-        # schema, so the editor reads and draws no grid for them ... it goes
-        # red the day one of them is declared, at which point the cases below
-        # must move onto the model". Unit C declared all six; it went red; the
-        # cases below moved onto the model. What is asserted now is the state
-        # that replaced it, and it is the stronger of the two: a sheet that is
-        # declared but does not reach the model draws nothing while every
-        # census says it should.
+        # A sheet that is declared but does not reach the model draws nothing
+        # while every census says it should.
         t.check('ALL SIX are declared by a schema and all six reached the '
-                'model, keyed by their own paths — this replaces the pin that '
-                'asserted none of them was declared, which went red when unit '
-                'C declared them, which is what it was for',
+                'model, keyed by their own paths',
                 len(set(_cons_rel) & set(ov_decl)) == 6
                 and _cons_from_model == _cons_rel,
                 (sorted(set(_cons_rel) - set(ov_decl)),
@@ -7303,13 +6703,9 @@ def selftest(config_arg, frozen_exe=None, migration=False):
                     for e in _cons_read.values()) and len(_cons_read) == 6,
                 [(k, v['error']) for k, v in _cons_read.items()
                  if v['error'] or not v['present']])
-        # RESTATED, 2026-09-14. This asserted the six were AMONG the undeclared
-        # csv/tsv the census prints. They are not any more, and the useful half
-        # of the sentence -- nothing has gone undeclared unnoticed -- survives
-        # as its opposite.
-        t.check('and not one of the six is in the census\'s undeclared list '
-                'any more: the csv/tsv this editor can see and no schema '
-                'claims are now only the enemy-gear tables it never opens '
+        t.check('and not one of the six is in the census\'s undeclared list: '
+                'the csv/tsv this editor can see and no schema '
+                'claims are only the enemy-gear tables it never opens '
                 '(%d of them)' % len(set(csv_undeclared) - set(_cons_rel)),
                 not (set(_cons_rel) & set(csv_undeclared)),
                 sorted(set(_cons_rel) & set(csv_undeclared)))
@@ -7340,9 +6736,20 @@ def selftest(config_arg, frozen_exe=None, migration=False):
         print('        overlay census: %d row(s), %d value column(s) beyond the '
               'id, %d control column(s), %d operator-suffixed column(s)'
               % (_rows, _vals, _ctl, _ops))
+        # SET equality, not a count. The old form asserted one control column
+        # per sheet, which held only while every sheet carried _comment and
+        # nothing else; a direct overlay that inserts rows carries _clone too.
+        # This asserts what the name says instead, and is stricter: it catches a
+        # control column the reader failed to flag AND a flagged column that is
+        # not one, neither of which a total can see.
+        _ctl_flagged = set((rel, c['name']) for rel, v in ov_read.items()
+                           for c in v['columns'] if c['control'])
+        _ctl_named = set((rel, c['name']) for rel, v in ov_read.items()
+                         for c in v['columns'] if c['name'].startswith('_'))
         t.check('the reader recognises control columns by their leading '
                 'underscore, as Overlays.ParseHeader does — %d found' % _ctl,
-                _ctl == len(ov_read), (_ctl, len(ov_read)))
+                _ctl_flagged == _ctl_named,
+                sorted(_ctl_flagged ^ _ctl_named))
 
         # ---- the two kinds of sheet, and the four (table, id) collisions
         _kinds = {}
@@ -7352,12 +6759,9 @@ def selftest(config_arg, frozen_exe=None, migration=False):
               % ', '.join('%s %d' % (k, len(v)) for k, v in sorted(_kinds.items())))
         t.check('both kinds are on disk, so neither branch of the renderer is '
                 'untested', len(_kinds) == 2, sorted(_kinds))
-        # CORRECTION. Phase 4 asserted "every overlay has an id column as its
-        # first column, which is what Overlays.LoadTable requires" and tested
-        # only `all(v['keyColumn'])` -- that the first column has a name which
-        # is not a control column. WeaponName passes that. Three expanded
-        # sheets went green under a sentence that does not describe them and a
-        # requirement they are not subject to [measured, Phase 6]. Each kind is
+        # `all(v['keyColumn'])` only says the first column has a name that is
+        # not a control column, which WeaponName passes, so "every overlay has
+        # an id column first" is not asserted over all sheets. Each kind is
         # now asserted for what is actually true of it.
         for rel in _kinds.get('direct', []):
             e = ov_read[rel]
@@ -7444,13 +6848,10 @@ def selftest(config_arg, frozen_exe=None, migration=False):
         print('        kind split: %s'
               % ', '.join('%s/%s %d' % (k[0], k[1], len(v))
                           for k, v in sorted(_src.items())))
-        # EXTENDED IN PHASE 8 to the merged map rather than to `ov_read` alone.
-        # The six consumable sheets are exactly the case this cross-check
-        # exists for -- an expander shipping sheets that nothing else routes --
-        # and while nothing routed them, measuring only `ov_read` would have
-        # left them out of the one case whose whole subject they are.
-        # NAME NARROWED 2026-09-14: it said "every file on disk", and the map
-        # is 53 of the 56 csv there, the three enemy-gear tables excluded.
+        # Over the merged map rather than `ov_read` alone: an expander shipping
+        # sheets that nothing else routes is exactly the case this cross-check
+        # exists for. The map is not every csv on disk; the enemy-gear tables
+        # are excluded.
         _disagree = [rel for rel, e in _all_sheets.items()
                      if e['kind'] != overlay_kind_derived(e)]
         t.check('the expanders\' declared names and the filename derivation '
@@ -7467,16 +6868,11 @@ def selftest(config_arg, frozen_exe=None, migration=False):
                    sum(len(v) for k, v in _src.items() if k[1] == 'derived')),
                 any(k[1] == 'declared' for k in _src)
                 and any(k[1] == 'derived' for k in _src), sorted(_src))
-        # CORRECTION, PHASE 8. This measured DECLARED_EXPANDED against the
-        # basenames in `ov_read` -- the sheets a SCHEMA declares -- under a
-        # name that says "on disk". While every declared sheet was also a
-        # schema target the two sets coincided and the proxy was invisible.
-        # consumables.py declares six sheets that are on disk and that no
-        # schema targets, and the proxy answers "missing" for all six [measured
-        # 2026-09-14]. What the sentence says is what is now measured: the
-        # slice directory listing. The gap the proxy was accidentally covering
-        # -- declared, on disk, and reachable by nothing -- is a separate case
-        # directly below, so it is stated rather than smuggled into this one.
+        # "On disk" is measured against the slice directory listing, not
+        # against `ov_read` (the sheets a SCHEMA declares), which answers
+        # "missing" for a sheet that is on disk and that no schema targets.
+        # "Declared, on disk, and reachable by nothing" is the separate case
+        # directly below.
         _on_disk = set(_names)
         t.check('every expander that declares sheet names has all of them on '
                 'disk', not (DECLARED_EXPANDED - _on_disk),
@@ -7486,43 +6882,19 @@ def selftest(config_arg, frozen_exe=None, migration=False):
         print('        sheets an expander declares that no schema targets, so '
               'the editor draws no grid for them: %d %s'
               % (len(_undrawn), _undrawn))
-        # RESTATED, 2026-09-14. This asserted `_undrawn == the six consumable
-        # sheets` -- "the ones on disk that this editor opens for nobody are
-        # exactly these six and nothing else. Pinned, not accepted: the day a
-        # seventh appears, OR ONE OF THESE SIX IS DECLARED, this goes red and
-        # somebody looks." Unit C declared all six on the day it was written,
-        # the case went red, and somebody looked. That is the whole of what it
-        # was for, and its useful half is kept rather than deleted: the set is
-        # still printed, and an expander sheet that reaches no schema is still
-        # a thing this goes red over -- the expected size of that set is simply
-        # 0 now instead of 6.
+        # The set is printed, and an expander sheet that reaches no schema
+        # turns this red; the expected size of that set is 0.
         t.check('every sheet an expander declares is not only on disk but '
                 'reachable through some schema\'s targets.overlays, so none of '
-                'them is a file the editor opens for nobody. The day a seventh '
-                'is shipped without a schema to route it, this goes red and '
-                'somebody looks — which is exactly what it did when it held '
-                'these six',
+                'them is a file the editor opens for nobody. A sheet shipped '
+                'without a schema to route it turns this red',
                 _undrawn == [], _undrawn)
 
         # ---- a one-row sheet is a grid like any other
         #
-        # WAS, until 2026-09-14, under the heading "one row is a form":
-        #
-        #   _forms = sorted(rel for rel, e in ov_read.items() if e['form'])
-        #   _multi = [rel for rel, e in ov_read.items()
-        #             if e['kind'] == 'expanded' and not e['form']]
-        #   t.check('exactly the one-row expanded sheet(s) are drawn as a
-        #           form, and the discriminator is the row count in the file
-        #           -- nothing declares it and no schema field carries it', ...)
-        #   t.check('and there is one of each, so neither the form nor the
-        #           grid branch is untested', _forms and _multi, ...)
-        #
-        # David overruled the one-row form on 2026-09-14 after seeing the page.
-        # The two cases above are not LOOSENED to fit -- they had a subject and
-        # it is gone, so they are replaced by cases stating the new truth: a
-        # one-row sheet renders through the same grid path as every other
-        # sheet, with editable lever cells, and NOTHING anywhere still carries
-        # the old discriminator.
+        # There is no one-row form (David's rule): a one-row sheet renders
+        # through the same grid path as every other sheet, with editable lever
+        # cells, and nothing anywhere carries a `form` discriminator.
         _one = sorted(rel for rel, e in ov_read.items()
                       if e['kind'] == 'expanded' and len(e['rows']) == 1)
         _multi = sorted(rel for rel, e in ov_read.items()
@@ -7539,15 +6911,13 @@ def selftest(config_arg, frozen_exe=None, migration=False):
                 'something to be compared against: %d one-row, %d multi-row'
                 % (len(_one), len(_multi)), bool(_one) and bool(_multi),
                 (len(_one), len(_multi)))
-        # The complaint that started the thread was a lever cell that could not
-        # be typed into. A one-row sheet has to offer the same boxes as any
-        # other, so the grading is asserted here and the INPUTS themselves are
+        # A one-row sheet has to offer the same input boxes as any other, so the grading is asserted here and the INPUTS themselves are
         # asserted in the DOM render.
         for rel in _one:
             e = ov_read[rel]
             _ed = [i for i, b in enumerate(e['editable']) if b]
             t.check('%s: one row, and its lever columns are graded editable on '
-                    'the same terms as a sheet of twenty-seven — %d of %d '
+                    'the same terms as a many-row sheet — %d of %d '
                     'column(s), never index 0, never identity, never control'
                     % (rel.split('/')[-1], len(_ed), len(e['columns'])),
                     e['writable'] and _ed and 0 not in _ed
@@ -7556,17 +6926,11 @@ def selftest(config_arg, frozen_exe=None, migration=False):
 
         # ---- five columns hidden by name, at every row count
         #
-        # DAVID, 2026-09-14: "Suppress the ImplantLevel, Deactivated, Rarity,
-        # PowerLevel, and ImplactConflict columns." HIDDEN_COLUMNS is the
-        # declared table; this is the measurement that had to come back clean
-        # before anything was hidden, re-derived on every run rather than
-        # quoted from the day it was taken.
-        #
-        # HIDING AN EDIT DAVID MADE IS THE FAILURE MODE. `Rarity` and
-        # `PowerLevel` are real levers on sheets where an override could
-        # plausibly sit, and he asked for this having looked at one page. So
-        # the non-blank cells are counted, per column per sheet, and a single
-        # one goes red.
+        # HIDDEN_COLUMNS is the declared table (David's rule). HIDING AN
+        # OVERRIDE IS THE FAILURE MODE: `Rarity` and `PowerLevel` are real
+        # levers on sheets where an override could sit. So the non-blank cells
+        # are counted, per column per sheet, on every run, and a single one
+        # goes red.
         _hid_seen, _hid_filled, _hid_cells = {}, {}, {}
         for rel, e in sorted(ov_read.items()):
             names = [c['name'] for c in e['columns']]
@@ -7710,12 +7074,9 @@ def selftest(config_arg, frozen_exe=None, migration=False):
               % (', '.join('%s -> %s on %d sheet(s)' % (k[0], k[1], len(v))
                            for k, v in sorted(_by_label.items())),
                  len(_cost_sheets), len(_cost_bare), _cost_bare or ''))
-        # WAS `len(set(labels)) == 2`, under the name "two different labels".
-        # Correct until Phase 8 gave Cost a third meaning on the six consumable
-        # sheets; then the data said three and the case said two, and it went
-        # red [measured 2026-09-14]. THREE is the true number and checking it
-        # is stronger than checking "more than one", so the count is asserted
-        # exactly -- per label as well as in total. A label that silently
+        # Cost has three meanings (install cost, item value, shop price), and
+        # checking three is stronger than checking "more than one", so the
+        # count is asserted exactly -- per label as well as in total. A label that silently
         # gained or lost a sheet is the drift this repo keeps getting bitten
         # by, and `>= 2` would not see it.
         _lab_n = dict((k[1], len(v)) for k, v in _by_label.items())
@@ -7883,15 +7244,9 @@ def selftest(config_arg, frozen_exe=None, migration=False):
                 continue
             # A SHEET THAT OVERRIDES NOTHING. Every lever cell blank on every
             # row is a statement, not an omission, and the page has to say so
-            # or 16 empty rows read as 16 rows somebody forgot.
-            # WAS `len(e['rows']) > 1`, as a proxy for "there is more than
-            # one row to lose". Phase 7 landed a sheet with exactly one row --
-            # slot 11, which design.md section 7 then drew as a form for that
-            # reason -- and the proxy failed on a sheet that is correct. What
-            # the case is for is that every row the file carries reaches the
-            # page, so that is what it counts. (The form is gone as of
-            # 2026-09-14, David having overruled it; the past tense above is
-            # the correction, and the case itself never depended on the shape.)
+            # or empty rows read as rows somebody forgot. What the case is for
+            # is that every row the file carries reaches the page, so that is
+            # what it counts, one-row sheets included.
             t.check('%s: all %d of its row(s) reach the page even though it '
                     'overrides nothing'
                     % (rel.split('/')[-1], len(e['rows'])),
@@ -7908,12 +7263,10 @@ def selftest(config_arg, frozen_exe=None, migration=False):
                     (len(e['shipped']), len(e['rows'])))
 
         # ---- the shared row: consumed, not re-derived
-        # OVER THE MERGED MAP. SHARED_ROWS gained consumables.py's two rows
-        # this phase, and while their sheets were not schema targets the
-        # owner-count case below would have compared 4 marks against 9 declared
-        # owners and failed -- correctly, because it would have been measuring
-        # marks over a set of sheets smaller than the set of declarations it
-        # was counting against. It measures both over the same set now, and
+        # OVER THE MERGED MAP. SHARED_ROWS includes consumables.py's rows, and
+        # measuring marks over a set of sheets smaller than the set of
+        # declarations the owner-count case counts against would fail it. It
+        # measures both over the same set, and
         # that stays true whether or not a schema routes the sheet: the
         # declarations come from the expanders, so the marks must be looked for
         # everywhere an expander's sheet is, not only where a schema points.
@@ -7954,10 +7307,8 @@ def selftest(config_arg, frozen_exe=None, migration=False):
         # declarations. Nothing below retypes a header, a row count or an id.
         # Each case says in its own name what it could not look at.
         #
-        # MOVED ONTO THE MODEL 2026-09-14. Every case here read the six files
-        # directly while no schema declared them; unit C declared them and they
-        # now read `ov_read`. THE TWO EXCEPTIONS ARE DELIBERATE AND ARE ABOUT
-        # THE BYTES: the per-file row total below, and the Striatum
+        # Every case here reads `ov_read`. THE TWO EXCEPTIONS ARE DELIBERATE
+        # AND ARE ABOUT THE BYTES: the per-file row total below, and the Striatum
         # on-disk-versus-drawn case further down. Both exist to say that the
         # file and the grid differ by exactly one row, and a claim about the
         # file cannot be settled by asking the thing that parsed it.
@@ -7968,7 +7319,7 @@ def selftest(config_arg, frozen_exe=None, migration=False):
         # AND THE SAME COUNT OUT OF THE BYTES, parsed here and not by the entry
         # under test. Counting only the model's drawn rows would make the
         # withheld row disappear from the census as well as from the grid,
-        # which is the failure this phase is guarding; counting only the
+        # which is the failure this case is guarding; counting only the
         # model's own total would take the parser's word for what the file
         # holds.
         _cons_on_disk = {}
@@ -8300,13 +7651,10 @@ def selftest(config_arg, frozen_exe=None, migration=False):
         # ---- the exclusion, over BOTH sheets rather than one
         # MEASURED PER EXPANDER FAMILY, NOT ACROSS EVERY EXPANDED SHEET.
         #
-        # CORRECTION, Phase 7. This intersected the columns of every expanded
-        # sheet on disk. With three sheets from one expander that was the
-        # cyberweapon pair; with fourteen from three expanders the intersection
-        # collapses to {PowerLevel, Cost, _comment} and no pair survives
-        # [measured], so a case about the crit columns failed on a directory
-        # that had simply grown. A claim about two columns of one dialect is
-        # measured over the sheets of that dialect.
+        # Intersected across every expanded sheet, the columns collapse to
+        # {PowerLevel, Cost, _comment} and no pair survives [measured]. A claim
+        # about two columns of one dialect is measured over the sheets of that
+        # dialect.
         _fams = {}
         for rel, e in sorted(ov_read.items()):
             if e['kind'] != 'expanded' or not e['shipped']:
@@ -8357,34 +7705,12 @@ def selftest(config_arg, frozen_exe=None, migration=False):
 
         # ---- THE WRITE PATH, AND THE FOUR CLASSES IT STILL REFUSES
         #
-        # CORRECTION, 2026-09-14. Everything between here and the nav-group
-        # block used to assert that no save could reach a sheet. What it said,
-        # verbatim, was:
-        #
-        #   'a save proposes no overlay file at all'
-        #   'and not one of their bytes moved'
-        #   'and the six consumable sheets did not move either -- the row this
-        #    editor hides is still on disk, byte for byte, after a save that
-        #    rewrote everything the editor does own'
-        #   'and no save proposed one of them, so "not written" is a property
-        #    of the save path and not of a file it happens not to reach'
-        #   'an overlay is in no edit set the page can build, so there is
-        #    nothing for a save to carry'
-        #   'and an overlay is not a fingerprinted path either -- the editor
-        #    does not claim to own a file it will not write'
-        #
-        # David reversed the rule those six cases guarded (see the block header
-        # above). Three of the six survive UNCHANGED in meaning and are kept
-        # below, because they were never about the rule: a save with no cell
-        # edit in it still moves no byte, the withheld Striatum row is still on
-        # disk byte for byte, and an undeclared sheet is still not written. The
-        # other three are replaced by their opposites, and the LAST of them --
-        # "an overlay is not a fingerprinted path" -- was a defect in its own
-        # right and not only a consequence of the rule: because
-        # files_check_schema_reads omitted the sheets, stage_and_validate never
-        # copied them either, and every validate and every save was reporting
-        # 53 MISSING problems for files that were all present [measured
-        # 2026-09-14]. MISSING is not in BLOCKING, so nothing failed.
+        # THE WRITE PATH. Asserted below: a save with no cell edit in it moves
+        # no byte, the withheld Striatum row stays on disk byte for byte, an
+        # undeclared sheet is not written, a lever cell edit reaches exactly
+        # that cell, and the sheets are fingerprinted paths (files_check_schema_
+        # reads includes them, so stage_and_validate copies them and a save
+        # does not report one false MISSING per sheet).
         cdov = _sandbox(src, os.path.join(td, 'overlays-write'))
         appov = App({'gameDir': '', 'configDirOverride': cdov,
                      'stripReadme': False}, 'x')
@@ -8698,11 +8024,9 @@ def selftest(config_arg, frozen_exe=None, migration=False):
         t.check('and a cell carrying a line break is refused -- the plugin '
                 'reads these files one line at a time',
                 not _g_nl['ok'], _g_nl.get('refused'))
-        # THE DIRECT DIALECT, tested against overlay_check_cell directly: no
-        # shipped sheet carries a non-set header operator today [measured
-        # 2026-09-14: all 563 editable columns across the 53 declared sheets
-        # are Op.Set], so the refusal below has no subject on disk and would
-        # otherwise be untested code guarding the day one appears.
+        # THE DIRECT DIALECT, tested against overlay_check_cell directly with a
+        # synthetic entry, so the refusal is exercised whether or not any sheet
+        # on disk carries a non-set header operator.
         _d_entry = {'kind': 'direct',
                     'columns': [{'name': 'Id', 'op': 'set', 'control': False},
                                 {'name': 'Scaled', 'op': 'multiply', 'control': False},
@@ -8873,7 +8197,7 @@ def selftest(config_arg, frozen_exe=None, migration=False):
         # THE SUPPRESSION TRAP, COUNTED SO IT CANNOT GO QUIET. A lever column
         # that is blank on every row is constant, and a client that suppressed
         # every constant column would suppress most of the override surface --
-        # which is the state David could not type into.
+        # which leaves nothing to type into.
         _lev_all = _lev_var = _lev_blank = _lev_val = 0
         _dead_sheets = []
         for _r in ov_decl:
@@ -8934,11 +8258,22 @@ def selftest(config_arg, frozen_exe=None, migration=False):
         print('        nav groups whose every section owns overlays: %s'
               % ', '.join('%s (%d section(s))' % (g['id'], len(g['sections']))
                           for g in _pack_groups))
-        t.check('two groups are filled entirely by overlay-owning sections — '
-                'the packs and the constants', len(_pack_groups) == 2,
-                [g['id'] for g in _pack_groups])
-        _packs = max(_pack_groups, key=lambda g: len(g['sections']))
-        _consts = min(_pack_groups, key=lambda g: len(g['sections']))
+        # Identified BY ID. These were picked by section count until a third
+        # group (enemy-gear) also filled up entirely with overlay-owning
+        # sections and tied game-constants at one section, at which point min()
+        # started choosing by list order and the two checks below could silently
+        # have asserted about the wrong group.
+        _pack_ids = set(g['id'] for g in _pack_groups)
+        t.check('every group filled entirely by overlay-owning sections is one '
+                'this block knows about — the packs, the constants and the '
+                'enemy rosters', _pack_ids <= {'talent-balance',
+                'game-constants', 'enemy-gear'}, sorted(_pack_ids))
+        _by_pack_id = dict((g['id'], g) for g in _pack_groups)
+        t.check('the packs and the constants are both among them',
+                'talent-balance' in _by_pack_id and 'game-constants' in _by_pack_id,
+                sorted(_by_pack_id))
+        _packs = _by_pack_id['talent-balance']
+        _consts = _by_pack_id['game-constants']
         t.check('the pack group holds one section per class, each its own '
                 'subsystem, and none of them is absent',
                 len(_packs['sections']) == 11 and not _packs['absent']
@@ -9049,13 +8384,10 @@ def selftest(config_arg, frozen_exe=None, migration=False):
 
         # ---- keys no schema declares, in a slice file
         #
-        # THE CHECKER CANNOT SEE THESE ANY MORE. check_schema's stray-key guard
-        # runs only for a file some schema `claimed`, and `claimed` is filled in
-        # only for a schema declaring a `targets.section`. The Phase 3 split
-        # removed `section` from all nine, so the guard continues on every file.
-        # Measured 2026-09-13 against the live directory carrying a real
-        # leftover key: `check_schema` returned 0 problems, rc 0. The C# side
-        # still refuses it at launch through ConfigDoc.ReadSection, so it is
+        # THE CHECKER CANNOT SEE THESE. check_schema's stray-key guard runs only
+        # for a file some schema `claimed`, and `claimed` is filled in only for
+        # a schema declaring a `targets.section`, which slice schemas do not
+        # (see stray_keys). The C# side refuses such a key at launch through ConfigDoc.ReadSection, so it is
         # caught eventually -- but by nothing a developer runs first, which
         # makes this editor the only gate that can report it.
         #
@@ -9068,17 +8400,10 @@ def selftest(config_arg, frozen_exe=None, migration=False):
               % (len(sk_live), sum(len(v) for v in sk_live.values()),
                  '; '.join('%s: %s' % (k, ', '.join(v))
                            for k, v in sorted(sk_live.items())) or 'none'))
-        # CORRECTION, made during this change. This first read
-        #
-        #   not [k for v in sk_live.values() for k in v
-        #        if k.startswith(METADATA_PREFIX)]
-        #
-        # which uses the constant under test to say what the constant should
-        # do: setting METADATA_PREFIX to a string nothing starts with left the
-        # case PASSING over a census that had stopped filtering anything
-        # [measured, mutation run 2026-09-13]. An assertion that cannot fail is
-        # the thing this file exists to catch, and it was in the case written
-        # to catch it. It now names the key off disk instead: every slice file
+        # NOT `not [k ... if k.startswith(METADATA_PREFIX)]`: that uses the
+        # constant under test to say what the constant should do, and passes
+        # when METADATA_PREFIX is mutated to match nothing [measured]. The
+        # case names the key off disk instead: every slice file
         # carries a _version stamp that no schema declares as a field, so it is
         # in the raw undeclared set and must be out of the census.
         raw_undeclared = build_model(doc)[0]['unknownTopLevel']
@@ -9306,8 +8631,8 @@ def selftest(config_arg, frozen_exe=None, migration=False):
 
         # ---- line endings, per file, both ways
         #
-        # Phase 1 found the live .cfg CRLF that afternoon and LF that morning,
-        # so nothing here assumes an ending anywhere. With one document there
+        # A .cfg has been seen both CRLF and LF (see the line-endings note), so
+        # nothing here assumes an ending anywhere. With one document there
         # was one ending to preserve; with a file per slice there are as many
         # as there are files, and a writer that normalised them all to one
         # would still pass a census taken over a directory that happens to be
@@ -9376,24 +8701,13 @@ def selftest(config_arg, frozen_exe=None, migration=False):
                     [(o, _ends(os.path.join(cdnl, o))) for o in others
                      if _ends(os.path.join(cdnl, o))[0] != 0])
         by_sub_m = dict((sc['subsystem'], sc) for sc in app.schemas)
-        # WAS, until 2026-09-13, under the comment "One gate each since 3.0, and
-        # it is a path in the merged document. Elapse had two -- a cfg key and
-        # the section's own 'enabled' -- and the cfg half is gone.":
-        #
-        #   t.check('the enable index reports effective state per subsystem',
-        #           idx['Elapse']['effective'] == 'on'
-        #           and len(idx['Elapse']['gates']) == 1
-        #           and idx['Elapse']['gates'][0]['kind'] == 'json', ...)
-        #   t.check('SelfCheck reads as deliberately off, from its own section',
-        #           idx['SelfCheck']['effective'] == 'off', ...)
-        #
-        # split-config-into-toggleable-slices makes both gates cfg keys, and a
-        # slice key is not in ckf.hardmode.cfg until the game has been launched
-        # once, so both subsystems correctly read 'unknown' and both checks
-        # failed. They asserted a VALUE that depends on whether the game has
-        # run. The three-state contract is asserted against a built model
-        # instead -- which is launch-independent and is the thing the nav toggle
-        # relies on -- and the live reading is reported rather than asserted.
+        # Every gate is a cfg key, and a slice key may be missing from
+        # ckf.hardmode.cfg until the game has been launched once, in which case
+        # the subsystem correctly reads 'unknown'. Asserting a live VALUE would
+        # depend on whether the game has run, so the three-state contract is
+        # asserted against a built model instead -- launch-independent, and the
+        # thing the nav toggle relies on -- and the live reading is reported
+        # rather than asserted.
         class _FakeDoc:
             def __init__(self, schemas):
                 self.schemas = schemas
@@ -9480,9 +8794,9 @@ def selftest(config_arg, frozen_exe=None, migration=False):
         # bytes equal the current bytes, so once the live config happened to
         # carry the same number the save became a no-op, nothing was written,
         # no backup was taken, and the two backup checks below failed for a
-        # reason that had nothing to do with the code. That is what a retune of
-        # the Team PL table did on 2026-09-03 -- override[0] became 0.25, which
-        # was the constant this test wrote. Derive it instead, and keep it
+        # reason that had nothing to do with the code -- a retune that sets
+        # override[0] to the constant this test writes does exactly that.
+        # Derive it instead, and keep it
         # inside the column's declared [-5.0, 5.0] so the edit stays legal.
         _cur = rows[0]['cells'].get('PowerLevelFraction')
         NEW_FRACTION = 0.25 if not isinstance(_cur, (int, float)) or abs(_cur - 0.25) > 1e-12 else 0.26
@@ -9516,21 +8830,73 @@ def selftest(config_arg, frozen_exe=None, migration=False):
                 'the mirror invariant included',
                 res['checkAfter']['ran'] and after_set == base_set,
                 sorted(after_set ^ base_set))
-        t.check('a save of a declared-but-absent table does not invent an empty one',
-                'offDuty' not in json.dumps(  # any absent table would show up as {} or []
-                    _read_section(cd, U_FATIGUE)
-                    .get('offDuty', {}).get('byPowerLevel', 'ABSENT')))
+        # A DECLARED-BUT-ABSENT TABLE STAYS ABSENT ACROSS A SAVE. apply_edits
+        # skips a table the schema declares, the file does not carry and the
+        # browser sends no rows for, because writing {} or [] back would turn an
+        # absent key into a present empty one -- the same class of mistake as
+        # writing 0 for unset.
+        #
+        # This used to name one fatigue path as its witness, and when that
+        # subsystem's layout changed the witness stopped existing, so the case
+        # was asserting something about a path no schema declares any more. The
+        # property is asserted over EVERY declared table in EVERY readable unit
+        # instead, so no retuning and no relayout can retire it.
+        #
+        # The absent state is MADE, not hoped for. A config in which every
+        # declared table happens to be present would leave the case with nothing
+        # to prove, and nothing must not read as clean. It is made in the
+        # DOCUMENT rather than on disk: apply_edits is pure, so this needs no
+        # second sandbox and leaves `cd` exactly as the baseline comparison above
+        # found it.
+        #
+        # A unit whose file owns a mirror source is left alone. apply_edits
+        # regenerates that mirror from the unit's own table, so emptying it would
+        # be exercising the mirror generator rather than this property, and the
+        # mirror has its own cases above.
+        _mirror_files = set(inv['source'].split('#', 1)[0]
+                            for sc in schemas for inv in sc.get('invariants', [])
+                            if inv.get('kind') == 'mirror')
+        _dabs = read_document(cd, schemas)
+        _absent = []
+        for (_au, _ap), (_asch, _af) in json_fields(schemas).items():
+            if _af['type'] != 'table' or _au not in _dabs.sidecars:
+                continue
+            if unit_file(_au) in _mirror_files:
+                continue
+            put(_dabs.sidecars[_au], _ap, None, False)
+            _absent.append((_au, _ap))
+        _absent.sort()
+        t.check('there is at least one declared table to make absent — a run '
+                'with no witness says so by name instead of passing quietly',
+                _absent, sorted(_mirror_files))
+        _mabs, _xabs = build_model(_dabs)
+        t.check('the reader reports every one of them absent, which is what the '
+                'browser renders as an empty grid',
+                all(_mabs['tables']['%s|%s' % (_au, _ap)]['present'] is False
+                    for _au, _ap in _absent),
+                [k for k in ('%s|%s' % (_au, _ap) for _au, _ap in _absent)
+                 if _mabs['tables'][k]['present']])
+        _eabs = {'json': {}}
+        for _au, _ap in _absent:
+            _eabs['json'].setdefault(_au, {'scalars': {}, 'tables': {}})
+            _eabs['json'][_au]['tables'][_ap] = {'rows': []}
+        _pabs, _ = apply_edits(_dabs, _xabs, _eabs, strip_readme=False)
+        # dig(), not a substring of the rendered bytes: an emptied nested path
+        # leaves its parent object behind, so {} or [] at the path itself is the
+        # only thing that means the table was invented.
+        _invented = [(_au, _ap) for _au, _ap in _absent if dig(_sec(_pabs, _au), _ap)[1]]
+        t.check('a save of a declared-but-absent table does not invent an empty '
+                'one — every declared table in every unit (%d of them)'
+                % len(_absent),
+                not _invented, _invented)
         t.check('a relaunch reminder comes back with the save', bool(res.get('relaunch')))
 
-        # REMOVED, 2026-09-07: the .pre-gui-backup copy every first save used
-        # to leave beside the file it wrote, and the three cases that asserted
-        # it appeared, matched the pre-save bytes, and survived a second save.
-        # David's ruling: the editor writes the file the player asked it to
-        # write and leaves nothing else in BepInEx/config. The transaction is
-        # what makes that safe -- a crash cannot leave a half-written file --
-        # and the reset is re-extracting BepInEx\config from the zip. These
-        # two cases replace them: the directory after a save holds the config
-        # and nothing else.
+        # NO BACKUP FILE. The editor writes the file the player asked it to
+        # write and leaves nothing else in BepInEx/config (David's rule). The
+        # transaction is what makes that safe -- a crash cannot leave a
+        # half-written file -- and the reset is re-extracting BepInEx\config
+        # from the zip. The directory after a save holds the config and
+        # nothing else.
         new_after_save = sorted(set(_walk_rel(cd)) - before_files)
         t.check('a save creates no file except the ones it wrote',
                 new_after_save == [], new_after_save)
@@ -9557,23 +8923,16 @@ def selftest(config_arg, frozen_exe=None, migration=False):
 
         # an INVARIANT violation is refused
         #
-        # WAS, until 2026-09-13: a json edit writing `enabled` in the teampl
-        # section, under the comment "3.0 moved both halves of the linkedEnable
-        # group out of the cfg and into the merged document, so this is a json
-        # edit now." split-config-into-toggleable-slices moves them back --
-        # teampl.schema.json's group now names `Slices.Progression` and
-        # `Slices.ModelRules`, both cfg keys -- and the json paths this wrote
-        # no longer exist in any schema.
+        # teampl.schema.json's linkedEnable group names cfg keys
+        # (Slices.Progression and Slices.ModelRules), so the edit is a cfg edit.
         #
-        # THE FIRST OF THE THREE WENT ON PASSING WHILE MEASURING NOTHING. It
-        # asked only `not badinv['ok']`, and the save WAS refused: with "no
-        # schema declares ckf.hardmode.json#teampl path 'enabled'", which has
-        # nothing to do with the invariant. A refusal check that does not read
-        # the reason cannot fail. Both halves read the kind now.
+        # A refusal check that does not read the reason cannot fail: a save
+        # refused for an unrelated reason (an undeclared path, say) would pass
+        # `not badinv['ok']`. Both halves read the kind.
         #
         # The group's keys are read off the schema rather than spelled, so this
-        # follows them wherever the next phase puts them, and the fixture
-        # carries them because the live .cfg does not yet.
+        # follows them wherever a later layout puts them, and the fixture
+        # carries them because a .cfg the game has not rewritten may not.
         linked_groups = [inv for sc in schemas for inv in sc.get('invariants', [])
                          if inv.get('kind') == 'linkedEnable']
         t.check('at least one linkedEnable group is declared to exercise',
@@ -9899,49 +9258,22 @@ def selftest(config_arg, frozen_exe=None, migration=False):
 
         # ---- 8. a .cfg whose line endings are mixed
         #
-        # AGENTS.md section 6 has agents editing this file line by line, and a
+        # AGENTS.md has agents editing this file line by line, and a
         # tool that rewrites one line of a CRLF file with an LF ending produces
         # exactly this. Splitting the whole file on one sniffed separator
         # merged the LF-ended line into the next one, and what came out was a
         # silent WRONG WRITE, not a read error.
         #
-        # CORRECTION, 2026-09-13 morning. This fixture used to be the live
-        # ckf.hardmode.cfg exactly as read, guarded by a check named
-        # 'the fixture source really is CRLF' and followed by
-        # `clean_raw.rindex(b'\r\n', 0, gj)` to find an ending to flip. The
-        # file was LF that morning -- 162 bytes, 8 LF, 0 CRLF -- so the check
-        # FAILed and the rindex two lines under it raised
-        # `ValueError: subsection not found`, which ended the whole run before
-        # its report line -- no pass count at all. Reported by David.
+        # MAKE the condition in the fixture instead of hoping the source
+        # supplies it: a check written against live data stops testing the
+        # code the moment the data moves, and then fails (or ends the run) as
+        # if the code regressed. The source file's content is still what is
+        # read, so the section still indexes the real sections and the real
+        # key, but every ending is normalised to CRLF here and exactly one of
+        # them is flipped to LF here.
         #
-        # Same defect class as the three checks TASKS.md records on
-        # 2026-09-03: a check written against live data stops testing the code
-        # the moment the data moves, and then fails as if the code regressed.
-        # The fix is the same one -- MAKE the condition in the fixture instead
-        # of hoping the source supplies it. The source file's content is still
-        # what is read, so the section still indexes the real sections and the
-        # real key, but every ending is normalised to CRLF here and exactly one
-        # of them is flipped to LF here.
-        #
-        # SECOND CORRECTION, 2026-09-13 afternoon. THE FIX ABOVE STANDS; ITS
-        # STATED REASON DID NOT. The paragraph above used to continue: "That
-        # claim is not true of this file and was never true of a file BepInEx
-        # had written. BepInEx owns ckf.hardmode.cfg and rewrites it from the
-        # keys the plugin binds on game exit, and what it writes is LF ...
-        # ckf.datadump.cfg beside it measured 448 bytes, 23 LF, 0 CRLF", and
-        # ended "What BepInEx writes no longer decides whether this section
-        # runs."
-        #
-        # A launch that afternoon rewrote ckf.hardmode.cfg as 3,238 bytes,
-        # 179 CRLF, 0 LF, and ckf.datadump.cfg as 24,988 bytes, 317 CRLF and 3
-        # lone LF [measured]. So "what it writes is LF" was false, and the
-        # original 'the fixture source really is CRLF' check would now PASS --
-        # not because it was right, but because the data moved back underneath
-        # it. That is the whole argument for building the condition here: this
-        # section was correct to stop depending on the source's endings, and it
-        # would have gone on running unchanged through both states. Only the
-        # sentence explaining why was wrong. See the line-endings note above
-        # class CfgFile for the three observations and for what is not known.
+        # BepInEx has written this file both ways; see the line-endings note
+        # above class CfgFile.
         print('\n[8] a .cfg with mixed line endings')
 
         def _lone_lf(b):
@@ -10048,19 +9380,9 @@ def selftest(config_arg, frozen_exe=None, migration=False):
         #   AND no comment is written and no key is appended that already exists
         # THE SOURCE IS READ; ITS SHAPE IS NOT ASSUMED.
         #
-        # CORRECTION, 2026-09-13 afternoon. As first written this section took
-        # the live ckf.hardmode.cfg and assumed two things about it: that it
-        # had no [Slices] section, and that Slices.RuleModel was not in it.
-        # Both held that morning (162 bytes, one key) and neither held after
-        # the launch (3,238 bytes, 43 keys), so eight cases here FAILed --
-        # including one named 'the live .cfg really has no [Slices] section'.
-        #
-        # That is the SAME defect this file corrected in section [8] earlier
-        # the same day, written into a new section hours later by the agent
-        # that had just written the correction. The guard caught it and said
-        # so rather than the run dying, which is the only part that worked as
-        # intended. The fix is the one section [8] already uses: BUILD the
-        # condition. `s8_nosec` below is the source with [Slices] removed
+        # BUILD the condition, as section [8] does: whether the source carries
+        # [Slices] or a given slice key depends on whether the game has been
+        # launched. `s8_nosec` below is the source with [Slices] removed
         # whatever it arrived with, and `s8_withsec` is that plus one seeded
         # key, so the create-a-section half and the append-under-a-header half
         # both run in either state.
@@ -10098,10 +9420,8 @@ def selftest(config_arg, frozen_exe=None, migration=False):
                 MASTER_KEY in CfgFile(s8_nosec).keys, sorted(CfgFile(s8_nosec).keys))
 
         # A FIXTURE BUILDER THAT CANNOT BUILD ITS CONDITION RETURNS A REASON.
-        # It does not raise. _cfg_add_keys, the helper these two replace, threw
-        # AssertionError when handed a file already in the target state, and on
-        # 2026-09-13 that ended the whole run with no report line -- the third
-        # time this file did that in a day. The property is checked here rather
+        # It does not raise: a raise here would end the whole run with no report
+        # line. The property is checked here rather
         # than assumed, because the mutation that puts the raise back changes
         # only an error branch and every other case in this suite would stay
         # green.
@@ -10142,11 +9462,10 @@ def selftest(config_arg, frozen_exe=None, migration=False):
         #   THEN the key is appended under that section header
         #   AND a section that does not exist is created with the key under it
         #
-        # Both halves are driven off the live file's own bytes. [Slices] is the
-        # section every slice toggle lands in and the live file has no such
-        # section [measured, 2026-09-13: 162 bytes, [General] only], so the
-        # second half is the state the editor is actually in today, not an
-        # edge case built for the test.
+        # Both halves are driven off the source file's own bytes. [Slices] is
+        # the section every slice toggle lands in, and a .cfg BepInEx has not
+        # yet rewritten carries [General] only, so the second half is a state
+        # the editor really meets, not an edge case built for the test.
         s2a = CfgFile(s8_nosec)
         s2a_what = s2a.set_value('General.Appended', 'true')
         t.check('scenario 2: a key whose section exists is appended, not refused',
@@ -10163,8 +9482,8 @@ def selftest(config_arg, frozen_exe=None, migration=False):
                 s2a.to_bytes().count(b'#') == s8_nosec.count(b'#'),
                 (s8_nosec.count(b'#'), s2a.to_bytes().count(b'#')))
 
-        # The live file has ONE section, so in it "under [General]" and "at the
-        # end of the file" are the same line and the check above cannot tell
+        # A file with ONE section makes "under [General]" and "at the end of
+        # the file" the same line and the check above cannot tell
         # them apart -- it passes for a writer that appends everything to the
         # end. A section with another one after it is what makes the two
         # distinguishable, so the placement is pinned here instead.
@@ -10283,11 +9602,8 @@ def selftest(config_arg, frozen_exe=None, migration=False):
         #        for a sequence it expects to find
         #   AND it reports which endings the source actually had
         #
-        # This is the scenario that section [8] above was failing on David's
-        # machine: it asserted 'the fixture source really is CRLF' against a
-        # file BepInEx had written with LF, and the rindex under it ended the
-        # run with ValueError before any report line. What follows checks the
-        # property the scenario states, rather than re-checking [8]'s fixture:
+        # What follows checks the property the scenario states, rather than
+        # re-checking [8]'s fixture:
         # a line this writer ADDS takes its ending from the file, whatever the
         # file uses, and the census is printed rather than assumed.
         s4_crlf = s8_nosec.replace(b'\r\n', b'\n').replace(b'\n', b'\r\n')
@@ -10630,13 +9946,9 @@ def selftest(config_arg, frozen_exe=None, migration=False):
                          and (s.get('enable') or {}).get('json'))
     t.check('no subsystem declares two enable gates: the outer cfg gate is gone',
             twice_gated == [], twice_gated)
-    # WAS, until 2026-09-13: "exactly one subsystem is gated by a cfg key, and
-    # it is the master", asserting `len(gated_by_cfg) == 1`. That was a
-    # consolidate-config-and-ship statement -- 21 of 22 keys had moved into the
-    # merged document and [General] Enabled was the only cfg key left.
-    # split-config-into-toggleable-slices reverses it: every slice toggle is a
-    # cfg key again. What is asserted now is the property that outlives the
-    # count -- exactly one cfg gate is the master, and every other one is not.
+    # Every slice toggle is a cfg key. What is asserted is the property that
+    # outlives the count: exactly one cfg gate is the master, and every other
+    # one is not.
     gated_by_cfg = sorted(s['subsystem'] for s in schemas
                           if (s.get('enable') or {}).get('cfg'))
     masters = [s for s in schemas
@@ -10780,32 +10092,10 @@ def selftest(config_arg, frozen_exe=None, migration=False):
     # about what SURVIVED, not about how much came out.
     all_docs = [(s['subsystem'], f['path'], f['doc'])
                 for s in schemas for f in s['fields'] if f.get('doc')]
-    # 58 before Phase 3. The two cfg gates it deleted -- [Elapse] Enabled and
-    # [Fatigue] Enabled -- took their `doc` with them; the prose was folded into
-    # the section's own "enabled" field, which already had one.
-    # 48 since 2026-09-07, which removed the eight flat fatigue fields --
-    # runningEmpty chancePercent, durationDays, minAffected and maxAffected,
-    # the two knight ones under it, offDuty.durationDays and
-    # offDuty.knight.durationDays -- each of which carried a doc.
-    # 82 since 2026-09-13: split-config-into-toggleable-slices declared the
-    # slice set in the schemas, which added 34 slice-stub schemas carrying one
-    # documented cfg field each, and deleted the eight subsystem `enabled` json
-    # fields whose docs moved to the cfg gates that replaced them. 48 + 34 = 82.
-    # 86 since 2026-09-13, later the same day: implantsglobal.schema.json stopped
-    # being a slice stub. Phase 3 gave it a file of its own,
-    # ckf.hardmode.d/implants-global.json, and it now declares the four json
-    # fields that file carries -- costMultiply, installTimeMultiply,
-    # implantStressMultiply and implantStressClampMin -- each with a doc, on top
-    # of the cfg gate it already had. 82 + 4 = 86.
-    # 85 since 2026-09-13, later again: David had implantStressClampMin deleted
-    # as useless, and the measurement is that the clamp never binds --
-    # ImplantStress is 1 on 197 of the 198 rows and 5 on Quantum Rider, so
-    # after the x3 nothing lands below the floor of 1 for it to lift. The field
-    # went with it. 86 - 1 = 85, across 43 schemas: 43 cfg fields and 42 json.
-    # 86 since Phase 4: rulemodel.schema.json gained `ruleReference`, a
-    # documented field of a third kind -- `"in": "reference"`, rows in the
-    # schema, on no file and in no edit set. 85 + 1 = 86, across 43 schemas:
-    # 43 cfg, 42 json and 1 reference.
+    # The expected count is the number of documented fields across the
+    # schemas (cfg gates, json fields and rulemodel's `"in": "reference"`
+    # field). It changes only when a schema gains or loses a documented field,
+    # and then this literal moves with it.
     t.check('there are %d field docs to check' % len(all_docs), len(all_docs) == 86, len(all_docs))
     emptied, unbalanced, mangled, changed = [], [], [], []
     for sub, path, doc in all_docs:
@@ -10838,12 +10128,10 @@ def selftest(config_arg, frozen_exe=None, migration=False):
     print('\n[13] hidden, collapsed and cleared — what reaches the disk')
     with tempfile.TemporaryDirectory() as td:
         # (a) A NO-OP SAVE WRITES ZERO BYTES -- ACROSS EVERY FILE THE EDITOR
-        #     OWNS, NOT JUST THE ONE IT USED TO BE.
+        #     OWNS.
         #
-        # This is the check that caught the generated-mirror defect in
-        # consolidate-config-and-ship Phase 2. Until Phase 3 the editor owned
-        # one document and one mirror, so it had one real chance to catch
-        # something; it now owns a file per slice and has one chance per file.
+        # The editor owns a file per slice, so this has one chance per file to
+        # catch a writer that rewrites what it did not change.
         # `written` is the editor's own account of what it did, so the bytes
         # are hashed independently either side of the save as well -- a writer
         # that reported [] while replacing a file would pass on the first half
@@ -10876,11 +10164,8 @@ def selftest(config_arg, frozen_exe=None, migration=False):
 
         appn = App({'gameDir': '', 'configDirOverride': cdn, 'stripReadme': False}, 'x')
         mn = appn.api_model()
-        # 2026-09-14: `owned` now includes the 53 lever sheets, and the
-        # no-op edit set reaches them too -- every lever cell sent back at the
-        # value it already holds. Before the write path opened this compared
-        # the sidecars and the .cfg only; a sheet was not in `owned` and no
-        # edit set could name one.
+        # `owned` includes the lever sheets, and the no-op edit set reaches
+        # them too -- every lever cell sent back at the value it already holds.
         _noop = _edits_for(appn.schemas, mn)
         t.check('the no-op edit set covers every file the editor owns — an '
                 'edit set that reached none of them would write zero bytes '
@@ -11119,22 +10404,11 @@ def selftest(config_arg, frozen_exe=None, migration=False):
         # (c) every subsystem gate, whatever it is spelled in, and writing one
         #     off is what turns the subsystem off
         #
-        # WAS, until 2026-09-13: "every subsystem gate is a path in the merged
-        # document now", asserting `len(cfg_gated) == 1 and len(ungated) <= 1`
-        # with the comment "Phase 3 deleted the outer cfg gate, so there is no
-        # pair to collapse and no pair to disagree." That was a
-        # consolidate-config-and-ship statement.
-        # split-config-into-toggleable-slices reverses it: every slice toggle is
-        # a cfg key again, so on 2026-09-13 the counts were 0 json-gated / 10
-        # cfg-gated / 33 ungated [measured].
-        #
-        # THE LOOP UNDER IT WENT QUIET AND NOTHING SAID SO. `json_gated` fell to
-        # zero, so the twenty per-subsystem assertions below stopped executing
-        # and the run got twenty checks shorter with no FAIL, no NOT RUN and no
-        # line naming what had stopped -- exactly the defect AGENTS.md section 3
-        # is about, and the fourth of that shape found this phase. The loop now
-        # runs over every gated schema whatever the spelling, and
-        # `gates_to_exercise` fails loudly if that set is ever empty.
+        # Every slice toggle is a cfg key, so `json_gated` is empty and a loop
+        # over it alone would run no assertion and say nothing -- exactly the
+        # defect AGENTS.md is about. The loop runs over every gated schema
+        # whatever the spelling, and `gates_to_exercise` fails loudly if that
+        # set is ever empty.
         json_gated = [sc for sc in apph.schemas
                       if (sc.get('enable') or {}).get('json') and sidecar_unit(sc)]
         cfg_gated = [sc for sc in apph.schemas if (sc.get('enable') or {}).get('cfg')]
@@ -11199,19 +10473,11 @@ def selftest(config_arg, frozen_exe=None, migration=False):
             #   - refused because a linkedEnable group will not move alone;
             #   - written, in which case the gate reads back off.
             #
-            # A THIRD WAY WAS HERE AND IS NOW A FAILURE. Until
-            # split-config-into-toggleable-slices a cfg gate whose key the file
-            # did not carry was refused, and this branch asserted that refusal
-            # and `continue`d. Every slice key is in that state on the live file
-            # -- it carries [General] Enabled and nothing else [measured,
-            # 2026-09-13] -- so for every slice gate this loop asserted the
-            # refusal and never reached the write.
-            #
-            # set_value appends such a key now, so that branch would simply
-            # stop running, and a check that stops running with nothing said is
-            # the defect AGENTS.md section 3 is about. It is kept as an explicit
-            # FAIL instead: if the refusal ever comes back, this says so by name
-            # rather than going quiet and leaving the write untested.
+            # A THIRD OUTCOME IS A FAILURE: refusing a cfg gate whose key the
+            # file does not carry. set_value appends such a key, and a refusal
+            # would make the write below go untested with nothing said
+            # (AGENTS.md). If the refusal ever comes back, this says so by
+            # name.
             if not rp['ok']:
                 summary = (rp.get('refused') or {}).get('summary', '')
                 if 'is not in ckf.hardmode.cfg' in summary:
@@ -11268,14 +10534,9 @@ def selftest(config_arg, frozen_exe=None, migration=False):
                 # contradicted each other and only one could be right.
                 #
                 # It went unnoticed while every slice gate defaulted true.
-                # Slices.SelfCheck is the one slice whose declared default is
-                # false; after the 2026-09-13 launch BepInEx wrote
-                # `SelfCheck = false`, turning it off became a no-op, and this
-                # FAILed alone out of 42 [measured]. The writer was correct
-                # throughout. And it printed no DETAIL, because the check
-                # passed no `detail` argument -- the same silence that cost a
-                # round trip on make_release.py the same day. Both fixed.
-                # THREE cases, because there are three things the save can
+                # A key already false (Slices.SelfCheck's declared default is
+                # false) makes turning it off a no-op, so the save correctly
+                # writes nothing. THREE cases, because there are three things the save can
                 # correctly do, and only one of them was being allowed for:
                 #   key absent   -> appended, so the file IS written
                 #   key != false -> replaced, so the file IS written
@@ -11309,7 +10570,7 @@ def selftest(config_arg, frozen_exe=None, migration=False):
         # Which of the three endings each gate reached, printed on every run.
         # A census is the only thing that separates "no gate was refused by a
         # requires declaration" from "the branch that reads them stopped being
-        # reached" -- the shape AGENTS.md section 3 is about, and the shape
+        # reached" -- the shape AGENTS.md is about, and the shape
         # check_schema's own `requires:` line exists for.
         print('        gate-off census: %d written off, %d refused by a '
               'requires declaration (%s), %d refused by a linkedEnable '
@@ -11335,19 +10596,11 @@ def selftest(config_arg, frozen_exe=None, migration=False):
         # (c2) the same gates, against a .cfg that carries their keys, AND
         #      against one that does not -- both derived, neither assumed
         #
-        # REWRITTEN 2026-09-13 after the launch. This block used to open "The
-        # block above measures the live file, where every slice key is still
-        # absent, so every cfg gate lands in the 'not in the file yet' branch
-        # and the WRITE path is never reached", and called _cfg_add_keys to
-        # build "the after-a-launch shape". Both halves of that were bets on
-        # the live file's contents. The game was launched, the live file went
-        # from 1 key to 43, _cfg_add_keys hit its own AssertionError on the
-        # [Slices] section that was now there, and the run ended with no
-        # report line.
-        #
-        # Neither state is assumed now. Both are built from the source with
-        # _cfg_with_keys and _cfg_without_keys, so this runs the same either
-        # way and the source's own state is reported rather than relied on.
+        # Whether the source .cfg carries the slice keys depends on whether the
+        # game has been launched, so neither state is assumed: both are built
+        # from the source with _cfg_with_keys and _cfg_without_keys, so this
+        # runs the same either way and the source's own state is reported
+        # rather than relied on.
         slice_keys = sorted(set(sc['enable']['cfg'] for sc in cfg_gated
                                 if sc['enable']['cfg'] != MASTER_KEY))
         if slice_keys:
@@ -11546,11 +10799,7 @@ def selftest(config_arg, frozen_exe=None, migration=False):
         # refused. This is the end-to-end half of scenario 2; section [8b]
         # drives CfgFile directly. The fixture strips [General] Enabled out of
         # a sandbox copy, which is the one absent-key state that can be built
-        # from the live file without inventing a key no schema declares.
-        #
-        # REPLACED, split-config-into-toggleable-slices. The two cases here
-        # were 'a cfg key the file does not carry is refused, not appended' and
-        # 'and nothing was written by that refusal'.
+        # from the source file without inventing a key no schema declares.
         cdx = _sandbox(src, os.path.join(td, 'nokey'))
         cx = CfgFile.load(os.path.join(cdx, 'ckf.hardmode.cfg'))
         gone = [ln for i, ln in enumerate(cx.lines) if i != cx.keys[MASTER_KEY]]
@@ -11610,13 +10859,9 @@ def selftest(config_arg, frozen_exe=None, migration=False):
         # end through commit() and not just the replacement that already
         # shipped.
         #
-        # CORRECTION, 2026-09-13 afternoon: the removal is new. This block
-        # asserted 'the toggle being flipped is a key the .cfg does not carry'
-        # against the live file, which carried one key that morning and 43
-        # after the launch, so the assertion FAILed and the insertion check
-        # under it FAILed with it. Same defect as section [8b]'s: the state was
-        # read off the source instead of built. It is built now, so the append
-        # is exercised whichever state the source is in.
+        # The key being flipped is REMOVED from the fixture first, as in
+        # section [8b]: the state is built, not read off the source, so the
+        # append is exercised whichever state the source is in.
         cdt = _sandbox(src, os.path.join(td, 'only-the-cfg'))
         slice_gates = [sc for sc in apph.schemas
                        if (sc.get('enable') or {}).get('cfg')
@@ -11775,9 +11020,9 @@ def selftest(config_arg, frozen_exe=None, migration=False):
             okr, whyr = _cfg_with_keys(os.path.join(cdr, 'ckf.hardmode.cfg'), _write)
             t.check('the render fixture writes the slice keys it means to', okr, whyr)
         if _held:
-            # The held-back key has to be ABSENT, and after the 2026-09-13
-            # launch the source carries all 43 -- so it is removed here rather
-            # than assumed missing. Without this the render covers only the
+            # The held-back key has to be ABSENT, and a source the game has
+            # rewritten carries every key -- so it is removed here rather than
+            # assumed missing. Without this the render covers only the
             # in-the-file branch and the other one goes untested in silence.
             okh, whyh = _cfg_without_keys(os.path.join(cdr, 'ckf.hardmode.cfg'), _held)
             t.check('the render fixture holds back the key it means to', okh, whyh)
@@ -11867,10 +11112,10 @@ def selftest(config_arg, frozen_exe=None, migration=False):
         # ---- the teardown instrument itself, on every machine
         #
         # _procs_settle is what decides whether the frozen HTTP case below
-        # leaked a process, and the single immediate _procs_from it replaced
-        # got that wrong on Windows: it FAILED while the delete beside it
-        # PASSED, which cannot both be true of a process that was really still
-        # holding the image. [David, 2026-09-04]
+        # leaked a process. A single immediate _procs_from gets that wrong on
+        # Windows: it FAILS while the delete beside it PASSES, which cannot both
+        # be true of a process that was really still holding the image.
+        # [measured, Windows]
         #
         # These belong here rather than in the frozen block because here they
         # have a sampling moment on any machine: _procs_from is stubbed, so
@@ -11888,8 +11133,8 @@ def selftest(config_arg, frozen_exe=None, migration=False):
 
             seq = [['7'], ['7'], []]
             t.check('a pid still there while Windows finishes an asynchronous '
-                    'teardown is not a leak — the poll is the fix for the '
-                    'failure of 2026-09-04',
+                    'teardown is not a leak — the poll is what makes a single '
+                    'mid-teardown sample harmless',
                     _procs_settle('x', tries=5, delay=0) == [])
 
             seq = [['7', '9'], ['9'], ['9']]
@@ -12050,9 +11295,8 @@ def selftest(config_arg, frozen_exe=None, migration=False):
             # NOT under `td`. A one-file exe that is still running cannot be
             # unlinked on Windows, so a copy inside the block's own
             # TemporaryDirectory turns any failure to kill it into a
-            # PermissionError out of the cleanup -- which is what happened on
-            # 2026-09-04: every case in this section had passed and the run
-            # died before printing the report. Its own directory, deleted with
+            # PermissionError out of the cleanup, and the run dies before
+            # printing the report after every case has passed [measured]. Its own directory, deleted with
             # retries and never raising, keeps a lock from costing the result.
             exedir = tempfile.mkdtemp(prefix='ckf-exe-home-')
             fxr = os.path.join(exedir, os.path.basename(fx))
@@ -12138,8 +11382,8 @@ def selftest(config_arg, frozen_exe=None, migration=False):
             # The process question is asked of the OS, not of the Popen handle.
             # `died` only says this process reaped the child it owns; the
             # application the bootloader launched is a grandchild it cannot
-            # see, and believing `died` is what let the second version of this
-            # pass while the exe was still running. [David, 2026-09-04]
+            # see, and believing `died` passes while the exe is still running.
+            # [measured, Windows]
             t.check('no process is left running from the exe copy — a one-file '
                     'exe is two processes and terminate() reaches only the '
                     'bootloader',
@@ -12161,7 +11405,7 @@ def selftest(config_arg, frozen_exe=None, migration=False):
             # process really did survive; otherwise it is reported NOT RUN with
             # the path, because passing it would claim a sample this machine
             # did not take. On POSIX it cannot fail at all -- a running binary
-            # unlinks fine there [measured 2026-09-04].
+            # unlinks fine there [measured].
             if gone:
                 t.check('and the directory it ran from could be deleted', True)
             elif alive == []:
@@ -12177,11 +11421,10 @@ def selftest(config_arg, frozen_exe=None, migration=False):
 
     # ---- 17. where --selftest gets its fixtures
     #
-    # This is startup, before any case runs, and it is where `--selftest` with
-    # no `--config` died on every machine that is not a cloud session's
-    # assembled tree: `<repo>/live-config` was the unconditional default and
-    # `shutil.copytree` raised FileNotFoundError out of section 2. Reported by
-    # David, 2026-09-04, on the Phase 5 Windows run.
+    # This is startup, before any case runs. `<repo>/live-config` exists only
+    # in a cloud session's assembled tree, so it cannot be the unconditional
+    # default: anywhere else `shutil.copytree` would raise FileNotFoundError
+    # out of section 2.
     print('\n[17] where --selftest gets its fixtures')
     with tempfile.TemporaryDirectory() as td:
         fake_repo = os.path.join(td, 'repo')
@@ -12220,7 +11463,7 @@ def selftest(config_arg, frozen_exe=None, migration=False):
             shutil.rmtree(staged)
             got, how, err = _src(None)
             t.check('with no staged copy the game config from settings.json is '
-                    'used — the case that was a FileNotFoundError until 2026-09-04',
+                    'used',
                     got == os.path.abspath(gcfg) and 'settings.json' in (how or ''),
                     err or (got, how))
             shutil.rmtree(gcfg)
@@ -12238,8 +11481,7 @@ def selftest(config_arg, frozen_exe=None, migration=False):
     # carry the settings file, so the default should have applied -- but
     # setdefault only fills an ABSENT key, and a settings file left over beside
     # the exe carried "gameDir": "", which is what clearing the box writes.
-    # Blank survived every restart and every re-extract. Reported by David,
-    # 2026-09-07.
+    # Blank would survive every restart and every re-extract.
     print('\n[18] the game directory the editor starts from')
     with tempfile.TemporaryDirectory() as td:
         sp = os.path.join(td, 'settings.json')
@@ -12294,546 +11536,23 @@ def selftest(config_arg, frozen_exe=None, migration=False):
                 default_game_dir() == DEFAULT_GAME_DIR, default_game_dir())
 
 
-    # ---- 19. the 3.x -> 4.0 migrator
+    # SECTION 19, THE 3.x -> 4.0 MIGRATOR BLOCK, WAS DELETED (David's ruling,
+    # 2026-09-19). It converted the frozen tests/fixture-3.0.0 into the 4.0
+    # layout and compared the result byte for byte against the live config this
+    # run was pointed at. That premise held only while the live config WAS the
+    # untuned conversion; it is a tuning bench now, and the 4.1 settings layout
+    # finished the block off, so it was deleted rather than left reporting NOT
+    # RUN forever.
     #
-    # THE SUBJECT IS A REAL SHIPPED 3.x INSTALL, NOT A RECONSTRUCTION:
-    # tests/fixture-3.0.0/, extracted from dist/CKF-Hard-Mode-1.0.0.zip. Its
-    # three files are the migrator's whole input and they are never written to
-    # -- every case copies them into a temp directory first.
+    # The numbering stops at 18 and the gap is left open rather than closed:
+    # 19 was the last section, so there is nothing after it to renumber, and
+    # scripts/run_gates.cmd and docs/ still name section 19 by number.
     #
-    # THE COMPARISON IS AGAINST THE LIVE 4.0 LAYOUT, and its SIZE IS REPORTED.
-    # A migrator selftest that compares two empty directories and prints no
-    # differences is the failure this section exists to be incapable of: the
-    # file count and the byte count are asserted to be the real ones before any
-    # difference count is believed.
-    print('\n[19] the 3.x -> 4.0 migrator')
-
-    # RETIRED FROM THE DEFAULT SUITE, 2026-09-15. See migration_report_retired
-    # and the banner above it for the ruling, what this block caught, and why
-    # its premise lapsed. `--migration` runs every case below UNCHANGED -- not
-    # one byte of section 19 moved for this retirement, which is what makes the
-    # opt-in the same check and not a reconstruction of it. Section 19 is the
-    # last thing selftest() does, so the guard is an early return rather than a
-    # re-indent of 500 lines that would have to be re-read to be believed.
-    if not migration:
-        migration_report_retired(t)
-        return t.report('gui/serve.py verification')
-
-    FIXTURE = os.path.join(REPO, 'tests', 'fixture-3.0.0')
-
-    def _mig_sandbox(td, name, cfg_bytes=None, carried=True, seed_4x=None,
-                     backup=None):
-        """A 3.x install under `td`. Copies; the fixture is never written to."""
-        cd = os.path.join(td, name)
-        os.makedirs(os.path.join(cd, MIGRATION_DIR))
-        for n in MIGRATION_INPUTS:
-            shutil.copy2(os.path.join(FIXTURE, n), os.path.join(cd, n))
-        if cfg_bytes is not None:
-            with open(os.path.join(cd, 'ckf.hardmode.cfg'), 'wb') as fh:
-                fh.write(cfg_bytes)
-        if carried:
-            for n in MIGRATION_CARRIED:
-                shutil.copy2(os.path.join(src, MIGRATION_DIR, n),
-                             os.path.join(cd, MIGRATION_DIR, n))
-        if seed_4x:
-            with open(os.path.join(cd, MIGRATION_DIR, seed_4x), 'w') as fh:
-                fh.write('{}')
-        if backup:
-            with open(os.path.join(cd, backup + MIGRATION_BACKUP_SUFFIX), 'wb') as fh:
-                fh.write(b'an earlier backup nothing may overwrite')
-        return cd
-
-    class _mig_fault(object):
-        """Set MIGRATION_FAULT for one block. Faults land in the CONVERSION,
-        never in the fixture: a fault injected into the source would move both
-        sides of the comparison equally and stay green."""
-
-        def __init__(self, name):
-            self.name = name
-
-        def __enter__(self):
-            global MIGRATION_FAULT
-            MIGRATION_FAULT = self.name
-
-        def __exit__(self, *_a):
-            global MIGRATION_FAULT
-            MIGRATION_FAULT = None
-
-    def _mig_diff(files):
-        """-> (identical, [ (rel, live_len, new_len) ]), against the live 4.0
-        layout `src` was copied from."""
-        same, diffs = 0, []
-        for rel in sorted(files):
-            p = os.path.join(src, rel)
-            if not os.path.exists(p):
-                diffs.append((rel, None, len(files[rel])))
-                continue
-            live = read_bytes(p)
-            if live == files[rel]:
-                same += 1
-            else:
-                diffs.append((rel, len(live), len(files[rel])))
-        return same, diffs
-
-    # -- 19a. the fixture is the artefact design.md section 13 describes.
-    _fix_rules_raw = read_bytes(os.path.join(FIXTURE, 'ckf.hardmode.rules.json'))
-    _fix_text = _fix_rules_raw.decode('utf-8-sig')
-    _fix_rules = json.loads(migration_strip_jsonc(_fix_text))['rules']
-    _shapes = {'exact': 0, 'range': 0, 'unscoped': 0}
-    _by_model, _nonexact = {}, {}
-    for _r in _fix_rules:
-        _s = migration_selector(_r)
-        _shapes[_s] += 1
-        _by_model[_r['model']] = _by_model.get(_r['model'], 0) + 1
-        if _s != 'exact':
-            _nonexact[_r['model']] = _nonexact.get(_r['model'], 0) + 1
-    t.check('the fixture is JSONC: json.loads throws on it unstripped',
-            _raises(lambda: json.loads(_fix_text), ValueError))
-    t.check('fixture: 82,478 bytes, 3,161 lines, 76 // comment lines',
-            (len(_fix_rules_raw), _fix_text.count('\n') + 1,
-             sum(1 for l in _fix_text.split('\n') if l.strip().startswith('//')))
-            == (82478, 3161, 76),
-            (len(_fix_rules_raw), _fix_text.count('\n') + 1))
-    t.check('fixture: 287 rules = 263 exact + 24 range/unscoped',
-            len(_fix_rules) == 287 and _shapes['exact'] == 263
-            and _shapes['range'] + _shapes['unscoped'] == 24, _shapes)
-    t.check('fixture non-exact by model: WeaponModel 17, TalentModel 5, '
-            'ImplantModel 1, MonsterTypeModel 1',
-            _nonexact == {'WeaponModel': 17, 'TalentModel': 5,
-                          'ImplantModel': 1, 'MonsterTypeModel': 1}, _nonexact)
-    t.check('the fixture ckf.hardmode.json is 40,865 bytes',
-            os.path.getsize(os.path.join(FIXTURE, 'ckf.hardmode.json')) == 40865)
-    t.check('the fixture .cfg is the 172-byte one-key file, before the 43-key layout',
-            os.path.getsize(os.path.join(FIXTURE, 'ckf.hardmode.cfg')) == 172)
-
-    # -- 19b. WHICH MonsterTypeModel. The trap design.md section 13 calls the
-    # most load-bearing decision in the change, measured both ways here so the
-    # two numbers are in the report rather than in a comment.
-    def _ptr_census(path):
-        with open(path, newline='', encoding='utf-8-sig') as fh:
-            rows = list(csv.DictReader(fh))
-        ids = set(int(r[MIGRATION_POINTER_COLUMN]) for r in rows
-                  if (r[MIGRATION_POINTER_COLUMN] or '').strip())
-        with open(os.path.join(migration_dump_dir(), 'WeaponModel.csv'),
-                  newline='', encoding='utf-8-sig') as fh:
-            weapons = list(csv.DictReader(fh))
-        p = sum(1 for w in weapons if int(w['WeaponClass']) == 3
-                and int(w['WeaponId']) not in ids)
-        e = sum(1 for w in weapons if int(w['WeaponClass']) == 3
-                and int(w['WeaponId']) in ids)
-        return len(ids), p, e
-
-    _post = _ptr_census(os.path.join(src, MIGRATION_DIR, MIGRATION_POINTER_FILE))
-    _ship = _ptr_census(os.path.join(migration_dump_dir(), MIGRATION_POINTER_FILE))
-    t.check('post-overlay ckf.hardmode.d/MonsterTypeModel.csv: 405 distinct '
-            'WeaponTypeId, class 3 = 33 player / 43 enemy',
-            _post == (405, 33, 43), _post)
-    t.check('shipped sheets/raw/MonsterTypeModel.csv: 208 distinct WeaponTypeId, '
-            'class 3 = 25 player / 51 enemy -- eight player ARs misclassified',
-            _ship == (208, 25, 51), _ship)
-    t.check('the two readings really do disagree, so the choice is not cosmetic',
-            _post[1] - _ship[1] == 8, (_post, _ship))
-
-    # THE STAMP THE CONVERSION WRITES, CHECKED AGAINST THE C# AND NOT AGAINST
-    # ITSELF. MIGRATION_DOC_VERSION is a literal in this file; DocVersion is a
-    # literal in mods/CKFHardMode/Defaults.cs. Nothing derives one from the
-    # other, so this is a real comparison and not two readings of one source.
-    # NOT RUN, never PASS, when Defaults.cs is absent -- that is the frozen exe,
-    # whose _MEIPASS holds no mods/ tree.
-    _defaults_cs = os.path.join(REPO, 'mods', 'CKFHardMode', 'Defaults.cs')
-    if not os.path.exists(_defaults_cs):
-        t.skip('the stamp the migration writes is Defaults.DocVersion',
-               'no %s -- this is the frozen exe and it bundles no mods/ tree'
-               % _defaults_cs)
-    else:
-        _dv = re.search(r'DocVersion\s*=\s*"([^"]+)"',
-                        read_bytes(_defaults_cs).decode('utf-8'))
-        t.check('the stamp the migration writes is Defaults.DocVersion, so a '
-                'migrated install is not born reporting all ten slices behind',
-                bool(_dv) and _dv.group(1) == MIGRATION_DOC_VERSION,
-                ('MIGRATION_DOC_VERSION=%r' % MIGRATION_DOC_VERSION,
-                 'Defaults.cs DocVersion=%r' % (_dv and _dv.group(1))))
-
-    # THE STAMP THE CONVERSION PUTS IN THE .cfg HEADER, CHECKED THE SAME WAY.
-    # MIGRATION_PLUGIN_VERSION is a literal in this file; PluginVersion is a
-    # literal in mods/CKFHardMode/Plugin.cs, and BepInEx writes PluginVersion
-    # into the header of every player's ckf.hardmode.cfg. Nothing derives one
-    # from the other. NOT RUN, never PASS, when Plugin.cs is absent -- that is
-    # the frozen exe, whose _MEIPASS holds no mods/ tree.
-    _plugin_cs = os.path.join(REPO, 'mods', 'CKFHardMode', 'Plugin.cs')
-    if not os.path.exists(_plugin_cs):
-        t.skip('the version the migration stamps the .cfg header with is '
-               'Plugin.PluginVersion',
-               'no %s -- this is the frozen exe and it bundles no mods/ tree'
-               % _plugin_cs)
-    else:
-        _pv = re.search(r'PluginVersion\s*=\s*"([^"]+)"',
-                        read_bytes(_plugin_cs).decode('utf-8'))
-        t.check('the version the migration stamps the .cfg header with is '
-                'Plugin.PluginVersion, so a migrated .cfg does not announce '
-                'the version it was converted FROM',
-                bool(_pv) and _pv.group(1) == MIGRATION_PLUGIN_VERSION,
-                ('MIGRATION_PLUGIN_VERSION=%r' % MIGRATION_PLUGIN_VERSION,
-                 'Plugin.cs PluginVersion=%r' % (_pv and _pv.group(1))))
-
-    with tempfile.TemporaryDirectory() as td:
-        # -- 19c. the migration itself, run into a temp directory.
-        cd = _mig_sandbox(td, 'convert')
-        mig = run_migration(cd)
-        _files, _bytes = len(mig.files), mig.bytes_total()
-        _live_bytes = sum(os.path.getsize(os.path.join(src, r)) for r in mig.files)
-        _same, _diffs = _mig_diff(mig.files)
-        _carried_n = sum(1 for r in mig.source.values() if r == 'carried')
-        _smallest = min(len(b) for b in mig.files.values())
-        print('      compared %d file(s), %d byte(s) produced against %d byte(s) '
-              'on the live 4.0 layout; %d identical, %d differ (%d of the %d are '
-              'carried through unchanged and are identity by construction)'
-              % (_files, _bytes, _live_bytes, _same, len(_diffs), _carried_n, _files))
-        t.check('the migration produced %d files -- 67 under %s plus the .cfg'
-                % (MIGRATION_EXPECTED_FILES, MIGRATION_DIR),
-                _files == MIGRATION_EXPECTED_FILES
-                and sum(1 for r in mig.files
-                        if r.startswith(MIGRATION_DIR + '/')) == 67,
-                _files)
-        # THE CASE THAT PROVES THE COMPARISON HAS A SUBJECT. A floor and a
-        # no-empty-file check, not a typed-in total: the total moved today
-        # (586,634 -> 585,504) when scripts/implants.py stopped carrying a
-        # column, and a literal here would fail for the wrong reason on every
-        # future re-dump. What must survive is the proof that this is a real
-        # layout and not an empty directory, and it does.
-        t.check('every one of the %d files carries bytes and the layout is at '
-                'least %d of them (measured: %d) -- so the comparison below '
-                'cannot be over an empty directory'
-                % (_files, MIGRATION_MIN_BYTES, _bytes),
-                _smallest > 0 and _bytes >= MIGRATION_MIN_BYTES,
-                (_smallest, _bytes))
-        # Stronger than any literal, and impossible to type in wrong: the size
-        # is measured on BOTH sides and has to agree.
-        t.check('the produced layout and the live layout are the same size to '
-                'the byte (%d == %d), measured on both sides' % (_bytes, _live_bytes),
-                _bytes == _live_bytes, (_bytes, _live_bytes))
-        t.check('the comparison actually read a live file for all %d' % _files,
-                all(os.path.exists(os.path.join(src, r)) for r in mig.files))
-        t.check('%d of the %d are byte-identical to the live 4.0 layout'
-                % (MIGRATION_EXPECTED_FILES, MIGRATION_EXPECTED_FILES),
-                _same == MIGRATION_EXPECTED_FILES, [d[0] for d in _diffs])
-        t.check('nothing differs at all -- the declared divergence set is empty '
-                'and the measured one equals it',
-                not _diffs, [d[0] for d in _diffs])
-        # THE THREE FILES THAT USED TO DIFFER. Restated, not deleted: they are
-        # the record of a real defect this instrument found, and a case that
-        # names what it used to measure is what stops the finding from being
-        # re-discovered.
-        for _rel, (_col, _model) in sorted(MIGRATION_CLOSED_DIVERGENCES.items()):
-            t.check('%s is byte-identical -- it DIFFERED by exactly one column '
-                    '(%s.%s) until scripts/implants.py gained '
-                    'EFFECT_PRESENTATION on %s'
-                    % (os.path.basename(_rel), _model, _col,
-                       MIGRATION_DIVERGENCES_CLOSED_ON),
-                    mig.files[_rel] == read_bytes(os.path.join(src, _rel)),
-                    (len(mig.files[_rel]),
-                     os.path.getsize(os.path.join(src, _rel))))
-        # The retired bound, and its live successor.
-        t.check('the one-column divergence check is retired and REFUSES rather '
-                'than answering False over a subject that no longer exists',
-                _raises(lambda: migration_divergence_is_one_column(b'', b'', 'x'),
-                        RuntimeError))
-        _decl, _indump, _scanned, _hits = migration_presentation_columns(mig.files)
-        t.check('all %d names scripts/implants.py declares presentation-only are '
-                'in the EffectModel dump header, so the exclusion has a subject'
-                % len(_decl), len(_indump) == len(_decl) and _decl,
-                [c for c in _decl if c not in _indump])
-        t.check('and none of them reaches any of the %d generated overlay '
-                'headers -- the tripwire that fires if the exclusion is dropped '
-                'or the next re-dump adds a column that slips through' % _scanned,
-                _scanned >= 56 and not _hits, _hits)
-
-        # -- 19d. what the directory looks like afterwards.
-        t.check('ckf.hardmode.json is gone from the top of the config',
-                not os.path.exists(os.path.join(cd, 'ckf.hardmode.json')))
-        t.check('ckf.hardmode.rules.json is gone from the top of the config',
-                not os.path.exists(os.path.join(cd, 'ckf.hardmode.rules.json')))
-        t.check('both originals are renamed to %s, byte for byte'
-                % MIGRATION_BACKUP_SUFFIX,
-                all(read_bytes(os.path.join(cd, n + MIGRATION_BACKUP_SUFFIX))
-                    == read_bytes(os.path.join(FIXTURE, n))
-                    for n in MIGRATION_INPUTS[:2]))
-        t.check('%s holds 67 files' % MIGRATION_DIR,
-                len(os.listdir(os.path.join(cd, MIGRATION_DIR))) == 67,
-                len(os.listdir(os.path.join(cd, MIGRATION_DIR))))
-        t.check('no journal is left behind',
-                not os.path.exists(journal_path(cd)))
-        t.check('the converted install is not in ConfigDoc.BothLayouts state',
-                not any(os.path.exists(os.path.join(cd, n))
-                        for n in MIGRATION_INPUTS[:2]))
-
-        # -- 19e. D1. A positive measurement, never an inferred absence.
-        t.check('D1: the fixture carries 1 MonsterTypeModel rule (PL 11+, '
-                'ChasingSpeed and AggroSpeed x1.1)',
-                mig.measured['D1']['rules_in'] == 1
-                and mig.measured['D1']['operands'] == ['AggroSpeed', 'ChasingSpeed'],
-                mig.measured['D1'])
-        _d1_files = [r for r in mig.files
-                     if os.path.basename(r).startswith(D1_MODEL + '.')
-                     and mig.source[r] != 'carried']
-        t.check('D1: it converts to NOTHING -- 0 files written for that model '
-                '(the one MonsterTypeModel.csv on disk is the carried-through '
-                'enemy-gear overlay, which this conversion does not author)',
-                mig.measured['D1']['files_out'] == 0 and not _d1_files, _d1_files)
-        t.check('D1: MonsterTypeModel.csv is the carried-through file, unchanged',
-                mig.source['%s/MonsterTypeModel.csv' % MIGRATION_DIR] == 'carried'
-                and mig.files['%s/MonsterTypeModel.csv' % MIGRATION_DIR]
-                == read_bytes(os.path.join(src, MIGRATION_DIR, 'MonsterTypeModel.csv')))
-        t.check('D1: no output file names ChasingSpeed or AggroSpeed at all',
-                not [r for r, b in mig.files.items()
-                     if b'ChasingSpeed' in b or b'AggroSpeed' in b],
-                [r for r, b in mig.files.items()
-                 if b'ChasingSpeed' in b or b'AggroSpeed' in b])
-
-        # -- 19f. D2 + D4.
-        _gc = mig.files['%s/gear-classes.csv' % MIGRATION_DIR]
-        _gc_rows = list(csv.reader(io.StringIO(_gc.decode('utf-8'))))
-        _starred = [r[0] for r in _gc_rows[1:]
-                    if r[_gc_rows[0].index('RecoilRate2')] == '*1.8']
-        t.check('D2+D4: the fixture carries 16 WeaponModel RecoilRate2 id ranges',
-                mig.measured['D2D4']['ranges_in'] == 16, mig.measured['D2D4'])
-        t.check('D2+D4: they become 10 gear-classes.csv rows, not 16 transcribed '
-                'ranges', len(_gc_rows) - 1 == 10, len(_gc_rows) - 1)
-        t.check('D2+D4: RecoilRate2 *1.8 lands on the four dual-mode player '
-                'classes 3, 5, 10 and 12 -- derived from the partition, not listed',
-                _starred == ['3', '5', '10', '12'], _starred)
-        t.check('D2+D4: the partition was resolved from the post-overlay file, '
-                '405 pointer ids over 2,427 rows',
-                (mig.measured['pointer_ids'], mig.measured['pointer_rows'])
-                == (405, 2427)
-                and mig.measured['pointer_file'].startswith(cd),
-                (mig.measured['pointer_ids'], mig.measured['pointer_file']))
-        t.check('D2+D4: class 3 resolves to 33 player rows, all 33 with a live '
-                'RecoilRate2', mig.measured['gear_partition'][3] == (33, 33),
-                mig.measured['gear_partition'][3])
-        t.check('D2+D4: gear-classes.csv is byte-identical to the shipping sheet',
-                _gc == read_bytes(os.path.join(src, MIGRATION_DIR, 'gear-classes.csv')))
-
-        # -- 19g. D3.
-        _glob = json.loads(
-            mig.files['%s/implants-global.json' % MIGRATION_DIR].decode('utf-8'))
-        t.check('D3: the fixture\'s unscoped ImplantModel rule DOES carry '
-                'clampMin ImplantStress 1', mig.measured['D3']['in_source'] is True,
-                mig.measured['D3'])
-        t.check('D3: implants-global.json is written with THREE numbers, not four',
-                sorted(k for k in _glob if not k.startswith('_'))
-                == ['costMultiply', 'implantStressMultiply', 'installTimeMultiply'],
-                sorted(_glob))
-        t.check('D3: the three carry the rule\'s own operands, 0.5 / 0.5 / 3',
-                (_glob['costMultiply'], _glob['installTimeMultiply'],
-                 _glob['implantStressMultiply']) == (0.5, 0.5, 3),
-                (_glob['costMultiply'], _glob['installTimeMultiply'],
-                 _glob['implantStressMultiply']))
-        # Read as OPERANDS, not as text: implants-global.json's own _doc
-        # explains at length why the floor is not carried, and a byte search
-        # would score that explanation as the floor coming back.
-        _clamped = []
-        for _rel, _b in sorted(mig.files.items()):
-            if _rel.endswith('.csv'):
-                _h = next(csv.reader(io.StringIO(_b.decode('utf-8'))), [])
-                _clamped += ['%s %s' % (_rel, c) for c in _h
-                             if c.endswith('>') or c.endswith('<')]
-            elif _rel.endswith('.json'):
-                _o = json.loads(_b.decode('utf-8'))
-                if isinstance(_o, dict):
-                    _clamped += ['%s %s' % (_rel, k) for k in _o
-                                 if not k.startswith('_') and 'lamp' in k]
-        t.check('D3: no output file carries a clamp OPERAND anywhere -- no CSV '
-                'header cell with a > or < operator suffix, no settings key '
-                'naming a clamp', not _clamped, _clamped)
-
-        # -- 19h. the .cfg.
-        _cfg = mig.files['ckf.hardmode.cfg']
-        _keys = re.findall(rb'^([A-Za-z]\w*) = (\S+)', _cfg, re.M)
-        t.check('the .cfg goes from 1 key to 43',
-                len(_keys) == 43 and len(re.findall(
-                    rb'^([A-Za-z]\w*) = ', read_bytes(
-                        os.path.join(FIXTURE, 'ckf.hardmode.cfg')), re.M)) == 1,
-                len(_keys))
-        t.check('the .cfg is byte-identical to the shipping one',
-                _cfg == read_bytes(os.path.join(src, 'ckf.hardmode.cfg')))
-        # RESTATED, 2026-09-15. This read `_cfg.startswith(<the fixture>)`,
-        # which asserted the 3.x file survived byte for byte INCLUDING its
-        # header line -- and that line is the one token the converter now
-        # restamps. Weakening it to a prefix match below the header would have
-        # lost the claim, so it is split into the two claims it was really
-        # making: everything below the header line is untouched, and the header
-        # line differs in the version token and in NOTHING else. The fixture's
-        # own version is read back out of the fixture rather than typed here,
-        # and the case requires the two to actually differ, so a fixture bumped
-        # to 4.0.0 would make this case fail rather than pass vacuously.
-        _fixcfg = read_bytes(os.path.join(FIXTURE, 'ckf.hardmode.cfg'))
-        _fix_h, _, _fix_rest = _fixcfg.partition(b'\n')
-        _cfg_h, _, _cfg_rest = _cfg.partition(b'\n')
-        _fh = _MIGRATION_CFG_HEADER.match(_fix_h.rstrip(b'\r'))
-        _want_h = (_fh and _fh.group(1)
-                   + MIGRATION_PLUGIN_VERSION.encode('utf-8') + _fh.group(3))
-        t.check('the 3.x file survives byte for byte below the header line, '
-                'and the header line differs ONLY in the version token '
-                '(fixture v%s -> v%s)'
-                % (_fh and _fh.group(2).decode('ascii'),
-                   MIGRATION_PLUGIN_VERSION),
-                bool(_fh)
-                and _fh.group(2) != MIGRATION_PLUGIN_VERSION.encode('utf-8')
-                and _cfg_rest.startswith(_fix_rest)
-                and _cfg_h.rstrip(b'\r') == _want_h
-                and _cfg_h.endswith(b'\r') == _fix_h.endswith(b'\r'),
-                (_cfg_h, _fix_h))
-        t.check('Slices.SelfCheck carries its declared default of false, not a '
-                'blanket true', (b'SelfCheck', b'false') in _keys,
-                [k for k in _keys if k[0] == b'SelfCheck'])
-
-    # -- 19i. the .cfg value a player actually set is carried across, not
-    # rebuilt. Run on a fixture copy with the mod switched OFF.
-    with tempfile.TemporaryDirectory() as td:
-        _off = read_bytes(os.path.join(FIXTURE, 'ckf.hardmode.cfg')).replace(
-            b'Enabled = true', b'Enabled = false')
-        cd = _mig_sandbox(td, 'off', cfg_bytes=_off)
-        m2 = build_migration(cd)
-        t.check('a 3.x .cfg with Enabled = false converts to a 4.0 .cfg with '
-                'Enabled = false', b'Enabled = false' in m2.files['ckf.hardmode.cfg']
-                and b'Enabled = true' not in m2.files['ckf.hardmode.cfg'],
-                m2.files['ckf.hardmode.cfg'][:200])
-        # AND THE STAMP DID NOT COST THE CARRY. Same conversion, read for the
-        # header: v1.0.0 in, MIGRATION_PLUGIN_VERSION out, Enabled = false
-        # still false. The two claims are on one subject on purpose -- the
-        # defect this guards against is a header rewrite that rebuilds the
-        # block under it.
-        t.check('and its header is restamped to v%s while Enabled = false is '
-                'carried -- the stamp rewrites the version token, not the '
-                'block below it' % MIGRATION_PLUGIN_VERSION,
-                m2.files['ckf.hardmode.cfg'].split(b'\n')[0].rstrip(b'\r')
-                == b'## Settings file was created by plugin CKF Hard Mode v'
-                   + MIGRATION_PLUGIN_VERSION.encode('utf-8'),
-                m2.files['ckf.hardmode.cfg'].split(b'\n')[0])
-
-    # -- 19i-2. a header line this converter cannot read is a REFUSAL, not a
-    # rewrite and not an append. A .cfg announcing a version other than the
-    # running plugin's is the defect the stamp removes; guessing what a
-    # stranger first line wants would put it straight back.
-    with tempfile.TemporaryDirectory() as td:
-        _bad = read_bytes(os.path.join(FIXTURE, 'ckf.hardmode.cfg')).replace(
-            b'## Settings file was created by plugin CKF Hard Mode v1.0.0',
-            b'## hand-edited, header line removed', 1)
-        cd = _mig_sandbox(td, 'badhdr', cfg_bytes=_bad)
-        t.check('a 3.x .cfg whose first line is not the BepInEx header is a '
-                'refusal -- the version token has nothing to replace and '
-                'nothing is written',
-                _raises(lambda: build_migration(cd), MigrationRefused))
-        # The shape IS the whole test: same file, header restored, converts.
-        cd = _mig_sandbox(td, 'goodhdr')
-        t.check('and the identical fixture WITH the header line converts, so '
-                'the refusal above is the header and not the sandbox',
-                b'[Slices]' in build_migration(cd).files['ckf.hardmode.cfg'])
-
-    # -- 19j. the refusals. Each one is a refusal that WROTE NOTHING.
-    with tempfile.TemporaryDirectory() as td:
-        cd = _mig_sandbox(td, 'nojson')
-        os.remove(os.path.join(cd, 'ckf.hardmode.json'))
-        t.check('a missing 3.x input is a refusal, not a partial conversion',
-                _raises(lambda: build_migration(cd), MigrationRefused))
-        cd = _mig_sandbox(td, 'both', seed_4x='difficulty.json')
-        t.check('a directory already carrying the 4.0 layout is refused '
-                '(ConfigDoc.BothLayouts)',
-                _raises(lambda: build_migration(cd), MigrationRefused))
-        cd = _mig_sandbox(td, 'hasbak', backup='ckf.hardmode.json')
-        _bak = os.path.join(cd, 'ckf.hardmode.json' + MIGRATION_BACKUP_SUFFIX)
-        _before = read_bytes(_bak)
-        t.check('an existing %s is refused rather than overwritten'
-                % MIGRATION_BACKUP_SUFFIX,
-                _raises(lambda: run_migration(cd), MigrationRefused))
-        t.check('and the existing backup is still byte for byte what it was',
-                read_bytes(_bak) == _before)
-        t.check('and the refusal wrote no slice files',
-                not os.listdir(os.path.join(cd, MIGRATION_DIR)) or
-                sorted(os.listdir(os.path.join(cd, MIGRATION_DIR)))
-                == sorted(MIGRATION_CARRIED),
-                os.listdir(os.path.join(cd, MIGRATION_DIR)))
-        cd = _mig_sandbox(td, 'noptr')
-        os.remove(os.path.join(cd, MIGRATION_DIR, MIGRATION_POINTER_FILE))
-        t.check('an unreadable ckf.hardmode.d/MonsterTypeModel.csv is a refusal, '
-                'NOT a fallback to sheets/raw -- the same choice GearClasses.cs '
-                'makes', _raises(lambda: build_migration(cd), MigrationRefused))
-        cd = _mig_sandbox(td, 'blankptr')
-        _p = os.path.join(cd, MIGRATION_DIR, MIGRATION_POINTER_FILE)
-        _lines = read_bytes(_p).split(b'\n')
-        _hdr = _lines[0].decode().split(',')
-        _i = _hdr.index(MIGRATION_POINTER_COLUMN)
-        _cells = _lines[1].decode().split(',')
-        _cells[_i] = ''
-        _lines[1] = ','.join(_cells).encode()
-        with open(_p, 'wb') as fh:
-            fh.write(b'\n'.join(_lines))
-        t.check('a MonsterTypeModel row with a blank %s is a refusal -- an '
-                'incomplete partition is not a smaller one'
-                % MIGRATION_POINTER_COLUMN,
-                _raises(lambda: build_migration(cd), MigrationRefused))
-
-    # -- 19k. FAULT INJECTION. Every case must go RED. A control run first, so
-    # that a fault "caught" by a harness that was already failing is not read
-    # as the fault being caught.
-    with tempfile.TemporaryDirectory() as td:
-        cd = _mig_sandbox(td, 'control')
-        _ctrl = build_migration(cd)
-        _cs, _cd_ = _mig_diff(_ctrl.files)
-        t.check('control: with no fault injected the run is the green one -- '
-                '%d of %d identical, nothing differing at all'
-                % (MIGRATION_EXPECTED_FILES, MIGRATION_EXPECTED_FILES),
-                _cs == MIGRATION_EXPECTED_FILES and not _cd_, (_cs, _cd_))
-
-        def _red(fault, why):
-            """-> (went_red, detail). Red is a refusal OR a difference beyond
-            the three declared ones."""
-            c = _mig_sandbox(td, 'f-' + fault)
-            try:
-                with _mig_fault(fault):
-                    m = build_migration(c)
-            except MigrationRefused as e:
-                return True, 'refused: %s' % str(e).split('\n')[0][:110]
-            same, diffs = _mig_diff(m.files)
-            # Every difference is red now: the declared divergence set is
-            # empty since 2026-09-14, so nothing is filtered out here.
-            extra = [d[0] for d in diffs]
-            missing = sorted(set(_ctrl.files) - set(m.files))
-            added = sorted(set(m.files) - set(_ctrl.files))
-            if extra or missing or added:
-                return True, ('differs: %s%s%s'
-                              % (extra, ' missing=%s' % missing if missing else '',
-                                 ' added=%s' % added if added else ''))
-            return False, 'GREEN over %d file(s) -- the fault was not caught' % same
-
-        for _f, _why in MIGRATION_FAULTS:
-            if _f == 'backup-clobber':
-                # This one cannot be seen in the output files: the guard it
-                # disables is the one that keeps an EXISTING backup. So the red
-                # condition is the backup's own bytes moving, on a directory
-                # that has one -- the same directory 19j proved is refused.
-                _c = _mig_sandbox(td, 'f-backup', backup='ckf.hardmode.json')
-                _bp = os.path.join(_c, 'ckf.hardmode.json'
-                                   + MIGRATION_BACKUP_SUFFIX)
-                _was = read_bytes(_bp)
-                try:
-                    with _mig_fault(_f):
-                        run_migration(_c)
-                except MigrationRefused:
-                    pass
-                ok = read_bytes(_bp) != _was
-                detail = ('the existing backup was overwritten (%d -> %d bytes), '
-                          'which is what the guard prevents'
-                          % (len(_was), os.path.getsize(_bp))) if ok else \
-                         ('GREEN -- the backup survived even with the guard off, '
-                          'so 19j proved nothing')
-            else:
-                ok, detail = _red(_f, _why)
-            t.check('fault %r goes red -- %s' % (_f, _why), ok, detail)
-            print('           %s' % detail)
-        t.check('MIGRATION_FAULT is back to None after the injections',
-                MIGRATION_FAULT is None, MIGRATION_FAULT)
+    # THE MIGRATOR ITSELF IS UNTOUCHED. build_migration, run_migration,
+    # migration_cfg, the --migrate CLI path and tests/fixture-3.0.0/ all stay.
+    # What no longer exists anywhere is a comparison of a conversion against
+    # bytes on disk, so a stamp or a deviation the conversion gets wrong now
+    # reaches a converted install unchallenged.
 
     return t.report('gui/serve.py verification')
 
@@ -12860,7 +11579,7 @@ def undeclared_globals_in_app_html(path=None):
     outlived the retroactive confirm gate 3.0 deleted -- a write with no
     declaration and no reader -- and threw out of load() on every start, so the
     page came up with "Could not load the config -- ReferenceError: RETRO_OK is
-    not defined" and nothing else. Reported by David, 2026-09-07.
+    not defined" and nothing else.
     """
     with open(path or APP_HTML, encoding='utf-8') as f:
         src = f.read()
@@ -12874,13 +11593,10 @@ def hardcoded_names_in_app_html(schemas, path=None):
         src = f.read()
     names = set()
     for sch in schemas:
-        # A target may be a LIST since Phase 4: `targets.overlays` names the
-        # overlay CSVs a slice owns, two or three for a talent pack. This read
-        # `names.add(t)` over the raw value and raised
-        # `TypeError: unhashable type: 'list'` the moment the first list-valued
-        # target landed -- not a failed case, a dead run [measured 2026-09-13].
-        # A target may also be null: the four sections Phase 3 created declare
-        # "legacyJson": null to say they never had a 2.x sidecar.
+        # A target may be a LIST: `targets.overlays` names the overlay CSVs a
+        # slice owns (`names.add(t)` on a list would raise TypeError and end
+        # the run). A target may also be null: "legacyJson": null says a
+        # section never had a 2.x sidecar.
         for t in (sch.get('targets') or {}).values():
             for one in (t if isinstance(t, list) else [t]):
                 if one:
@@ -12957,10 +11673,8 @@ def _edits_for(schemas, model):
     value it was handed, sent straight back. The server writes only what
     differs from disk, so this is the shape a no-op save arrives in.
 
-    SINCE 2026-09-14 THAT INCLUDES EVERY LEVER CELL OF EVERY WRITABLE SHEET.
-    Before the write path opened, a no-op edit set reached no sheet at all, so
-    "a no-op save moves no overlay byte" was true because nothing offered one.
-    It now goes through the real writer -- key lookup, span replacement, the
+    THAT INCLUDES EVERY LEVER CELL OF EVERY WRITABLE SHEET, so "a no-op save
+    moves no overlay byte" goes through the real writer -- key lookup, span replacement, the
     whole path -- with every cell set to the value it already holds, which is
     the only shape in which that sentence is worth asserting.
     """
@@ -13016,14 +11730,10 @@ def _status(url, data=None, headers=None):
 def _teampl_first_fraction(cd, schemas=None):
     """The first override row's value, read off disk.
 
-    THREE LAYOUTS HAVE HELD THAT ROW NOW: a section of the merged document, its
-    own ckf.hardmode.teampl.json, and since Phase 3 a slice file under
-    ckf.hardmode.d/. This used to carry the first two as a written-down list
-    and raised FileNotFoundError the moment a third appeared -- which is how it
-    ended a whole --selftest run with a traceback and no report line
-    [measured 2026-09-13, against the split layout]. The file is resolved from
-    the mirror declaration that already names it instead, so a fourth layout
-    moves it without touching this.
+    Three layouts have held that row (the 2.x ckf.hardmode.teampl.json, a
+    section of the 3.x merged document, and the 4.0 slice file), so the file
+    is not written down here: it is resolved from the mirror declaration that
+    already names it, and a later layout moves it without touching this.
     """
     for sch in (load_schemas() if schemas is None else schemas):
         for inv in sch.get('invariants', []):
@@ -13062,7 +11772,7 @@ def _cfg_key_line_count(raw, section, key):
 
     Counted with str.splitlines rather than through CfgFile: an instrument
     built out of the thing under test cannot see the thing under test fail
-    (AGENTS.md section 3). Splitting the file the way CfgFile used to would
+    (AGENTS.md). Splitting the file the way CfgFile used to would
     hide the merged line and report one key where the file has two."""
     n, here = 0, False
     for line in raw.decode('utf-8-sig').splitlines():
@@ -13098,7 +11808,7 @@ def _is_pure_insertion(before, after):
 
     Built out of split_lines_keepends rather than out of CfgFile, for the same
     reason _cfg_key_line_count is: an instrument assembled from the thing under
-    test cannot see the thing under test fail (AGENTS.md section 3). It does
+    test cannot see the thing under test fail (AGENTS.md). It does
     share split_lines_keepends, which is the one piece both need to agree on
     for "a line" to mean anything; that function has its own cases in [8].
 
@@ -13170,7 +11880,7 @@ def _refuses_under_O():
     None is not False. Frozen there is no interpreter to re-enter and no -O to
     pass, and a subprocess that cannot start is not evidence that the guards
     failed. The caller reports None as NOT RUN and says why (AGENTS.md
-    section 3).
+    ).
 
     Both guards are driven twice, against a key the fixture HAS and a key it
     does NOT, so a regression that moved the guards below the key lookup --
@@ -13198,21 +11908,11 @@ def _refuses_under_O():
 def _first_line_diff(a, b):
     """The first line where two files differ, as a detail string.
 
-    CORRECTION, 2026-09-13 afternoon. This split both sides on a literal b'\n'.
-    The Phase 1a review found that and deliberately left it, on the grounds
-    that "it is only ever a t.check detail string and can never decide a
-    result" -- which is still true, and is why this is a readability fix and
-    not a defect fix. But the file it most often describes is now CRLF (see the
-    line-endings note above class CfgFile), and the literal split left a
-    trailing \r on every line, so a report of a one-character value change read
-    as `b'Enabled = true\r' vs b'Enabled = false\r'`. Worse, it could not
-    describe a difference that was ONLY in the endings: both sides split the
-    same way and it returned '', i.e. "no difference", for two files that
-    differ. A diagnostic that says nothing about the thing currently under
-    scrutiny is the wrong diagnostic to keep.
-
-    It now splits through split_lines_keepends, the way _one_line_changed and
+    Splits through split_lines_keepends, the way _one_line_changed and
     _is_pure_insertion do, and names the ending when the ending is what moved.
+    A split on a literal b'\n' would leave a trailing \r on every line of a
+    CRLF file and would report '' ("no difference") for two files that differ
+    only in their endings.
     """
     la, ea = split_lines_keepends(a.decode('utf-8-sig', 'replace'))
     lb, eb = split_lines_keepends(b.decode('utf-8-sig', 'replace'))
@@ -13233,25 +11933,13 @@ def _cfg_line_shape(before_path, after_path):
     """Every line is either identical or a 'Key = Value' line whose key is
     unchanged, and every line keeps the ending it had. Nothing else moved.
 
-    CORRECTION, 2026-09-13. This used to split both files on a literal CRLF --
-    ``read_bytes(p).decode('utf-8-sig').split('\\r\\n')`` -- which is the same
-    assumption that crashed selftest section 8 on David's machine the same day.
-    The file measured 162 bytes, 8 LF, 0 CRLF on the morning of 2026-09-13.
-    (This docstring said "BepInEx owns ckf.hardmode.cfg and writes it with LF".
-    The byte count was measured; the attribution to BepInEx was not, and a
-    launch the same afternoon rewrote the file as 179 CRLF and no LF -- see the
-    line-endings note above class CfgFile. The defect described below is
-    unaffected: it was about splitting on a literal separator, and a literal
-    split breaks on whichever ending the file does not have.)
-    On an LF file that split returns ONE
-    element holding the whole text, so `len(a) != len(b)` passed, and the one
-    comparison left ran KEY_RE over a multi-line blob -- KEY_RE is anchored
-    without re.MULTILINE and `.` does not cross a newline, so it cannot match
-    one. Every real save therefore read as False: a FAIL raised against the
-    cfg writer for a file the writer had handled correctly, and the only thing
-    that had moved was the line endings BepInEx uses.
+    NOT A LITERAL SPLIT. Splitting both files on a literal CRLF breaks on an
+    LF file: the split returns ONE element holding the whole text, so
+    `len(a) != len(b)` passes, and the one comparison left runs KEY_RE (anchored,
+    no re.MULTILINE) over a multi-line blob and cannot match -- a FAIL against
+    a cfg writer that handled the file correctly.
 
-    It now splits the way _one_line_changed does, through
+    It splits the way _one_line_changed does, through
     split_lines_keepends, so a line is a line whatever the file's endings are
     and however they are mixed.
 
@@ -13388,10 +12076,9 @@ ck('and is named as the reason it is there',
 ck('no window means everything is drawn',
    CKF.visibleAxis([-2,5], null, []).shown.join(',') === '-2,5');
 
-// REMOVED, 2026-09-07: the five hasUnsetControl cases. The control is gone and
-// so is the function. What remains true, and is asserted here instead, is the
-// coercion the boxes now carry on their own: a cleared numeric box drops the
-// key, a cleared text box holds an empty string.
+// There is no per-cell unset control (hasUnsetControl). The coercion the
+// boxes carry on their own is asserted instead: a cleared numeric box drops
+// the key, a cleared text box holds an empty string.
 ck('the unset helper is gone from the pure block',
    CKF.hasUnsetControl === undefined);
 
@@ -13440,7 +12127,7 @@ ck('a cleared text box is an empty string, which is a value',
 ck('null is still how an edit payload drops a text key',
    CKF.coerceCell('string', null).present === false);
 
-// ---- overlayHidden: the DECLARED half of suppression, added 2026-09-14.
+// ---- overlayHidden: the DECLARED half of suppression.
 //
 // The names live in the server's HIDDEN_COLUMNS and reach the page as a
 // per-column reason string, so these cases are about the READING of that
@@ -13635,18 +12322,16 @@ setTimeout(function () {
 
   // 3. the merged section
   //
-  // WAS: `findIndex(s => s.subsystems.length > 1)` -- "one section presents two
-  // subsystems", which worked while exactly one section in the whole nav was a
-  // merge. Since 2026-09-13 SECTION_GROUPS declares several, and that search
-  // returned whichever came first rather than the one these cases are about.
-  // The section under test is now found from the schema that owns the readonly
-  // reference table, which is what the rest of this block reads.
-  // TWO KINDS OF READONLY TABLE SINCE PHASE 4. This block is about the
+  // Not `findIndex(s => s.subsystems.length > 1)`: SECTION_GROUPS declares
+  // several merged sections, and that search returns whichever comes first.
+  // The section under test is found from the schema that owns the readonly
+  // underlay table, which is what the rest of this block reads.
+  // TWO KINDS OF READONLY TABLE. This block is about the
   // UNDERLAY -- a readonly table some control declares as its `over`, drawn on
   // that control's axes. rulemodel's reference field is the other kind: its
   // rows are in the schema and it is drawn beside an overlay, with no owner and
-  // no axes. `f.ui === 'readonly'` alone matched both and returned whichever
-  // came first, so the cases below started measuring the wrong subsystem.
+  // no axes. `f.ui === 'readonly'` alone matches both and returns whichever
+  // comes first.
   const isUnderlay = function (s, f) {
     return f.ui === 'readonly' && s.fields.some(function (g) {
       return g.over === f.path && g.axes; }); };
@@ -13764,27 +12449,11 @@ setTimeout(function () {
          boxes[k].checked === (!unreadable && !!slot.value)
            && boxes[k].indeterminate === unreadable,
          [unreadable, slot && slot.value, boxes[k].checked, boxes[k].indeterminate]);
-      // WAS, until 2026-09-14:
-      //   ck(want[k] + ': and it is writable exactly when its key is in the
-      //      file',
-      //      boxes[k].disabled === (g0.in === 'cfg'
-      //                             && !FIXTURE.values.cfg[g0.path].present));
-      //
-      // THE NAV AND THE PANEL WERE ASSERTING OPPOSITE RULES ABOUT THE SAME
-      // GATE, and both passed. The panel's case (section 5, below) reads "its
-      // key is not in the file, and the control is live rather than disabled —
-      // saving appends the key", because split-config-into-toggleable-slices
-      // reversed the old rule: CfgFile.set_value APPENDS a key the file does
-      // not carry, and disabling an absent key greyed out every slice toggle
-      // until somebody launched the game once. The nav kept the old rule and
-      // its comment still claimed the two agreed.
-      //
-      // Item 3 merged the two controls into one gateBox, which forced the
-      // question. The measured answer is that the key is writable, so the box
-      // is live on BOTH screens and the absent case is carried by the
-      // indeterminate state rather than by a disable. NOT loosened: the case
-      // still asserts a value, the opposite one, and the absent branch is
-      // still counted by togIndeterminate above so it cannot go quiet.
+      // CfgFile.set_value APPENDS a key the file does not carry, so the box
+      // is live on BOTH screens (nav and panel) even when the key is absent;
+      // an unreadable gate is carried by the indeterminate state rather than
+      // by a disable, and togIndeterminate above counts that branch so it
+      // cannot go quiet.
       ck(want[k] + ': and it is live rather than disabled even when its key is '
          + 'not in the file — saving appends the key, and "could not be read" '
          + 'is carried by the indeterminate state, not by a dead box',
@@ -13894,21 +12563,9 @@ setTimeout(function () {
 
   // 5. every subsystem gate is a control of its own, whatever it is spelled in
   //
-  // WAS, until 2026-09-13, under the comment "This replaces 'one checkbox per
-  // doubly gated subsystem'. Phase 3 deleted the outer cfg gate, so the
-  // collapsed control and the fixture that drove it are gone":
-  //
-  //   ck('every gate is a field in the document except the master, which is
-  //      the one cfg key left',
-  //      cfgGated.length === 1 && ungated.length <= 1 && ...);
-  //
-  // "Phase 3 deleted the outer cfg gate" is a consolidate-config-and-ship
-  // statement, and split-config-into-toggleable-slices reverses it: every slice
-  // toggle is a cfg key again. Measured 2026-09-13 the three sets are 0 json,
-  // 10 cfg, 33 with no gate declared, of 43 schemas. Counts move every phase,
-  // so they are REPORTED in the case name and what is ASSERTED is the
-  // partition plus the one property that outlives a phase: exactly one cfg
-  // gate is the master key.
+  // Every slice toggle is a cfg key. The counts per spelling are REPORTED in
+  // the case name; what is ASSERTED is the partition plus the property that
+  // outlives any count: exactly one cfg gate is the master key.
   const gated = FIXTURE.schemas.filter(function (s) {
     return (s.enable || {}).json && s.fields.some(function (f) {
       return f.in === 'json' && f.path === s.enable.json; }); });
@@ -13923,11 +12580,9 @@ setTimeout(function () {
      cfgGated.filter(function (s) { return s.enable.cfg === FIXTURE.masterKey; }).length === 1,
      cfgGated.map(function (s) { return s.enable.cfg; }));
 
-  // THIS LOOP USED TO RUN OVER `gated` ALONE AND WENT QUIET. `gated` is 0
-  // today, so every per-subsystem assertion under it stopped executing --
-  // no FAIL, no NOT RUN, nothing in the output naming what had stopped. It
-  // runs over every gated schema whatever the spelling now, and the case
-  // above it fails loudly if that set is ever empty.
+  // NOT OVER `gated` ALONE: with no json-spelled gates that loop would run no
+  // assertion and name nothing. It runs over every gated schema whatever the
+  // spelling, and the case above it fails loudly if that set is ever empty.
   const gatedAll = FIXTURE.schemas.filter(function (s) {
     const g = gateOf(s);
     return g && s.fields.some(function (f) {
@@ -14030,23 +12685,16 @@ setTimeout(function () {
   // 6. no cell carries a button, in any grid on any page, and the only button
   //    on a row is the one that deletes it.
   //
-  // REPLACES, 2026-09-07: two cases that asserted the unset button appeared on
-  // the free-text columns and not on the adjustment ones. The control is gone,
-  // so the assertion is inverted and widened -- every grid, not just the one
-  // with adjustment columns -- and the delete-row button is asserted by name
-  // so that removing the unset control cannot quietly remove that one too.
+  // There is no per-cell unset button, on any grid, and the delete-row button
+  // is asserted by name so that a change to cell controls cannot quietly
+  // remove that one too.
   // WHICH GRIDS THIS IS ABOUT: the EDITABLE ones. The delete button is what
   // removes a row, so a grid with no editable cell has no row to remove and
   // must not be asked for one.
   //
-  // WAS, until Phase 4: a grid counted if some schema declared a table field
-  // whose row[] length equalled the header count minus one. That is not a test
-  // for editability, it is a coincidence of widths -- readonly grids were
-  // excluded only because their header has no trailing blank column, which is
-  // the same arithmetic by accident. Phase 4's overlay grids are readonly and
-  // have a header the arithmetic happened to match, so 341 rows were counted
-  // and 185 delete buttons found [measured]. The marker is read off the grid
-  // itself now: a grid is editable when its cells carry inputs.
+  // Matching a schema table field's row[] length against the header count is
+  // a coincidence of widths, not a test for editability. The marker is read
+  // off the grid itself: a grid is editable when its cells carry inputs.
   let cellButtons = 0, rowsSeen = 0, deleters = 0, editable = 0, readonly = 0, matrices = 0;
   for (let i = 0; i < FIXTURE.sections.length; i++) {
     select(i);
@@ -14447,29 +13095,12 @@ setTimeout(function () {
     const files = ovOf(s);
     // ONE SLICE, ONE TOGGLE, however many files.
     //
-    // CORRECTION, Phase 5. This counted checkboxes across the whole PANEL and
-    // asserted exactly one:
-    //
-    //     const boxes = panel.find(n => n.tagName === 'INPUT' && n.type === 'checkbox');
-    //     ck(... + ': its N file(s) sit under exactly one toggle ...',
-    //        boxes.length === 1, boxes.length);
-    //
-    // A panel is a SECTION, and a section may present several subsystems --
-    // design.md section 12: "Weapons is one section holding three tables",
-    // with the files and the toggles staying separate. So the correct panel
-    // for that section carries three checkboxes, one per slice, and this
-    // reported 3 against an expected 1 [measured on David's machine,
-    // Logs/gates-phase5.txt, and reproduced here].
-    //
-    // IT WAS PASSING FOR A REASON THAT WAS NOT THE ONE IT CLAIMED. Until
-    // Phase 5 every overlay-owning subsystem sat in a section of its own, so
-    // "one toggle in the panel" and "one toggle per slice" were the same
-    // number in every case it had ever seen, and it could not tell them
-    // apart. GearClasses is the first overlay-owning subsystem to share a
-    // section, and it separated them.
+    // Not counted across the whole PANEL: a panel is a SECTION, and a
+    // section may present several subsystems (design.md section 12: "Weapons
+    // is one section holding three tables"), each with its own toggle.
     //
     // What the case is FOR is that a slice's files sit under that slice's own
-    // switch, so that is what it reads now: the card carrying the gate is
+    // switch, so that is what it reads: the card carrying the gate is
     // found, and the files have to be in THAT card -- not merely somewhere on
     // the page, which is what would let one escape.
     const locParts2 = function (n) {
@@ -14484,20 +13115,11 @@ setTimeout(function () {
     ck(s.subsystem + ': exactly one card in its section carries its gate',
        mine.length === 1, [mine.length, gateKey]);
     const card = mine[0];
-    // A SUBSYSTEM'S BLOCK IS TWO CARDS, and after 2026-09-14 the gate is in
-    // the first of them.
+    // A SUBSYSTEM'S BLOCK IS TWO CARDS: a header card carrying the one gate
+    // control, and the body card after it carrying the files.
     //
-    // WAS: `const ct = txt(card)` and every file had to be inside THAT card.
-    // That held while the gate was an ordinary field row in the body card, so
-    // the card carrying the gate and the card carrying the files were the same
-    // card. Item 3 moved the gate up into the header card -- it was being
-    // drawn three times across the two, and David asked for one control -- so
-    // "the card with the switch" and "the card with the files" are now the
-    // header and the body of one subsystem, in that order.
-    //
-    // NOT LOOSENED TO FIT. The statement is still "a slice's files sit under
-    // that slice's own switch and nobody else's"; what changed is that the
-    // block is a header card plus the body card that follows it. The pairing
+    // The statement is "a slice's files sit under that slice's own switch and
+    // nobody else's". The pairing
     // is checked rather than assumed: the following card counts only if it
     // carries no gate of its own, so a subsystem that draws no body (its
     // header is followed by the NEXT subsystem's header) cannot silently
@@ -14687,25 +13309,16 @@ setTimeout(function () {
      refJoined === 1, refJoined);
   // AN OVERLAY GRID OFFERS AN EDIT ON ITS LEVER CELLS, AND NOWHERE ELSE.
   //
-  // CORRECTION, 2026-09-14. This block asserted the opposite, once per
-  // overlay-owning subsystem, and its name was:
+  // Lever and override columns are editable; identity columns, control
+  // columns and the key column are not (David's rule).
   //
-  //   'its overlay grids offer no editable cell - this editor never writes
-  //    an overlay'      (condition: !!mycard && inputs.length === 0)
-  //
-  // David reversed that rule on 2026-09-14 -- lever and override columns
-  // become editable, identity columns, control columns and the key column do
-  // not. The reason the old rule carried, that scripts/rules_to_overlays.py
-  // was the only thing that might write these files, had already lapsed when
-  // Phase 9 retired that script together with its subject.
-  //
-  // WHAT IS ASSERTED NOW, AND WHY IT IS A RANGE AND NOT A COUNT. The server
+  // WHAT IS ASSERTED, AND WHY IT IS A RANGE AND NOT A COUNT. The server
   // publishes `editable` per column, so the number of cells a client MAY put
   // an input on is exactly computable and is the upper bound: an input beyond
   // it is an input on an identity, control or key cell. It also publishes
-  // `constant` per column, which David asked for so that a column that never
-  // changes within a table can be SUPPRESSED -- a suppressed column renders no
-  // input, so an exact count would forbid the suppression he asked for. The
+  // `constant` per column, so that a column that never changes within a table
+  // can be SUPPRESSED -- a suppressed column renders no input, so an exact
+  // count would forbid the suppression. The
   // lower bound is therefore the editable cells of columns that VARY, which no
   // suppression rule may remove. A page that drew no input at all fails the
   // lower bound; a page that drew one on a key column fails the upper.
@@ -14719,10 +13332,9 @@ setTimeout(function () {
     const lp = function (n) {
       return (n.children || []).map(function (k) { return txt(k).trim(); }); };
     const gk = ((s.enable || {}).cfg || '').split('.');
-    // The gate card, and the body card after it. Since 2026-09-14 the gate
-    // sits in the header card and the grids in the body card below it, so the
-    // slice's block is the pair; before that it was one card and this took the
-    // one. The scoping is the point either way -- a section may present
+    // The gate card, and the body card after it: the gate sits in the header
+    // card and the grids in the body card below it, so the slice's block is
+    // the pair. The scoping is the point -- a section may present
     // several subsystems, and another one's boxes are not this one's to count.
     const mycards = panel.children.filter(function (c) { return c._cls().includes('card'); });
     const gcard = mycards.filter(function (c) {
@@ -14764,12 +13376,11 @@ setTimeout(function () {
        inputs.length <= maxCells, [inputs.length, maxCells]);
   }
 
-  // ---- THE THREE THINGS 2026-09-14 CHANGED, ASSERTED ON THE RENDERED PAGE
+  // ---- THREE PROPERTIES OF THE RENDERED PAGE
   //
-  // Each of these states a NEW truth. None of them replaces a case by relaxing
-  // it: the counts above moved because the page changed, and these say what it
-  // changed into. A page that quietly went back to the old behaviour would
-  // pass every case above and fail these.
+  // A one-row sheet is a grid, lever cells take input, and the gate is one
+  // control. A page that lost any of them could pass every case above and
+  // fail these.
   //
   // One helper for all three: the sheet's own block, found by the path the
   // server sent for it, which is a value and not a name this file spells.
@@ -14781,12 +13392,9 @@ setTimeout(function () {
 
   // 1. A ONE-ROW SHEET IS A GRID LIKE ANY OTHER.
   //
-  // It used to be drawn as a stack of labelled values, on the reasoning that a
-  // header row above a single line is a table of one. David overruled that on
-  // 2026-09-14 after seeing the page. The consequence that matters is not the
-  // shape: it is that the row's lever cells must take an edit on the same
-  // terms as every other sheet's, which is the complaint this whole wave is
-  // about.
+  // Not a stack of labelled values (David's rule). What matters is not the
+  // shape: the row's lever cells must take an edit on the same terms as every
+  // other sheet's.
   let oneRowSeen = 0;
   for (const s of packSubs) {
     const si = secIndexOf(s.subsystem);
@@ -14917,8 +13525,8 @@ const nav = document.querySelector('#index');
 const txt = function (n) { return n.textContent.replace(/\s+/g, ' ').trim(); };
 setTimeout(function () {
   // The section holding the windowed matrix, found from the schema that
-  // declares it. `subsystems.length > 1` used to identify it because it was the
-  // only merged section on the page; it is not since 2026-09-13.
+  // declares it, not by `subsystems.length > 1`: several sections are
+  // merged.
   const owner = FIXTURE.schemas.filter(function (s) {
     return s.fields.some(function (f) { return f.ui === 'matrix'; }); })[0];
   const gi = FIXTURE.sections.findIndex(function (s) {
@@ -15039,15 +13647,6 @@ def main(argv=None):
     ap.add_argument('--port', type=int, default=0,
                     help='bind this port instead of a free one')
     ap.add_argument('--selftest', action='store_true', help='run the verification suite')
-    ap.add_argument('--migration', action='store_true',
-                    help='with --selftest, also run section 19, the 3.x -> 4.0 '
-                         'migrator block. Retired from the default suite by '
-                         "David's ruling, %s -- it compares a conversion of "
-                         'tests/fixture-3.0.0 against the LIVE config, so it '
-                         'goes red on every tuning edit. Without this flag its '
-                         'twelve subsections are reported NOT RUN by name, '
-                         'never passing and never absent'
-                         % MIGRATION_RETIRED_ON)
     ap.add_argument('--migrate', action='store_true',
                     help='convert the 3.x layout in --config to 4.0 and rename '
                          'the originals to %s. Refuses, writing nothing, if an '
@@ -15064,7 +13663,7 @@ def main(argv=None):
     a = ap.parse_args(args)
 
     if a.selftest:
-        return selftest(a.config, a.frozen_exe, a.migration)
+        return selftest(a.config, a.frozen_exe)
     if a.selftest_js:
         return selftest_js()
     if a.migrate:

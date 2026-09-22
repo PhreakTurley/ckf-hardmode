@@ -1,62 +1,56 @@
 // Elapse — the mission elapse penalty.
 //
-// The design is docs/mission-elapse-penalty.md; this file is its implementation.
+// Mechanics and design: docs/mission-elapse-penalty.md. Settings:
+// ckf.hardmode.d/elapse.json (the switch is [Slices] Elapse in
+// ckf.hardmode.cfg; defaults are in schema/elapse.schema.json).
+//
 // When a mission's window closes unplayed, credits come off the balance and
 // Stress goes onto mercs who had a reason to care about that contact. Nothing
-// else. On by default as of 2.12.0. Every write below happens live; David's
-// standing instruction of 2026-08-31 is to test that way (AGENTS.md §6).
+// else. Every write below happens live; test it that way (David's rule).
 //
 // THIS SUBSYSTEM WRITES TO THE SAVE. Two write channels, both proven against a
-// live save by CKFDataDump's WriteProbe before this was written:
+// live save by CKF Data Dump's WriteProbe [measured]:
 //
 //   Credits   SaveManager.SpendCredits(long, string) -> bool, inherited from
-//             GameManagerBase. Run52 proved AddCredits on the same object; the
-//             database row (UpdateGameData) is KNOWN BROKEN — Run49 saw it
-//             revert on the next tick because the engine writes its own live
+//             GameManagerBase (AddCredits on the same object works). The
+//             database row (UpdateGameData) is KNOWN BROKEN: a write there
+//             reverts on the next tick because the engine writes its own live
 //             GameDataModel back over the row. The charge is capped to the
-//             live balance first (David's ruling: a 400 fine against 300
+//             live balance first (David's rule: a 400 fine against 300
 //             credits takes 300), so SpendCredits returning false is only a
 //             backstop, and a surprise worth reporting.
 //   Stress    set GameCharacterModel.NegativeTraitValue, then
-//             GameDb.UpdateGameCharacter(row). Run50/51: the Stress bar moved.
-//             THE COLUMN NAMES LIE — `StressScore` is the DISCONTENT bar
-//             (Run49). Spec §6.0. Do not "fix" this to StressScore.
-//             THE ROW IS NOT THE AUTHORITY EITHER. Run55: every row write
-//             read back correctly, and the roster panel kept showing the old
-//             number — Midnight's 7 surfaced turns later, nobody else's at
-//             all. SaveManager.playerCache holds a live PlayerModel per merc
-//             whose CharacterModel is what the UI reads and what the engine
-//             writes back. So the cached object is the AUTHORITY: it is
-//             what `before` is read from, it is what the increase is added
-//             to, and it is what is passed to UpdateGameCharacter. The row
-//             is written too, as a write-through copy, and is only read when
-//             there is no cached object to ask.
-//             CORRECTION, 2.13.0: this header used to promise "a watch line
-//             follows every written merc for a few ticks so drift between
-//             cache and row is measured". That instrument was removed from
-//             the code at some point before 2.12.0 and the sentence outlived
-//             it. It did run: Log18 has its 42 samples, 7 writes over 6
-//             mercs, every one `row N, cache N`. That is the evidence the
-//             cache-only rule above rests on.
+//             GameDb.UpdateGameCharacter(row); the Stress bar moves.
+//             THE COLUMN NAMES LIE — `StressScore` is the DISCONTENT bar.
+//             Do not "fix" this to StressScore.
+//             THE ROW IS NOT THE AUTHORITY EITHER. A row write reads back
+//             correctly while the roster panel keeps showing the old number.
+//             SaveManager.playerCache holds a live PlayerModel per merc whose
+//             CharacterModel is what the UI reads and what the engine writes
+//             back. So the cached object is the AUTHORITY: it is what
+//             `before` is read from, it is what the increase is added to, and
+//             it is what is passed to UpdateGameCharacter. The row is written
+//             too, as a write-through copy, and is only read when there is no
+//             cached object to ask. [measured: Logs/Log18.txt has 42 watch
+//             samples, 7 writes over 6 mercs, every one `row N, cache N`.]
 //
 // HOW AN EXPIRY IS DETECTED. The game logs every expiry as a GameLogModel row
 // with LogTypeId 202, stamped with the turn that was ENDING, and the postfix on
 // SaveManager.ProcessTimelineToNextTurn reads GameTurn after it has advanced,
-// so every row seen so far carried `turn - 1` (Runs 48-55, nine rows). Since
-// 2.10.2 the stamp is recorded, not filtered on: a 202 row is an expiry when
-// its Id is above the previous tick's highest, because the game moves mission
-// deadlines on purpose and a row stamped anything else would otherwise be
-// dropped silently. The 202 row carries a title and nothing else usable,
-// and the GameMissionModel row is DELETED when the window closes (Run48,
-// mission 114 gone between turns 1386 and 1387, no flag set on the way out).
+// so observed rows carry `turn - 1` [measured]. The stamp is recorded, not
+// filtered on: a 202 row is an expiry when its Id is above the previous tick's
+// highest, because the game moves mission deadlines on purpose and a row
+// stamped anything else would otherwise be dropped silently. The 202 row
+// carries a title and nothing else usable, and the GameMissionModel row is
+// DELETED when the window closes, with no flag set on the way out [measured].
 // So every tick snapshots the board, and an expiry resolves against the
 // PREVIOUS tick's snapshot — the last tick on which the mission was still
 // there. One tick of history is exactly enough and there is none to spare.
 //
-// THE THREE RULES CARRIED OVER FROM Fatigue.cs, each of which cost a run:
+// THE THREE RULES SHARED WITH Fatigue.cs:
 //   1. Never store the GameDb. Reached off the SaveManager the hook hands us,
-//      used inside the postfix, dropped. A cached instance that outlived its
-//      moment is the Log7 mission hang.
+//      used inside the postfix, dropped. A cached instance that outlives its
+//      moment hangs the next mission load.
 //   2. [ThreadStatic] reentrant. Our reads and writes call GameDb methods on
 //      a GameDb we hold a postfix on.
 //   3. Swallow every exception. A postfix that throws surfaces inside the
@@ -72,21 +66,19 @@
 //   * a COMPLETE game-log read whose highest row id is BELOW this session's
 //     high-water mark. The mark only ever rises within a session, so a top row
 //     id under it means the log table is not the one that was baselined.
-// Correcting an earlier claim in this header: it is not "any turn
-// discontinuity". Neither signal sees a reload onto the same turn or the next
-// one whose GameLogModel ids are HIGHER than the mark — the turn looks
-// continuous and the log looks like it merely grew — so when the save-load
-// postfix is also missing, that reload is not detected at all and the stale
-// snapshot and guard survive it. Dropping too little matters because Fatigue's
-// in-memory guard blocking a genuine replay was the 2.9.2 bug and this must
-// not repeat it. After a DETECTED reload the snapshot is stale for exactly one
-// tick, so an expiry stamped on the tick right after a load is missed and
-// logged as unmatched. The spec accepts that cost.
+// It is not "any turn discontinuity". Neither signal sees a reload onto the
+// same turn or the next one whose GameLogModel ids are HIGHER than the mark —
+// the turn looks continuous and the log looks like it merely grew — so when
+// the save-load postfix is also missing, that reload is not detected and the
+// stale snapshot and guard survive it. Dropping too little matters: an
+// in-memory guard must never block a genuine replay. After a DETECTED reload
+// the snapshot is stale for exactly one tick, so an expiry stamped on the tick
+// right after a load is missed and logged as unmatched. That cost is accepted.
 //
 // DETERMINISM. Who takes the stress is seeded from (turn, mission) ^ salt,
 // splitmix64 as in Fatigue.StableRoll with a different salt so the two
-// subsystems' rolls do not correlate. Without it §3.2's replay behaviour is a
-// slot machine.
+// subsystems' rolls do not correlate. Without it replay would be a slot
+// machine.
 
 using System;
 using System.Collections.Generic;
@@ -122,16 +114,19 @@ namespace CKFHardMode
 
         // Every block below carries a [JsonExtensionData] bag. System.Text.Json
         // drops a key no declared property claims, in silence: "enabeld": false
-        // in the credits block left Enabled at its default of true and the
-        // player who tried to switch the channel off kept being charged. The
-        // bag collects those keys instead, and Load reports each one by name
+        // in the credits block would leave Enabled at its default of true and a
+        // player who tried to switch the channel off would keep being charged.
+        // The bag collects those keys instead, and Load reports each one by name
         // and refuses the file. (.NET 8 has a serializer option that does this
         // in one line; this project targets net6.0, so the bags do it here.)
         //
         // Matching stays case-SENSITIVE: PropertyNameCaseInsensitive would make
         // "Enabled" and "ENABLED" work, which hides a different class of typo.
-        // The file ships lowercase keys, so a key in the wrong case lands in
-        // the bag and gets reported like any other unrecognised key.
+        // Keys are camelCase as declared below, so a key in the wrong case lands
+        // in the bag and gets reported like any other unrecognised key.
+        //
+        // Initialisers match the schema defaults (schema/elapse.schema.json)
+        // and apply only when a key is absent from the file.
         private sealed class TierBlock
         {
             [JsonPropertyName("patterns")]   public List<string> Patterns { get; set; }
@@ -174,13 +169,13 @@ namespace CKFHardMode
         {
             [JsonPropertyName("enabled")]             public bool Enabled { get; set; } = true;
             [JsonPropertyName("cap")]                 public long Cap { get; set; } = 10;
-            [JsonPropertyName("fallbackToRandom")]    public bool FallbackToRandom { get; set; } = true;
+            [JsonPropertyName("fallbackToRandom")]    public bool FallbackToRandom { get; set; }
             [JsonPropertyName("applyTierMultiplier")] public bool ApplyTierMultiplier { get; set; }
             // Only mercs the engine's own GameCharacterModel
             // .IsStatusSafehouseAliveAndActive() says are in the safehouse.
-            // Run55 stressed Status 5 and Status 7 mercs; what those are is
-            // not established, and a merc the roster does not show cannot
-            // show a penalty.
+            // Without it, mercs in Status 5 and Status 7 were stressed
+            // [measured]; what those are is not established, and a merc the
+            // roster does not show cannot show a penalty.
             [JsonPropertyName("safehouseOnly")]       public bool SafehouseOnly { get; set; } = true;
             [JsonPropertyName("byPowerLevel")]        public List<StressRow> ByPowerLevel { get; set; }
             [JsonExtensionData] public Dictionary<string, JsonElement> Unknown { get; set; }
@@ -188,18 +183,15 @@ namespace CKFHardMode
 
         private sealed class Options
         {
-            // RETIRED 2026-09-13. This used to be
-            //     [JsonPropertyName("enabled")] public bool Enabled { get; set; } = true;
-            // and Init branched on it. The gate is [Slices] Elapse in
-            // ckf.hardmode.cfg now (design.md section 3). Still parsed, into a
-            // bool?, so an existing document is not refused for a key that maps
-            // to no member; nothing branches on it.
+            // RETIRED gate. The switch is [Slices] Elapse in ckf.hardmode.cfg.
+            // Still parsed, into a bool?, so a file carrying it is not refused
+            // for a key that maps to no member; nothing branches on it.
             //
             // credits.enabled and stress.enabled are NOT retired. They gate
             // blocks inside this subsystem rather than the subsystem, so they
             // are settings.
             [JsonPropertyName("enabled")]    public bool? RetiredEnabled { get; set; }
-            [JsonPropertyName("logFirst")]   public int LogFirst { get; set; } = 40;
+            [JsonPropertyName("logFirst")]   public int LogFirst { get; set; }
             [JsonPropertyName("tiers")]      public TiersBlock Tiers { get; set; }
             [JsonPropertyName("credits")]    public CreditsBlock Credits { get; set; }
             [JsonPropertyName("stress")]     public StressBlock Stress { get; set; }
@@ -246,11 +238,8 @@ namespace CKFHardMode
 
         private static int expiriesSeen;
 
-        // Every merc written this session is re-read for a few ticks
-        // afterwards, from the row AND from the cached PlayerModel, so the
-        // log shows whether the value held, drifted, or was spent by a limit
-        // break. Run55 is why: the writes "took" by the row and the roster
-        // panel disagreed for turns.
+        // Log-once flags for the cache path (see WriteStress and the
+        // ONE AUTHORITY note in the stress resolution).
         private static bool warnedNoCache, warnedNoSafehousePredicate, warnedCacheMiskeyed;
         private static string lastExcluded = "";
         private static long ticks;
@@ -273,21 +262,10 @@ namespace CKFHardMode
 
         public static void Init(Harmony harmony)
         {
-            // CORRECTION, 2026-09-13. This used to read "3.0: one gate, not
-            // two. [Elapse] Enabled is gone from ckf.hardmode.cfg and
-            // \"enabled\" in the \"elapse\" section is the whole chain, so
-            // the file is read first and the switch is read out of it. logFirst
-            // came the same way; it used to be bound above this early return so
-            // BepInEx would keep writing the key into the cfg on the disabled
-            // path, and a JSON key needs nothing done to it to stay on disk."
-            //
-            // It is still one gate, and it is the other one. [Slices] Elapse in
-            // ckf.hardmode.cfg is the whole chain, and it is read BEFORE the
-            // section (design.md section 3). logFirst stays a JSON setting. The
-            // note about BepInEx dropping an unbound key is why Slices.Init
-            // binds all 43 eagerly, above Plugin.Load's master-switch bail-out.
-            // This subsystem WRITES TO THE SAVE, so the ordering matters more
-            // here than anywhere else.
+            // One gate: [Slices] Elapse in ckf.hardmode.cfg, read BEFORE the
+            // settings file. logFirst is a setting in elapse.json. This
+            // subsystem WRITES TO THE SAVE, so the ordering matters more here
+            // than anywhere else.
             if (!Slices.On("Elapse"))
             {
                 Plugin.Log.LogInfo(Slices.OffBecause("Elapse",
@@ -317,8 +295,7 @@ namespace CKFHardMode
             // Same speculative seam Fatigue patches, for the same reason: it is
             // the only pair of methods in the interop assembly that name loading
             // a save. Tick's own discontinuity signals cover most of what this
-            // hook covers but not all of it, so it is not redundant — correcting
-            // the claim that used to stand here.
+            // hook covers but not all of it, so it is not redundant.
             int loadHooks = Patch(harmony, GameManagementTypeName, "LoadGame", nameof(AfterLoadGame))
                           + Patch(harmony, GameManagementTypeName, "LoadGameSlot", nameof(AfterLoadGame));
             if (loadHooks == 0)
@@ -336,11 +313,8 @@ namespace CKFHardMode
             Plugin.Log.LogWarning("Elapse: ACTIVE, and this subsystem WRITES TO YOUR SAVE.");
         }
 
-        // 3.0: the text comes from ConfigDoc — one merged document, one section
-        // each — and everything below that is unchanged. Same JsonSerializer
-        // call, same POCOs, same [JsonExtensionData] bags, same defaulting, same
-        // error paths. `path` is only ever interpolated into a message, and now
-        // reads `...\ckf.hardmode.json section "elapse"`.
+        // The text comes from ConfigDoc (elapse.json). `path` is only ever
+        // interpolated into a message.
         private static Options Load()
         {
             var path = ConfigDoc.Where(ConfigDoc.Elapse);
@@ -349,24 +323,10 @@ namespace CKFHardMode
                 var text = ConfigDoc.SectionText(ConfigDoc.Elapse);
                 if (text == null)
                 {
-                    // AGENTS.md §3. "The section is not there" and "the document
-                    // could not be read" are different findings: WhyNo says
-                    // which, and the second is an Error, not a Warning.
-                    // CORRECTION, 2026-09-13 (Phase 3). This comment used to
-                    // read: "3.0: this used to say 'restore it from the mod's
-                    // defaults' without saying where those were, because they
-                    // did not exist. They are an EmbeddedResource now, so the
-                    // instruction can be the actual one: delete the file and
-                    // the next launch writes the shipped copy back." The second
-                    // half is false and had been since the defaults stopped
-                    // being embedded — Defaults.cs's own header records the
-                    // removal and Defaults.Install writes nothing. Telling a
-                    // player to delete the file would have cost them their
-                    // tuning with nothing able to restore it. The instruction
-                    // below is the one Defaults.Install already gives.
-                    //
-                    // The file named is this slice's own now, not the merged
-                    // document: Phase 3 of split-config-into-toggleable-slices.
+                    // "The file is not there" and "the file could not be read"
+                    // are different findings (AGENTS.md): WhyNo says which, and
+                    // the second is an Error, not a Warning. Nothing writes the
+                    // file back; the release zip is the place to restore from.
                     var why = $"Elapse: {ConfigDoc.WhyNo(ConfigDoc.Elapse)}, so there are no "
                         + "amounts to work from. Doing nothing. To start again from the values "
                         + "the mod ships, extract BepInEx\\config from the release zip over "
@@ -434,7 +394,7 @@ namespace CKFHardMode
             }
             catch (Exception e)
             {
-                // Never throw past Init. A malformed sidecar turns the feature
+                // Never throw past Init. A malformed settings file turns the feature
                 // off; it does not take the plugin with it.
                 Plugin.Log.LogError($"Elapse: could not read {path}: {e.GetType().Name}: "
                                   + e.Message + ". Doing nothing.");
@@ -682,7 +642,7 @@ namespace CKFHardMode
 
         // SaveManager.ProcessTimelineToNextTurn() -> void, instance. No GameDb
         // in the signature; it comes off the SaveManager the hook hands us,
-        // read here and dropped: __instance.Dac.GameDBI (Run44-48).
+        // read here and dropped: __instance.Dac.GameDBI [measured].
         public static void AfterProcessTimeline(object __instance)
         {
             if (!active || reentrant) return;
@@ -811,10 +771,9 @@ namespace CKFHardMode
             }
 
             // The first-tick counters, taken off the snapshot that was actually
-            // recorded rather than off the rows as they were read. They used to
-            // be incremented inside the loop above, before the title-collision
-            // tiebreak could discard the row, so they described rows the
-            // snapshot did not hold. Rows with an unreadable column are skipped
+            // recorded rather than off the rows as they were read, which the
+            // title-collision tiebreak may have discarded. Rows with an
+            // unreadable column are skipped
             // here: their columns read as 0 and those zeros are not data.
             int withContact = 0, pluRows = 0;
             long pluMin = long.MaxValue, pluMax = long.MinValue;
@@ -828,8 +787,8 @@ namespace CKFHardMode
             }
 
             // B. This tick's expiries: every 202 row that did not exist on the
-            //    previous tick, by Id. Runs 48-55 stamped every such row with
-            //    `turn - 1`, but the game moves mission deadlines around on
+            //    previous tick, by Id. Observed rows are stamped `turn - 1`
+            //    [measured], but the game moves mission deadlines around on
             //    purpose (a merc's surgery finishing pushes a mission back), so
             //    the stamp is recorded and checked, not relied on. A row that
             //    is new is an expiry whatever turn it carries; a filter on the
@@ -879,10 +838,10 @@ namespace CKFHardMode
                     }
                 }
 
-                // Only a row that was fully classified may be stepped over. The
-                // watermark used to be raised on the row's Id before either
-                // column was read, so a row that failed one of them was above
-                // the mark on the next tick and was never looked at again.
+                // Only a row that was fully classified may be stepped over.
+                // Raising the watermark before both columns are read would put a
+                // row that failed one of them below the mark on the next tick,
+                // and it would never be looked at again.
                 if (rowId > seenMaxId) seenMaxId = rowId;
                 if (typeId != LogTypeMissionExpire) continue;
 
@@ -957,14 +916,14 @@ namespace CKFHardMode
                 logBaselined = true;
             }
 
-            // The instrument's own proof that it can see. AGENTS.md §3: a quiet
+            // The instrument's own proof that it can see (AGENTS.md): a quiet
             // session has to be distinguishable from a reader that returns
             // nothing. The reference save carries 20 x 202 rows at turn 1382.
             // It fires again after a session reset because ForgetSession puts
             // `ticks` back to 0, so the wording says which of the two this is.
             // pluMin/pluMax only mean anything when a readable row set them:
             // an unreadable row is still recorded in the snapshot, so counting
-            // the snapshot instead used to print the long sentinels.
+            // the snapshot alone would print the long sentinels.
             if (ticks == 1)
             {
                 string when = sessionWasReset ? "first tick after a session reset"
@@ -1010,7 +969,7 @@ namespace CKFHardMode
                 }
 
                 applied.Add(key);
-                previousSnapshot.Remove(title);     // releases the title (§3.1)
+                previousSnapshot.Remove(title);     // releases the title
                 expiriesSeen++;
 
                 if (snap.Unreadable != null)
@@ -1113,7 +1072,7 @@ namespace CKFHardMode
                     amount += (long)Math.Round(balance * o.Credits.PercentOfBalance,
                                                MidpointRounding.AwayFromZero);
 
-                // David's ruling, 2026-08-31: a fine the crew cannot cover takes
+                // David's rule: a fine the crew cannot cover takes
                 // what they have. When the balance is readable the charge is
                 // capped to it here, so SpendCredits is asked for an amount it
                 // can grant and its refusal is a backstop, not the floor. When
@@ -1244,7 +1203,8 @@ namespace CKFHardMode
         // ---- channel 1: credits ----------------------------------------------
 
         // The engine's live GameDataModel (SaveManager.GameData) is the
-        // authority — Run52 saw it move first and the row follow a tick later.
+        // authority: it moves first and the row follows a tick later
+        // [measured].
         // The row is the fallback for the log line only.
         private static bool ReadBalance(object saveManager, object db, out long balance)
         {
@@ -1298,9 +1258,9 @@ namespace CKFHardMode
             // Call resolves an overload by parameter types only, so on a build
             // whose SpendCredits(long, string) is void — or returns anything
             // that is not a bool — `ret` is not a refusal and must not be read
-            // as one. It used to be: anything but a true bool was reported as
-            // "nothing charged" while the balance may well have moved. Three
-            // outcomes, distinguished by the balance read-back already in hand.
+            // as one: reporting "nothing charged" would be wrong if the balance
+            // moved. Three outcomes, distinguished by the balance read-back
+            // already in hand.
             if (!(ret is bool))
             {
                 if (haveBalance && haveAfter && after == before - amount)
@@ -1504,23 +1464,18 @@ namespace CKFHardMode
                 //
                 // SaveManager.playerCache holds a live PlayerModel per merc
                 // whose CharacterModel is what the roster panel reads and what
-                // the engine's own stress code takes (Run55, from the interop
+                // the engine's own stress code takes (from the interop
                 // metadata). The GameDb row is a write-through copy: durable
-                // (Runs 49-51) but not what anything reads back. So `before`
+                // [measured] but not what anything reads back. So `before`
                 // comes from the cached object and from nothing else, and the
                 // row is only consulted when there is no cached object to ask.
                 //
-                // This replaces a rule that read BOTH and took the higher of
-                // the two. That rule was written to stop the cache-derived
-                // value being written down onto a row that read higher — a
-                // case that has never been observed. Log18 carries 42 watch
-                // samples over 7 writes and 6 mercs, every one of them
-                // `row N, cache N`, no disagreement warning, and no merc
-                // without a cache entry in any run. Reading two objects to
-                // arbitrate between them was carrying a contradiction the data
-                // does not show, so it is gone. [measured: Logs/Log18.txt]
+                // Reading both and arbitrating is not needed: the row and the
+                // cache have never been seen to disagree [measured:
+                // Logs/Log18.txt, 42 watch samples over 7 writes and 6 mercs,
+                // every one `row N, cache N`].
                 //
-                // What that gives up: nothing now compares the two, so a
+                // What that gives up: nothing compares the two, so a
                 // divergence would go unseen here. The read-back in
                 // WriteStress still re-reads the row through a fresh
                 // ReadGameCharacters() and warns when it does not hold the
@@ -1638,12 +1593,9 @@ namespace CKFHardMode
                 // Put back every object this method actually wrote — the cached
                 // PlayerModel when there is one, and the row object when it took
                 // the value — so nothing is left holding a number the database
-                // does not have. Each revert is reported on its own result.
-                // Correcting what stood here: the old revert short-circuited to
-                // "reverted" whenever there was no cache, having put nothing
-                // back although the row had been written through `target`, and
-                // when there was a cache it restored only the cache and left
-                // the row at `after`.
+                // does not have — the row too, when it was written through
+                // `target`, whether or not there is a cache. Each revert is
+                // reported on its own result.
                 var back = new List<string>();
                 var stuck = new List<string>();
                 if (m.Cached != null)
@@ -1893,7 +1845,7 @@ namespace CKFHardMode
 
         // A zero-arg bulk reader, materialised, with a completeness flag. Bulk
         // readers only: a by-id reader that misses THROWS where a postfix
-        // cannot see it (docs/verifying-2.7.md). `complete` is false whenever
+        // cannot see it (see RowClone.ReaderThrew). `complete` is false whenever
         // the caller must not conclude anything from a row being absent.
         private static List<object> ReadRows(object db, string reader, out bool complete)
         {

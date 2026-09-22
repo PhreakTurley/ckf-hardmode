@@ -1,29 +1,24 @@
 // SelfCheck — assert what the config should produce, in one launch, no sweep.
 //
-// THE PROBLEM THIS SOLVES is stated in docs/verifying-2.5.md: verifying the
-// arithmetic needs every affected row to be read, the only thing that forced
-// that was a CKF Data Dump whole-table sweep, and Run 42 showed a sweep and
-// cloning cannot be used together — the mission hung on load. The doc's own
-// conclusion was "verify from an ordinary play session instead and accept
-// partial coverage."
+// THE PROBLEM THIS SOLVES. Verifying the arithmetic needs every affected row
+// to be read. A CKF Data Dump whole-table sweep forces that, but a sweep and
+// cloning cannot be used together: the mission hangs on load (see
+// RowClone.cs). A BY-ID read is what the game itself does, and serves clones
+// without trouble. So this reads exactly the rows an expectations file
+// (ckf.hardmode.selfcheck.csv) names, by id, through the game's own reader —
+// the same call the game makes when a monster resolves its gear — and compares
+// the columns against values written down in advance.
 //
-// Partial coverage is not necessary. A whole-table read is the dangerous thing;
-// a BY-ID read is what the game itself does, and Runs 40, 41 and 43 all served
-// clones that way with no trouble. So this reads exactly the rows an
-// expectations file names, by id, through the game's own reader — the same call
-// the game makes when a monster resolves its gear — and compares the columns
-// against values written down in advance.
-//
-// That means every rule in the file can be checked whether or not a mission
+// That means every rule can be checked whether or not a mission
 // happens to spawn the enemy that uses it, and the answer is arithmetic:
 //
-//   SelfCheck: PASS ArmorModel 22007 BallisticArmorDegraded = 46   [A: the old regression]
+//   SelfCheck: PASS ArmorModel 22007 BallisticArmorDegraded = 46   [A: a regression note]
 //   SelfCheck: FAIL ArmorModel 22106 BallisticArmor = 35, expected 0
 //                   [C: the zero-column guard]
 //
 // It reads rows the game has not asked for, so it is a diagnostic rather than
-// part of play, and it is OFF by default — David's ruling 2026-08-31, the one
-// exception to "every feature switch defaults true". It is a verification-launch
+// part of play, and its switch defaults to OFF — the one slice switch that
+// does (schema/selfcheck.schema.json). It is a verification-launch
 // tool: retune, turn it on, regenerate the expectations, read the block, turn it
 // off. What it does is safe by construction — it is
 // one nested by-id read, shallower than the read RowClone already performs
@@ -37,27 +32,24 @@
 // per-table — one DataDb instance can call ReadMonsterType and ReadEffect just
 // as well as ReadArmor.
 //
-// TWO HOOKS HAND ONE OVER. There used to be only one.
+// TWO HOOKS HAND ONE OVER.
 //
 //   ModelRules.AfterGetRow   the __instance of every hooked materializer.
 //                            Installed whenever ModelRules has anything to
 //                            hook, which is the ordinary case.
 //   RowClone.Remember        the __instance of every hooked reader. Installed
-//                            only when the rules file carries a clone rule.
+//                            only when the rule set carries a clone rule.
 //
-// RowClone was the only source, so a rules file with no clone rules — which is
-// what the shipped config is — printed "waiting for a database instance" and
-// then nothing at all: no PASS, no FAIL, no SKIP list, no CSV. That is the
-// exact failure the note above Offer() says this file was rewritten to prevent.
+// Both are needed: with RowClone as the only source, a rule set with no clone
+// rules would print "waiting for a database instance" and then nothing at all.
 //
 // AND IT MAKES CLONES MATERIALIZE EARLY, which is a real consequence and not
 // only a timing detail: reading a cloned id by id builds it there and then,
-// against whatever database instance is live at that moment. RowClone used to
-// pin that instance for the rest of the session — see the comment on
-// RowClone.Instance — so a self-check at the menu could leave every later
-// serve re-reading through a stale database. Fixed in 2.7.2; the live instance
-// now wins. If this file is ever moved earlier again, that is the invariant to
-// keep.
+// against whatever database instance is live at that moment. RowClone must not
+// pin that instance for the rest of the session (see RowClone.Instance: the
+// live instance wins), or a self-check at the menu would leave every later
+// serve re-reading through a stale database. That is the invariant to keep if
+// this file is ever moved earlier.
 
 using System;
 using System.Collections.Generic;
@@ -122,7 +114,7 @@ namespace CKFHardMode
         // ...and a deadline in wall-clock time beside it, because counting
         // offers is not counting time. A quiet session — one that loads a save
         // and sits at the base — can read a few dozen rows and stop, so the
-        // 500th offer never arrives and the report was never written at all,
+        // 500th offer never arrives and the report would never be written,
         // which is the silence the note above Offer() promises not to produce.
         //
         // Five minutes from Init. Nothing in this source measures how long a
@@ -140,19 +132,14 @@ namespace CKFHardMode
 
         // ---- setup -------------------------------------------------------------
 
-        // 3.0: the three [SelfCheck] cfg keys are the "selfcheck" section of
-        // ckf.hardmode.json. The section is new — it has no 2.x sidecar behind
-        // it — and it is flat, so ConfigDoc.ReadSection does the grading and
-        // the unknown-key report.
+        // selfcheck.json. It is flat, so ConfigDoc.ReadSection does the
+        // grading and the unknown-key report. Initialisers match the schema
+        // defaults and apply only when a key is absent from the file.
         private sealed class Options : ConfigDoc.IHasUnknownKeys
         {
-            // RETIRED 2026-09-13. This used to be
-            //     [JsonPropertyName("enabled")] public bool Enabled { get; set; }
-            // defaulting to false here and true everywhere else, because this is
-            // a diagnostic rather than part of play. That default now lives on
-            // [Slices] SelfCheck, which Plugin.Binds.g.cs declares false while
-            // every other slice key is true. The key is still parsed so an
-            // existing document is not refused; nothing branches on it.
+            // RETIRED gate. The switch is [Slices] SelfCheck in
+            // ckf.hardmode.cfg. "enabled" is still parsed so a file carrying it
+            // is not refused; nothing branches on it.
             [JsonPropertyName("enabled")] public bool? RetiredEnabled { get; set; }
             [JsonPropertyName("file")]    public string File { get; set; } = "";
             [JsonPropertyName("output")]  public string Output { get; set; } = "";
@@ -162,26 +149,21 @@ namespace CKFHardMode
 
         // dbTypes comes from ModelRules.ResolvedDbs. Plugin.Load calls this
         // whether or not ModelRules ran, so this subsystem's own setting is
-        // honoured either way; it used to be initialised from inside
-        // ModelRules.Init, which meant the whole [SelfCheck] section vanished
-        // from ckf.hardmode.cfg on a launch with ModelRules off, taking the
-        // user's setting with it. The keys are not BepInEx binds any more, so
-        // that particular failure cannot recur — but the call still belongs
-        // here, because a launch with ModelRules off is exactly the one where
-        // this subsystem has something to say.
+        // honoured either way: a launch with ModelRules off is exactly the one
+        // where this subsystem has something to say.
         public static void Init(string configDir, List<Type> dbTypes)
         {
-            // absentIsOrdinary: this is the one subsystem that ships OFF, so a
-            // document with no "selfcheck" section is an ordinary configuration
-            // and says nothing about a mistake. An UNREADABLE document is still
-            // an Error - the same split MissionRewards makes.
+            // absentIsOrdinary: this is the one subsystem whose switch defaults
+            // to OFF, so an absent selfcheck.json is an ordinary configuration
+            // and says nothing about a mistake. An UNREADABLE file is still an
+            // Error - the same split MissionRewards makes.
             if (!Slices.On("SelfCheck"))
             {
-                // Info, not Warning: this is the one slice that ships OFF, so
-                // its gate being false is the ordinary state and not a finding.
+                // Info, not Warning: this is the one slice whose switch defaults
+                // to OFF, so its gate being false is not a finding.
                 Plugin.Log.LogInfo(Slices.OffBecause("SelfCheck",
                     "the regression suite does not run this launch and no report is written. "
-                    + "That is the shipped state of this slice."));
+                    + "That is this slice's default."));
                 enabled = false;
                 return;
             }
@@ -219,7 +201,7 @@ namespace CKFHardMode
                     + "which resolves them only when [" + Slices.Section + "] ModelRules is "
                     + "true in ckf.hardmode.cfg, its settings in " + ConfigDoc.DirName + "/"
                     + ConfigDoc.FileFor(ConfigDoc.ModelRules) + " could be read, the "
-                    + "rules file gives it something to hook, and its initialisation finished. "
+                    + "rule set gives it something to hook, and its initialisation finished. "
                     + "Nothing will hand SelfCheck a database instance, so NOTHING IS CHECKED "
                     + "this launch and no report is written. There should be a line above "
                     + "saying which of those four it was.");
@@ -269,9 +251,9 @@ namespace CKFHardMode
 
                 var table = c[0].Trim();
                 // OrdinalIgnoreCase, not Ordinal: ModelTypes, ModelHome and
-                // Readers are all case-insensitive, so an expectations file
-                // saying "armormodel" used to become "armormodelModel" and get
-                // reported as having no materializer.
+                // Readers are all case-insensitive; with Ordinal, "armormodel"
+                // would become "armormodelModel" and be reported as having no
+                // materializer.
                 if (!table.EndsWith("Model", StringComparison.OrdinalIgnoreCase)) table += "Model";
 
                 long id;
@@ -364,13 +346,11 @@ namespace CKFHardMode
 
         // ---- the check ----------------------------------------------------------
         //
-        // ONE INSTANCE IS NOT ENOUGH, and assuming it was cost 96 of 102 checks
-        // in Log10. A database is per-TYPE, so a DataDb instance can call every
-        // DataDb reader — that part was right. What was wrong was finishing on
-        // the FIRST instance offered: that one was a GameDb, and the only
-        // content table GameDb can read is WeaponModel, because GameDb declares
-        // a ReadWeapon(long) of its own. Six WeaponModel checks resolved and the
-        // other ninety-six were reported "row not read".
+        // ONE INSTANCE IS NOT ENOUGH. A database is per-TYPE, so a DataDb
+        // instance can call every DataDb reader, but the FIRST instance offered
+        // may be a GameDb, and the only content table GameDb can read is
+        // WeaponModel (GameDb declares a ReadWeapon(long) of its own). Finishing
+        // on it would report every other table's rows "row not read".
         //
         // So this resolves incrementally. Every new database type that arrives
         // settles whatever it can, and the report goes out when nothing is left
@@ -379,11 +359,10 @@ namespace CKFHardMode
         //
         // This still patches nothing of its own: ModelRules and RowClone hook
         // the materializers and the readers and hand over what they see.
-        // SelfCheck used to add capture-only prefixes to five more readers,
-        // which is what got a DataDb instance early — but docs/patching-rules.md
-        // is explicit that IL2CPP folds function bodies and that the dangerous
-        // case is invisible to managed code. Waiting for the instance is the
-        // cheaper trade.
+        // Capture-only prefixes on more readers would get a DataDb instance
+        // earlier, but docs/patching-rules.md is explicit that IL2CPP folds
+        // function bodies and that the dangerous case is invisible to managed
+        // code. Waiting for the instance is the cheaper trade.
         public static void Offer(Type dbType, object instance)
         {
             if (!enabled || ran || running || dbType == null || instance == null) return;
@@ -495,12 +474,10 @@ namespace CKFHardMode
             int pass = Wanted.Count(w => w.Verdict == "PASS");
             int fail = Wanted.Count(w => w.Verdict == "FAIL");
 
-            // INFO and SKIP are not the same thing and used to be one number.
-            // INFO is a row that WAS read and carries no expected value, so
-            // there was nothing to judge — deliberate, and a clean result. SKIP
-            // is a row that was never read, or was read and turned out not to
-            // exist. An all-INFO expectations file used to print "12 were never
-            // read — this is NOT a clean pass", which was false about all twelve.
+            // INFO and SKIP are counted apart. INFO is a row that WAS read and
+            // carries no expected value, so there was nothing to judge —
+            // deliberate, and a clean result. SKIP is a row that was never
+            // read, or was read and turned out not to exist.
             int info = Wanted.Count(w => w.Verdict == "INFO");
             int skip = Wanted.Count(w => w.Verdict == "SKIP");
             int absent = Wanted.Count(w => w.Verdict == "SKIP" && w.Miss != null
@@ -520,9 +497,9 @@ namespace CKFHardMode
                 else Plugin.Log.LogInfo(line);
             }
 
-            // "all expectations met" with ninety-six of them unread is how
-            // Log10 read, and it is the wrong thing for a checker to say.
-            // Silence about what was not checked is not a pass. An INFO row is
+            // "All expectations met" while most are unread is the wrong thing
+            // for a checker to say. Silence about what was not checked is not a
+            // pass. An INFO row is
             // not silence, though: it was read, and the file asked for no
             // judgement on it, so a file whose only unjudged rows are INFO is a
             // clean pass.
@@ -614,8 +591,8 @@ namespace CKFHardMode
                     // NOT "non-null is the row". A by-id reader answers a miss
                     // with a live object whose every column is defaulted — the
                     // same behaviour RowClone.ReadById exists for — so an
-                    // expectation of 0 on an id no rule ever created used to
-                    // read 0 off a defaulted row and report PASS. Green for a
+                    // expectation of 0 on an id no rule ever created would read
+                    // 0 off a defaulted row and report PASS. Green for a
                     // row that does not exist is worse than no answer, so the
                     // row is accepted only when its own id column carries the
                     // id that was asked for.

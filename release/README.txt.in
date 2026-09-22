@@ -94,7 +94,7 @@ The first key, under [General], is the master switch:
 
 Set it to false and the mod does nothing at all, without uninstalling it.
 
-Under it, [Slices] has one switch per part of the mod -- 42 of them. Set one to
+Under it, [Slices] has one switch per part of the mod -- 44 of them. Set one to
 false and that part alone stops applying; everything else still runs. They are,
 in the order they appear in the file:
 
@@ -112,11 +112,15 @@ in the order they appear in the file:
                                 sliders past their stock bounds
     Elapse                      the mission elapse penalty -- what it costs to
                                 let a mission's clock run down
-    Fatigue                     mission fatigue: Running Empty and Off-Duty
+    Fatigue                     mission fatigue -- a three-tier track:
+                                Checked Out, Running Empty, Off-Duty
     GearClasses                 player weapon classes -- recoil and the rest
 
     ImplantsGlobal              implant multipliers that apply across the board
     ImplantsSlot01 .. Slot11    implant tuning, one switch per implant slot
+    LimitBreakTraits            what the limit-break traits do to a merc
+                                carrying one -- Fatigue decides who gets
+                                them, this decides what they cost
 
     MissionRewards              per-mission-type reward overrides
     ModelRules                  the declarative row-by-row game table edits
@@ -128,6 +132,7 @@ in the order they appear in the file:
     RuleModel                   the game's own rule constants
     SelfCheck                   OFF by default. A diagnostic that writes a
                                 report and changes nothing in the game
+    SpawnWeights                enemy roster weights and power-level bands
 
 The eleven talent switches are one per class. FIVE OF THEM ARE NAMED AFTER A
 CLASS THE GAME DOES NOT HAVE. The key names are older than the class names and

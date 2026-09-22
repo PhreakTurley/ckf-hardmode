@@ -12,7 +12,7 @@
 //   EffectModel        keyed on that row's EffectId        the payload
 //   MatrixEffectModel  keyed on that row's MatrixEffectId  the matrix payload
 //
-// ItemModel is 73 rows of ten columns -- ItemName, ItemDesc, ItemTypeId,
+// Stock ItemModel is 73 rows of ten columns -- ItemName, ItemDesc, ItemTypeId,
 // ItemClass, ServiceOptionId, LeverageClass, Rarity, PowerLevel, Cost, TalentId
 // [measured, sheets/raw/ItemModel.csv] -- so every lever past price and rarity
 // lives behind TalentId and every payload past that lives behind the talent's
@@ -20,17 +20,18 @@
 //
 // SIX SHEETS, BECAUSE THE LIVE COLUMNS BARELY OVERLAP
 //
-// Split by ItemClass: 1 medical (18 rows), 2 grenades (11), 3 devices (12),
-// 4 chems (18), 6 sploitkits (3), 7 matrix (11). There is no ItemClass 5.
+// Split by ItemClass (stock row counts): 1 medical (18 rows), 2 grenades (11),
+// 3 devices (12), 4 chems (18), 6 sploitkits (3), 7 matrix (11). There is no
+// ItemClass 5.
 // 18+11+12+18+3+11 = 73. A grenade and a Juice share only MaxCharges, so a flat
 // 73-row table would be about 70% empty and the lever-sheets spec forbids a
 // column dead for its own rows. ItemClass itself is the SUB-TABLE KEY and is
 // carried by no file, the same role ImplantSlot plays in Implants.cs.
 //
 // consumables-sploitkits.csv IS ItemModel ONLY, AND THAT IS NOT AN OVERSIGHT.
-// Its three rows are ItemTypeId 1000, 1002 and 1003, all TalentId 0, and no
-// TalentModel row with id 0 exists [measured, scripts/consumables.py's
-// check_join()]. So the file carries no TalentId column, no EffectId column and
+// The stock sploitkits are ItemTypeId 1000, 1002 and 1003, all TalentId 0, and
+// no TalentModel row with id 0 exists [measured, scripts/consumables.py's
+// check_join()]. So the sheet has no TalentId column, no EffectId column and
 // five ItemModel levers, and SploitkitLevers below declares exactly that. A
 // sheet that showed talent columns there would give the player rows that do
 // nothing. The load line names the three tables this sheet cannot reach rather
@@ -68,56 +69,41 @@
 // dialect GearClasses.cs, Cyberweapons.cs and Implants.cs all use and this file
 // uses it unchanged. There is no third dialect here.
 //
-// EVERY CELL SHIPS BLANK, AND THAT IS A MEASUREMENT
-//
-// 0 of the 270 rules in ckf.hardmode.rules.json select any of the 194
-// consumable-reachable (table, id) pairs, and 0 rows across the overlay CSVs in
-// ckf.hardmode.d do either [measured, reproduced by scripts/consumables.py's
-// check_untouched() on every run]. 0 lever cells are non-blank across the six
-// files today [measured, 2026-09-14]. So a correct load emits 0 rules from this
-// file, and the load line says so IN WORDS with the row count beside it: "read
-// 18 rows and every cell was blank" and "could not read the file at all" are
-// different answers and this class never prints one for the other
-// (AGENTS.md section 3).
+// A LOAD THAT EMITS NOTHING SAYS SO IN WORDS. A sheet whose lever cells are
+// all blank emits 0 rules, and the load line says so with the row count
+// beside it: "read N rows and every cell was blank" and "could not read the
+// file at all" are different answers and this class never prints one for the
+// other (AGENTS.md).
 //
 // KEYS ARE (table, id), NEVER id ALONE
 //
-// 221 ids are both a TalentId and an EffectId; 130 are both an EffectId and a
-// MatrixEffectId; 137 are both a MonsterTypeId and a WeaponId [measured].
-// Inside this phase's own 194 pairs, 31 ids appear under two different models,
-// so an id-alone key collapses 194 pairs to 163 and sends 31 writes to the
-// wrong table [measured, 2026-09-14, reproduced against the six live files].
+// [measured, stock dump] 221 ids are both a TalentId and an EffectId; 130 are
+// both an EffectId and a MatrixEffectId; 137 are both a MonsterTypeId and a
+// WeaponId. Among the consumable-reachable (table, id) pairs, some ids appear
+// under two different models, so an id-alone key would send writes to the
+// wrong table.
 //
-// The sharpest cases are inside ONE FILE:
-//
-//   consumables-medical.csv row 2 is TalentId 75006 AND EffectId 75006 -- one
-//   sheet row writing TalentModel 75006 and EffectModel 75006, two different
-//   rows of two different tables that share a number. Row 3 is 75012/75012 the
-//   same way.
-//
-//   consumables-medical.csv row 9 has TalentId 75022 (Bio-Stitch Bandages) and
-//   row 18 has EffectId 75022 (Mass Trauma Kit's effect). Two different rows of
-//   the file, one number, two tables.
-//
-// Eight ids of consumables-medical.csv alone are both a TalentId and an EffectId
-// of that file [measured]. The registry below is keyed on (model, id) and keeps
+// The sharpest cases are inside ONE SHEET. In the stock medical items, one
+// item carries TalentId 75006 AND EffectId 75006 (two different rows of two
+// different tables that share a number; 75012 is the same), and TalentId
+// 75022 (Bio-Stitch Bandages) shares its number with EffectId 75022 (Mass
+// Trauma Kit's effect). The registry below is keyed on (model, id) and keeps
 // every one of them apart.
 //
-// NO CLONE. EVER. design.md section 11 makes splitting a shared row an explicit
-// per-row opt-in and this dialect does not carry one: _clone and _serveOn in a
-// header REFUSE THE WHOLE FILE rather than being ignored. RowClone.cs is the
+// NO CLONE. EVER. Splitting a shared row needs an explicit per-row opt-in and
+// this dialect does not carry one: _clone and _serveOn in a header REFUSE THE
+// WHOLE FILE rather than being ignored. RowClone.cs is the
 // path that produces a mission that will not load.
 //
 // TWO EFFECT ROWS ARE SHARED BY MORE THAN ONE ITEM, AND BOTH ARE EDITABLE HERE
 //
-//   EffectModel 76005  <- consumables-medical.csv rows 6 and 19
-//                         (Patch X-Kit, Patch X-Kit Ultra; talents 75009, 75050)
-//   EffectModel 76017  <- consumables-devices.csv rows 4, 8 and 10
-//                         (Dazzler, Advanced Dazzler, LR-Max Dazzler;
-//                          talents 75004, 75035, 75048)
+//   EffectModel 76005  <- medical: Patch X-Kit, Patch X-Kit Ultra
+//                         (talents 75009, 75050)
+//   EffectModel 76017  <- devices: Dazzler, Advanced Dazzler, LR-Max Dazzler
+//                         (talents 75004, 75035, 75048)
 //
-// [measured, 2026-09-14, against the six live files] Both have every owner
-// inside one file, so both are TWO OR THREE EDITORS OF ONE EffectModel ROW.
+// [measured, stock dump] Both have every owner inside one sheet, so both are
+// TWO OR THREE EDITORS OF ONE EffectModel ROW.
 // Reconcile() below settles that before any rule is built, the way Implants.cs
 // does, rather than letting the (model, id) registry keep whichever row arrived
 // first: that would make the surviving edit depend on row order and could not
@@ -180,71 +166,28 @@ namespace CKFHardMode
         // parse each Lever entry's column / model / target, group them by the
         // preceding `<Name>Levers =` line, and REFUSE if the markers are absent
         // or no entry parses — a scrape that matched nothing must not report
-        // agreement (AGENTS.md section 3). The entry shape and the array-name
+        // agreement (AGENTS.md). The entry shape and the array-name
         // shape here are deliberately identical to Cyberweapons.cs's so that
         // reader's own regexes fit without a second dialect.
         //
-        // THE MARKER TEXT MUST NOT APPEAR IN PROSE -- AND THIS FILE'S READER NOW
-        // REFUSES RATHER THAN GUESSING WHEN IT DOES. scripts/consumables.py's
+        // THE MARKER TEXT MUST NOT APPEAR IN PROSE. scripts/consumables.py's
         // scrape_plugin_map() counts the marker LINES and requires EXACTLY ONE
-        // of each; zero, or two or more, is a named P-MAP refusal, not a block
-        // quietly resolved to the first occurrence. This file still declines to
-        // spell either marker outside the two real ones, and should keep
-        // declining: the rule turns a reflowed comment into a loud failure, it
-        // does not make writing one safe.
+        // of each; zero, or two or more, is a named P-MAP refusal. That turns a
+        // reflowed comment into a loud failure; it does not make writing one
+        // safe. scripts/cyberweapons.py's reader takes the FIRST occurrence of
+        // its closing marker, so prose that spells a marker out would close its
+        // block early. scripts/implants.py matches a marker only when it
+        // occupies its whole comment line.
         //
-        // CORRECTION, 2026-09-14. The paragraph this replaces said "The reader
-        // takes the FIRST occurrence of each marker string, so a comment that
-        // spells either of them out in a sentence would close the block early
-        // and the scrape would parse zero entries." That was written when
-        // cyberweapons.py was the only reader of a map like this one, and it is
-        // STILL TRUE OF THAT READER -- it does `src.find(_MAP_END)` and takes
-        // whatever comes first. It is no longer true of this file's reader.
+        // scripts/consumables.py's check_map_matches_plugin() (in ALL_CHECKS,
+        // run by --check and --selftest) compares this table against the
+        // generator's, entry for entry and in order, across all six sheets,
+        // and each array against that sheet's generated header.
         //
-        // WHY THE EXACTLY-ONE RULE IS WORTH A REFUSAL [measured 2026-09-14].
-        // Implants.cs carries the opening marker once and the CLOSING one three
-        // times: the real marker line at 211, plus two sentences of prose that
-        // spell it out, at 146 and 692. A find()-style reader would close on the
-        // one at line 146 -- one line below the opening marker -- and report
-        // agreement over a block containing no entry at all. scripts/implants.py
-        // escapes that a third way, with a line-anchored regex that matches a
-        // marker only when it occupies its whole comment line, and it has a
-        // selftest case (F23) for exactly this. cyberweapons.py gets away with
-        // find() only because the closing phrase occurs in Cyberweapons.cs
-        // exactly once: that file's own prose splits those words across a line
-        // break, so the literal string never appears twice. That is a property
-        // of one comment's line wrapping, not a guarantee, and it is a single
-        // reflow away from being false.
-        //
-        // WIRED UP SINCE 2026-09-14 -- WHICH IS WHAT THIS BLOCK USED TO DENY.
-        // scripts/consumables.py:2710 defines check_map_matches_plugin(); its
-        // PLUGIN_SOURCE (line 2573) names this file; scrape_plugin_map() (2626)
-        // applies the exactly-one rule above; and `map` is in ALL_CHECKS (2860)
-        // and called from run_checks(), so --check and --selftest both compare
-        // this table against the generator's -- entry for entry and in order,
-        // across all six sheets -- and each array against that sheet's
-        // generated header as well.
-        //
-        // CORRECTION, 2026-09-14, left standing because it is the claim a reader
-        // would otherwise still act on. This block read: "NOT YET WIRED UP, SAID
-        // RATHER THAN IMPLIED: scripts/consumables.py has its own marker pair
-        // but NO check_map_matches_plugin() and no PLUGIN_SOURCE pointing here,
-        // so as of this commit NOTHING COMPARES THIS TABLE TO ANYTHING. The
-        // markers and the entry shape are in place so that the check is a
-        // reader, not a rewrite; until it exists, the two transcriptions can
-        // drift and no gate will say so. scripts/ is not this unit's directory
-        // to write." Both halves are false now, and the last sentence is why it
-        // lasted: the paragraph was written to be deleted by whichever commit
-        // added the check, by an author who could not make that commit himself.
-        // The check landed and the paragraph did not move. A comment that
-        // accurately describes a gap is the most confident wrong thing in a file
-        // the moment the gap closes -- so say which commit retires it, or expect
-        // to find it here.
-        //
-        // THE TARGET IS LITERAL ON EVERY ENTRY. On the 126 entries whose model
-        // is not MatrixEffectModel the target is the column name unchanged; on
-        // the 11 MatrixEffectModel entries it is the column name with its
-        // "Matrix" alias prefix removed. Writing it out rather than computing it
+        // THE TARGET IS LITERAL ON EVERY ENTRY. On entries whose model is not
+        // MatrixEffectModel the target is the column name unchanged; on
+        // MatrixEffectModel entries it is the column name with its "Matrix"
+        // alias prefix removed. Writing it out rather than computing it
         // is what makes "never strip the prefix for an EffectModel target" a
         // property you can read off the page instead of a branch you have to
         // trust. VerifyMap() re-derives it at load anyway.
@@ -481,9 +424,9 @@ namespace CKFHardMode
 
         // The five identity columns. NONE of them is a lever: a value in one is
         // never parsed as an adjustment, which is why an ItemTypeId of 5404 does
-        // not become "set ItemTypeId to 5404". Phase 6 hit that trap the other
-        // way round on the claw sheet — the editor's first count of "override
-        // cells filled" came back 32 and they were all identity.
+        // not become "set ItemTypeId to 5404". The same trap the other way
+        // round: a count of "override cells filled" that includes identity
+        // columns counts ids, not overrides.
         //
         // A sheet carries only the identity columns its rows can use:
         // consumables-sploitkits.csv has ItemName and ItemTypeId and no others,
@@ -502,8 +445,8 @@ namespace CKFHardMode
         {
             { "_clone", "a clone is never emitted from a lever sheet. RowClone.cs is "
                       + "the path that produces a mission that will not load, and "
-                      + "design.md section 11 makes splitting a shared row an explicit "
-                      + "per-row opt-in that this dialect does not carry." },
+                      + "splitting a shared row needs an explicit per-row opt-in that "
+                      + "this dialect does not carry." },
             { "_serveOn", "serveOn belongs to a clone rule, and these sheets emit none." },
         };
 
@@ -550,7 +493,7 @@ namespace CKFHardMode
         /// another row of the same sheet. ItemModel and TalentModel are a row's
         /// own identity — two rows claiming one is an authoring fault the
         /// (model, id) registry refuses — but two items legitimately pointing at
-        /// one effect row is the shipped state twice over. See Reconcile().</summary>
+        /// one effect row happens twice in the stock game. See Reconcile().</summary>
         private static readonly string[] PayloadModels = { EffectModel, MatrixEffectModel };
 
         /// <summary>True when this file is a lever sheet this class expands.
@@ -573,11 +516,10 @@ namespace CKFHardMode
 
         // ---- the map self-check ----------------------------------------------
         //
-        // The alias rule is the one thing in this file that cannot be checked by
-        // a build and is not yet checked repo-side (see the LEVER MAP note), so
-        // it is checked HERE, once per process, and the line says WHAT IT
+        // The alias rule cannot be checked by a build, so it is checked HERE as
+        // well as repo-side, once per process, and the line says WHAT IT
         // CHECKED and WHAT IT COULD NOT. A silent pass and an instrument that
-        // never ran would otherwise look the same (AGENTS.md section 3).
+        // never ran would otherwise look the same (AGENTS.md).
         //
         // WHAT IT CANNOT SEE, said rather than left blank: it compares the map
         // to ITSELF. It cannot tell whether a target column exists in the game
@@ -671,10 +613,8 @@ namespace CKFHardMode
                 + "blank: it compares this map to ITSELF. It does not know whether a target "
                 + "column exists in the game table, whether the six sheet headers still "
                 + "match this map, or whether the generator changed which table a name "
-                + "belongs to. Those three are repo-side and belong to "
-                + "scripts/consumables.py against the dump; there is no plugin-map scrape "
-                + "on the consumables side yet, so today NOTHING compares this table to the "
-                + "generator's.");
+                + "belongs to. Those three are repo-side: scripts/consumables.py checks them "
+                + "against the dump and compares this table to the generator's.");
         }
 
         // ---- the (model, id) registry ---------------------------------------
@@ -716,10 +656,8 @@ namespace CKFHardMode
 
             /// <summary>Id per model, 0 meaning "this row reaches no row of that
             /// table". A blank cell and a literal 0 both land here as 0 and both
-            /// are legitimate: consumables-devices.csv ships 7 blank EffectId
-            /// cells of 12, consumables-grenades.csv 10 of 11, and
-            /// consumables-matrix.csv 6 blank EffectId and 4 blank
-            /// MatrixEffectId of 11 [measured, 2026-09-14]. No TalentModel row
+            /// are legitimate: many stock devices, grenades and matrix items
+            /// reach no EffectModel or MatrixEffectModel row. No TalentModel row
             /// with id 0 exists, and neither effect table has one.</summary>
             internal readonly Dictionary<string, long> Ids =
                 new Dictionary<string, long>(StringComparer.Ordinal);
@@ -913,9 +851,7 @@ namespace CKFHardMode
 
                 // THE OTHER THREE IDS ARE OPTIONAL PER ROW AND BLANK IS NOT
                 // MALFORMED. A blank cell means this row reaches no row of that
-                // table — 7 of 12 device rows have a blank EffectId, 10 of 11
-                // grenade rows do, and 6 of 11 matrix rows have a blank EffectId
-                // with 4 having a blank MatrixEffectId [measured, 2026-09-14].
+                // table (common among devices, grenades and matrix items).
                 // A NON-BLANK cell that is not an integer is a different thing
                 // and takes the whole row with it, the way Cyberweapons.cs and
                 // Implants.cs do: emitting the item half from a row whose effect
@@ -1030,7 +966,7 @@ namespace CKFHardMode
                             + "uses; it does not change what that row does, and it does NOT "
                             + "move where this line's payload cells are written — those are "
                             + $"keyed on the {EffectKey}/{MatrixKey} printed on the line, "
-                            + "which is the shipped resolution.");
+                            + "which is the stock resolution.");
                     }
                 }
 
@@ -1040,19 +976,15 @@ namespace CKFHardMode
 
             // ---- reconcile the payload halves that share a row ---------------
             //
-            // Two of the six sheets ship this today:
-            //   EffectModel 76005 <- consumables-medical.csv rows 6 and 19
-            //   EffectModel 76017 <- consumables-devices.csv rows 4, 8 and 10
-            // [measured, 2026-09-14]
+            // The stock cases are EffectModel 76005 (medical) and 76017
+            // (devices); see the header.
             //
             // Reconciled HERE, before any rule is built, rather than by letting
             // the (model, id) registry reject whichever row arrived second: that
             // would make the surviving edit depend on row order, and it could
-            // not name the other owners, which is what design.md section 11
-            // requires the refusal to do.
+            // not name the other owners, which the refusal must do.
             //
-            // Identical payloads — including all-blank, which is today — are NOT
-            // divergence. One rule is emitted and the sharing is marked.
+            // Identical payloads — including all-blank — are NOT divergence. One rule is emitted and the sharing is marked.
             //
             // ItemModel and TalentModel are NOT reconciled here on purpose: they
             // are a row's own identity, not something a row points at, so two
@@ -1095,9 +1027,9 @@ namespace CKFHardMode
                             + $"({owners}) and they DIVERGE on "
                             + $"{string.Join(", ", divergent)}. One {model} row cannot hold "
                             + $"two payloads, so NO {model} rule is emitted for {kv.Key} at "
-                            + "all — neither owner's version wins. Splitting it is an "
-                            + "explicit per-row _clone opt-in (design.md section 11) and "
-                            + "nothing has opted in; _clone in this header refuses the whole "
+                            + "all — neither owner's version wins. Splitting it needs an "
+                            + "explicit per-row _clone opt-in and nothing has opted in; _clone "
+                            + "in this header refuses the whole "
                             + "file. The other halves of those rows still apply: they are "
                             + "different rows and do not collide.");
                         refused++;
@@ -1210,8 +1142,8 @@ namespace CKFHardMode
                     Plugin.Log.LogWarning($"Consumables: {name} repoints {kv.Value.Count} "
                         + $"talent(s) ({string.Join(", ", kv.Value)}) at the same {kv.Key}. "
                         + "They now SHARE that effect row: an edit to what it does reaches "
-                        + "all of them. design.md section 11 makes splitting a shared row "
-                        + "an explicit per-row opt-in and nothing here emits a clone.");
+                        + "all of them. Splitting a shared row needs an explicit per-row "
+                        + "opt-in and nothing here emits a clone.");
                 Plugin.Log.LogInfo($"Consumables: {name} — {repointed.Count} distinct effect "
                     + $"pointer value(s) written by this sheet, {collided.Count} of them "
                     + "landing two or more talents on one row.");
@@ -1228,19 +1160,15 @@ namespace CKFHardMode
                     + "file WAS READ: all "
                     + $"{rows} of its row(s) were parsed and every lever cell in every one "
                     + "of them was blank, which in this dialect means 'leave that column "
-                    + "alone'. The rows are present with their shipped values in _comment "
-                    + "and no override set. THIS IS NOT THE SAME ANSWER AS A FILE NOTHING "
-                    + "READ: a read failure logs an Error above saying the row count is not "
-                    + "known. The mod does not tune these today — 0 of the rules in "
-                    + "ckf.hardmode.rules.json select any of the 194 consumable-reachable "
-                    + "(table, id) pairs [measured] — and a shipped override would be a "
-                    + "balance change (proposal.md non-goals).");
+                    + "alone'. THIS IS NOT THE SAME ANSWER AS A FILE NOTHING READ: a read "
+                    + "failure logs an Error above saying the row count is not known.");
 
             Plugin.Log.LogInfo($"Consumables: {name} emits no clone and cannot. _clone and "
                 + "_serveOn in a header refuse the whole file. WHAT THIS CANNOT SEE, said "
-                + "rather than left blank: the sheet carries no shipped values — a blank "
-                + "cell means 'leave that column alone' — so sharing that exists in the "
-                + "SHIPPED data between a row of this sheet and a row NO SHEET SHOWS is "
+                + "rather than left blank: this walk reads override cells, not the game's "
+                + "stock values — a blank cell means 'leave that column alone' — so sharing "
+                + "that exists in the stock data between a row of this sheet and a row NO "
+                + "SHEET SHOWS is "
                 + "invisible here, and this line will not mention it. The shared rows this "
                 + "walk CAN see are the ones whose owners are all inside this one file, and "
                 + "they are counted above. The other half is owned repo-side by "

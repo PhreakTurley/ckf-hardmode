@@ -1,68 +1,99 @@
-# Documentation index
+# Find the project documentation
 
-The plugin sources, `schema/*.schema.json` and the overlay CSVs are the sources
-of truth. These files explain how the game works and where a lever lives; when
-one disagrees with the code, the code wins.
+Use this index to choose the authoritative page for a task. Start with the architecture map, then open the subsystem or mechanic page that owns your question. Code and the live configuration take precedence when prose is stale.
 
-## Getting a change into the game
+## Start here
 
-| I want to… | Read |
+| Goal | Read first |
 |---|---|
-| Install, dump the data, edit, test | [`workflow.md`](workflow.md) |
-| Know what every setting does | [`config-reference.md`](config-reference.md) (generated) or run `python gui/serve.py` |
-| Avoid something that has already failed | [`gotchas.md`](gotchas.md) |
-| Add, remove or change a config key | [`../schema/SCHEMA-FORMAT.md`](../schema/SCHEMA-FORMAT.md) |
-| Check the live config against the schema | `python schema/check_schema.py --game "<game dir>"` |
+| Understand the four project areas and their boundaries | [Project architecture](architecture.md) |
+| Install, dump, edit, test, build, or release | [Workflow](workflow.md) |
+| Check open work and decisions | `TASKS.md` |
+| Avoid a known failure mode | [Gotchas](gotchas.md) |
+| Find a configuration field or default | [Generated configuration reference](config-reference.md) |
 
-## Making changes
+`config-reference.md` is generated from `schema/*.schema.json`. Never edit it by hand.
 
-| I want to… | Read |
+## Start a new agent task
+
+For a maintainer checkout, use this sequence before editing:
+
+1. Read `AGENTS.md` completely
+2. Run `git status --short` and treat every existing change as someone else's work
+3. Read the [architecture map](architecture.md)
+4. Read the relevant section of `TASKS.md`
+5. Open the owning subsystem or mechanic page from this index
+6. Re-read the exact source or live file immediately before editing it
+
+Re-derive counts and file states from the current tree. A handoff, old log, or another agent's report is not a measurement.
+
+## Work on a component
+
+| Component | Scope | Primary guide |
+|---|---|---|
+| Hard Mode | Shipped BepInEx plugin, table rules, and gameplay subsystems | [Hard Mode guide](../mods/CKFHardMode/README.md) |
+| Data Dump | Private table dumper, traces, and diagnostic probes | `mods/CKFDataDump/README.md` |
+| Config editor | Schema-driven local editor for the live config | [Config editor guide](../gui/README.md) |
+| Schema | Config declarations, defaults, controls, and invariants | [Schema format](../schema/SCHEMA-FORMAT.md) |
+| Release packaging | Player archive templates and pinned BepInEx input | [Release templates](../release/README.md), [vendor tree](../vendor/README.md) |
+
+Hard Mode and Data Dump are independent plugins. Both inspect game types through `BepInEx/interop/CoreRPG_v1.dll`, but they share no code or configuration.
+
+## Change data rules
+
+| Task | Reference |
 |---|---|
-| Write or debug a rule in `ckf.hardmode.rules.json` | [`rule-engine.md`](rule-engine.md) |
-| Make enemies harder | [`tuning-enemies.md`](tuning-enemies.md), then [`../overlays/README.md`](../overlays/README.md) |
-| Understand the overlay CSV format | [`overlays.md`](overlays.md) |
-| Add a row the game does not ship | [`cloning-rows.md`](cloning-rows.md) |
-| Write a Harmony patch without crashing the game | [`patching-rules.md`](patching-rules.md) |
+| Understand rule selection, operation order, curves, or indexing | [Rule engine](rule-engine.md) |
+| Edit direct CSV or TSV table overlays | [Overlay format](overlays.md) |
+| Insert and serve a cloned row | [Cloning rows](cloning-rows.md) |
+| Identify the table and domain key for a value | [Table reference](tables.md) |
+| Change enemy stats, gear, or roster data | [Tune enemies](tuning-enemies.md) |
+| Compare faction roster slots | [Enemy faction parity](enemy-faction-parity.md) |
+| Add a Harmony patch | [Patching rules](patching-rules.md) |
 
-## How the game works
+Always run pointer validation before launching a configuration that changes IDs or clones.
 
-| Subject | File |
+## Research a game system
+
+| System | Owning page |
 |---|---|
-| Which table controls what, and its key column | [`tables.md`](tables.md) |
-| Global constants — cover, heat, caps, story pacing | [`game-constants.md`](game-constants.md) |
-| What a mission awards: Team PL, contact PL, money, XP | [`progression.md`](progression.md) |
-| How one payout is assembled, term by term | [`mission-rewards.md`](mission-rewards.md) |
-| Enemy difficulty and the Power Level 10 ceiling | [`power-and-progression.md`](power-and-progression.md) |
-| What drops, and where V-Chip parts come from | [`loot.md`](loot.md) |
-| Taking a character out of action after missions | [`character-fatigue.md`](character-fatigue.md) |
-| The limit break temporary trait pool, buff and debuff | [`limit-break-traits.md`](limit-break-traits.md) |
-| Punishing a mission that expires unplayed | [`mission-elapse-penalty.md`](mission-elapse-penalty.md) |
-| Writing credits, Stress or Discontent onto a save | [`gamedb-write-surface.md`](gamedb-write-surface.md) |
-| Mid-mission reinforcements (read off the data, never observed firing) | [`reinforcements.md`](reinforcements.md) |
-| Giving the collapsed Guard / adaptive variants their own armour again | [`armour-groups.md`](armour-groups.md) |
+| Power levels, progression, mission caps, and difficulty sliders | [Power level](power-level.md) |
+| Mission payment, experience, Trust, and reward overrides | [Mission rewards](mission-rewards.md) |
+| Global `RuleModel` constants | [Game constants](game-constants.md) |
+| Fatigue and its three-tier trait track | [Character fatigue](character-fatigue.md) |
+| Unplayed-mission penalties | [Mission elapse penalty](mission-elapse-penalty.md) |
+| Save writes for credits and character bars | [GameDb write surface](gamedb-write-surface.md) |
+| Enemy turn behavior and observed planner traces | [Enemy AI](enemy-ai.md) |
+| Security tally, levels, and card decks | [Security escalation](escalation.md) |
+| Mid-mission reinforcement data | [Reinforcements](reinforcements.md) |
+| Loot tables and V-Chip parts | [Loot](loot.md) |
+| Limit-break trait rows | [Limit-break traits](limit-break-traits.md) |
+| Talent tally values and special-code weights | [Talent values and special codes](talent-value-specialcodes.md) |
+| Armour family reconstruction | [Armour groups](armour-groups.md) |
 
-Build instructions live with the code:
-[`../mods/CKFHardMode/README.md`](../mods/CKFHardMode/README.md).
-The config editor is described in [`../gui/README.md`](../gui/README.md).
+Mechanic pages separate observed results from explanations. Preserve their evidence tags and citations when editing them.
 
-`CKFDataDump`, referenced by name in some of these docs and in code comments as
-the tool that produced a measurement, is a separate internal diagnostic plugin
-and is not part of this repo.
+## Know what is private
 
-## The things that bite most often
+The public repository includes Hard Mode, the GUI, schemas, release templates, selected build scripts, and the docs in this directory.
 
-Full list in [`gotchas.md`](gotchas.md). These four account for most lost time:
+The following paths are maintainer-only unless `.gitignore` explicitly changes:
 
-1. **Match rows on the domain ID, not `Id`.** Most models inherit an `Id` that
-   reads `-1`. The real key is `WeaponId`, `ArmorId`, `MonsterTypeId`.
-2. **Two power levels, not three.** Team Power Level is the sum over your mission
-   log, not a stored counter. `PowerLevelUnscaled` is that sum floored at mission
-   generation and drives rewards; `PowerLevel` is
-   `round((teamPowerLevel + BasePowerLevelOffset) × PowerLevelScalar)` at full
-   precision and drives enemies. Rounded, not truncated.
-3. **Enemy gear numbers live in the overlay CSVs in
-   `BepInEx\config\ckf.hardmode.d\`, not `rules.json`.** Overlays
-   load last and win. Player gear is the opposite — it stays a rule, prefixed
-   `PLAYER`.
-4. **A pointer at a row that does not exist is a black screen**, and the game's
-   exception never reaches the log. `scripts/validate_rules.py` catches it.
+- `mods/CKFDataDump/`
+- `overlays/`
+- `tests/`
+- `sheets/` and `Logs/`
+- `AGENTS.md` and `TASKS.md`
+- `openspec/`
+- the unpacked tree under `vendor/`
+
+Do not copy private measurements or mutable tuning into public docs without checking whether the owning public page should contain them.
+
+## Keep documentation maintainable
+
+- Put each fact in one owning page and link to it elsewhere
+- Cite source members instead of line numbers where possible
+- Treat the live config as mutable; never describe its current values as shipped defaults
+- Derive declarations from schemas or source, not from a dump
+- Replace correction histories with the current fact
+- Put open work in `TASKS.md`, not in handoff or session-note files

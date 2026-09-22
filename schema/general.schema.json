@@ -7,14 +7,13 @@
   "doc": [
     "CKF Hard Mode - master switch.",
     "",
-    "One key. Off runs the game unmodified without removing the plugin, which",
-    "is the first thing to check when the mod appears to do nothing: Run53 was",
-    "a whole session spent discovering this was false (AGENTS.md section 6).",
+    "One key. Off runs the game unmodified without removing the plugin; check",
+    "it first when the mod appears to do nothing.",
     "",
-    "ORDER MATTERS in Plugin.Load(). The bail-out sits above every subsystem",
-    "init. It used to sit underneath, which meant Enabled = false still let",
-    "ModelRules rewrite every row and PowerLevelCap overwrite every calculation",
-    "- the switch turned off the difficulty knobs and nothing else."
+    "Plugin.Load binds every key (Slices.Init) and then returns on this",
+    "switch before any subsystem initialises, so off patches nothing while",
+    "the [Slices] lines are still written. A value that cannot be read is",
+    "not treated as off: the bind error is logged and the mod runs."
   ],
 
   "uiDoc": [

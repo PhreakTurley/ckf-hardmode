@@ -23,8 +23,8 @@
 // docs/patching-rules.md says never to patch methods that do arithmetic,
 // because an IL2CPP release build folds functions with identical machine code
 // onto one address — patch the address and you have patched every method that
-// shares it, and the trampoline recurses until the stack is gone. That is what
-// killed CKFDataDump 1.1.0.
+// shares it, and the trampoline recurses until the stack is gone (see
+// docs/gotchas.md).
 //
 // Folding requires the bodies to be IDENTICAL. These three are step tables over
 // different constants: 150/225/350/... against 100/120/145/... against
@@ -41,36 +41,31 @@
 // — one per managed method — not the address of the compiled function. Whether
 // two methods whose machine code the linker folded onto one address would then
 // share a MethodInfo pointer is an OPEN QUESTION: it cannot be determined from
-// this source. An earlier version of this header asserted it could ("a folded
-// pair is exactly what that check catches"); that was a claim about the engine
-// rather than a reading of this code, and it is withdrawn.
+// this source, so do not read the check as proof that folding was ruled out.
 //
 // The check is kept regardless, because two proxies resolving to one MethodInfo
 // pointer is worth refusing to patch whatever the cause. Note also that the
 // field is lazily initialised and reads zero until the method has been invoked
 // at least once — which, at plugin load, it has not been. A zero is skipped, so
-// in practice the comparison often cannot run at all. That case now logs a
+// in practice the comparison often cannot run at all. That case logs a
 // warning naming the method, so "checked, no folding" and "could not check" are
-// told apart in the log instead of both looking clean.
+// told apart in the log.
 //
-//   "rewardcurve": { "enabled": true, "logEffectiveCurve": true,
-//                    "curve": [ ... ] }
+// SETTINGS: ckf.hardmode.d/rewardcurve.json (the switch is [Slices]
+// RewardCurve in ckf.hardmode.cfg):
 //
-// 3.0 moved both switches out of the [RewardCurve] section of
-// ckf.hardmode.cfg and into this one, beside the rows they gate.
+//   { "_version": ..., "logEffectiveCurve": false, "curve": [ ... ] }
 //
-// The table lives in the "rewardcurve" section of BepInEx/config/ckf.hardmode.json,
-// one row per power level, shipped pre-filled with the game's own values so you can see the
-// curve you are editing. Leave a field out, or set it below zero, to keep the
-// game's number for that cell.
+// "curve" holds rows keyed on PowerLevel with Payment, Experience and Bonus.
+// Leave a field out, or set it below zero, to keep the game's number for that
+// cell; a power level with no row keeps all three.
 //
 // VERIFYING IT TOOK
 // -----------------
 // NOT with _reward_curve.csv. CKF Data Dump loads first — 'ckf.datadump' sorts
 // before 'ckf.hardmode' — and its sweep runs during that load, hundreds of log
 // lines before this file patches anything. The sweep therefore always records
-// the stock curve, patched or not. Measured: sweep at log line 4081, patch at
-// 4548.
+// the stock curve, patched or not.
 //
 // So verify from this plugin instead. After patching, it calls the three
 // functions itself over the table's range and logs what they now return. That
@@ -108,17 +103,14 @@ namespace CKFHardMode
 
         private sealed class CurveFile
         {
-            // RETIRED 2026-09-13. "enabled" used to be
-            //     [JsonPropertyName("enabled")] public bool Enabled { get; set; } = true;
-            // with the comment "3.0: both switches live here now. [RewardCurve]
-            // Enabled and LogEffectiveCurve are gone from ckf.hardmode.cfg."
-            // Half of that is reversed: the subsystem switch is back in
-            // ckf.hardmode.cfg, as [Slices] RewardCurve (design.md section 3).
-            // logEffectiveCurve is a setting rather than a gate and stays here.
-            // "enabled" is still parsed so an existing document is not refused;
-            // nothing branches on it.
+            // RETIRED gate. The switch is [Slices] RewardCurve in
+            // ckf.hardmode.cfg. "enabled" is still parsed so a file that
+            // carries it is not refused; nothing branches on it.
+            //
+            // Initialisers match the schema defaults and apply only when a key
+            // is absent.
             [JsonPropertyName("enabled")]           public bool? RetiredEnabled { get; set; }
-            [JsonPropertyName("logEffectiveCurve")] public bool LogEffectiveCurve { get; set; } = true;
+            [JsonPropertyName("logEffectiveCurve")] public bool LogEffectiveCurve { get; set; }
             [JsonPropertyName("curve")] public List<Tier> Curve { get; set; } = new List<Tier>();
         }
 
@@ -129,8 +121,8 @@ namespace CKFHardMode
 
         public static void Init(Harmony harmony)
         {
-            // THE GATE IS READ FIRST, from ckf.hardmode.cfg. The section
-            // carries the tiers and logEffectiveCurve now, not the switch.
+            // THE GATE IS READ FIRST, from ckf.hardmode.cfg. The settings file
+            // carries the tiers and logEffectiveCurve, not the switch.
             if (!Slices.On("RewardCurve"))
             {
                 Plugin.Log.LogInfo(Slices.OffBecause("RewardCurve",
@@ -139,9 +131,9 @@ namespace CKFHardMode
                 return;
             }
 
-            // LoadTable still sets `logEffective`, and still leaves `enabled`
-            // false when the section could not be read — which it says at Error
-            // rather than letting this read like a toggle.
+            // LoadTable sets `logEffective`, and leaves `enabled` false when the
+            // file could not be read, which it says at Error rather than
+            // letting this read like a toggle.
             LoadTable();
             if (!enabled) return;                        // LoadTable said why
 
@@ -188,9 +180,9 @@ namespace CKFHardMode
                 {
                     // Zero is neither compared nor recorded, so this method is
                     // simply not checked — and it stays out of the set the other
-                    // two are checked against. That used to happen silently,
-                    // which made a check that ran and a check that could not run
-                    // produce the same clean-looking load log. The field is
+                    // two are checked against. It is logged so a check that ran
+                    // and a check that could not run do not produce the same
+                    // clean-looking load log. The field is
                     // lazily initialised and reads zero until the method has
                     // been invoked once, which at plugin load it has not been,
                     // so this is the expected case rather than a rare one.
@@ -206,7 +198,7 @@ namespace CKFHardMode
                     Plugin.Log.LogError($"RewardCurve: {name} and {other} resolve to the SAME "
                         + "native method — the linker folded them together. Patching either "
                         + "would patch both and recurse. Nothing has been patched. Use the "
-                        + "per-mission-type levers in the \"missions\" section instead.");
+                        + "per-mission-type levers in missions.json instead.");
                     return;
                 }
                 else seen[ptr] = name;
@@ -250,11 +242,11 @@ namespace CKFHardMode
                 Plugin.Log.LogInfo("RewardCurve:   PL   payment       xp    bonus");
 
                 // Every cell is read in its own try and prints "-" on failure.
-                // That is kept — one unreadable cell should not lose the rest of
-                // the table — but the failures are counted now: if the three
-                // methods are not callable at plugin load, every column printed
-                // "-" under a heading that calls this "the effective curve",
-                // with nothing saying that nothing had been read.
+                // One unreadable cell should not lose the rest of the table, but
+                // the failures are counted: if the three methods are not
+                // callable at plugin load, every column prints "-" under a
+                // heading that calls this "the effective curve", and the count
+                // is what says nothing was read.
                 int unread = 0;
                 foreach (var pl in levels)
                 {
@@ -300,7 +292,7 @@ namespace CKFHardMode
             catch { return IntPtr.Zero; }
         }
 
-        // 3.0: the text comes from ConfigDoc. Only the source moved.
+        // The text comes from ConfigDoc (rewardcurve.json).
         private static void LoadTable()
         {
             var path = ConfigDoc.Where(ConfigDoc.RewardCurve);
@@ -309,11 +301,11 @@ namespace CKFHardMode
                 var text = ConfigDoc.SectionText(ConfigDoc.RewardCurve);
                 if (text == null)
                 {
-                    // AGENTS.md §3: an absent section and an unreadable document
-                    // are different findings and do not share a log level.
-                    var why = $"RewardCurve: {ConfigDoc.WhyNo(ConfigDoc.RewardCurve)}. Since 3.0 "
-                        + "that section carries the subsystem switch as well as the tiers, so "
-                        + "nothing is applied and nothing is patched.";
+                    // An absent file and an unreadable file are different
+                    // findings and do not share a log level (AGENTS.md).
+                    var why = $"RewardCurve: {ConfigDoc.WhyNo(ConfigDoc.RewardCurve)}. That "
+                        + "file carries the tiers, so nothing is applied and nothing is "
+                        + "patched.";
                     if (ConfigDoc.CouldNotRead(ConfigDoc.RewardCurve))
                         Plugin.Log.LogError(why);
                     else Plugin.Log.LogWarning(why);
@@ -330,7 +322,7 @@ namespace CKFHardMode
                 if (file != null)
                     Slices.ReportRetiredGate("RewardCurve", ConfigDoc.RewardCurve,
                                              "RewardCurve", file.RetiredEnabled);
-                logEffective = file == null || file.LogEffectiveCurve;
+                logEffective = file != null && file.LogEffectiveCurve;
                 enabled = true;
 
                 foreach (var tier in file?.Curve ?? new List<Tier>())

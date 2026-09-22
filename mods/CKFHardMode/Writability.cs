@@ -35,9 +35,9 @@
 // This is a write onto a row the game is about to use, which is why it is off
 // by default and why the original is put back before the postfix returns. The
 // restore is ATTEMPTED always, including after a throw — and a restore that
-// itself fails is now reported as an error naming the table, the column, the
-// row and the value left behind. It used to be swallowed, which left a probe
-// value on a live row for the rest of the session with nothing in the log.
+// itself fails is reported as an error naming the table, the column, the row
+// and the value left behind, because that probe value stays on a live row for
+// the rest of the session.
 //
 // The probe runs once per table per launch — on the first row of that table the
 // game happens to read — and the report is rewritten each time a new table is
@@ -127,11 +127,10 @@ namespace CKFHardMode
                 var f = new Finding { Table = modelName, Column = p.Name, Type = u.Name };
                 Findings.Add(f);
 
-                // A column the probe has no test value for. It used to be left
-                // out of the report entirely, so the file did not list every
-                // column and there was no way to tell "not probed" from "not
-                // there" — an enum column, which a rule CAN target, simply did
-                // not appear.
+                // A column the probe has no test value for. It still gets a row,
+                // so the report lists every column and "not probed" is told
+                // apart from "not there" — an enum column, which a rule CAN
+                // target, appears with its reason.
                 if (!IsProbeable(u))
                 {
                     f.Verdict = "skipped";
@@ -203,7 +202,7 @@ namespace CKFHardMode
                 finally
                 {
                     // ATTEMPTED always, including after a throw — and reported
-                    // when it fails, which it used to swallow. A setter that
+                    // when it fails. A setter that
                     // throws on the second write leaves stat+1, or
                     // Name + "-ckf-probe", on a row the game is about to use,
                     // for the rest of the session. That is a balance change
@@ -337,8 +336,8 @@ namespace CKFHardMode
             {
                 Plugin.Log.LogError($"ModelRules: could not write {outputPath}: {e.Message}");
                 Plugin.Log.LogError("If the game is installed under Program Files, Windows may be "
-                    + "blocking the write. Set probeOutput in the \"modelrules\" section of "
-                    + "ckf.hardmode.json to a path you own.");
+                    + "blocking the write. Set probeOutput in " + ConfigDoc.DirName + "/"
+                    + ConfigDoc.FileFor(ConfigDoc.ModelRules) + " to a path you own.");
                 Enabled = false;      // no point probing further with nowhere to put it
             }
         }

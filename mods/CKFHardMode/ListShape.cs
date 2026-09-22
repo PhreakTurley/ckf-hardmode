@@ -1,16 +1,13 @@
 // ListShape — Count / this[i] / Add on an Il2Cpp list, resolved once.
 //
 // Serving a clone into a filtered list read means answering "is the row this
-// was copied from already in this list?". That was done per clone, and each
-// answer walked the whole list through MethodInfo.Invoke — so N clones for a
-// table cost N x listLength reflective calls plus a boxed index array each,
-// on a reader the game calls while a mission is loading.
+// was copied from already in this list?", on a reader the game calls while a
+// mission is loading. Answering it per clone through MethodInfo.Invoke would
+// cost N x listLength reflective calls plus a boxed index array each.
 //
-// Two changes fix it, and this class is the second: the list's own members are
-// looked up and compiled once per list type, instead of being re-resolved and
-// re-invoked on every call. The first is in RowClone.AfterListRead, which now
-// walks the list once to collect the ids it holds and answers every clone from
-// that set.
+// Two things keep it cheap. This class looks the list's own members up and
+// compiles them once per list type. RowClone.AfterListRead walks the list once
+// to collect the ids it holds and answers every clone from that set.
 
 using System;
 using System.Collections.Generic;

@@ -1,12 +1,14 @@
-# Overlays — the bulk authoring format
+# Overlays: the CSV rule dialect
 
-`ckf.hardmode.rules.json` is right for a rule that says something general:
-"every enemy above PL 10 gains 2.2 crit per level". It is wrong for the other
-job — stating what one specific row's numbers are. That is twenty lines of JSON
-to carry four values, and 77 armour families one row at a time is tens of
-thousands of them.
+The per-table CSV format for stating specific rows' values, which is how every
+table edit in `ckf.hardmode.d/` is written. Rule semantics (operation order,
+clone serving) are in [`rule-engine.md`](rule-engine.md); lever sheets
+(`gear-classes.csv` and the like) have their own headers and are described by
+their schemas, not here.
 
-An overlay is the same edit as a table.
+Use an overlay when each row should receive an explicit value. Use JSON rules
+when the change is a curve or broad selector. Use
+[`cloning-rows.md`](cloning-rows.md) before inserting a row.
 
 ```
 ArmorId, BallisticArmorDegraded, PhysicalArmorDegraded, MaxArmorPoints, _comment
@@ -14,224 +16,186 @@ ArmorId, BallisticArmorDegraded, PhysicalArmorDegraded, MaxArmorPoints, _comment
 22011,   54,                     50,                    2,              Guard Std 12
 ```
 
-One line per row edited. **The header row is column names straight out of
-`D:\ckf-data-modding\sheets\raw\<Table>.csv`**, so an LLM handed the dump edits a file it can
-already read, and a human opens the result in a spreadsheet and changes one
-cell. **An empty cell means "leave that column alone"**, so a sparse edit costs
-no more to write than a dense one.
+One line per row. The header row is column names exactly as in the dump's
+`<Table>.csv`, so a file can be edited in a spreadsheet or handed to an LLM
+together with the dump. An empty cell means "leave that column alone".
 
-Added in Hard Mode 2.7.0. Nothing about `rules.json` changed — every existing
-rule loads and behaves exactly as before.
+Each edit line compiles to a rule selecting one exact id (`Overlays.BuildRule`),
+which is the shape the rule index buckets on
+([`rule-engine.md`](rule-engine.md#indexing)); per-row cost stays flat as a file
+grows. Edit lines carry no JSON, and a `_comment` is kept only when the file
+supplies one.
 
-The install/dump/edit/test loop and reading the log are in
-[`workflow.md`](workflow.md). The things that do not work are in
-[`gotchas.md`](gotchas.md).
+## Files
 
----
+Location: `BepInEx/config/ckf.hardmode.d/`. Subfolders are not read.
 
-## Where the files go
+- The table is the filename up to the first dot, with `Model` appended if
+  missing (`Overlays.TableOf`). `ArmorModel.csv` and
+  `ArmorModel.guard-standard.csv` both target `ArmorModel`, so a table can be
+  split across files. A filename with nothing before the first dot is ignored
+  with a warning.
+- `.csv` is comma-separated, `.tsv` tab-separated. Other `.json` files are
+  rules files ([`rule-engine.md`](rule-engine.md#where-rules-come-from)).
+- Files load in ordinal filename order, so where two lines touch one row the
+  later file's line applies last.
+- Encoding: UTF-8; a leading BOM is stripped. In PowerShell, `>` writes UTF-16,
+  which the loader does not read; use `| Out-File -Encoding utf8 "<path>"`.
+- A file's `[Slices]` toggle, if a slice claims it, decides whether it is opened
+  at all (`Slices.OverlayOwner`). The shipped enemy-gear files `ArmorModel.csv`,
+  `WeaponModel.csv` and `MonsterTypeModel.csv` are claimed by no slice and always
+  load.
 
-`BepInEx/config/ckf.hardmode.d/`
+## Choose an operation in the header
 
-The table is **the part of the filename before the first dot**, so
-`ArmorModel.csv` and `ArmorModel.guard-standard.csv` both target `ArmorModel`
-and one table can be split across as many files as suits. Three extensions:
-
-| Extension | Is |
-|---|---|
-| `.csv` | this format, comma-separated |
-| `.tsv` | this format, tab-separated |
-| `.json` | an ordinary rules file — which is how `rules.json` gets split per table |
-
-**Load order is `rules.json` first, then the directory in filename order.**
-Overlays therefore win where they overlap, which is the useful way round: a
-sweep sets the shape of a family, and one line overrides the row that should
-not follow it.
-
-**The shipped set is one file per table** — `ArmorModel.csv` (180 rows),
-`WeaponModel.csv` (385), `MonsterTypeModel.csv` (2427). It used to be 51 files,
-one per gear family, split `<family>-base.csv` for edits to shipped rows and
-`<family>.csv` for the clone inserts above them. The two shapes are the same
-data: a merged file carries the union of its family files' columns, an empty
-cell still means "leave that column alone", and an empty `_clone` cell still
-means the line is an edit rather than an insert.
-
-`scripts/merge_overlays.py` did the merge and can redo it. Its `--check`
-compiles both file sets to a canonical rule list and compares them element by
-element in order; `--selftest` proves that comparison can fail, by injecting
-nine faults into the merge and asserting each is reported. Splitting a table
-back across several files is still legal if a future set wants it.
-
----
-
-## The operator lives in the header
+The operator is a suffix on the column name, so every cell stays a plain number
+and a spreadsheet never reads one as a formula (`Overlays.ParseHeader`).
 
 | Header | Does |
 |---|---|
-| `Column` | set to the cell's value |
-| `Column*` | multiply by it |
-| `Column+` | add it |
+| `Column` | set |
+| `Column*` | multiply |
+| `Column+` | add |
 | `Column>` | clampMin |
 | `Column<` | clampMax |
 
-So every **cell stays a plain number**: nothing starts with `=` or `+`, so a
-spreadsheet will not read a cell as a formula. A bare `-7` is "set to −7", not
-"subtract 7".
+A bare `-7` under `Column` sets −7. One column may appear more than once with
+different operators; order is always set → multiply → add → clampMin →
+clampMax.
 
-One column may appear more than once with different operators. Order is always
-`set → multiply → add → clampMin → clampMax`, whatever order the headers are
-in, exactly as in `rules.json`.
+A non-numeric cell is kept as a literal only under a plain `Column` (set);
+`true` / `false` become booleans. Under an operator suffix it is warned about
+and skipped.
 
-Three control columns, recognisable by their leading underscore:
+The first column must be the table's id column, with no suffix. If it is empty
+or a control column, the file is ignored with an Error.
+
+Control columns start with `_` (case-insensitive):
 
 | Column | Does |
 |---|---|
-| `_clone` | the id of the row to copy — makes the line an **insert**, not an edit |
-| `_comment` | free text; shown by `TraceRules` and by the validator |
-| `_serveOn` | `auto` \| `provenance` \| `always` \| `never`, on a clone line |
+| `_clone` | id of the row to copy; makes the line an insert |
+| `_comment` | free text, shown in trace lines and by the validator |
+| `_serveOn` | `auto` / `provenance` / `always` / `never`, on a clone line |
 
-A line whose cells are all empty is skipped. So is a line whose id will not
-parse, with a warning naming the file and line number. `#` starts a comment
-line.
+CSV quoting follows RFC 4180 as far as a quote that opens a field and a doubled
+quote inside one (`Overlays.SplitLine`).
 
-### A gear tier is one line
+## Read line outcomes
+
+| Line | Result |
+|---|---|
+| blank, or every cell empty | skipped, not counted |
+| starts with `#` | comment, skipped |
+| id parses, every value cell empty | counted as "named a row and set nothing"; the row is left as shipped. One Info line per file. |
+| id cell empty but values present, or id not an integer | warned, counted as malformed |
+| values present but none could be applied | warned, counted as malformed |
+
+The summary line reports files read, rows merged, inserts, untouched lines and
+malformed lines:
+`Overlays: N file(s) in the directory, ... ; M row(s) merged, K of them inserts, U line(s) named a row and set nothing.`
+
+## Clone lines
 
 ```
 ArmorId, _clone, BallisticArmorDegraded, MaxArmorPoints, _comment
 22010,   22009,  52,                     2,              Guard Std 11
-22011,   22009,  54,                     2,              Guard Std 12
 ```
 
-Plain columns on a clone line go into `as`, which runs **before** any
-operations — so the values here are what the new row *is*, and a `*` or `+`
-column on the same line then applies on top of them.
+A non-empty `_clone` cell makes the line an insert (`Overlays.CloneRule`):
 
-Everything in [`cloning-rows.md`](cloning-rows.md) still holds: allocate the
-ids as an unbroken run, and **a clone inherits every gate its source carried**
-— set `MaxPowerLevel` explicitly rather than relying on inheritance.
+- the first cell is the new id, `_clone` the source id;
+- plain `Column` cells go into `as`, which is written before any operation, so
+  they state what the new row is;
+- `*`, `+`, `>`, `<` cells then apply on top of those values;
+- `_serveOn` becomes `serveOn`.
 
-### Which rows are player gear and which are enemy gear
+Two rules for clone lines:
 
-[`../overlays/_reference/player-vs-enemy-gear.md`](../overlays/_reference/player-vs-enemy-gear.md)
-is the canonical derivation and lists the ranges; regenerate it if the ladders
-change. Nothing here restates it.
+- State every column the file carries, including zeros. A column left empty is
+  inherited from the `_clone` source, so a later edit to the source moves every
+  tier built from it for that column. Columns no CSV names at all (class, mode,
+  firing arc, `SpecialRule`, `PrecisionRule`, VFX, name) always come from the
+  source, which is why a clone source must stay inside its own family.
+- A clone inherits every gate its source carries. Set `MaxPowerLevel` and similar
+  explicitly.
 
-One thing that reference has not caught up with: the weapon split **has been
-done** [measured, live install]. `WeaponModel.blade5.csv` puts PL 1-10 at ids
-`900160`-`900169`, cloning `52`, `5001`, … , and PL 11-20 at `900010`-`900019`;
-`sniper6`, `thrasher` and `shock` are the same shape. The rows shared between
-player and enemy are no longer what enemies carry.
+Id choice and serving are in [`cloning-rows.md`](cloning-rows.md). Which ids are
+enemy gear is in
+[`player-vs-enemy-gear.md`](../overlays/_reference/player-vs-enemy-gear.md).
 
-### Two rules for a clone line
+## Use JSON for curves
 
-**State every column, including the ones that are 0.** A column left off a
-clone line is inherited from the `_clone` source, so a later edit to that source
-moves every tier built from it. Stating all of them leaves a tier depending on
-its source only for the columns no CSV names at all: class, mode, firing arc,
-`SpecialRule`, `PrecisionRule`, VFX, name. That is also why a clone source must
-stay inside its own family.
+Curves. `perLevelAbove`, `gapFrom`, `geometric`, `every` and `levelColumn` exist
+only in JSON rules. An overlay states values; a JSON rule states a shape.
 
-**Count a family's tiers as shipped + already in `rules.json` + new here.**
-`make_enemy_overlays.py` refuses to write unless every block is exactly 20
-distinct ids with all 20 provided, and its `_reference/gear-blocks.md` prints
-the `ship/rules.json/new` split per block.
+## Generate a file from the dump
 
-### What overlays do NOT do
+`scripts/make_overlay.py` writes an overlay pre-filled from the dump to stdout.
 
-**Curves.** `perLevelAbove`, `gapFrom`, `geometric`, `every` and `levelColumn`
-stay in `rules.json`. The split is deliberate: an overlay states values, a rule
-states a shape. Use a rule where one formula covers a family, and an overlay
-where the numbers are decided row by row.
-
----
-
-## Generating and checking a file
-
-### Generate the file pre-filled from the dump
-
-Nobody should author an overlay from a blank file.
-
-One line, cmd.exe. **In PowerShell `>` writes UTF-16 and the loader will not
-read it** — there, use `| Out-File -Encoding utf8 "<path>"` instead.
-
-```
-python "D:\ckf-data-modding\scripts\make_overlay.py" edit ArmorModel --ids 22400-22409 --columns BallisticArmorDegraded,PhysicalArmorDegraded,MaxArmorPoints --game "C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint" > "C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint\BepInEx\config\ckf.hardmode.d\ArmorModel.guard-superheavy.csv"
-```
-
-`edit` writes a line per existing row carrying its **current** values, so the
-job is "change these numbers" and a diff against the generated file shows
-exactly what was retuned. `ladder` does the same for tiers that do not exist
-yet, cloning a source row:
-
-```
-python "D:\ckf-data-modding\scripts\make_overlay.py" ladder ArmorModel --from 22409 --ids 22410-22419 --columns BallisticArmorDegraded,PhysicalArmorDegraded,MaxArmorPoints --game "C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint" > "C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint\BepInEx\config\ckf.hardmode.d\ArmorModel.guard-superheavy-ladder.csv"
-```
-
-Omit `--columns` and it takes every numeric column the table has.
-
-The four `ArmorModel` clone sources are `22009`, `22105`, `22200` and `22300`;
-the validator reports any others, and [`gotchas.md`](gotchas.md) says why not to
-target one.
-
-Then edit the numbers, by hand or by handing the file to an LLM along with
-`D:\ckf-data-modding\sheets\raw\<Table>.csv` — the format is the dump's own columns.
-
-### Validate before launching
-
-Run `validate_rules.py` — the command line is in [`workflow.md`](workflow.md).
-**This is the step that matters.** A pointer aimed at an id that does not exist
-is a black screen with no logged exception, and the validator is the only place
-that catches it at your desk rather than in a mission.
-
-| Reported | Means |
+| Mode | Writes |
 |---|---|
-| `dangling pointer` **E** | a `set` or curve aims a pointer column at an id neither the table nor any clone provides — **the mission will not load** |
-| `unknown table` **E** | the model name has no materializer |
-| `clone source missing` **E** | `_clone` names a row that is not there |
-| `id collision` **E** | an id the table already uses, or two clones claiming one id |
-| `clone shape` **E** | `clone` names a column that is not the table's by-id key |
-| `unknown column` **W** | a name in no dump header — the rule silently never fires |
-| `read-only column` **W** | an alias or computed column; the write is taken and discarded |
-| `gated clone source` **W** | the source row's own `MaxPowerLevel` excludes the clone from the calls it is meant for — the Run 37 trap |
-| `edits a clone source` **W** | this row is copied by clone rules. It only moves the tiers for columns their clone lines do NOT state — state every column and the warning is bookkeeping, not a defect. Re-record any SelfCheck expectation taken from the source. |
-| `duplicate overlay id` **W** | the same row set twice; the later file wins |
-| `row does not exist` **W** | an edit line for an id nothing provides |
+| `edit <Table> --ids A-B` | one line per existing row, with its current values |
+| `ladder <Table> --from SRC --ids A-B` | one clone line per new id, pre-filled with the source row's values |
 
-Truth comes from `D:\ckf-data-modding\sheets\raw\`, written by the live game; it reads
-`_dropped_columns.csv` and `_skipped_tables.csv` too, so a column the dumper
-trimmed is reported as INFO rather than as a mistake, and it refuses to fall
-back to `Aug21Sheets/`.
+Other flags: `--dump <dump dir>`, or `--game <install dir>`, which looks in
+`BepInEx/ckf-dump` (pass `--dump` when `[Dump] OutputDirectory` points elsewhere); `--columns a,b,c`
+(default: the numeric columns that vary across the table); `--key` for a table
+the script's `KEYS` map does not know; `--comment`.
 
-Exit code is 1 if anything is at ERROR, so it drops into a build step as-is.
-Warnings from `*.zz-verify*` files are counted separately and named as fixtures
-— those plant faults on purpose. A warning from any other file is worth reading.
+```
+python scripts\make_overlay.py edit ArmorModel --ids 22400-22409 --columns BallisticArmorDegraded,PhysicalArmorDegraded,MaxArmorPoints --dump "<dump dir>" > "<game dir>\BepInEx\config\ckf.hardmode.d\ArmorModel.guard-superheavy.csv"
+```
 
-To assert exact values in-game rather than eyeball them, add rows to
-`ckf.hardmode.selfcheck.csv` and turn `[SelfCheck] Enabled` on for that launch —
+Table names are the dump's file names in full (`ArmorModel`, not `Armor`).
+
+## Validate before launch
+
+Run from the repository root:
+
+```text
+python scripts\validate_rules.py --game "<game root>" --dump "<dump dir>" --enabled-set
+```
+
+The validator catches a pointer to an id that neither the dump nor a clone
+provides. Exit code is 1 if anything is at `ERROR`. The full gate sequence is in
 [`workflow.md`](workflow.md).
 
----
+| Reported | Level | Means |
+|---|---|---|
+| `dangling pointer` | E | a `set` or curve aims a pointer column at an id neither the table nor any clone provides |
+| `unknown table` | E | the model has no materializer |
+| `clone source missing` | E | `_clone` names a row that is not in the table |
+| `clone shape` | E | `clone` does not name the table's by-id key |
+| `id collision` | E | an `as` id the table already uses, or two clones claiming one id |
+| `overlay header` | E | the file's header cannot be used |
+| `unknown column` | W | a name in no dump header; the rule never fires |
+| `read-only column` | W | an alias or computed column; the write is discarded |
+| `gated clone source` | W | the source row's own `MaxPowerLevel` excludes the clone from the calls it is meant for |
+| `edits a clone source` | W | this row is copied by clone lines; only columns those lines leave empty move with it |
+| `duplicate overlay id` | W | the same row set twice; the later file wins |
+| `row does not exist` | W | an edit line for an id nothing provides |
+| `column not in the dump` | I | the column was dropped or its table skipped by the dumper (`_dropped_columns.csv`, `_skipped_tables.csv`) |
+| `empty overlay line` | I | a line that names a row and sets nothing |
 
-## Why this is also the fast path
+Warnings from `*.zz-verify*` files are counted separately: those are fixtures
+that plant faults on purpose.
 
-Every edit line compiles to a rule selecting one exact id, which is the shape
-the rule index buckets on (see [`rule-engine.md`](rule-engine.md) §Indexing).
-Ten thousand overlay lines on `ArmorModel` cost **one number read and one
-dictionary lookup per row**, not ten thousand comparisons. Measured on the
-current file, with 400 rows swept:
+The validator also checks the consumable lever sheets (see the script's
+docstring). `--enabled-set` resolves pointers against only the files whose
+slices are on in `ckf.hardmode.cfg`.
 
-| Overlay lines | Load | Retained | Sweep, indexed | Sweep, unindexed |
-|---|---|---|---|---|
-| 1,000 | 3 ms | 1.0 MB | 0.17 ms | 24.6 ms |
-| 10,000 | 43 ms | 10.1 MB | 0.17 ms | — |
-| 40,000 | 579 ms | 40.5 MB | 0.16 ms | — |
+The lever converters (`gear_classes.py`, `cyberweapons.py`, `implants.py`,
+`consumables.py`) have their own `--check`. In `cyberweapons.py`, P-DIVERGE
+(`check_divergent_shared_edits`) refuses two owners of one shared row that
+give the same column different values.
 
-Sweep cost is **flat** as the file grows; load time and memory are what scale,
-at roughly **1 MB and 15 ms per thousand lines**. Forty thousand lines is
-about half a second of extra load — the practical ceiling is memory, not
-per-row cost.
+To assert exact values in game, add rows to `ckf.hardmode.selfcheck.csv` and set
+`[Slices] SelfCheck = true` for that launch ([`workflow.md`](workflow.md)).
 
-Edit lines carry no JSON at all: the selector is a `long` on the rule and the
-values are constant terms, so a line costs a few small arrays rather than a
-retained `JsonDocument`. That is also why a `_comment` is only kept when the
-file supplies one.
+## Related
+
+- [`rule-engine.md`](rule-engine.md)
+- [`cloning-rows.md`](cloning-rows.md)
+- [`tuning-enemies.md`](tuning-enemies.md)
+- `overlays/README.md` (not published): the enemy-gear overlay generator

@@ -30,13 +30,18 @@
 # the config schema
 !/schema/
 
-# the four scripts the build and the generated files depend on
+# scripts a source build needs: the generators, the release builder, and the
+# four sheet expanders gui/serve.py imports (the editor is incomplete without them)
 !/scripts/
 /scripts/*
 !/scripts/gen_binds.py
 !/scripts/gen_docs.py
 !/scripts/gen_teampl_labels.py
 !/scripts/make_release.py
+!/scripts/consumables.py
+!/scripts/cyberweapons.py
+!/scripts/gear_classes.py
+!/scripts/implants.py
 
 # the pinned BepInEx is unpacked here locally; only the how-to is published
 !/vendor/

@@ -1,13 +1,10 @@
 // ConfigDoc — one settings file per slice, read once.
 //
-// 3.0 replaced the five sidecars (ckf.hardmode.elapse.json and friends) with
-// one BepInEx/config/ckf.hardmode.json namespaced by section. Phase 3 of
-// split-config-into-toggleable-slices takes that back apart, for the reason
-// design.md section 1 gives: no slice's settings may live in a file another
-// slice can disable, and one syntax error in a merged document costs all nine
-// subsystems their settings at once.
+// No slice's settings live in a file another slice can disable, so one syntax
+// error costs one slice its settings and no other slice anything. The switches
+// are in ckf.hardmode.cfg (Slices.cs), never in these files.
 //
-// The layout this class now reads:
+// The layout this class reads:
 //
 //     BepInEx/config/ckf.hardmode.d/
 //       difficulty.json   elapse.json    fatigue.json
@@ -15,73 +12,44 @@
 //       powerlevel.json   modelrules.json   selfcheck.json
 //       implants-global.json
 //
-// Each file is { "_version": "4.0.0", ...that slice's keys... }. Nothing INSIDE
-// a slice moved: the nine files' bodies are the nine sections of the old
-// document, key for key and character for character, so no POCO, no
-// [JsonPropertyName] and no field path in schema/*.schema.json changed. Each
-// loader still deserialises its own whole object; this only swaps where the
-// text comes from. `SectionText` keeps its signature and hands back the file's
-// whole JSON body minus nothing, so the loader's own JsonSerializer call, its
-// [JsonExtensionData] bags, its defaulting and every one of its error paths are
-// untouched.
+// Each file is { "_version": "<Defaults.DocVersion>", ...that slice's keys... }.
+// Each loader deserialises its own whole object; this class only supplies the
+// text. `SectionText` hands back the file's JSON body minus "_version", so the
+// loader's own JsonSerializer call, its [JsonExtensionData] bag, its defaulting
+// and its error paths all apply.
 //
-// CORRECTION, 2026-09-13 (Phase 3). This header used to say "the one merged
-// config document, read once" and described ckf.hardmode.json as where every
-// setting lives. That file is now the PRE-4.0 layout. `FileName` still names it,
-// because two things still have to name it: the both-layouts refusal below, and
-// the message Slices.ReportRetiredGate prints about a retired "enabled" key.
-// It is no longer read for settings.
+// `FileName` names ckf.hardmode.json, the pre-4.0 single-file layout. It is
+// never read for settings; only the both-layouts refusal below uses it.
 //
-// CORRECTION, 2026-09-13 (Phase 3). tasks.md Phase 3 says of the stray-key
-// guard: "Today every top-level key is checked against the five section names
-// plus `_version`." It was checked against NINE section names plus "_version" —
-// the `Sections` array below has had nine entries since 3.0 and check_schema.py
-// declares nine `targets.section` values [measured, schema/*.schema.json,
-// 2026-09-13]. The "five" is the count of the 2.x sidecars, which is a different
-// number about a different thing. The instruction the sentence carries is
-// unaffected and is implemented as written.
+// THE STRAY-KEY GUARD
 //
-// THE GUARD THIS FILE EXISTS FOR, IN ITS NEW FORM
-//
-// A stray key at a sidecar's root lands in that POCO's [JsonExtensionData] bag
-// and the loader refuses the file — loudly, by name. In a merged document a
-// MISSPELLED SECTION ("elapes") belonged to no POCO at all: no deserialiser ever
-// saw it, and the subsystem ran on defaults with nothing in the log. That is
-// what the old guard caught.
-//
-// Per file, the same failure has two shapes and this class catches both:
+// A misspelled key or file must not be silently ignored. Two shapes:
 //
 //   1. A stray KEY inside a slice file. Checked here against that slice's own
-//      declared keys — transcribed below from each schema's `fields`, plus the
-//      retired "enabled" gate — and reported at Error by name. The file's text
+//      declared keys (transcribed below from each schema's `fields`, plus the
+//      retired "enabled" gate) and reported at Error by name. The file's text
 //      is STILL SERVED, so the loader's own extension-data bag reports it too
-//      with its own wording and refuses the file exactly as it does today. The
-//      point of checking here as well is that this runs on a launch where the
-//      subsystem is switched off and its loader never asks (AGENTS.md section
-//      3: a guard that only runs when someone asks is one that can go quiet).
+//      and refuses the file. Checking here as well means the guard runs on a
+//      launch where the subsystem is switched off and its loader never asks
+//      (AGENTS.md: a guard that only runs when someone asks can go quiet).
 //
-//   2. A misspelled FILE. There is no POCO and no loader for elapes.json, so
-//      the summary line below names every expected slice file that is not on
-//      disk, every launch, found-of-expected. Overlays names it from the other
-//      side, on its "claimed by no slice" line.
+//   2. A misspelled FILE. There is no loader for elapes.json, so the summary
+//      line names every expected slice file that is not on disk, every
+//      launch. Overlays names it from the other side, on its "claimed by no
+//      slice" line.
 //
-// A DUPLICATE TOP-LEVEL KEY IS AN ERROR, not a shrug. JSON last-wins discards
-// the earlier one, so a player who edited the first of two "curve" keys has
-// edited nothing and has nothing in the log saying so.
+// A DUPLICATE TOP-LEVEL KEY IS AN ERROR. JSON last-wins discards the earlier
+// one, so a player who edited the first of two "curve" keys has edited nothing.
 //
-// BOTH LAYOUTS PRESENT IS A REFUSAL. If ckf.hardmode.json is still on disk and
-// any slice file is too, this class sets `BothLayouts` and Plugin.Load applies
-// NO RULE this launch. A silent preference for one of the two would mean a
-// player's tuning quietly stops applying — the half-applied state design.md
-// section 3 exists to make unreachable. specs/config-surface/spec.md,
-// "Both layouts present is a refusal, not a preference".
+// BOTH LAYOUTS PRESENT IS A REFUSAL. If ckf.hardmode.json is on disk and any
+// slice file is too, this class sets `BothLayouts` and Plugin.Load applies
+// nothing this launch. Silently preferring one layout would mean a player's
+// tuning quietly stops applying.
 //
-// AGENTS.md section 3 applies to the read itself: "the file is not there" and
-// "the file could not be read" are different findings and get different
-// sentences. `WhyNo` is what says which, and `CouldNotRead(section)` is what
-// decides whether the caller logs it at Warning or Error. That method GAINED
-// ITS PARAMETER in Phase 3 — state is per file now, and a parameterless answer
-// would have reported one slice's unreadable file as another slice's.
+// "The file is not there" and "the file could not be read" are different
+// findings and get different sentences (AGENTS.md). `WhyNo` says which, and
+// `CouldNotRead(section)` decides whether the caller logs Warning or Error.
+// State is per file, so that answer takes the slot it is about.
 
 using System;
 using System.Collections.Generic;
@@ -94,18 +62,16 @@ namespace CKFHardMode
 {
     internal static class ConfigDoc
     {
-        /// <summary>The PRE-4.0 merged document. Not read for settings any
-        /// more; named by the both-layouts refusal and by
-        /// Slices.ReportRetiredGate.</summary>
+        /// <summary>The pre-4.0 single-file layout. Never read for settings;
+        /// used only by the both-layouts refusal.</summary>
         internal const string FileName = "ckf.hardmode.json";
 
         /// <summary>The slice directory, under BepInEx/config. Flat:
         /// Overlays.Load does not recurse and this does not either.</summary>
         internal const string DirName = "ckf.hardmode.d";
 
-        // The nine subsystem slices. Must match targets.section across
-        // schema/*.schema.json — schema/check_schema.py is what checks that
-        // they still agree.
+        // The nine settings subsystems. Each name plus ".json" is the file
+        // named by targets.json in the matching schema/*.schema.json.
         internal const string ModelRules  = "modelrules";
         internal const string SelfCheck   = "selfcheck";
         internal const string PowerLevel  = "powerlevel";
@@ -116,33 +82,13 @@ namespace CKFHardMode
         internal const string RewardCurve = "rewardcurve";
         internal const string Difficulty  = "difficulty";
 
-        /// <summary>The tenth settings file. Not a subsystem section: it is the
-        /// blanket implant multipliers (design.md section 7).
-        ///
-        /// CORRECTION, Phase 7. This comment said "four blanket implant
-        /// multipliers" and "the expander arrives in Phase 7". Both moved.
-        /// There are THREE numbers, not four: costMultiply, installTimeMultiply
-        /// and implantStressMultiply. The fourth was implantStressClampMin, and
-        /// David removed it because it provably never binds — ImplantStress is
-        /// 1 on 197 rows (1 -> 3) and 5 on Quantum Rider (5 -> 15), so nothing
-        /// lands below the floor for it to lift [measured, sheets\raw
-        /// 2026-09-12]. Phase 9's migrator must not carry it back in.
-        ///
-        /// And the expander DID arrive in Phase 7 — mods/CKFHardMode/Implants.cs
-        /// — but it deliberately emitted NOTHING from this file.
-        ///
-        /// RESOLVED IN PHASE 9, 2026-09-14. The paragraph above used to end
-        /// "NOTHING READS ITS VALUES YET remains true; the reason changed." It
-        /// is false now and is kept because the reason it was true is the whole
-        /// hazard: the source rule is a MULTIPLY, `set` is idempotent and
-        /// `multiply` is not, so with BOTH live the three numbers would have
-        /// squared to x0.25, x0.25 and x9 across all 198 rows. Phase 9 deleted
-        /// the unscoped ImplantModel rule and replaced Implants.RefuseGlobal
-        /// with Implants.ExpandGlobal IN ONE COMMIT, because either half alone
-        /// is a balance change. THIS FILE IS NOW THE ONLY SOURCE of x0.5, x0.5
-        /// and x3, and 594 cells (198 rows x 3 columns) were measured equal
-        /// across the swap [measured, 2026-09-14].
-        /// </summary>
+        /// <summary>The tenth settings file. Not a subsystem: it holds the
+        /// three blanket implant multipliers (costMultiply,
+        /// installTimeMultiply, implantStressMultiply), which
+        /// Implants.ExpandGlobal applies to every ImplantModel row. This file
+        /// is their only source. They are multiplies, and `multiply` is not
+        /// idempotent, so they must never also arrive as a rule from another
+        /// file.</summary>
         internal const string ImplantsGlobal = "implants-global";
 
         // In the order Plugin.Load initialises the subsystems, so the summary
@@ -171,12 +117,11 @@ namespace CKFHardMode
         // Slot -> the top-level keys that slot's file is allowed to carry.
         //
         // TRANSCRIBED, NOT DECLARED HERE. Each list is the `fields` array of the
-        // matching schema/*.schema.json with `in` != "cfg", plus "enabled" where
-        // the file still carries the retired gate Slices.ReportRetiredGate
-        // reports. schema/ is not this phase's directory to edit, so this is a
-        // copy of a declaration rather than a second declaration — the same
-        // arrangement as Slices.OverlayOwner. [measured, schema/*.schema.json
-        // and the live ckf.hardmode.json, 2026-09-13]
+        // matching schema/*.schema.json with `in` != "cfg", plus the retired
+        // "enabled" gate Slices.ReportRetiredGate reports. Keep the two in step
+        // by hand, as with Slices.OverlayOwner. implants-global also accepts
+        // "_doc" and the retired "implantStressClampMin" (Implants.cs parses
+        // and ignores it).
         //
         // "difficulty" has no "enabled": it never carried one, so one appearing
         // there is a stray and is reported as one.
@@ -189,8 +134,15 @@ namespace CKFHardMode
             { PowerLevel,  new[] { "enabled", "minCap", "maxCap", "matrixMaxCap",
                                    "logFirst" } },
             { TeamPl,      new[] { "enabled", "table", "override" } },
-            { Fatigue,     new[] { "enabled", "runningEmpty", "offDuty", "woundResist",
-                                   "deterministicRolls", "logGrants" } },
+            // runningEmpty and offDuty are the retired 4.0 stage blocks. They stay
+            // DECLARED so a 4.0 file is reported as carrying a retired block
+            // rather than a stray key; Fatigue.LegacyKeys names them and
+            // Fatigue.Validate refuses the file, because their curves do not
+            // stand behind the 4.1 ones.
+            { Fatigue,     new[] { "enabled", "byPowerLevel", "knight",
+                                   "tier1", "tier2", "tier3", "woundResist",
+                                   "deterministicRolls", "logGrants",
+                                   "runningEmpty", "offDuty" } },
             { Elapse,      new[] { "enabled", "logFirst", "tiers", "credits", "stress",
                                    "seedSalt" } },
             { Missions,    new[] { "enabled", "missions" } },
@@ -225,14 +177,13 @@ namespace CKFHardMode
 
         private static bool ran;
 
-        /// <summary>True when ckf.hardmode.json is still on disk AND at least
-        /// one slice file is. Plugin.Load applies no rule when this is set; see
-        /// the header and specs/config-surface/spec.md.</summary>
+        /// <summary>True when ckf.hardmode.json is on disk AND at least one
+        /// slice file is. Plugin.Load applies nothing when this is set; see
+        /// the header.</summary>
         internal static bool BothLayouts { get; private set; }
 
         /// <summary>The stamp on one slot's file, or null. Nothing fills a new
-        /// key from it yet — see ReportStamps below, which says so rather than
-        /// leaving the absence to be read as "nothing to do".</summary>
+        /// key from it; see ReportStamps below.</summary>
         internal static string VersionOf(string section)
         {
             Ensure();
@@ -249,8 +200,8 @@ namespace CKFHardMode
         /// <summary>True when <paramref name="fileName"/> is one of the ten
         /// settings files this class reads. Overlays asks before it opens a
         /// file in ckf.hardmode.d, because a settings file deserialised as a
-        /// RuleFile yields zero rules and NO ERROR — the silent-instrument
-        /// shape AGENTS.md section 3 forbids.</summary>
+        /// RuleFile yields zero rules and NO ERROR, a silent instrument
+        /// (AGENTS.md).</summary>
         internal static bool OwnsFile(string fileName)
         {
             if (fileName == null) return false;
@@ -263,12 +214,8 @@ namespace CKFHardMode
         /// <summary>True when that slot's file could not be read or parsed at
         /// all, as opposed to being read fine and simply not carrying what was
         /// asked for. Callers log the first at Error and the second at their own
-        /// level.
-        ///
-        /// GAINED ITS PARAMETER IN PHASE 3. It used to be a parameterless
-        /// property over one shared document. State is per file now, and an
-        /// answer that ignored which file was asked about would report one
-        /// slice's unreadable file as another slice's.</summary>
+        /// level. State is per file, so the answer is for the slot
+        /// asked about.</summary>
         internal static bool CouldNotRead(string section)
         {
             Ensure();
@@ -287,9 +234,7 @@ namespace CKFHardMode
 
         /// <summary>The slot's JSON text, or null when its file could not be
         /// read. Callers pass the text straight to their own
-        /// JsonSerializer.Deserialize.
-        ///
-        /// SIGNATURE UNCHANGED. The five older loaders do not move.</summary>
+        /// JsonSerializer.Deserialize.</summary>
         internal static string SectionText(string section)
         {
             Ensure();
@@ -297,8 +242,8 @@ namespace CKFHardMode
             return slots.TryGetValue(section, out s) ? s.Text : null;
         }
 
-        /// <summary>Where a slot lives, for a message: its own file's path.
-        /// Replaces "the document, section X".</summary>
+        /// <summary>Where a slot lives, for a message: its own file's
+        /// path.</summary>
         internal static string Where(string section)
         {
             Ensure();
@@ -309,11 +254,8 @@ namespace CKFHardMode
 
         /// <summary>One clause saying why <paramref name="section"/> produced
         /// nothing, distinguishing "not there" from "could not look". Callers
-        /// append their own consequence and finish the sentence.
-        ///
-        /// FIVE CLAUSES, UNCHANGED, AND NO SIXTH. What moved is what
-        /// file-missing means: the slice's own file, not one document for all
-        /// nine.</summary>
+        /// append their own consequence and finish the sentence. "Missing"
+        /// means the slice's own file.</summary>
         internal static string WhyNo(string section)
         {
             Ensure();
@@ -342,15 +284,13 @@ namespace CKFHardMode
 
         // ---- reading one flat slot -------------------------------------------
         //
-        // The four slots whose files are flat — modelrules, powerlevel,
-        // selfcheck and difficulty — are scalars and nothing else. Their loaders
-        // would otherwise be four copies of the same forty lines the five older
-        // loaders already carry by hand, so the shape lives here once.
+        // The four slots whose files are flat (modelrules, powerlevel,
+        // selfcheck, difficulty) hold scalars and nothing else, so their
+        // loader shape lives here once.
         //
-        // The five older loaders are NOT routed through this. Their bodies are
-        // nested and each walks its own blocks to name an unknown key, and
-        // rewriting them to fit would be a change to code Run58 confirmed for
-        // no gain.
+        // The five nested loaders (teampl, fatigue, elapse, missions,
+        // rewardcurve) are NOT routed through this. Each walks its own blocks
+        // to name an unknown key.
 
         /// <summary>A POCO that can report the keys it did not recognise.
         /// Implement it by returning the [JsonExtensionData] bag.</summary>
@@ -369,10 +309,10 @@ namespace CKFHardMode
         /// to false.
         ///
         /// <paramref name="absentIsOrdinary"/> drops an ABSENT file from Warning
-        /// to Info, for the one subsystem whose shipped state is off anyway. It
+        /// to Info, for the one subsystem whose switch defaults to off. It
         /// never touches the unreadable path: that stays an Error whatever the
         /// caller thinks of an absence, because "not there" and "could not look"
-        /// are different findings (AGENTS.md section 3).</summary>
+        /// are different findings (AGENTS.md).</summary>
         internal static T ReadSection<T>(string subsystem, string section, string consequence,
                                          bool absentIsOrdinary = false)
             where T : class, IHasUnknownKeys
@@ -422,7 +362,7 @@ namespace CKFHardMode
                 return null;
             }
 
-            // Same rule as the five older loaders: an unrecognised key is
+            // Same rule as the five nested loaders: an unrecognised key is
             // refused rather than ignored, because ignoring it means the player
             // set something and nothing happened, with nothing in the log.
             //
@@ -463,11 +403,11 @@ namespace CKFHardMode
 
             // ---- the both-layouts refusal ------------------------------------
             //
-            // Presence, exactly as specs/config-surface/spec.md states it: the
-            // old document on disk at the same time as any slice file. Not
-            // "carries a section" — narrowing it to that would be this class
-            // deciding which of two copies of the player's tuning is the real
-            // one, which is the decision the refusal exists to refuse.
+            // Presence only: the old file on disk at the same time as any
+            // slice file. Not "carries a section": narrowing it to that would
+            // be this class deciding which of two copies of the player's
+            // tuning is the real one, which is what the refusal exists to
+            // refuse.
             var anySlice = 0;
             foreach (var name in Slots)
                 if (slots[name].State != State.FileMissing) anySlice++;
@@ -476,28 +416,27 @@ namespace CKFHardMode
             try { legacyThere = File.Exists(legacy); }
             catch (Exception e)
             {
-                // Could not look. NOT "it is not there" (AGENTS.md section 3).
+                // Could not look. NOT "it is not there" (AGENTS.md).
                 // Treated as present, because refusing costs a launch and
                 // applying a half-migrated config costs the tuning.
                 legacyThere = true;
                 Plugin.Log.LogError("ConfigDoc: could not tell whether " + legacy
                     + " exists: " + e.GetType().Name + ": " + e.Message + ". That is NOT the "
                     + "same as it being absent, so it is treated as PRESENT: if any slice "
-                    + "file is on disk this launch applies no rule. Fix the error and "
-                    + "relaunch.");
+                    + "file is on disk, the mod applies nothing this launch. Fix the error "
+                    + "and relaunch.");
             }
 
             if (legacyThere && anySlice > 0)
             {
                 BothLayouts = true;
                 Plugin.Log.LogError("ConfigDoc: BOTH CONFIG LAYOUTS ARE ON DISK. "
-                    + legacy + " is the pre-4.0 merged document, and " + dir
-                    + " holds " + anySlice + " slice file(s). THE MIGRATOR HAS NOT BEEN RUN. "
-                    + "No rule is applied this launch and the game runs unmodified: with two "
-                    + "copies of the same tuning present, applying either one would mean "
-                    + "silently choosing which of your edits count. Move " + FileName
-                    + " out of BepInEx\\config (renaming it to " + FileName
-                    + ".pre-4.0-backup is what the migrator does) and relaunch.");
+                    + legacy + " is the settings file from before 4.0, and " + dir
+                    + " holds " + anySlice + " settings file(s) from 4.0 or later. "
+                    + "The game runs unmodified this launch: with two copies of the "
+                    + "settings present, the mod will not guess which one counts. "
+                    + "Delete " + legacy + " and relaunch (see the README, \"Updating "
+                    + "from an earlier version\"). Nothing on disk was changed.");
             }
 
             ReportStamps();
@@ -588,7 +527,7 @@ namespace CKFHardMode
                     // switched off and its own loader never runs. The text is
                     // still served: the loader's extension-data bag reports the
                     // same key with its own wording and refuses the file, which
-                    // is the behaviour that was already exercised.
+                    // is the behaviour a player sees either way.
                     slot.Strays = strays.Count;
                     foreach (var stray in strays)
                         Plugin.Log.LogError($"ConfigDoc: {slot.Path}: top-level key \"{stray}\" "
@@ -602,17 +541,14 @@ namespace CKFHardMode
                     //
                     // Elapse.Options and Fatigue's root block each carry a
                     // [JsonExtensionData] bag and REFUSE THE WHOLE FILE on any
-                    // key that maps to no member — Elapse.cs returns null and
-                    // the feature is off for the launch [measured, Elapse.cs
-                    // member Options and its unknown-key walk]. The stamp maps
-                    // to no member in any of them. Serving the raw object would
-                    // therefore switch Elapse and Fatigue OFF on every launch,
-                    // by the stamp this phase just added.
+                    // key that maps to no member (Elapse.Load returns null and
+                    // the feature is off for the launch). The stamp maps to no
+                    // member in any of them, so serving the raw object would
+                    // switch Elapse and Fatigue OFF on every launch.
                     //
                     // So the served text is the object minus "_version" and
-                    // nothing else. Every other key, comment and trailing comma
-                    // survives; the five older loaders do not move; and no POCO
-                    // gains a stamp property it has no use for. The four flat
+                    // nothing else, and no POCO gains a stamp property it has
+                    // no use for. The four flat
                     // loaders that route through ReadSection are covered twice
                     // over — it drops the key from the bag as well — because
                     // that path is also reachable from a test harness that
@@ -640,9 +576,9 @@ namespace CKFHardMode
                 slot.Problem = e.Message + (string.IsNullOrEmpty(e.Path) ? "" : $" (at {e.Path})");
                 Plugin.Log.LogError($"ConfigDoc: {slot.Path} is not valid JSON: {slot.Problem}. "
                     + "The subsystem that reads this file does nothing this launch rather than "
-                    + "running on built-in defaults. Since the split, one syntax error costs one "
-                    + "slice its settings and no other slice anything; it never costs a switch, "
-                    + "because the switches are in ckf.hardmode.cfg and were read before this.");
+                    + "running on built-in defaults. One syntax error costs one slice its "
+                    + "settings and no other slice anything; it never costs a switch, because "
+                    + "the switches are in ckf.hardmode.cfg and were read before this.");
             }
             catch (Exception e)
             {
@@ -659,23 +595,13 @@ namespace CKFHardMode
 
         // ---- the stamps -------------------------------------------------------
         //
-        // THIS INSTRUMENT REPORTS THAT IT DID NOT ACT. AGENTS.md section 3.
+        // THIS INSTRUMENT REPORTS THAT IT DID NOT ACT (AGENTS.md).
         //
-        // specs/config-surface/spec.md, "Version-stamped upgrade fills new keys
-        // only", wants a file whose stamp is older than the assembly's to have
-        // the keys the running version added written into it from the embedded
-        // default. THIS ASSEMBLY CARRIES NO EMBEDDED DEFAULTS: Defaults.cs's own
-        // header records that they were removed and now travel as loose files in
-        // the release zip, and Defaults.Install writes nothing at all. So there
-        // is nothing here to fill a new key FROM, and a silent pass would read
-        // as "checked, nothing to do".
-        //
-        // What this does instead: read every stamp, compare it to
-        // Defaults.DocVersion, and say out loud which files are behind and that
-        // NOTHING WAS FILLED IN. The fill half arrives with whatever restores an
-        // embedded or packaged default; until then the upgrade is the player
-        // extracting the release zip, which is what Defaults.Install already
-        // tells them.
+        // The assembly carries no embedded defaults (see Defaults.cs), so there
+        // is nothing to fill a missing key FROM, and a silent pass would read as
+        // "checked, nothing to do". Instead this reads every stamp, compares it
+        // to Defaults.DocVersion, and says which files differ and that NOTHING
+        // WAS FILLED IN. The upgrade path is extracting the release zip.
         private static void ReportStamps()
         {
             var missing = new List<string>();
@@ -740,33 +666,16 @@ namespace CKFHardMode
             if (missing.Count > 0 || broken.Count > 0 || strays > 0) Plugin.Log.LogError(line);
             else Plugin.Log.LogInfo(line);
 
-            // NOT APPLIED, AND SAID SO. implants-global.json is read, stamped
-            // and guarded here, and nothing consumes its three numbers. The
-            // live effect still comes from the one unscoped ImplantModel rule in
-            // ckf.hardmode.rules.json. A file that is read and not applied, with
-            // nothing in the log, is the silent instrument AGENTS.md section 3
-            // is about.
-            //
-            // CORRECTION, Phase 7. This block used to say "its four numbers have
-            // no expander yet". THREE numbers (implantStressClampMin was removed
-            // per David; it never binds), and there IS an expander now —
-            // Implants.cs — which refuses to emit from this file while the
-            // source MULTIPLY is still live in ckf.hardmode.rules.json.
-            // Implants.RefuseGlobal carries the full statement; this line stays
-            // because ConfigDoc is what actually read the file and a reader that
-            // goes quiet about its own subject is the defect, not the fix.
+            // implants-global.json is read and guarded here but applied by
+            // Implants.ExpandGlobal, so this line says where its numbers go.
             var ig = slots[ImplantsGlobal];
             if (ig.State == State.Ok)
                 Plugin.Log.LogInfo("ConfigDoc: " + FileFor(ImplantsGlobal) + " was read and "
-                    + "guarded, and IT IS NOW THE ONLY SOURCE of the three blanket implant "
-                    + "multipliers. Implants.ExpandGlobal emits them from here, against every "
-                    + "ImplantModel row with no selector -- all 198, INCLUDING the 20 drone "
-                    + "modules in slots 100-107 that no table shows, which is accepted and not "
-                    + "a bug. Editing this file now changes the game. THIS LINE USED TO SAY "
-                    + "'NOTHING APPLIED IT ... editing this file changes nothing until Phase 9 "
-                    + "deletes that rule'; Phase 9 deleted it, in the same commit that wired "
-                    + "this up, because either half alone is a balance change. See the "
-                    + "Implants: lines below for the numbers.");
+                    + "guarded. It is the only source of the three blanket implant "
+                    + "multipliers: Implants.ExpandGlobal applies them to every ImplantModel "
+                    + "row with no selector, including the drone modules in slots 100-107 "
+                    + "that no table shows (accepted, not a bug). See the Implants: lines "
+                    + "below for the numbers.");
         }
     }
 }

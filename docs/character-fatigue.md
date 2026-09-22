@@ -1,396 +1,69 @@
-# Mission fatigue — Running Empty → Off-Duty
-
-How the shipped mission-fatigue mechanic works. `mods/CKFHardMode/Fatigue.cs`,
-CKFHardMode 2.9.2, `[Fatigue] Enabled` default true.
-
-Settings: `docs/config-reference.md` (Fatigue section), generated from
-`schema/*.schema.json`. Traps: `docs/gotchas.md`. Test procedure:
-`docs/workflow.md`.
-
-**RUN44–RUN47** mark facts observed in a live save (2026-08-29/30); the rest are
-read off `global-metadata.dat`, the interop DLLs' `NativeMethodInfoPtr_*` field
-names, the `D:\ckf-data-modding\sheets\raw-save\` save CSVs and `en-US.json`. **[unverified]** marks
-a claim never observed.
-
----
-
-## 1. The mechanic
-
-Two shipped traits, no custom content, no new save state.
-
-```
-  mission completes
-         │
-         ├── merc was already Running Empty ──► force Off-Duty (no roll)
-         │                                       └─► engine stops them being
-         │                                           rostered until it expires
-         │
-         └── merc was clear ──► roll ──► fail ──► Running Empty
-                                 │                 └─► still selectable,
-                                 └── pass ──► nothing      but −4 Init, −50% XP
-```
-
-The player gets one mission of warning. Running Empty does not stop anyone
-deploying; deploying anyway earns the lockout. Enforcement is the engine's, off
-Off-Duty's `SpecialCode 90 BlockMissions` ("Unwilling to go on any mission
-(unless required by mission)"): the mod grants the trait and stops there, never
-filtering `ReadGameCharactersAvailableForMission`, and the game keeps its
-story-mission override.
-
-**RUN45**: Rhino held 2014 (row 163, `SpecialCode 90` on the row's joined
-`EffectData`) and still came back from
-`ReadGameCharactersAvailableForMission(1386)` with an aggregate reading
-`SpecialCode 0` — consistent with `docs/character-availability.md`, where the
-gate is one SQL query over the **character row** with no trait term. Whether the
-planning screen blocks above the query, or enforcement reads
-`GameCharacterEffect`, is **[unverified]**; nothing in the mod depends on it.
-
-## 2. The two traits
-
-Both are `TraitClass 6` (limit-break temporary traits), `TraitScore -2` (severe
-tier), `TraitLevel 1`, each in its **own `TraitGroup`**, so a merc can hold both
-at once without a group collision.
-
-| | Running Empty | Off-Duty |
-|---|---|---|
-| `TraitId` | **2009** | **2014** |
-| `TraitGroup` | 2009 | 2014 |
-| `EffectTypeId` | 10507 | 10512 |
-| Effect name in locale | **"Bloodless"** (not "Running Empty") | "Off-Duty" |
-| `EffectClassification` | 12 `MutationTempTrait` | 12 `MutationTempTrait` |
-| Effect | `InitBonus -4`, `XpBonus -50` | `SpecialCode 90 BlockMissions`, value 1 |
-| Shipped flavour | "Your body is here moving on autopilot, but that is about it." | "You have decided to take a break for a bit and it is not up for debate." |
-
-Off-Duty carries no stat penalty at all; its entire content is SpecialCode 90.
-Running Empty's bite is the −50% XP; the −4 Initiative is the combat half.
-**2007 Checked Out** (`InitBonus -2`, `XpBonus -33`) is the milder first stage,
-selectable through `runningEmpty.traitId` without a rebuild — also `TraitClass 6`
-in its own group, so it is legal beside 2014.
-
-The shipped Stress Limit Break grants these for **30 days**, which is where the
-default durations come from. 4 turns = 1 day (`RuleModel` 40 `Max Injury Time` =
-100 turns, "25 days default"). `EffectSpecialCode.BlockMissions = 90` is
-confirmed against `_id_constants.csv`.
-
-**RUN44**, read back off the game's own join on a row the mod inserted:
-`id 163 char 6 trait 2009 created 1383 expires 1503 | TraitData yes EffectData
-yes (Effect 10507 InitBonus -4 XpBonus -50 SpecialCode 0)`.
-
-**RUN45**: a TraitClass 6 temporary trait reaches the character's stat aggregate.
-Panther carried shipped trait 2007 and her `MissionStart` aggregate read
-`XpBonus -33`, which can come from nothing else on her (Bubbles read `+4` from
-1009 Below the Level 2, Rhino `0` with no XP trait), so Running Empty's
-`XpBonus -50` lands the same way. `InitBonus` is not readable this way — the
-aggregate carries gear, implants and jobs too.
-
-Traits are processed in `TraitContext.MissionStart`; `MissionVictory` and
-`CyberSurgery` are the other two contexts and neither appeared in Run45.
-
-## 3. Trigger — mission, not room
-
-`GameScoreModel` rows for one mission arrive in a fixed order: every
-`ScoreTypeId 19 MissionCompleteByCharacter` row, one per deployed merc, then a
-single `ScoreTypeId 16 MissionComplete` row with `CharacterId 0` as terminator.
-Across the reference save, **92 turns carry a type-16 row and 92 carry type-19
-rows, with no orphan on either side**; the shape held on RUN44's four-merc
-mission and RUN45's solo hack alike. `ScoreTypeId 20
-MissionCompleteByCharacterUnseen` interleaves, is per-character and conditional
-on not being spotted (RUN44: char 6 got a 19 and no 20), and is ignored. Type-16
-and type-19 rows carry the real game turn; types 15 `AttackKilled` and 18
-`SpikeCPU` carry the *mission* turn in `GameTurn`. Rooms do not interfere —
-`StartRoom` fires 106 times against those 92 missions and a two-room mission
-still produced one `MissionComplete`.
-
-The hook is a postfix on `GameDb.InsertGameScore(GameScoreModel) -> Int64`.
-**Phase A**, on `ScoreTypeId == 19`, pushes `CharacterId` onto a pending list;
-**Phase B**, on `ScoreTypeId == 16`, resolves the mission from that list and
-clears it.
-
-**RUN45: a failed mission writes no score rows at all.** A four-merc mission was
-lost on purpose; its last row was `StartRoom`, then `ProcessGameOver
-gameOverWin=False`, then the safehouse four turns later. **A lost mission costs
-no fatigue**; `applyOnMissionFailure` exists neither as key nor code, and the
-defeat-side hook (`View_MissionRoomDefeat_Main.ProcessCharactersAfterDefeat`) is
-not built.
-
-**Solo missions are exempt** (David's ruling, 2026-09-10). When Phase B's
-roster holds one distinct `CharacterId`, nothing in §4 runs: no roll, no
-Off-Duty escalation, no row written, nothing marked resolved. A merc who goes out
-alone while Running Empty keeps the first stage and is not locked out. The log
-line is `Fatigue: mission complete at turn N with one merc deployed (character
-X). Solo missions are exempt`. Offline checks: `tests/fatigue/Part5.cs`.
-
-Nothing is gated on `Status`, which is transient at mission end: RUN44 saw chars
-1, 19 and 20 read `Status 12 Extracted` on the victory screen and `Status 1
-Active` a few reads later, while on defeat all four read `status=1`. That type 19
-means *deployed* rather than *survived and extracted* is **[unverified]**.
-
-## 4. Resolution order
-
-Phase B runs once per mission over the pending `CharacterId` list. The order is
-what makes "went out while Running Empty" a clean test with no timestamp
-arithmetic and no deploy-time hook.
-
-1. **Read** each merc's traits — `ReadGameCharacterTraitsByCharacter(characterId)`.
-2. **Off-Duty pass.** Any merc already holding 2009 gets 2014 for its configured
-   duration, no roll. With `offDuty.clearsRunningEmpty` their 2009 row is deleted
-   in the same pass, inside the success branch only, so a refused insert cannot
-   leave the merc carrying nothing.
-3. **Build the roll pool** — deployed mercs holding **neither** 2009 nor 2014.
-4. **Roll** each merc in the pool against their own chance (§5).
-5. **Clamp** the failure count into `[minAffected, maxAffected]` by margin.
-6. **Grant** 2009 to the final failure set.
-
-Because step 2 reads before step 6 writes, no `CreatedTurn` comparison is needed.
-
-**The double-fire guard** is keyed on the completion turn **and the sorted
-roster**, so two missions completing on one turn resolve separately, and the
-database decides it rather than session memory: every row §6.2 writes is stamped
-`CreatedTurn` = the mission's turn, so a first-stage or Off-Duty row at that turn
-on any roster merc is that resolution's own evidence. Present means a genuine
-second Phase B and the guard blocks; absent means a save load rolled the database
-back, and the mission resolves again to the same result through deterministic
-rolls. A postfix on `ViewModel_GameManagement.LoadGame` / `.LoadGameSlot` clears
-session state on load; both fire on one load (elapse layer, Log16).
-
-## 5. The roll
-
-**Chance.** One percentage per merc per completed mission, read off
-`runningEmpty.byPowerLevel` at the mission's power level (§8). The Cyber Knight
-uses `runningEmpty.knight.byPowerLevel` where it names a chance, identified by
-`GameCharacterModel.IsKnight` — a real boolean column, `True` on character 1 in
-the reference save (`CharacterTypeId == 1` is the equivalent test). The Face
-never enters this at all: `CharacterTypeId 6` is excluded by the eligibility SQL,
-so the Face does not deploy.
-
-**Duration.** `ExpiresTurn = GameTurn + durationDays * 4`, `durationDays` again
-off the curve; the Knight's curve overrides it. `durationDays: 0` on an anchor is
-refused at load, because `ExpiresTurn` of zero is how the game marks a trait
-PERMANENT (`ProcessTraits` filters on `ExpiresTurn != 0`). If no anchor names a
-`durationDays` at all, the merc is **not granted the trait** — a row with no
-length would be that permanent trait — and both the missing key and the merc it
-cost are logged.
-
-**Clamp.** `minAffected` and `maxAffected` are absolute counts applying only to
-the Running Empty roll; forced Off-Duty grants are never clamped. Each merc's
-margin is their roll minus their own threshold: short of `minAffected`, the
-smallest *passing* margins fail; past `maxAffected`, the smallest *failing*
-margins are spared. Ranking is by distance from each merc's **own** threshold,
-since Wound Resist (§9) makes thresholds differ per merc, and ties break on
-character id so a reload reproduces the same set. `minAffected` is capped at pool
-size; a curve that names no `maxAffected` means no ceiling, `maxAffected: 0` a
-ceiling of zero (zero switches the roll off while leaving escalation running),
-and a curve that names no `minAffected` means no floor. The Knight sits inside
-the clamp — no `knight.exemptFromClamp` key exists, and RUN47 saw Panther take
-2009 like the rest.
-
-**Determinism.** The roll is seeded from `splitmix64(GameTurn, CharacterId)` plus
-a constant salt, so the same inputs give the same result however many times the
-victory screen is reloaded; `deterministicRolls: false` falls back to unseeded
-RNG. **RUN47 verified this against a prediction made before the run**: rolls for
-turns 1386-1388 were computed offline in advance, the mission landed on 1388, and
-characters 1, 16 and 19 rolled 27, 61 and 97 exactly as predicted.
-
-## 6. Implementation mechanics
-
-### 6.1 The calls and the database instance
-
-All on `RPG.Database.GameDb`: the hook `InsertGameScore(GameScoreModel)`;
-`ReadGameCharacterTraitsByCharacter(Int64) -> List<GameCharacterTraitModel>`;
-`InsertGameCharacterTrait(GameCharacterTraitModel) -> Int64`;
-`DeleteGameCharacterTrait(Int64) -> Int32`; `ReadGameCharacter(Int64)` for
-`IsKnight`; and the zero-arg `ReadGameData()` for `GameTurn` / `GameKey`.
-`ReadGameCharacter` is the file's one catch that could swallow the Knight — a
-rename there makes every merc read `IsKnight 0` and `DisplayName ""` — so it logs
-once, naming what that costs.
-
-The postfix is handed the live `GameDb` as `__instance`, used there and never
-stored. **RUN44** confirmed the walk for hooks that get no `GameDb` directly:
-`__instance` (SaveManager) → `.Dac` (`RPG.Core.GameManagerBase`) →
-`RPG.Saving.DataLayer` → `.GameDBI`. `DataLayer` has no static singleton, so
-there is no `GameDb` outside a hook (`docs/gotchas.md`).
-
-### 6.2 Building the trait row
-
-`GameCharacterTraitModel` columns:
-
-```
-Id, CharacterId, TraitTypeId, OptionId, IsWound, Description, CreatedTurn, ExpiresTurn, IsNew
-```
-
-The mod sets `CharacterId`, `TraitTypeId`, `CreatedTurn = GameTurn`,
-`ExpiresTurn = GameTurn + days*4`, `IsWound = 0`, `IsNew = 1`, `OptionId = 0`,
-`Description = ""`, and leaves `Id` at 0 for the insert to assign and return.
-The turn comes off the `GameScoreModel` being inserted, read from the `__args`
-model rather than by calling `ReadGameData()`, so `ExpiresTurn` is based on the
-same turn the mission's own score rows carry.
-
-**RUN44: use Route A — construct the row.** `GameCharacterTraitModel` has a
-public parameterless `.ctor` on both the leaf and `GameCharacterTraitModelBase`;
-`Activator.CreateInstance` allocated a usable il2cpp object, the insert returned
-id 163, and both readers found it. Borrowing an existing row stays in
-`TraitProbe` as a fallback instrument and is not used by the mod.
-
-**RUN44: the joined properties fill themselves in, and the reader decides it.**
-`GameCharacterTraitModel` carries `TraitData`, `EffectData` and
-`MatrixEffectData` alongside its nine columns. The constructed row went in with
-all three null — and so did the row from `ReadGameCharacterTrait(163)`, while
-`ReadGameCharacterTraitsByCharacter(6)` returned the *same row* fully joined:
-
-```
-built      : id   0  TraitData NULL  EffectData NULL
-after-byid : id 163  TraitData NULL  EffectData NULL        <- ReadGameCharacterTrait
-after-bychar id 163  TraitData yes   EffectData yes (10507, InitBonus -4, XpBonus -50)
-```
-
-Nothing populates the joins by hand, and a trait row's effect is only readable
-through the by-character reader, which is what step 1 of §4 uses.
-
-### 6.3 Re-entrancy, durability and expiry
-
-The mod calls `GameDb` methods from inside a `GameDb` postfix, behind the
-`reentrant` flag `RowClone.cs` already carries. **RUN45** granted 2014 from
-inside the `InsertGameScore` postfix on the type-16 row, through SqlNado while
-the game's own insert was still unwinding. **RUN47** ran the whole of §4 that way
-over a four-merc roster at turn 1388 — two inserts plus the first-ever
-`DeleteGameCharacterTrait`, which returned 1 — with zero errors.
-
-Writes are exactly as durable as the game's: `GameDb` is a live working database
-and a save slot is a snapshot of it (`DataLayer.CreateSnapshot` and its `Tmp` /
-`FromTmp` / `Safehouse` variants), so an inserted trait persists when the
-player's own progress persists and never separately. RUN45 opened on a save that
-had lost the whole of Run44 — proved by the score id counter reissuing 3238 — and
-the mod's row went with it. The mod does not force a save.
-
-**RUN46** granted 2014 to Rhino at `GameTurn 1386` with `GrantDurationDays = 1`
-(`ExpiresTurn 1390`), audited through `ReadGameCharacterTraitsByCharacter(16)`:
-
-| | rows | what it shows |
-|---|---|---|
-| after the grant | 4 | the row is there |
-| after loading a different save slot | 3 | that slot never had it — correct |
-| after coming back to the saved slot | 4, `expires 1390` | survived a save and a reload |
-| at `GameTurn 1391` | 3 | expired on schedule, one turn past `ExpiresTurn` |
-
-The mod writes the row and sets `ExpiresTurn`; the game's own
-`SaveManager.ProcessTraits` handles the rest of its life cycle.
-
-## 7. Save state added: none
-
-Both traits live in `GameCharacterTrait`, a table the game already owns.
-`SaveManager.ProcessTraits` runs `SELECT * FROM GameCharacterTrait WHERE
-ExpiresTurn != 0 AND ExpiresTurn <= ?` every turn, removes expired rows, and logs
-`Timeline.Log.TraitExpired` — *"{trait} has expired from {name} / The temporary
-{0} Trait has lapsed and no longer affects {1}."* The mod never ticks and adds no
-column, side file or row to any table the game does not already write.
-Uninstalling it leaves at most a few live traits, which lapse on schedule.
-
-## 8. Power-level scaling
-
-`chancePercent`, `durationDays`, `minAffected` and `maxAffected` each vary with
-the mission's power level. Since **2026-09-07** the curves are the **only** place
-they live; see the correction at the end of this section.
-
-The level comes from `GameDb.ReadGameMissionActive() -> GameMissionModel` and its
-**`PowerLevel`** column — the effective level, the one `[PowerLevel]` lifts past
-the stock ceiling of 10; `PowerLevelUnscaled` is the input to that scaling and is
-the wrong column here. Score rows carry no mission identity (`ScoreTargetId 0`,
-empty `ScoreKey`), so the level is read at **Phase A**, on the first type-19 row,
-while the mission is still active; Phase B retries, and if both fail the level
-stays 0 and **every curve returns its lowest anchor** for it. The log says so
-once.
-
-**The curve.** Anchors interpolate linearly, rounding away from zero. Each field
-walks only the anchors that name it, so a curve can shape the chance across all
-twenty levels while stepping the ceiling at three. Below the lowest anchor and
-above the highest the nearest anchor holds — a curve is a statement about the
-levels it names, not an extrapolation past them.
-
-```jsonc
-"byPowerLevel": {
-  "1":  { "chancePercent": 10, "minAffected": 0, "maxAffected": 1 },
-  "10": { "chancePercent": 25, "minAffected": 0, "maxAffected": 2 },
-  "20": { "chancePercent": 40, "minAffected": 1, "maxAffected": 4 }
-}
-```
-
-A full twenty-row list works identically, and one anchor is a flat value written
-as a curve. `offDuty.byPowerLevel` and `offDuty.knight.byPowerLevel` interpolate
-`durationDays` by the same precedence — a Knight curve beats the general curve —
-and the other three fields mean nothing on an Off-Duty anchor (escalation is not
-a roll), so they are warned about by name. Anchors carry the validation the flat
-settings used to, including a sweep across PL 1-20 that catches a floor and
-ceiling each legal on its own anchor and still crossing between them; validation
-runs at load and names the offending key.
-
-### 8.1 The flat settings were removed — 2026-09-07
-
-**What this section used to say**, and what was true until this date: each of the
-four values had a flat setting *and* a curve, the curve beat the flat value where
-it named a level, the flat value applied where it did not, and — the sentence
-that mattered most — *"if both fail the flat values apply and the log says so
-once"* for a mission whose `PowerLevel` could not be read. `no block leaves the
-flat values in force` was also written here, meaning an omitted `byPowerLevel`
-fell back to them.
-
-**David's ruling.** Every flat setting that had a `byPowerLevel` analogue is off
-the config surface, because a one-anchor curve at power level 1 does the same
-job. The eight: `runningEmpty.chancePercent`, `.durationDays`, `.minAffected`,
-`.maxAffected`, `runningEmpty.knight.chancePercent`,
-`runningEmpty.knight.durationDays`, `offDuty.durationDays` and
-`offDuty.knight.durationDays`.
-
-**Why the unreadable-`PowerLevel` sentence had to change with them.** `Curve()`
-used to return "no value" for a `powerLevel` of 0, which is what sent that case
-to the flat values; with the flat values gone that would have left the one code
-path nobody can control with no answer at all. So the `powerLevel <= 0` guard was
-dropped and a 0 now falls into the existing `powerLevel <= lowest anchor` clamp:
-an unreadable level takes the **lowest anchor** of each curve. That is what makes
-a one-anchor PL 1 curve behave exactly like the flat value it replaces, in every
-case including that one. The once-only warning is still logged and now says the
-lowest anchor was used.
-
-**What replaces the flat layer as a backstop:** nothing, deliberately, and that
-is reported rather than papered over.
-
-- `runningEmpty.byPowerLevel` is **required** while `fatigue.enabled` is true.
-  Absent or empty, the config names no chance, no duration and no counts; the
-  feature refuses to load and says which block is missing.
-- Where a curve names no value for one field, the roll or the write that needed
-  it **does not happen and is logged**: no chance means the merc is not rolled
-  for, no first-stage `durationDays` means the trait is not granted, no
-  `offDuty` `durationDays` means the merc is not escalated and keeps the first
-  stage. In each case the alternative would be a trait row with a zero
-  `ExpiresTurn`, which is how the game marks a trait PERMANENT. Mercs lost this
-  way are counted separately in the mission summary — not folded into "clear",
-  which they are not.
-- `minAffected` is the one exception: no anchor naming it means **no floor**, a
-  legal state, so it takes the named constant `NoMinAffected` (0) and is a
-  warning rather than an error.
-- `maxAffected` is unchanged: absent has always meant no ceiling.
-
-**Old config files still load.** `Fatigue.cs` refuses any file carrying a key
-that maps to no member, so the eight properties were kept and marked
-legacy-and-ignored rather than deleted — removing them would have made every
-existing player's `ckf.hardmode.json` fail to load. They parse, nothing reads
-them, and a file carrying any of them gets one log line at load naming which.
-Deleting them from the file changes nothing.
-
-## 9. Wound Resist mitigation
-
-A merc's Wound Resist is subtracted from their chance, **one point per percentage
-point**, floored at `woundResist.minChancePercent` (default 5) so nobody is
-immune and `minAffected` always has someone to reach for. The floor bounds what
-resist takes away and never raises a chance already at or below it, so
-`chancePercent: 0` stays 0.
-
-**The stat.** The **Triage Clinic** is `ModuleClassId 18`, module types 71-74,
-granting exactly two things: `InjuryTime` -25/-30/-35/-40 and **`WoundRes`**
-10/15/20/30 by upgrade level. `WoundRes` is a plain integer column on both
-`EffectModel` and `SafehouseModuleModel`.
-
-**`EffectClassification` values are explicit, not declaration order.** Read out
-of the metadata `Constant` table:
+# Mission fatigue
+
+Use this page to trace a completed mission through the three-tier fatigue track
+in `mods/CKFHardMode/Fatigue.cs`. It also records the shipped temporary traits,
+mission score rows, and Wound Resist inputs on which the subsystem depends.
+Settings and defaults belong to [`config-reference.md`](config-reference.md);
+known traps belong to [`gotchas.md`](gotchas.md).
+
+Evidence tags: [measured] means read back from a live save (CKFDataDump `TraitProbe`) or from the dumped tables. [unverified] means never observed.
+
+## Shipped data and runtime behavior
+
+### The three traits
+
+All three are shipped limit-break temporary traits (`TraitClass 6`, see [`limit-break-traits.md`](limit-break-traits.md)). Each has its own `TraitGroup`, so a merc can hold all three at once and their penalties apply together.
+
+| | Checked Out | Running Empty | Off-Duty |
+|---|---|---|---|
+| `TraitId` / `TraitGroup` | 2007 | 2009 | 2014 |
+| `EffectTypeId` | 10505 | 10507 | 10512 |
+| Effect name in locale | "Checked Out" | "Bloodless" | "Off-Duty" |
+| `EffectClassification` | 12 `MutationTempTrait` | 12 `MutationTempTrait` | 12 `MutationTempTrait` |
+| `TraitScore` | -1 mild | -2 severe | -2 severe |
+| Shipped effect | `InitBonus -2`, `XpBonus -33` | `InitBonus -4`, `XpBonus -50` | `SpecialCode 90 BlockMissions`, value 1. No stat penalty |
+
+The separate `LimitBreakTraits` slice can edit effect rows for these traits; see
+[`limit-break-traits.md`](limit-break-traits.md#what-the-mod-overlays) and inspect
+the live overlay for its current cells.
+
+- `SpecialCode 90 BlockMissions` reads "Unwilling to go on any mission (unless required by mission)". `BlockMissions = 90` is confirmed against `_id_constants.csv`.
+- [measured] A captured shipped Stress Limit Break granted one of these traits
+  for 30 days; see
+  [`mission-elapse-penalty.md`](mission-elapse-penalty.md#the-four-character-bars).
+- 4 turns = 1 day. `RuleModel` 40 `Max Injury Time` is 100 turns, described in game as "25 days default".
+- [measured] A `TraitClass 6` trait reaches the character's stat aggregate. A merc carrying 2007 read `XpBonus -33` in her `MissionStart` aggregate, and nothing else on her carried XP. `InitBonus` cannot be checked this way because gear, implants and jobs also feed that aggregate.
+- Traits are processed in `TraitContext.MissionStart`. The other two contexts are `MissionVictory` and `CyberSurgery`.
+- [measured] A merc holding 2014 still came back from `ReadGameCharactersAvailableForMission` with an aggregate reading `SpecialCode 0`. Where the game enforces `BlockMissions` is [unverified]; the mod does not depend on it.
+- [unverified] Whether two `TraitClass 6` traits that carry the same stat column add in the aggregate or one of them wins. Nothing shipped stacks two of these traits, so the data holds no precedent.
+
+### Trait rows and their life cycle
+
+`GameCharacterTraitModel` columns: `Id, CharacterId, TraitTypeId, OptionId, IsWound, Description, CreatedTurn, ExpiresTurn, IsNew`. The model also carries the joined properties `TraitData`, `EffectData` and `MatrixEffectData`.
+
+- [measured] The model has a public parameterless constructor. A row built with `Activator.CreateInstance` inserts through `GameDb.InsertGameCharacterTrait`, which returns the new id.
+- [measured] The joins are filled by the reader, not by the insert. `ReadGameCharacterTrait(id)` returns the row with all three joins null. `ReadGameCharacterTraitsByCharacter(characterId)` returns the same row fully joined.
+- `SaveManager.ProcessTraits` runs `SELECT * FROM GameCharacterTrait WHERE ExpiresTurn != 0 AND ExpiresTurn <= ?` every turn. It deletes expired rows and logs `Timeline.Log.TraitExpired` ("The temporary {0} Trait has lapsed and no longer affects {1}."). `ExpiresTurn = 0` therefore means permanent.
+- [measured] An inserted row survived a save and reload, was absent from a different save slot, and was removed one turn after its `ExpiresTurn`.
+- `GameDb` is a live working database and a save slot is a snapshot of it (`DataLayer.CreateSnapshot` and its variants). A row the mod writes persists exactly when the player's own progress does.
+- [measured] Inserts and deletes made from inside a `GameDb.InsertGameScore` postfix completed without errors, while the game's own insert was still unwinding.
+- There is no static `GameDb`. A hook that is not on `GameDb` reaches it through `__instance` (SaveManager) → `.Dac` (`RPG.Core.GameManagerBase`) → `RPG.Saving.DataLayer` → `.GameDBI`.
+
+### Mission-completion score rows
+
+- [measured] A completed mission writes, in order, one `GameScoreModel` row with `ScoreTypeId 19 MissionCompleteByCharacter` per deployed merc, then one `ScoreTypeId 16 MissionComplete` row with `CharacterId 0`.
+- [measured] In the reference save, 92 turns carry a type-16 row and 92 carry type-19 rows, with no orphans. Two-room missions still produce one type-16 row.
+- `ScoreTypeId 20 MissionCompleteByCharacterUnseen` is per character and conditional on not being spotted.
+- Types 16 and 19 carry the real game turn in `GameTurn`. Types 15 and 18 carry the mission turn.
+- Score rows carry no mission identity (`ScoreTargetId 0`, empty `ScoreKey`).
+- [measured] A lost mission writes no score rows. The last row is `StartRoom`, followed by `ProcessGameOver gameOverWin=False`.
+- `Status` is transient at mission end. [measured] Mercs read `Status 12 Extracted` on the victory screen and `Status 1` a few reads later. Whether type 19 means "deployed" or "survived" is [unverified].
+
+### Wound Resist
+
+- The Triage Clinic is `ModuleClassId 18`, module types 71–74. It grants `InjuryTime` -25/-30/-35/-40 and `WoundRes` 10/15/20/30 by upgrade level.
+- `WoundRes` is an integer column on both `EffectModel` and `SafehouseModuleModel`.
+- `EffectClassification` values are explicit enum values, not declaration order. They were read from the metadata `Constant` table and cross-checked against effect 10507 (classification 12):
 
 | | | | | |
 |---|---|---|---|---|
@@ -398,159 +71,204 @@ of the metadata `Constant` table:
 | 6 JobBonus | 7 Cyberware | 8 TalentBoosterDebuff | 9 ArmorEffect | 10 TalentDebuff |
 | 11 LoadedProgram | 12 MutationTempTrait | 13 MissionAdvantageBuff | 14 MissionAdvantageDebuff | 15 MutationTempTraitFace |
 
-Cross-checked two ways: trait 2009's effect 10507 reads classification 12, which
-this table calls `MutationTempTrait` and §2 documents as such; and
-`EffectSpecialCode` decoded the same way gives `BlockMissions = 90`, matching
-`_id_constants.csv`. Declaration order gives 12 = `MissionAdvantageBuff`.
+[measured, `EffectModel`] 144 effects carry a non-zero `WoundRes`:
 
-**The 144 WoundRes-bearing effects:**
-
-| Class | Rows | Range | |
-|---|---|---|---|
-| 1 TalentBuff | 9 | -50..+50 | limited-time |
-| 3 Backstory | 40 | -50..+25 | always-active |
-| 4 Wound | 4 | -20..-10 | limited-time |
-| 7 Cyberware | 64 | -25..+25 | always-active |
-| **9 ArmorEffect** | **22** | **+3..+30** | **always-active; excluded until 2026-09-10, counted since** |
-| 10 TalentDebuff | 1 | -25..-25 | limited-time |
-| 12 MutationTempTrait | 4 | -100..+50 | limited-time |
-
-**Cyberware runs negative, and that is the mechanic: 51 of the 83 implants that
-carry WoundRes are negative.** Measured across the reference save's roster, from
-implants alone:
-
-| | | | | |
-|---|---|---|---|---|
-| Pixel -39 | Jackknife -38 | Bracket -31 | Panther -30 | Bubbles -27 |
-| Rhino -27 | Static -20 | Seraph -18 | Sentry -15 | Gyre -15 |
-| Silent -15 | Tractor -11 | Sparklight -10 | | |
-
-Against a 25% base this crew rolls 35-64% before armour. A maxed Triage Clinic is
-+30 and pulls a 25% base to the floor.
-
-**Armour counts since 2026-09-10** (David's ruling). This section used to say
-"Gear is kept out so armour cannot buy the penalty back", per the 2026-08-30
-ruling; that ruling is reversed. ArmorEffect rows run +3..+30, so armour now
-offsets cyberware.
-
-**The sources, and the readers:**
-
-| Source | Reader | Note |
+| Class | Rows | Range |
 |---|---|---|
-| Safehouse modules | `ReadGameSafehouses()` | Global, read once per mission |
-| Traits | `ReadGameCharacterTraitsByCharacter(Int64)` | Already in hand from Phase B |
-| Character effects | `ReadGameCharacterEffects(Int64)` | |
-| Implants | `ReadGameCharacterImplants(Int64)` | The dominant term, and negative |
-| Job nodes | `ReadGameCharacterJobNodes(Int64)` | **0 of 1,525 shipped nodes carry WoundRes** |
-| Armour | `ReadGameArmorByCharacter(Int64)` | One row, not a list. Added 2026-09-10 |
+| 1 TalentBuff | 9 | -50..+50 |
+| 3 Backstory | 40 | -50..+25 |
+| 4 Wound | 4 | -20..-10 |
+| 7 Cyberware | 64 | -25..+25 |
+| 9 ArmorEffect | 22 | +3..+30 |
+| 10 TalentDebuff | 1 | -25 |
+| 12 MutationTempTrait | 4 | -100..+50 |
 
-**Armour, read.** `GameArmorModel` [measured, interop property tables] carries
-`ArmorTypeId` and `GameEffectId`, and joins `ArmorData` (`ArmorModel`, with
-`ArmorEffectId`), `EffectData` and `EffectDataCrafted` (both `EffectModel`).
-Two effects per armour row are counted:
+- Cyberware mostly lowers the stat. 51 of the 83 implants that carry `WoundRes` are negative. [measured, reference save] Every merc on the roster sits between -10 and -39 from implants alone.
+- 0 of the 1,525 shipped job nodes carry `WoundRes`.
+- `GameArmorModel` [measured, interop property tables] carries `ArmorTypeId` and `GameEffectId`. It joins `ArmorData` (`ArmorModel`, with `ArmorEffectId`), `EffectData` and `EffectDataCrafted`.
+- `GameSafehouseModel` has three read paths for Wound Resist: `GetWoundRes`, `ModuleSummary.WoundRes`, and summing `Modules[].ModuleData.WoundRes`. [measured] A dumped row read `GetWoundRes 0` because its `Modules` dictionary was not populated on that read path.
 
-- the armour's own: `EffectData`, else `ArmorData.ArmorEffectId`, else
-  `DataDb.ReadArmor(ArmorTypeId).ArmorEffectId`, then `ReadEffect`;
-- the crafted upgrade: `EffectDataCrafted`, else `ReadEffect(GameEffectId)` when
-  `GameEffectId` is non-zero. [fitted] `GameEffectId` is an `EffectModel` id:
-  it exists on no other model, and `EffectDataCrafted` is the only
-  `EffectModel` join beside it.
+## Hard Mode fatigue subsystem
 
-[unverified] What `ReadGameArmorByCharacter` returns for a merc with no armour.
-Null and a row with `ArmorTypeId 0` both read as `armor 0`. A throw reads as
-`armor UNREADABLE` with one warning, so if unarmoured mercs show that, the
-reader throws on a miss (the by-id pattern in `docs/gotchas.md`) and the
-warning can be ignored for them. That the returned row is the equipped armour
-is also [unverified]; `IsEquipped` is not gated on because it is a UI-side
-property that may not be filled on a database read.
+- Gate: `[Slices] Fatigue` in `ckf.hardmode.cfg`.
+- Settings: `ckf.hardmode.d/fatigue.json`, described by `schema/fatigue.schema.json`.
+- This subsystem writes to the save. It inserts `GameCharacterTrait` rows and adds no table, column or side file. It deletes nothing: `Fatigue.cs` has no delete path at all.
+- The game handles expiry. Uninstalling the mod leaves at most a few live traits, which lapse on schedule.
+- The mod never filters `ReadGameCharactersAvailableForMission`. Blocking the roster is left to the engine's `SpecialCode 90`, which keeps the game's story-mission override. [measured] A merc logged as already Off-Duty was deployed anyway on a story-required mission.
 
-Armour points go into the total and are reported as `gear +N` on the roll line,
-not split into permanent/timed. An ArmorEffect arriving through another reader
-counts the same way.
+### Three-tier track
 
-**Correction, 2026-09-10.** This section used to say: "All four per-character
-models carry a joined `EffectData`, as `GameCharacterTraitModel` does, so no
-`DataDb` hop and no id lookup is needed." The property exists on all four
-(`CoreRPG_v1.dll` property tables), but only the trait reader was ever shown to
-fill it (RUN44). The other three were assumed, and `AddRows` skipped a null
-`EffectData` without logging anything.
+Each tier has a configurable trait id. A tier is a position in
+`Fatigue.Options.Tiers` and `Options.TraitIds`, not a separate branch in the
+code: the trait scan, grant, double-fire guard, and distinctness validation all
+walk those arrays. Defaults belong to
+[`config-reference.md`](config-reference.md).
 
-**RUN63** [measured] is the first live run of this path. Turn 1248, PL 15, four
-mercs (5 Stiletto, 22 Apex, 27 Sin, 30 Lance). Every roll line reads `[57 base,
-no resist]`, there are no reader warnings, and the safehouse reads 0 on all three
-paths. David reports those mercs carry Wound Resist sources. The log cannot show
-which reader lost them: a reader that returned no rows, rows whose effects carry
-no `WoundRes`, and rows with a null join all printed the same `no resist`.
-[fitted] The join is null on the effect, implant and/or job-node readers. The
-next run with the fix confirms or rules this out; see "Reading the roll line"
-below.
+- **Every eligible merc rolls once per completed mission.** A merc who fails moves up one tier from the highest they already carry — nothing to tier 1, tier 1 to tier 2, tier 2 to tier 3.
+- **Moving up is not automatic.** The same `chancePercent` and the same Wound Resist subtraction decide a first grant and a move up a tier. There is no unconditional escalation.
+- **The tiers stack.** A grant never removes the tier below. Each row carries its own `ExpiresTurn` counted from the mission that granted it, so the lower tiers lapse first.
+- **A merc already on the top tier is not rolled**, because there is nowhere above it. They are counted as `already at the top of the track` in the summary.
+- **One chance curve and one duration curve serve every tier.** The number that grants tier 1 is the number that moves a merc to tier 3, and the duration written on a tier-3 row is the one written on a tier-1 row. Beyond the trait id there are no per-tier tunables.
+- **One pool, one clamp.** Everybody eligible to roll is in one pool whatever tier they are on, and `minAffected`/`maxAffected` bound the *total* number of grants the mission makes. A floor can therefore force a move up a tier, and a ceiling can spare one.
+- The tier a merc is on is the **highest** matching `TraitTypeId` they carry, not a count, so a merc holding tier 3 but not tier 2 is read as being at the top of the track and is never walked back down.
 
-**The fix.** A row without its joined `EffectData` has its effect read from
-`DataDb` (`GameDb.dataDb`), cached per mission:
+### Hooks
 
-| Source | Effect id comes from | Then |
-|---|---|---|
-| trait | `TraitData.EffectTypeId`, else `ReadTrait(TraitTypeId)` | `ReadEffect(id)` |
-| effect | the row's `EffectTypeId` | `ReadEffect(id)` |
-| implant | `ImplantData.ImplantEffectId`, else `ReadImplant(ImplantTypeId)` | `ReadEffect(id)` |
-| job | `NodeData.NodeEffect1Id`, else `ReadJobNode(JobNodeId)` | `ReadEffect(id)` |
+- A postfix on `GameDb.InsertGameScore(GameScoreModel)` does the work:
+  - **Phase A.** On a type-19 row it adds `CharacterId` to the pending roster, deduplicated. On the first such row it reads the mission's power level.
+  - **Phase B.** On a type-16 row it resolves the mission.
+- A type-19 row on a different turn while a roster is pending drops the session state.
+- A postfix on `ViewModel_GameManagement.LoadGame` / `.LoadGameSlot` clears session state. Both fire on one load, so the clear line appears twice.
 
-A joined `EffectData` is still used first when present. Column names are
-[measured] off the interop property tables. That `ReadImplant(long)` and
-`ReadJobNode(long)` key on `ImplantTypeId` and `JobNodeId` is [unverified]; a
-wrong key or a thrown reader shows as `UNRESOLVED` on the roll line.
+### Resolution (Phase B, once per mission)
 
-**Reading the roll line.** Every roll line now ends with what each reader
-returned:
+1. **Solo exemption.** If the roster holds one distinct `CharacterId`, nothing happens: no roll, no row. The log line reads `Fatigue: mission complete at turn N with one merc deployed (character X). Solo missions are exempt: no roll, no escalation, nothing written.`
+2. **Double-fire guard.** The key is the turn plus the sorted roster. On a repeat key, the mod asks the database for a row carrying *any* tier's trait with `CreatedTurn` equal to that turn on any roster merc.
+   - Rows present: the mission is not resolved again.
+   - Rows absent: the save was rolled back, so the mission resolves again. The deterministic rolls give the same result.
+3. **Read** each merc's traits with `ReadGameCharacterTraitsByCharacter` and take the highest tier they hold. A trait list that could not be read all the way through, or a row with an unreadable `TraitTypeId`, skips that merc rather than granting on them.
+4. **Skip** a merc already on the top tier, and a merc the curves name no `chancePercent` for.
+5. **Pool.** One pool of everyone who reached this step with a tier above them, whatever tier they are on.
+6. **Roll** each pool merc against their own threshold (below).
+7. **Clamp** the total grant count to `[minAffected, maxAffected]`.
+8. **Grant** tier `held + 1` to the final failure set, leaving the tier below in place.
+
+Step 3 reads before step 8 writes, so "how far up the track were they when they deployed" needs no `CreatedTurn` arithmetic and no deploy-time hook. Rows are stamped `CreatedTurn = GameTurn` of the type-16 row and `ExpiresTurn = GameTurn + durationDays × 4`. The other columns are written as `IsWound 0`, `IsNew 1`, `OptionId 0` and `Description ""`. All nine `Set` calls are checked and a row with any miss is not inserted.
+
+A merc carrying more than one row of one tier's trait is reported and left alone: the tiers stack, so a duplicate row is a trait held twice and it expires by itself.
+
+### Power level and the curves
+
+- **Which level.** The power level is `ReadGameMissionActive().PowerLevel`: the scaled level, including the lift from [`power-level.md`](power-level.md). It is not `PowerLevelUnscaled`. Phase A reads it and Phase B retries.
+- **Unreadable level.** If both reads fail, each curve returns its lowest anchor, and the log says so once.
+- **Anchors.** One required top-level `byPowerLevel` maps a power level to `chancePercent`, `durationDays`, `minAffected` and `maxAffected`, for all three tiers. An optional `knight.byPowerLevel` carries `chancePercent` and `durationDays` only.
+- **Interpolation.** Each field interpolates linearly over only the anchors that name it, rounding away from zero. Below the lowest anchor and above the highest, the nearest anchor holds. One anchor gives a flat value.
+- **The Knight.** The Knight is identified by `GameCharacterModel.IsKnight`. Where his curve names a field it beats the general curve for that field. He is inside the general floor and ceiling like anyone else, so a `minAffected` or `maxAffected` on a Knight anchor is warned about by name.
+- **Missing values.** A field that no applicable anchor names has no value:
+  - No `chancePercent`: the merc is not rolled for, at any tier.
+  - No `durationDays`: nothing is granted to anyone, because a row with no expiry would be permanent.
+
+  Both cases are logged once, and those mercs are counted separately in the mission summary as `not resolved for want of a configured value`.
+  - No `minAffected` means no floor (a warning).
+  - No `maxAffected` means no ceiling. `maxAffected: 0` is a ceiling of zero, and since every grant goes through the one clamp, it stops the whole mission's fatigue.
+- **Validation at load.** The feature stays off if any of these fail, and the log names the key:
+  - `byPowerLevel` must exist and name `chancePercent` and `durationDays`. A value on the Knight's curve does not satisfy either requirement: his curve is consulted for him and falls through to the general one for everybody else, so a chance named only there leaves every other merc without one.
+  - Anchors are checked: chance 0–100, `durationDays` ≥ 1, counts ≥ 0, `max ≥ min`, and no two keys for one level (`"1"` and `"01"`).
+  - A sweep over PL 1–20 rejects a curve whose ceiling crosses below its floor.
+  - Each tier's trait id must be non-zero, positive, distinct from the other two, and below 900000 (the id range reserved for `RowClone`).
+- **Unknown keys.** An unknown key anywhere in the file refuses the file, and matching is case-sensitive.
+- **The retired 4.0 blocks.** `runningEmpty` and `offDuty` still parse, held as raw JSON, so a 4.0 file loads instead of being refused for keys that map to no member. Nothing reads them, `Fatigue.LegacyKeys` names whichever a file carries, and their curves do not stand behind the current one — a 4.0 file names no top-level `byPowerLevel`, so `Validate` refuses it and says what to do. `offDuty.clearsRunningEmpty` went with them, along with the `Revoke` method it drove.
+- **Retired gate.** An `"enabled"` key is reported as retired (`Slices.ReportRetiredGate`).
+
+### The roll
+
+- **Threshold.** `chance − WoundResist`, floored at `min(woundResist.minChancePercent, chance)` and capped at 100. A configured chance of 0 means no roll, whatever the resist.
+- **Roll.** `Fatigue.StableRoll` is `splitmix64(GameTurn, CharacterId) mod 100`, with no salt. The same turn and merc always give the same roll. `deterministicRolls: false` switches to an unseeded `Random`. [measured] Rolls predicted offline before a live run matched: turn 1388 gave 27, 61 and 97 for characters 1, 16 and 19. Changing the constants changes every save's future rolls.
+- **Clamp.** Ranking is by distance from each merc's own threshold. Short of `minAffected`, the closest passes are made to fail. Past `maxAffected`, the closest fails are spared. Ties break on character id.
+  - `minAffected` is capped at the pool size.
+  - The Knight is inside the clamp.
+  - Nothing is exempt from it. A merc the floor pulls in moves up a tier like any other failure, and a merc the ceiling spares moves nowhere.
+
+### Wound Resist mitigation (`woundResist.enabled`)
+
+A merc's total Wound Resist is subtracted from their chance point for point, at every tier. Sources:
+
+| Source | Reader |
+|---|---|
+| Safehouse | `ReadGameSafehouses()`, once per mission. `GetWoundRes`, then `ModuleSummary.WoundRes`, then the module sum, with a warning when they disagree |
+| Traits | `ReadGameCharacterTraitsByCharacter` |
+| Character effects | `ReadGameCharacterEffects` |
+| Implants | `ReadGameCharacterImplants` |
+| Job nodes | `ReadGameCharacterJobNodes` |
+| Armour | `ReadGameArmorByCharacter`. One row. Counts the armour's effect and the crafted effect |
+
+- **Missing joins.** A row whose joined `EffectData` is null has its effect looked up in `DataDb` and cached per mission:
+  - trait: `TraitData.EffectTypeId` or `ReadTrait`
+  - effect: `EffectTypeId`
+  - implant: `ImplantData.ImplantEffectId` or `ReadImplant`
+  - job node: `NodeData.NodeEffect1Id` or `ReadJobNode`
+  - armour's own effect: `EffectData`, else `ArmorData.ArmorEffectId`, else `ReadArmor(ArmorTypeId)`
+  - armour's crafted effect: `EffectDataCrafted`, else `ReadEffect(GameEffectId)`
+- **Duplicates.** All readers share one set of seen effect ids, so an effect mirrored into two tables counts once. The first repeat is logged.
+- **Log split.**
+  - Armour, and any classification-9 effect, is reported as `gear`.
+  - Other effects are split into `timed` and `permanent`. An effect is `timed` if its classification is in `Fatigue.TimedClasses` (1, 2, 4, 8, 10, 12, 13, 14, 15), or if it comes from a trait row whose `ExpiresTurn` is non-zero.
+  - The split is logged only. All parts count toward the total.
+
+A merc's own fatigue traits reach the trait reader like any other trait row, and are classification 12, so they count as `timed`. None of the three shipped effect rows carries a non-zero `WoundRes`, so carrying a tier changes nothing about the next roll's resist.
+
+Each roll line ends with the arithmetic and a per-reader summary, for example:
 
 ```
 [57 base - -27 resist (permanent -27); read trait 6, effect 0, implant 3 (2 with WoundRes, 3 via DataDb), job 14]
 ```
 
-`via DataDb` counts rows whose join was null and whose effect was looked up;
-`name no effect` counts looked-up rows whose content row points at effect 0
-(normal for job nodes, which mostly grant talents); `UNRESOLVED` counts rows
-whose join was null and whose lookup failed;
-`UNREADABLE` means the reader threw or returned null; `PARTIAL` means it stopped
-part way. The first lookup per reader also logs `returned rows with no joined
-EffectData … Said once per reader`, which answers the join question directly.
+| Tag | Meaning |
+|---|---|
+| `via DataDb` | The join was null and the effect was looked up |
+| `name no effect` | The content row points at effect 0 |
+| `UNRESOLVED` | The join was null and the lookup failed |
+| `UNREADABLE` | The reader threw or returned null |
+| `PARTIAL` | The reader stopped part way |
 
-All five readers thread one `seen` union, so an implant or armour effect
-mirrored into the effect table counts once. (Until 2026-09-10 this paragraph
-opened "Gear is excluded by dropping classification 9 wherever it appears";
-that is no longer done.) The first such repeat is
-logged, which is what tells a session whether a grant writes both a
-`GameCharacterTrait` and a `GameCharacterEffect` row (§1).
+The first lookup per reader also logs `returned rows with no joined EffectData`.
 
-The safehouse total is read **once per mission**, so a Triage Clinic built or
-upgraded mid-session takes effect. It has three read paths — the dumped
-`GameSafehouseModel` row reads `GetWoundRes 0` because its `Modules` dictionary
-was not populated on that read path — so the mod prefers `GetWoundRes`, falls
-back to `ModuleSummary.WoundRes`, then to summing `Modules[].ModuleData.WoundRes`,
-and warns when the three disagree.
+### Logging
 
-**Timed and always-active** separate on two axes, both used:
-`EffectClassification` (talent effects, wounds and mutation temp traits are
-limited-time; cyberware, backstory and armour always-active) and
-`GameCharacterTraitModel.ExpiresTurn` (non-zero timed, zero permanent), the
-game's own predicate, which overrides the classification for a trait row. Both
-halves count toward the total; the split is logged, not configured.
+- `logGrants` switches the per-mission head line and the per-merc lines. The head line names the tier chain (`Tiers: 2007 -> 2009 -> 2014`). Each merc line names the tier they were on, their roll against their threshold, and the tier and trait they moved to.
+- The summary counts grants per tier, then `clear` and `already at the top of the track`, plus `not resolved for want of a configured value` and `FAILED TO WRITE` where those occur.
+- On a successful load the subsystem logs `Fatigue: ACTIVE, and this subsystem WRITES TO YOUR SAVE.` at Warning.
+- A `ReadGameCharacter` failure (throw or null) is logged once. It costs the Knight check and merc names.
 
-## 10. Offline checks
+### Offline checks
 
-`tests/fatigue/` holds checks against the built DLL — the rolls, the curve,
-the clamp, the shipped config, the mitigation arithmetic, the resist aggregator,
-and (Part 5, 2026-09-10) the solo exemption and the `DataDb` lookup. Part 3's
-missions carry a second, already Off-Duty merc so they are not solo; that merc
-writes nothing, and Parts 1-3 give the same results with and without the solo
-change.
+`tests/fatigue/` checks the built DLL by reflecting over `Fatigue`'s private
+members. It derives curve expectations from the config on disk, reads tier ids
+from `Options.TraitIds`, and covers highest-tier-held scanning, stacking, the
+shared clamp, and pairwise trait-id validation. [unverified] No clean run after
+that harness rewrite is recorded here; check `TASKS.md` before treating the
+harness as current evidence.
 
-**State of the harness, 2026-09-10** [measured]: 14 checks fail and Part 4
-crashes (`TargetParameterCountException` on `Load`) **before any of this day's
-changes**. They assert the pre-retune shipped curve (PL 1 chance 10, now 15),
-the flat keys removed 2026-09-07, and `Load(path)`'s old signature. They test
-stale fixtures, not regressions. `Program.cs` now reports a Part 4 crash as one
-failure instead of ending the run. Part 2 reads `/home/claude/work/ckf.hardmode.fatigue.json`,
-which is the `fatigue` section of the live `BepInEx\config\ckf.hardmode.json`
-extracted on its own (it was taken from the repo copy under
-`mods/CKFHardMode/defaults/`, deleted 2026-09-11; the two were identical).
+## Measured runtime coverage
+
+- [measured, `Logs/PlayedLogB.log` turn 1464] Non-trait readers did not fill
+  joined `EffectData`: implants returned 6 of 7 unjoined, job nodes 7 of 41,
+  and armour 1 of 1. The DataDb fallback carried them.
+- [measured, `Logs/PlayedLogB.log` turn 1464] Wound Resist reached the roll and
+  the arithmetic held: three chromed mercs subtracted -15, -16, and -6
+  (`permanent`, from implants) from base chances of 24 and 60, producing
+  thresholds of 39, 76, and 66. An unchromed merc used the base 60 with `no
+  resist`; nothing logged `UNRESOLVED`.
+- [measured, `Logs/PlayedLogB.log` turn 1464] Four tier-0 mercs resolved: three
+  received tier 1 (trait 2007) and one remained clear. The tier chain logged as
+  `2007 -> 2009 -> 2014`; the Knight's curve applied only to him (24% versus
+  60%, 10 days versus 13).
+
+## Open questions
+
+- [unverified] What `ReadGameArmorByCharacter` returns for an unarmoured merc.
+  Null or `ArmorTypeId 0` both show `armor 0`; a throw shows `armor UNREADABLE`.
+  Also unknown: whether the row it returns is equipped; `IsEquipped` is not
+  checked.
+- [fitted] `GameArmorModel.GameEffectId` is the crafted upgrade's `EffectModel` id.
+- [unverified] `ReadImplant(long)` and `ReadJobNode(long)` key on `ImplantTypeId` and `JobNodeId`.
+- [unverified] Whether a grant also writes a `GameCharacterEffect` row. The
+  first duplicate-effect log line would answer it.
+- [unverified] Where the game enforces `BlockMissions`: the planning screen or
+  a read of `GameCharacterEffect`.
+- [unverified] The solo exemption in live play; it has only been checked
+  offline.
+- [unverified] The load hook's target was inferred from the interop type table. A `Fatigue: a save was loaded` line in a log confirms it.
+- [unverified] Live move-up, stacking, top-tier skip, and clamp paths. The
+  measured mission started every merc at tier 0 and its three natural failures
+  already lay inside `min 1, max 5`.
+- [unverified] Whether movement penalties from tier-1 and tier-2 effect
+  overlays reach the in-mission character and stack. See
+  [`limit-break-traits.md`](limit-break-traits.md#what-the-mod-overlays).
+
+## Related
+
+- [`limit-break-traits.md`](limit-break-traits.md)
+- [`power-level.md`](power-level.md)
+- [`mission-elapse-penalty.md`](mission-elapse-penalty.md)
+- [`config-reference.md`](config-reference.md)

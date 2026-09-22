@@ -25,20 +25,12 @@
     "Edit a cell to replace it. Set a cell to -1, or leave the column out, to",
     "keep the game's own number for that power level.",
     "",
-    "TO VERIFY, READ THE PLUGIN'S OWN LOG, NOT _reward_curve.csv. CKF Data Dump",
-    "loads first - 'ckf.datadump' sorts before 'ckf.hardmode' - and its sweep",
-    "runs during that load, so the CSV records the stock curve whether this",
-    "subsystem patched or not (measured: sweep at log line 4081, patch at 4548).",
-    "LogEffectiveCurve calls the three functions back through the patch instead.",
-    "",
-    "KNOWN DISAGREEMENT IN THE SHIPPED ROWS. RewardCurve.cs:9-10 describes the",
-    "stock table as 2800 credits and 500 XP at PL 10 and the same at PL 25, while",
-    "row PL 10 of this file carries 1250 / 515 / 70 and rows 11-25 carry",
-    "2800 / 500 / 70. The two cannot both be the game's value for PL 10. Neither",
-    "has been re-measured; treat the shipped rows as unverified until a dump of",
-    "RulesUtil settles it.",
-    "",
-    "Generated from schema/rewardcurve.schema.json."
+    "TO VERIFY, READ THE PLUGIN'S OWN LOG (logEffectiveCurve), NOT",
+    "_reward_curve.csv. CKF Data Dump loads first - 'ckf.datadump' sorts",
+    "before 'ckf.hardmode' - and its sweep runs during that load, so the CSV",
+    "records the stock curve whether this subsystem patched or not",
+    "[measured]. LogEffectiveCurve calls the three functions back through the",
+    "patch instead."
   ],
 
   "uiDoc": [
@@ -58,7 +50,7 @@
       "path": "Slices.RewardCurve", "in": "cfg", "type": "bool",
       "default": true, "ui": "form",
       "label": "Enable Baseline Reward Curve",
-      "doc": "Slice toggle. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice never enters RulePlan. THIS IS THE GATE. Slices.Init binds every key in Binds.All (Slices.cs) and is called from Plugin.Load (Plugin.cs), above the master-switch bail-out, so BepInEx writes the line whether the mod is on or off. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg is 3,238 bytes carrying [General] and [Slices] and all 43 keys, and check_schema.py --game printed \"0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s).\" at rc 0 [measured, Logs\\gates-phase1b.txt]. The tag on this sentence used to sit before that run: it read \"[measured 2026-09-13]\" when what had been measured was the C#, not the file. The file has now been measured too. CORRECTION, 2026-09-13: this doc used to say \"the section's own \\\"enabled\\\" field is still on disk and is still the gate the plugin reads\" and \"NOT ON DISK ... check_schema.py reports it MISSING\". Both were true when written and are false now. The section's \"enabled\" field is deleted from this schema and the gate is this key. The RETIRED KEY IS STILL PARSED, into a report-only bool? RetiredEnabled ([JsonPropertyName(\"enabled\")]), because four subsystems refuse a whole section on an unknown key (ConfigDoc.ReadSection, ConfigDoc.cs) and an upgraded document would otherwise switch OFF. Slices.ReportRetiredGate (Slices.cs) names it: Warning normally, Error when the retired value is false and this key is not. Nothing branches on it -- grep RetiredEnabled finds one declaration and one report call per subsystem and no read. It is a migration report, not a second gate.",
+      "doc": "Slice toggle. It lives in ckf.hardmode.cfg because a gate cannot live inside the file it gates, and the .cfg is parsed before anything else loads. Slices.Init binds every [Slices] key above the [General] Enabled bail-out, so BepInEx writes the line even when the mod is off. A key that cannot be read is reported at Error and treated as on. Off: the subsystem logs why and does nothing this launch. The retired \"enabled\" key inside the subsystem's JSON file is still parsed (RetiredEnabled) so that Slices.ReportRetiredGate can report it: a Warning, or an Error when it is false and this key is not. Nothing branches on it.",
       "uiDoc": "Turn this off and this part of the mod does nothing; the game uses its own values. The master switch on the first page turns off everything at once."
     },
     {
@@ -74,7 +66,7 @@
       "label": "Reward tiers by power level",
       "uiDoc": "One row per power level. Each column replaces one of the three baseline numbers at that level, rounded to a whole number. Only the levels named here are touched; a level with no row keeps the game's own values. Nothing is patched at all if every cell is left empty or negative.",
       "doc": "One row per PowerLevelUnscaled. Each column replaces the return value of one RulesUtil function at that level, rounded to a whole number. Only the levels named here are touched; a level with no row keeps the game's own three values. Nothing is patched at all if every cell is left absent or negative.",
-      "absent": "A column set to -1 or any negative value, or left out of the row, keeps the game's own number for that function at that power level; the plugin's own initialiser is -1.",
+      "absent": "A column set to -1 or any negative value, or left out of the row, keeps the game's own number for that function at that power level.",
       "row": [
         { "name": "PowerLevel", "type": "int",   "range": [0, 25] },
         { "name": "Payment",    "type": "float", "format": "keep" },

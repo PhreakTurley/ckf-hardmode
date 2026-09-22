@@ -235,8 +235,9 @@ def anchor(subsystem):
 def sidecar_unit(sch):
     """file#section, or the bare filename when a schema owns a whole file.
 
-    Five subsystems share ckf.hardmode.json now, so the filename alone no
-    longer says where a key lives. The section is the useful half.
+    A schema that declares a section shares its file with others, so the
+    filename alone does not say where a key lives; the section is the useful
+    half.
     """
     t = sch.get('targets') or {}
     if not t.get('json'):
@@ -307,9 +308,8 @@ def render_enable_chain(sch, out):
                       en['json'], name))
         out.append('')
     elif en.get('json'):
-        out.append('**One gate.** 3.0 collapsed the chain: the `.cfg` key that '
-                   'used to gate this subsystem before its settings were read '
-                   'is gone, and `"%s"` in its own section is the whole of it. '
+        out.append('**One gate.** `"%s"` in its own section is the whole '
+                   'chain. '
                    'One consequence worth holding: a `%s` that cannot be read '
                    'costs this subsystem its switch as well as its values, and '
                    'the log says which of the two it is rather than implying '
@@ -328,12 +328,9 @@ def render_enable_chain(sch, out):
 
     if name != 'General':
         out.append('Outside every chain in this document sits `[General] '
-                   'Enabled`, which since 3.0 is the only key in '
-                   '`ckf.hardmode.cfg`. `general.schema.json` records that its '
-                   'bail-out sits above every subsystem init in '
-                   '`Plugin.Load()`, and that it used to sit underneath — which '
-                   'meant `Enabled = false` still let ModelRules rewrite every '
-                   'row and PowerLevelCap overwrite every calculation.')
+                   'Enabled`, the master switch in `ckf.hardmode.cfg`. Its '
+                   'bail-out in `Plugin.Load()` sits above every subsystem '
+                   'init, so `Enabled = false` stops every subsystem.')
         out.append('')
 
 
@@ -602,10 +599,8 @@ def render(schemas):
                'declares the subsystem `Progression`, so it sorts last under '
                'its filename, not under its name.')
     out.append('')
-    out.append('This document is the single destination for the prose that '
-               'used to live as `//` comments and `_readme` arrays inside the '
-               'five sidecars. A fact that is '
-               'not here is not in the schema either.')
+    out.append('This document is the single destination for the settings '
+               'prose. A fact that is not here is not in the schema either.')
     out.append('')
 
     total_fields = sum(len(s['fields']) for _, s in schemas)

@@ -4,30 +4,19 @@
 // a factory method with no table behind them. This exposes those three fields
 // per MissionTypeId and lets you overwrite them.
 //
-// TEAM POWER LEVEL IS NOT DONE HERE — SEE THE RULES FILE
-// -----------------------------------------------------
-// An earlier version of this file scaled the Team Power Level a solo-hack
-// mission awards, by bracketing the victory screen's power-level step to
-// attribute an otherwise context-free call on GameDifficultyModel. That is all
-// gone, because the game already separates these missions itself.
-//
-// MissionPowerLevelModel holds 63 rows: three ActionClass bands x 21 relative
-// power levels, and the bands are exactly x2 apart on every row —
+// TEAM POWER LEVEL IS NOT DONE HERE — SEE Progression
+// ----------------------------------------------------
+// The game already separates mission kinds for Team PL.
+// MissionPowerLevelModel is three ActionClass bands x 21 relative power
+// levels, and the stock bands are exactly x2 apart on every row [measured]:
 //
 //     ActionClass 1 = story missions      full rate
 //     ActionClass 2 = proc-gen missions   half
 //     ActionClass 3 = solo hack missions  quarter
 //
 // (story-driven solo hacks score as class 1, which is intended). So changing
-// what a hack job awards is a data edit against class 3 in
-// ckf.hardmode.rules.json, with no patch, no call-ordering assumption and
-// nothing to verify at runtime:
-//
-//     { "model": "MissionPowerLevelModel", "where": { "ActionClass": 3 },
-//       "multiply": { "PowerLevelFraction": 0.5 } }
-//
-// A rule beats a hook whenever the game has already modelled the distinction
-// you want. It had.
+// what a hack job awards is a per-cell edit to the class 3 rows of
+// "override" in teampl.json, applied by Progression, with no hook here.
 //
 // HOW IT INTERVENES
 // -----------------
@@ -39,28 +28,22 @@
 // clamps. See docs/mission-rewards.md.
 //
 // The fields are BonusPayment and BonusExperience, which are PERCENTAGES applied
-// to the base curve, and PowerLevelBonus. Observed shipped values: a contact
+// to the base curve, and PowerLevelBonus. Observed stock values: a contact
 // mission at +50 / +110, a safehouse raid at -100 / -75.
 //
 // ONE LEVER PER MISSION TYPE
 // --------------------------
-// Entries in the "missions" section of BepInEx/config/ckf.hardmode.json,
-// keyed by exact MissionTypeId. There is no pattern-bucket layer any more: the
-// PureCombatTypes / SoloHackTypes lists and their five bonus knobs were a
-// second way to set the same three fields, and they had already drifted —
-// the shipped cfg's PureCombatTypes had lost KillBoss and Kill3 relative to
-// the source default, so the live install classified those missions
-// differently from what the source said. See docs/deprecation-plan.md §7.2.
+// Entries in "missions" in ckf.hardmode.d/missions.json, keyed by exact
+// MissionTypeId. There is no pattern-bucket layer: a second way to set the
+// same three fields would drift from the first.
 //
-// The reward stack is now two layers with no overlap:
-// the "rewardcurve" section of ckf.hardmode.json sets the base per power
-// level, and the "missions" section adjusts one mission type.
+// The reward stack is two layers with no overlap: rewardcurve.json sets the
+// base per power level, and missions.json adjusts one mission type.
 //
-//   "missions": { "enabled": true, "missions": [ ... ] }
+//   { "_version": ..., "missions": [ ... ] }
 //
-// 3.0 moved the switch out of [MissionRewards] Enabled in ckf.hardmode.cfg and
-// into this section, beside the rows it gates. (This header used to say the
-// default was false. It is true; the schema is authoritative.)
+// The switch is [Slices] MissionRewards in ckf.hardmode.cfg; its default is in
+// the schema.
 //
 using System;
 using System.Collections.Generic;
@@ -79,29 +62,15 @@ namespace CKFHardMode
     {
         private static bool enabled;
 
-        // Exact MissionTypeId -> its own overrides, from
-        // the "missions" section of BepInEx/config/ckf.hardmode.json. The only
+        // Exact MissionTypeId -> its own overrides, from missions.json. The only
         // per-mission lever.
         private static readonly Dictionary<string, MissionOverride> ByType =
             new Dictionary<string, MissionOverride>(StringComparer.OrdinalIgnoreCase);
 
         public static void Init(Harmony harmony)
         {
-            // THE GATE IS READ FIRST, from ckf.hardmode.cfg. The "missions"
-            // section carries only the per-type overrides now.
-            //
-            // CORRECTION, 2026-09-13. This comment used to read "The section is
-            // read first now: it carries the switch as well as the overrides."
-            // The switch is back in ckf.hardmode.cfg as [Slices] MissionRewards
-            // (design.md section 3), and this gate is what reads it.
-            //
-            // This gate was MISSING for one revision on 2026-09-13: the
-            // "enabled" branch was deleted out of LoadOverrides and nothing was
-            // put here in its place, so this subsystem had no gate at all and
-            // ran unconditionally. Caught by comparing Plugin.Binds.g.cs's 42
-            // [Slices] keys against the keys the plugin actually reads --
-            // MissionRewards was the one declared key that neither the overlay
-            // file table nor any Slices.On call named.
+            // THE GATE IS READ FIRST, from ckf.hardmode.cfg. missions.json
+            // carries only the per-type overrides.
             if (!Slices.On("MissionRewards"))
             {
                 Plugin.Log.LogInfo(Slices.OffBecause("MissionRewards",
@@ -110,9 +79,9 @@ namespace CKFHardMode
                 return;
             }
 
-            // LoadOverrides still leaves `enabled` false when the section could
-            // not be read at all — which it says at Error rather than letting
-            // this read like someone turned it off.
+            // LoadOverrides leaves `enabled` false when the file could not be
+            // read at all, which it says at Error rather than letting this read
+            // like someone turned it off.
             LoadOverrides();
 
             if (!enabled) return;                    // LoadOverrides said why
@@ -130,15 +99,14 @@ namespace CKFHardMode
                 n += Patch(harmony, "RPG.Database.GameDb", "GetRowGameMissionRewardModel",
                            null, nameof(AfterGetRowMissionReward));
 
-            // n was accumulated and never read: a MissionFactory that could not
-            // be resolved produced a per-call LogWarning and no summary, so the
-            // log said "could not resolve" once and then looked normal.
-            // ModelRules and Plugin both check their patch counts; this does now.
+            // Check the patch count, as ModelRules and Plugin do: otherwise a
+            // MissionFactory that could not be resolved logs "could not resolve"
+            // once and then the log looks normal.
             if (n == 0)
                 Plugin.Log.LogError("MissionRewards: NOTHING HOOKED — not one patch took, on "
                     + "RPG.Database.MissionFactory.ProcessMissionRequest or on "
                     + "RPG.Database.GameDb.GetRowGameMissionRewardModel, so no per-type override "
-                    + "can fire and the \"missions\" section of ckf.hardmode.json has no effect "
+                    + "can fire and " + ConfigDoc.FileFor(ConfigDoc.Missions) + " has no effect "
                     + "this session. The warnings above name what could not be resolved.");
 
             // The two caches this file keeps — MissionType and OriginalQuantity
@@ -175,9 +143,8 @@ namespace CKFHardMode
         // never span the pair. Progression.PatchLoadHooks is the same code for
         // the same reason.
         //
-        // [measured] Both names really do fire, separately, on one load:
-        // Log17/Log18 line 4240-4241 and Run56 line 4417-4420 each show the
-        // Elapse and Fatigue load lines TWICE per load. So the pair is not
+        // [measured: Logs/Log18.txt] Both names really do fire, separately, on
+        // one load: the Elapse load line appears TWICE per load. So the pair is not
         // folded on this build, and ForgetSession runs twice per load. That is
         // idempotent — the second pass clears maps the first already emptied —
         // but it does mean two log lines per load, which is expected, not a
@@ -290,9 +257,9 @@ namespace CKFHardMode
                 // give one type a different number from its family.
                 //
                 // Tested for EMPTY, not null: Str returns "" for a missing
-                // member and never null, so the old `typeId == null` guard could
-                // not fire and a request carrying no MissionTypeId went on to
-                // look itself up under "".
+                // member and never null, so a null test could not fire and a
+                // request carrying no MissionTypeId would look itself up under
+                // "".
                 MissionOverride ov;
                 if (typeId.Length == 0
                  || !ByType.TryGetValue(typeId, out ov) || !ov.Active) return;
@@ -312,12 +279,10 @@ namespace CKFHardMode
             if (current == null) return;
 
             // Carried as double, not long. Forcing every field through Int64
-            // first truncated fractional targets: "x1.5" on a PowerLevelBonus
-            // holding 1 stored 2, "x0.4" stored 0 and deleted the bonus
-            // outright, "=1.5" stored 2, and a float column already holding 0.5
-            // read back as 0 — Convert.ToInt64 rounds halves to even — so any
-            // later multiply produced 0. Rounding now happens once, in Set, and
-            // only when the destination column is integral.
+            // first would truncate fractional targets (a float column holding
+            // 0.5 would read back as 0, so any later multiply produces 0).
+            // Rounding happens once, in Set, and only when the destination
+            // column is integral.
             double before;
             try { before = Convert.ToDouble(current, CultureInfo.InvariantCulture); }
             catch { return; }
@@ -366,8 +331,7 @@ namespace CKFHardMode
 
         // The "expose" half. Every mission is reported with the fields that
         // carry its reward, matched or not, so a type the missions file misses
-        // is a visible line rather than silence. This method used to contain no
-        // logging at all — the comment promised a report that was never written.
+        // is a visible line rather than silence.
         //
         // Bounded by a plain const counter: there is no [MissionRewards]
         // LogFirst key and the bind table is generated from the schema, so the
@@ -387,10 +351,9 @@ namespace CKFHardMode
                 // map there is no way to know whose objective a row belongs to.
                 //
                 // Empty, not null: Str returns "" for a missing member and never
-                // null, so the old `typeId != null` guard was always true and a
-                // mission carrying no MissionTypeId was filed under "". Such a
-                // row is rejected now — a key nothing can match is worse than no
-                // key, because it silently claims the row was understood.
+                // null. A mission carrying no MissionTypeId is not filed under
+                // "" — a key nothing can match is worse than no key, because it
+                // silently claims the row was understood.
                 var mid = Get(__result, "Id");
                 if (mid != null && typeId.Length != 0)
                 {
@@ -411,8 +374,8 @@ namespace CKFHardMode
                         + " pay=" + Fld(__result, "BonusPayment")
                         + " xp=" + Fld(__result, "BonusExperience")
                         + " pl=" + Fld(__result, "PowerLevelBonus") + " — "
-                        + (matched ? "an override in the \"missions\" section applies."
-                                   : "no entry in the \"missions\" section; left alone.")
+                        + (matched ? "an override in missions.json applies."
+                                   : "no entry in missions.json; left alone.")
                         + (missionsLogged == LogFirstMissions
                             ? $" ({LogFirstMissions} mission(s) reported — quiet from here.)"
                             : ""));
@@ -452,10 +415,9 @@ namespace CKFHardMode
         // ModelRules postfixes this same GameDb.GetRowGameMissionRewardModel
         // whenever a rule names that model, from a DIFFERENT Harmony instance
         // ('ckf.hardmode' vs 'ckf.hardmode.missionrewards'), and both write
-        // RewardQuantity. With no priority declared anywhere in the assembly the
-        // order was whatever Harmony happened to pick, and OriginalQuantity
-        // cached whichever value it saw FIRST for the rest of the session —
-        // stable, and half the time wrong.
+        // RewardQuantity. Without a declared priority the order is whatever
+        // Harmony picks, and OriginalQuantity caches whichever value it sees
+        // FIRST for the rest of the session — stable, and possibly wrong.
         //
         // Chosen order: this postfix runs FIRST. Harmony runs higher-priority
         // postfixes earlier, so Priority.First puts this ahead of ModelRules and
@@ -518,9 +480,8 @@ namespace CKFHardMode
                 }
 
                 // The snapshot is scaled as a double and rounded only if the
-                // column is integral. It used to be rounded to a long before the
-                // adjustment as well as after, which threw away the fractional
-                // part of a float RewardQuantity twice over.
+                // column is integral, so a float RewardQuantity keeps its
+                // fractional part.
                 double after = adj.Apply(original, Integral(__result, "RewardQuantity"));
                 if (after == current) return;
 
@@ -568,14 +529,9 @@ namespace CKFHardMode
 
         private sealed class MissionFile
         {
-            // RETIRED 2026-09-13. This used to be
-            //     [JsonPropertyName("enabled")] public bool Enabled { get; set; } = true;
-            // with the comment "3.0: the subsystem switch lives here now.
-            // [MissionRewards] Enabled is gone from ckf.hardmode.cfg and this is
-            // the whole enable chain." That is reversed: the switch is back in
-            // ckf.hardmode.cfg, as [Slices] MissionRewards (design.md section
-            // 3). The key is still parsed so an existing document is not
-            // refused; nothing branches on it.
+            // RETIRED gate. The switch is [Slices] MissionRewards in
+            // ckf.hardmode.cfg. "enabled" is still parsed so a file carrying it
+            // is not refused; nothing branches on it.
             [JsonPropertyName("enabled")]
             public bool? RetiredEnabled { get; set; }
 
@@ -583,7 +539,7 @@ namespace CKFHardMode
             public List<MissionOverride> Missions { get; set; } = new List<MissionOverride>();
         }
 
-        // 3.0: the text comes from ConfigDoc. Only the source moved.
+        // The text comes from ConfigDoc (missions.json).
         private static void LoadOverrides()
         {
             var path = ConfigDoc.Where(ConfigDoc.Missions);
@@ -592,16 +548,13 @@ namespace CKFHardMode
                 var text = ConfigDoc.SectionText(ConfigDoc.Missions);
                 if (text == null)
                 {
-                    // Since 3.0 this section carries the subsystem switch too,
-                    // so an absent one costs the switch as well as the amounts
-                    // and `enabled` stays false. An absent section is still an
-                    // ordinary configuration — no per-type override is a
-                    // supported state — but a document that could not be READ
-                    // is not, and reporting the second at Info would be an
-                    // instrument going quiet. AGENTS.md §3.
-                    var why = $"MissionRewards: {ConfigDoc.WhyNo(ConfigDoc.Missions)}, and there "
-                        + "is no pattern-bucket layer behind it any more, so nothing will be "
-                        + "adjusted and no hook is installed.";
+                    // `enabled` stays false. An absent file is an ordinary
+                    // configuration — no per-type override is a supported state —
+                    // but a file that could not be READ is not, and reporting
+                    // that at Info would be an instrument going quiet
+                    // (AGENTS.md).
+                    var why = $"MissionRewards: {ConfigDoc.WhyNo(ConfigDoc.Missions)}, so "
+                        + "nothing will be adjusted and no hook is installed.";
                     if (ConfigDoc.CouldNotRead(ConfigDoc.Missions)) Plugin.Log.LogError(why);
                     else Plugin.Log.LogInfo(why);
                     return;
@@ -672,15 +625,13 @@ namespace CKFHardMode
 
         // ---- adjust expressions ---------------------------------------------
 
-        // INTERNAL, not private, since 2026-09-13 (Phase 5).
+        // INTERNAL, not private, so GearClasses can use the same grammar for
+        // its lever cells instead of a fourth copy.
         //
         // gui/serve.py's parse_adjust and app.html's JavaScript twin are both
         // explicit transcriptions of Adjust.Parse below, tested against one
-        // shared case table. GearClasses needs the same grammar for its lever
-        // cells, and a FOURTH copy of a parser that already exists three times
-        // is how the copies start disagreeing. Widening the visibility of the
-        // one that owns it is the smaller change: no behaviour moves, and
-        // MissionRewards remains the only place the grammar is defined.
+        // shared case table. MissionRewards is the only place in the plugin the
+        // grammar is defined.
         internal enum AdjustKind { None, Set, Add, Multiply }
 
         internal sealed class Adjust
@@ -692,16 +643,14 @@ namespace CKFHardMode
 
             // Works in double so a float column can receive a fractional
             // result. `integral` says the destination stores whole numbers; on
-            // those the arithmetic is done exactly as the old long-only version
-            // did it, so no shipped number moves:
+            // those the arithmetic is integer-rounded:
             //
-            //   Set       rounds the value here, as (long)Math.Round did.
+            //   Set       rounds the value here (Math.Round).
             //   Add       rounds the ADDEND here, not the result — 1 with
-            //             "+1.5" gives 3, which is what the old code produced
-            //             and what rounding the result afterwards would not.
+            //             "+1.5" gives 3, where rounding the result afterwards
+            //             would not.
             //   Multiply  is left unrounded here; the conversion in Set() rounds
-            //             the product, which is where
-            //             (long)Math.Round(current * Value) rounded it.
+            //             the product.
             //
             // On a float or double column nothing is rounded at any step.
             public double Apply(double current, bool integral)
@@ -717,7 +666,7 @@ namespace CKFHardMode
             }
 
             // "" none | "=40" or "40" set | "+25" / "-25" add | "x1.5" / "*1.5" multiply
-            // THREE-STATE, added 2026-09-13 (Phase 5).
+            // THREE-STATE.
             //
             // Parse(spec) answers None for a blank cell AND for a cell holding
             // text the grammar rejects, which makes the two indistinguishable
@@ -725,8 +674,8 @@ namespace CKFHardMode
             // rejection itself and carries on — but a lever sheet has to tell
             // "this column is not tuned" from "somebody typed 1.8x instead of
             // x1.8", because the second is a tuning change that silently did
-            // not happen. Overlays.BuildRule grew a three-state LineResult for
-            // the same reason in Phase 4.
+            // not happen. Overlays.BuildRule has a three-state LineResult for
+            // the same reason.
             //
             // The one-argument form is unchanged in behaviour, logs exactly
             // what it logged before, and is still what MissionRewards calls.
@@ -836,15 +785,14 @@ namespace CKFHardMode
             if (MemberCache.TryGetValue(key, out mi)) return mi;
 
             // DeclaredOnly is what makes this a real per-level walk. Without it
-            // GetProperty already searched base types, so the loop added
-            // nothing, and a model type that shadowed a base property with `new`
-            // threw AmbiguousMatchException. Nearest declaration wins, which is
-            // what the loop was written to mean. Same flags PowerLevelCap.PropOf
-            // and ModelRules.Prop use.
+            // GetProperty searches base types itself, and a model type that
+            // shadows a base property with `new` throws
+            // AmbiguousMatchException. Nearest declaration wins. Same flags
+            // PowerLevelCap.PropOf and ModelRules.Prop use.
             //
-            // The resolution is guarded here rather than at the call sites: that
-            // throw used to escape into the caller's outer catch, where
-            // Once("objective", ...) retired every objective payment adjustment
+            // The resolution is guarded here rather than at the call sites: a
+            // throw escaping into the caller's outer catch would make
+            // Once("objective", ...) retire every objective payment adjustment
             // for the rest of the session after one warning.
             mi = null;
             for (var cur = t; cur != null && cur != typeof(object) && mi == null; cur = cur.BaseType)
@@ -899,7 +847,7 @@ namespace CKFHardMode
                     if (acc != null && acc.Exists && acc.Numeric && acc.CanWrite)
                     {
                         // SetNumber reports WHY it failed rather than a bare
-                        // false, so an overflow is no longer indistinguishable
+                        // false, so an overflow is not indistinguishable
                         // from "the rule changed nothing". Say it once and stop:
                         // falling through to reflection would only repeat the
                         // same conversion and the same failure.

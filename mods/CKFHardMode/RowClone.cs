@@ -4,8 +4,8 @@
 //
 // The rule engine is a postfix on GetRow<X>Model, the per-row materializer.
 // That hook can rewrite anything, but it only ever sees rows the game has
-// already decided to read, so it cannot add one. Everything the shipped tables
-// stop short of therefore stayed out of reach:
+// already decided to read, so it cannot add one. Without cloning, everything
+// the stock tables stop short of is out of reach:
 //
 //   WeaponModel / ArmorModel      PowerLevel columns end at 10; a PL 11-20
 //                                 archetype re-uses the tier-10 row, so any
@@ -15,9 +15,6 @@
 //                                 re-spacing the gates is a redistribution,
 //                                 never a net increase.
 //   MonsterTalentModel            PL-banded talent tiers stop at "PL 9+".
-//   EffectModel                   74 unreferenced rows exist and can be
-//                                 repurposed, but there are no spare armor
-//                                 rows at all.
 //
 // HOW A SYNTHETIC ROW IS BUILT
 //
@@ -44,10 +41,16 @@
 //   ReadMonsterGroupMembersByGroup(long, long, long, long)     -> List<MonsterGroupMemberModel>
 //   ReadMonsterTalents(long group, long powerLevel)            -> List<MonsterTalentModel>
 //
-// so a clone is hooked onto all three kinds at once: the by-id reader (so
-// another row can point at it), the filtered list readers (so it turns up in
-// the pool the game rolls from), and the zero-arg bulk readers (so anything
-// enumerating the whole table sees it).
+// A clone is served through two kinds: the by-id reader (so another row can
+// point at it) and the filtered list readers, which take arguments (so it
+// turns up in the pool the game rolls from).
+//
+// NOT through the zero-arg bulk readers (ReadWeapons() and the like). Nothing
+// during play enumerates a whole table, and appending to a whole-table read
+// can poison whatever the game builds from that list: the clone is appended
+// after the reader returns, so a structure built from the list lacks it, and
+// later lookups resolve through that structure instead of by id. Install
+// skips those readers.
 //
 // CKF Data Dump will NOT show a cloned row. It captures rows in a GetRow*
 // postfix, and a synthetic row is appended to the reader's result after every
@@ -93,7 +96,7 @@
 // candidate. The NativeMethodInfoPtr check below catches the lesser case of
 // two interop proxies resolving to one il2cpp method; nothing managed can see
 // the folding case. Nothing here is patched at all unless a clone rule names
-// that table, so a rules file without "clone" adds no hooks.
+// that table, so a rule set without "clone" adds no hooks.
 
 using System;
 using System.Collections.Generic;
@@ -121,16 +124,14 @@ namespace CKFHardMode
 
             // ReadWeapon(long), per database that declares one.
             //
-            // Run 34 is why this is a dictionary. WeaponModel's materializer is
-            // declared on DataDb, so 2.2.1 hooked DataDb.ReadWeapon and nothing
-            // else — but GameDb declares its OWN ReadWeapon(long) returning the
-            // same content WeaponModel, and that is the one a mission uses. So
-            // an enemy pointed at a cloned weapon reached a reader we had not
-            // patched, got nothing back, and the spawn threw
-            // NullReferenceException before the clone was ever built.
-            //
-            // A table is not owned by one database. Hook every reader that
-            // returns the row, wherever it is declared.
+            // A dictionary because a table is not owned by one database.
+            // WeaponModel's materializer is declared on DataDb, but GameDb
+            // declares its OWN ReadWeapon(long) returning the same content
+            // WeaponModel, and that is the one a mission uses. Hooking only
+            // DataDb.ReadWeapon leaves an enemy pointed at a cloned weapon
+            // reaching an unpatched reader, getting nothing back, and the spawn
+            // throwing NullReferenceException. Hook every reader that returns
+            // the row, wherever it is declared.
             public readonly Dictionary<Type, MethodInfo> ByIdReaders =
                 new Dictionary<Type, MethodInfo>();
             public MethodInfo ByIdReader; // the preferred one, for logging
@@ -155,11 +156,9 @@ namespace CKFHardMode
         private static readonly Dictionary<string, List<CloneSpec>> SingleTargets =
             new Dictionary<string, List<CloneSpec>>(StringComparer.Ordinal);
 
-        // The same specs, keyed by the id they answer to. A by-id read used to
-        // scan every clone for the table looking for a matching NewId, which is
-        // fine at 108 clones and is not at 1,500 — one gear ladder per armour
-        // family is 770 rows on its own, and that scan runs per monster per
-        // piece of gear.
+        // The same specs, keyed by the id they answer to. A linear scan of every
+        // clone per by-id read does not scale to large gear ladders, and that
+        // read runs per monster per piece of gear.
         private static readonly Dictionary<string, Dictionary<long, CloneSpec>> SingleById =
             new Dictionary<string, Dictionary<long, CloneSpec>>(StringComparer.Ordinal);
 
@@ -178,16 +177,15 @@ namespace CKFHardMode
         // duplicate-id check prefers the home database's reader because the
         // answers differ: DataDb.ReadWeapon returns a defaulted row for an
         // unknown id, GameDb.ReadWeapon throws — and a thrown one is logged by
-        // the interop layer whatever we do with it. With 88 clones in a file
-        // that is 88 alarming and meaningless exceptions at first use.
+        // the interop layer whatever we do with it: one alarming and
+        // meaningless exception per clone at first use.
         //
-        // It used to keep the FIRST instance and never replace it, which is the
-        // stale-instance fault the comment on Instance() describes (Log7) left
-        // on the check path after the serving path was fixed: MaterializeCore
+        // EVERY WRITE WINS; the first instance is never pinned. MaterializeCore
         // reads this to ask whether a new id is free, and asking a database
-        // object the game has moved on from is the read that comes back as a
-        // NullReferenceException from inside the game's own reader. Every write
-        // wins, so the check path and the serving path use the same rule.
+        // object the game has moved on from comes back as a
+        // NullReferenceException from inside the game's own reader (the
+        // stale-instance fault described on Instance()). The check path and
+        // the serving path use the same rule.
         private static readonly Dictionary<Type, object> LiveDbs =
             new Dictionary<Type, object>();
 
@@ -201,7 +199,7 @@ namespace CKFHardMode
             // so an instance can only be taken off a call the game makes.
             // ModelRules.AfterGetRow offers one too, and it is installed
             // whenever ModelRules has anything to hook; this one is only
-            // installed when the rules file carries a clone rule.
+            // installed when the rule set carries a clone rule.
             if (SelfCheck.Wants) SelfCheck.Offer(t, instance);
         }
 
@@ -220,10 +218,10 @@ namespace CKFHardMode
         [ThreadStatic] private static bool reentrant;
 
         // Key() is on the by-id serving path, which a mission walks once per
-        // piece of gear on every monster it restores. It used to call
-        // GetParameters() — which allocates a fresh array every time — and then
-        // concatenate three strings, twice per read (prefix and postfix). The
-        // answer never changes for a given method, so it is worked out once.
+        // piece of gear on every monster it restores. GetParameters() allocates
+        // a fresh array every call, and the key is three concatenated strings,
+        // twice per read (prefix and postfix). The answer never changes for a
+        // given method, so it is worked out once.
         //
         // Replaced wholesale rather than mutated: the serving path reads this
         // without a lock and must never see a dictionary mid-resize.
@@ -273,8 +271,7 @@ namespace CKFHardMode
                 var taken = new Dictionary<long, CloneSpec>();
 
                 // A pure scan: the loop marks a duplicate Broken and adds to
-                // `taken`, and never touches kv.Value, so the copy the ToList()
-                // here used to make protected nothing and only obscured that.
+                // `taken`, and never touches kv.Value, so no copy is needed.
                 foreach (var s in kv.Value)
                 {
                     CloneSpec first;
@@ -365,20 +362,14 @@ namespace CKFHardMode
                     var ps = m.GetParameters();
                     var byId = element == null && ps.Length == 1 && IsInteger(ps[0]);
 
-                    // Do not serve into a whole-table read.
+                    // Do not serve into a whole-table read (see the header).
                     //
-                    // Run 42: a CKF Data Dump sweep called ReadArmors(), our
-                    // postfix appended sixty clones to the list it returned, and
-                    // from then on the mission never called ReadArmor(id) for
-                    // any of them — it resolved armour from something the game
-                    // had already built out of that list. The clones were not in
-                    // it, because the append happens after the reader returns.
-                    // The mission then died on a null armour.
-                    //
-                    // Nothing during play enumerates a whole table, so appending
-                    // there buys nothing and can only poison whatever the game
-                    // builds from it. Clones are found by id and through the
-                    // filtered readers, which take arguments.
+                    // Observed: a CKF Data Dump sweep called ReadArmors() with
+                    // clones appended to its result; the mission then resolved
+                    // armour from a structure built out of that list, never
+                    // called ReadArmor(id) for the clones, and died on a null
+                    // armour. Clones are found by id and through the filtered
+                    // readers, which take arguments.
                     if (element != null && ps.Length == 0) continue;
 
                     // Anything else returning a bare row - ReadMonsterTypeByContactId
@@ -424,15 +415,15 @@ namespace CKFHardMode
                         }
                         else
                         {
-                            // PREFIX, not postfix. Run 35: GameDb.ReadWeapon
-                            // does not answer an unknown id with an empty row
-                            // the way DataDb.ReadWeapon does — it throws
+                            // PREFIX, not postfix. GameDb.ReadWeapon does not
+                            // answer an unknown id with an empty row the way
+                            // DataDb.ReadWeapon does — it throws
                             // NullReferenceException inside the game. A postfix
-                            // still supplied the clone and the mission loaded,
-                            // but every serve left a logged exception behind and
-                            // depended on the interop layer swallowing it. A
-                            // prefix answers before the game's lookup runs, so
-                            // the throwing path is never entered.
+                            // can still supply the clone, but every serve leaves
+                            // a logged exception behind and depends on the
+                            // interop layer swallowing it. A prefix answers
+                            // before the game's lookup runs, so the throwing
+                            // path is never entered.
                             bool serves = false;
                             try
                             {
@@ -449,12 +440,11 @@ namespace CKFHardMode
                                     + "id.");
                             }
 
-                            // The postfix goes on EITHER WAY, and it used to go
-                            // on only in the catch above. It carries MissCheck —
-                            // the exact dangling-reference check, and the only
-                            // one that can be exact, because the game has just
-                            // answered — so on every reader whose prefix took
-                            // (the normal case) that check never ran at all.
+                            // The postfix goes on EITHER WAY. It carries
+                            // MissCheck — the exact dangling-reference check, and
+                            // the only one that can be exact, because the game
+                            // has just answered — so it must run on readers
+                            // whose prefix took (the normal case) too.
                             // Harmony runs a postfix even when a prefix returned
                             // false, so it sees the clone the prefix supplied and
                             // MissCheck reads that as "the row is there", which
@@ -521,10 +511,10 @@ namespace CKFHardMode
 
         // A rule that points a row at a clone that will not exist.
         //
-        // This is the shape that killed Run 34: MonsterTypeModel rows had their
-        // WeaponTypeId set to 20020, the clone was never served, and the game
-        // threw NullReferenceException spawning a monster holding a weapon it
-        // could not find. A dangling reference does not degrade — it stops the
+        // Observed shape: MonsterTypeModel rows had their WeaponTypeId set to
+        // 20020, the clone was never served, and the game threw
+        // NullReferenceException spawning a monster holding a weapon it could
+        // not find. A dangling reference does not degrade — it stops the
         // mission loading — so it is worth an error at load rather than a
         // surprise thirty minutes in.
         //
@@ -593,15 +583,13 @@ namespace CKFHardMode
         // can tell the difference — the table cannot be enumerated without
         // forcing a read that has its own consequences.
         //
-        // AND IT CANNOT KNOW HOW HIGH THE LEVEL GOES. An earlier version swept a
-        // guessed level range and compared against declared clone ids; it
-        // reported twelve faults in a config with none, because a curve keyed on
-        // PowerLevel does not know that power levels stop at 20. Restricting it
-        // to the reserved range did not fix that — it only moved it. A ladder of
-        // twenty tiers based at 901000 runs out at level 21, and a sweep that
-        // keeps going reports 901040 as missing. It is missing. No row will ever
-        // ask for it. Log7 carried five of these against a config with none, and
-        // an error channel that cries wolf is worse than no error channel.
+        // AND IT CANNOT KNOW HOW HIGH THE LEVEL GOES. A curve keyed on
+        // PowerLevel does not know that power levels stop at 20, so sweeping a
+        // guessed level range reports false faults even inside the reserved
+        // range: a ladder of twenty tiers based at 901000 runs out at level 21,
+        // and a sweep that keeps going reports 901040 as missing. It is missing,
+        // and no row will ever ask for it. An error channel that cries wolf is
+        // worse than no error channel.
         //
         // So this says WHEN the ladder runs out and leaves the judgement to
         // whoever knows the data. It is a warning, not an error, and the real
@@ -612,8 +600,9 @@ namespace CKFHardMode
         //
         // `missing` is the same map CheckLiterals uses, and for the same
         // reason: a clone rule that was REFUSED still put its id in `declared`,
-        // so a curve landing on a broken clone's id used to be accepted while
-        // the identical literal set was an error. One rule for both — an id
+        // so without this a curve landing on a broken clone's id would be
+        // accepted while the identical literal set is an error. One rule for
+        // both — an id
         // counts as covered only when a clone rule declares it AND that rule
         // survived load.
         private static void CheckCurves(Rule rule, Dictionary<long, string> missing,
@@ -917,9 +906,9 @@ namespace CKFHardMode
                     + "it is handled. Reported once per table.");
 
             //    Through ReadById, so an empty row does not read as a taken id.
-            //    Checking non-null alone was the 2.2.0 bug: every by-id reader
-            //    answers a miss with a defaulted object, so EVERY clone was
-            //    refused for colliding with a row that did not exist.
+            //    Checking non-null alone is not enough: every by-id reader
+            //    answers a miss with a defaulted object, so EVERY clone would be
+            //    refused for colliding with a row that does not exist.
             if (ReadById(checkReader, checkDb, s.NewId, s.KeyColumn) != null)
             {
                 s.Broken = true;
@@ -952,10 +941,9 @@ namespace CKFHardMode
                                  + "'as' and the operations named nothing writable"));
         }
 
-        // A by-id reader does NOT return null for an id the table does not hold.
-        // Run32 established that: ReadWeapon(20020) came back as a live object
-        // with every column at its default, and the collision check read that as
-        // "the id is taken" and refused a clone of an id nothing was using.
+        // A by-id reader does NOT return null for an id the table does not hold:
+        // ReadWeapon(20020) comes back as a live object with every column at its
+        // default, which a naive collision check reads as "the id is taken".
         //
         // So a row counts as found only when its key column actually carries the
         // id that was asked for. Everything that reads by id goes through here.
@@ -986,8 +974,7 @@ namespace CKFHardMode
         }
 
         // A fresh copy per read, the way the game re-materializes a real row —
-        // WHEN IT CAN. There is no "shared-instance mode" and no toggle; an
-        // earlier comment here described one, and it does not exist.
+        // WHEN IT CAN. There is no "shared-instance mode" and no toggle.
         //
         // What does exist is the fallback below: with no usable reader, or when
         // rebuilding fails on every reader, this hands back s.Template — the one
@@ -999,19 +986,15 @@ namespace CKFHardMode
         // back the template is handing back nothing.
         //
         // THE INSTANCE MATTERS. Building a copy means re-reading the source row
-        // through a database object, and this used to always use `s.Db` — the
-        // instance captured the first time the clone was materialized, held for
-        // the rest of the session. That is fine as long as clones materialize
-        // during the mission that uses them, which is what lazy building
-        // guarantees and what every run up to Run 43 did.
+        // through a database object. `s.Db`, the instance captured the first
+        // time the clone was materialized, is only safe while clones
+        // materialize during the mission that uses them (lazy building).
         //
-        // It stops being fine the moment something builds a clone EARLIER, as
-        // [SelfCheck] does: the instance that existed then gets pinned, and
-        // every later serve re-reads through it. If the game has moved on to a
-        // different database object since, that read goes into a stale one, and
-        // what comes back is the game's own NullReferenceException from inside
-        // ReadWeapon — with no id in it, and a mission that never finishes
-        // loading. Log7.
+        // Something that builds a clone EARLIER, as SelfCheck does, pins the
+        // instance that existed then. If the game has moved on to a different
+        // database object since, a re-read through the stale one comes back as
+        // the game's own NullReferenceException from inside ReadWeapon — with no
+        // id in it, and a mission that never finishes loading.
         //
         // So the live instance wins. Every serving hook already has it: it is
         // the `__instance` of the very call we are answering. The captured pair
@@ -1076,17 +1059,14 @@ namespace CKFHardMode
                 List<string> why = diagnose ? new List<string>() : null;
 
                 // The provenance test — is the row this was copied from already
-                // in this list? — used to walk the whole list once PER CLONE.
-                // The list is the same for all of them, so walk it once and
-                // answer everyone from the set. Built lazily, because a reader
-                // whose clones are all gated out should not pay for it at all.
+                // in this list? The list is the same for every clone, so walk it
+                // once and answer everyone from the set. Built lazily, because a
+                // reader whose clones are all gated out should not pay for it.
                 //
-                // It is also kept up to date as clones are appended below. It
-                // used to hold only what the reader returned, so a clone whose
-                // SourceId is another clone's NewId could never pass provenance:
-                // the earlier clone had been appended to the list, but not to
-                // the set the test reads. Chained clones vanished from every
-                // filtered read while working fine by id.
+                // It is kept up to date as clones are appended below, so a clone
+                // whose SourceId is another clone's NewId (a chained clone) can
+                // pass provenance; otherwise chained clones would vanish from
+                // every filtered read while working fine by id.
                 HashSet<long> present = null;
                 string presentFor = null;
 
@@ -1126,11 +1106,11 @@ namespace CKFHardMode
                                                       __originalMethod.DeclaringType);
 
                             // Naming the clone's own gate columns here turns a
-                            // dead end into an answer. Run 37: every clone was
-                            // rejected this way, and the reason was that the
-                            // chosen source rows were themselves gated out of a
-                            // PL 18 call — MaxPowerLevel 5 filler entries. The
-                            // engine was right; the rules picked bad sources.
+                            // dead end into an answer. A typical cause: the
+                            // chosen source rows are themselves gated out of the
+                            // call (e.g. MaxPowerLevel 5 filler entries under a
+                            // PL 18 read). The engine is right; the rules picked
+                            // bad sources.
                             why?.Add($"{s.NewId}: source row {s.SourceId} is not in this list"
                                    + Gates(s));
                             continue;
@@ -1241,9 +1221,8 @@ namespace CKFHardMode
 
         // A by-id read that has just answered.
         //
-        // Installed on EVERY hooked by-id reader, whether or not the prefix took
-        // — it used to go on only when the prefix was refused, so on the normal
-        // path MissCheck below never ran at all. It does two jobs, and which
+        // Installed on EVERY hooked by-id reader, whether or not the prefix took,
+        // so MissCheck below runs on the normal path. It does two jobs, and which
         // ones apply depends on whether this reader also has the prefix:
         //
         //   always            MissCheck: the game has just said whether it holds
@@ -1286,7 +1265,7 @@ namespace CKFHardMode
 
             // The prefix already answered this call, so __result is ours and
             // there is nothing here to serve or to compare. Not dead: `Prefixed`
-            // holds every reader whose prefix took, which is now the usual case.
+            // holds every reader whose prefix took, which is the usual case.
             if (Prefixed.Contains(key)) return;
 
             try
@@ -1335,12 +1314,10 @@ namespace CKFHardMode
 
         // A by-id reader that THREW rather than returned.
         //
-        // MissCheck cannot see this case and never could: it lives in a
-        // postfix, and Harmony does not run a postfix when the original throws.
-        // So the loudest possible failure — the game's own reader dying on an
-        // id — was the quietest thing in the log. All you got was an
-        // Il2CppInterop trampoline dump with no id in it, and then the mission
-        // hung.
+        // MissCheck cannot see this case: it lives in a postfix, and Harmony
+        // does not run a postfix when the original throws. Without this, the
+        // game's own reader dying on an id leaves only an Il2CppInterop
+        // trampoline dump with no id in it, and then the mission hangs.
         //
         // A finalizer runs either way. This one only reports: it hands the
         // exception straight back, because suppressing it would return null to

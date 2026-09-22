@@ -34,17 +34,8 @@
     "an expiry and advancing again re-applies the penalty, and the same mercs",
     "take the Stress every time (Elapse.cs:58-62).",
     "",
-    "Every write this subsystem makes happens live. AGENTS.md section 6 records",
-    "the standing instruction to test that way.",
-    "",
-    "THE SHIPPED AMOUNTS ARE PLACEHOLDERS. ckf.hardmode.elapse.json:38-39 states",
-    "that none of them has been played, and that they exist so the file parses",
-    "and the first live sessions produce log lines to read. [unverified - that",
-    "comment is the only source for it; no play session behind these numbers is",
-    "recorded in this repository.]",
-    "",
-    "Generated from schema/elapse.schema.json. Edits to the comments in this",
-    "file are overwritten on the next generate; edit the schema instead."
+    "Every write this subsystem makes happens live. AGENTS.md records the",
+    "standing instruction to test that way."
   ],
 
   "uiDoc": [
@@ -61,7 +52,7 @@
       "path": "Slices.Elapse", "in": "cfg", "type": "bool",
       "default": true, "ui": "form",
       "label": "Enable Mission Elapse Penalty",
-      "doc": "Slice toggle. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice never enters RulePlan. THIS IS THE GATE. Slices.Init binds every key in Binds.All (Slices.cs) and is called from Plugin.Load (Plugin.cs), above the master-switch bail-out, so BepInEx writes the line whether the mod is on or off. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg is 3,238 bytes carrying [General] and [Slices] and all 43 keys, and check_schema.py --game printed \"0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s).\" at rc 0 [measured, Logs\\gates-phase1b.txt]. The tag on this sentence used to sit before that run: it read \"[measured 2026-09-13]\" when what had been measured was the C#, not the file. The file has now been measured too. CORRECTION, 2026-09-13: this doc used to say \"the section's own \\\"enabled\\\" field is still on disk and is still the gate the plugin reads\" and \"NOT ON DISK ... check_schema.py reports it MISSING\". Both were true when written and are false now. The section's \"enabled\" field is deleted from this schema and the gate is this key. The RETIRED KEY IS STILL PARSED, into a report-only bool? RetiredEnabled ([JsonPropertyName(\"enabled\")]), because four subsystems refuse a whole section on an unknown key (ConfigDoc.ReadSection, ConfigDoc.cs) and an upgraded document would otherwise switch OFF. Slices.ReportRetiredGate (Slices.cs) names it: Warning normally, Error when the retired value is false and this key is not. Nothing branches on it -- grep RetiredEnabled finds one declaration and one report call per subsystem and no read. It is a migration report, not a second gate.",
+      "doc": "Slice toggle. It lives in ckf.hardmode.cfg because a gate cannot live inside the file it gates, and the .cfg is parsed before anything else loads. Slices.Init binds every [Slices] key above the [General] Enabled bail-out, so BepInEx writes the line even when the mod is off. A key that cannot be read is reported at Error and treated as on. Off: the subsystem logs why and does nothing this launch. The retired \"enabled\" key inside the subsystem's JSON file is still parsed (RetiredEnabled) so that Slices.ReportRetiredGate can report it: a Warning, or an Error when it is false and this key is not. Nothing branches on it.",
       "uiDoc": "Turn this off and this part of the mod does nothing; the game uses its own values. The master switch on the first page turns off everything at once."
     },
 
@@ -84,7 +75,7 @@
       "path": "tiers", "in": "json", "type": "table", "ui": "table",
       "label": "Mission tiers",
       "uiDoc": "The multiplier here scales the credit charge, and the merc count as well when Apply tier multiplier to Stress is on. It roughly mirrors how much these missions pay in the first place.",
-      "doc": "Multiplier applied to the penalty by mission family, matched by SUBSTRING on MissionTypeId - the same idiom MissionRewards uses. FIRST MATCH WINS, in a fixed order: soloHack, then story, then standard, so the block is not order-independent even though it is a JSON object (Elapse.cs:850-862). A mission matching no tier's patterns falls through to 'standard'. The multiplier scales the credit charge, and the Stress merc count as well only when stress.applyTierMultiplier is on. A pattern that matches nothing makes its tier do nothing at all and logs no complaint, so check the tier= field in the plugin's own expiry log lines against real missions. [unverified: ckf.hardmode.elapse.json:49-51 records the shipped story patterns as a starting guess read off the game's MissionModel.csv and _mission_generated.csv dumps, neither of which is in this repository.]",
+      "doc": "Multiplier applied to the penalty by mission family, matched by SUBSTRING on MissionTypeId - the same idiom MissionRewards uses. FIRST MATCH WINS, in a fixed order: soloHack, then story, then standard, so the block is not order-independent even though it is a JSON object (Elapse.cs:850-862). A mission matching no tier's patterns falls through to 'standard'. The multiplier scales the credit charge, and the Stress merc count as well only when stress.applyTierMultiplier is on. A pattern that matches nothing makes its tier do nothing at all and logs no complaint, so check the tier= field in the plugin's own expiry log lines against real missions. [unverified: the default story patterns are a starting guess read off the game's MissionModel.csv and _mission_generated.csv dumps, neither of which is in this repository.]",
       "row": [
         { "name": "name",       "type": "string" },
         { "name": "patterns",   "type": "stringList" },
@@ -156,7 +147,7 @@
       "enabledBy": "stress.enabled",
       "label": "Safehouse mercs only",
       "uiDoc": "Only stress mercs the game counts as in the safehouse. Always leave this on.",
-      "doc": "Only charge mercs the engine's own GameCharacterModel.IsStatusSafehouseAliveAndActive() says are in the safehouse (Elapse.cs:1248). Elapse.cs:146-150 records an open question against it: Run55 stressed a Status 5 and a Status 7 merc, and what those statuses are has not been established. If the method cannot be found the filter cannot run, and that is logged rather than silently skipped."
+      "doc": "Only charge mercs the engine's own GameCharacterModel.IsStatusSafehouseAliveAndActive() says are in the safehouse. Open question: mercs with Status 5 and Status 7 have been stressed, and what those statuses are has not been established [unverified]. If the method cannot be found the filter cannot run, and that is logged rather than silently skipped."
     },
     {
       "path": "stress.byPowerLevel", "in": "json", "type": "table", "ui": "table",

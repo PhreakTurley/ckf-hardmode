@@ -1,9 +1,8 @@
 // Accessors — compiled property access for the rule hot path.
 //
-// Rules are matched and applied per ROW, and every column touch used to go
-// through PropertyInfo.GetValue / SetValue plus a string-concatenated cache
-// key. On a full ReadArmors() at 433 rules that is ~127k reflective calls and
-// ~127k throwaway strings.
+// Rules are matched and applied per ROW, so per-column reflection
+// (PropertyInfo.GetValue / SetValue plus a string cache key) is costly on a
+// bulk read.
 //
 // An Accessor resolves one (row type, column) pair ONCE and holds delegates
 // for it. The delegates are built with expression trees, which BepInEx 6 runs
@@ -11,28 +10,26 @@
 // call costs. Il2CppInterop model classes are ordinary managed proxy types, so
 // there is nothing exotic to compile against.
 //
-// THE ONE THING THAT MUST NOT DRIFT is the numeric conversion. The old path
-// wrote values back with Convert.ChangeType(double, columnType), which rounds
+// THE ONE THING THAT MUST NOT DRIFT is the numeric conversion. The reflective
+// path writes values with Convert.ChangeType(double, columnType), which rounds
 // to nearest and sends halves to even — 25 x 1.5 stores 38, not 37. A plain
 // (long) cast in IL truncates instead, which would quietly shave a point off
-// every rounded stat in the file. SetNumber therefore rounds with
-// MidpointRounding.ToEven before converting, and AccessorTests checks that
-// against Convert.ChangeType across the awkward values.
+// every rounded stat. SetNumber therefore rounds with MidpointRounding.ToEven
+// before converting, so both paths store the same value.
 //
-// A WRITE THAT CANNOT LAND NOW SAYS WHY. SetNumber and SetRaw return a
-// WriteResult rather than a bool, so a caller can tell an overflow apart from a
-// value of the wrong shape and from a column with no setter, and report it.
-// They still never throw into the game's call path.
+// A WRITE THAT CANNOT LAND SAYS WHY. SetNumber and SetRaw return a
+// WriteResult, so a caller can tell an overflow apart from a value of the
+// wrong shape and from a column with no setter, and report it. They never
+// throw into the game's call path.
 //
 // Everything degrades to reflection rather than failing:
 //   - a column that does not exist            -> Exists is false
 //   - a non-public or unusual property        -> reflection delegates
 //   - Expression.Compile() throwing at all    -> reflection delegates
-//   - [ModelRules] CompiledAccessors = false  -> reflection everywhere (a key that
-//     was removed in 2.12.0, before the section moved into ckf.hardmode.json)
+//   - Accessors.Configure(false)              -> reflection everywhere
+//     (ModelRules.Init passes true; no setting exposes it)
 //
-// so a build where codegen is unavailable behaves exactly as 2.5.2 did, only
-// slower.
+// so a build where codegen is unavailable behaves the same, only slower.
 
 using System;
 using System.Collections.Generic;
@@ -44,12 +41,11 @@ namespace CKFHardMode
 {
     // What happened to one attempted write.
     //
-    // SetNumber and SetRaw used to return a bare bool, and every caller
-    // discarded it — so an overflow on an int column, a string value that is
-    // not a number, and a column with no setter at all were three different
-    // faults that all looked like "the rule matched and changed nothing". The
-    // reason travels back with the answer now, and ModelRules reports it once
-    // per (type, column, reason).
+    // An overflow on an int column, a string value that is not a number, and
+    // a column with no setter are different faults that would otherwise all
+    // look like "the rule matched and changed nothing". The reason travels
+    // back with the answer, and ModelRules reports it once per
+    // (type, column, reason).
     internal enum WriteResult
     {
         Ok,
@@ -66,8 +62,7 @@ namespace CKFHardMode
         public readonly string Name;
         public readonly PropertyInfo Prop;
 
-        // The column's type with Nullable<> peeled off, as the old
-        // ModelRules.Underlying returned.
+        // The column's type with Nullable<> peeled off.
         public readonly Type Underlying;
 
         public bool Exists => Prop != null;

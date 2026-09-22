@@ -1,134 +1,120 @@
-// Fatigue — mission fatigue, Running Empty -> Off-Duty.
+// Fatigue — mission fatigue, a three-tier track.
 //
-// The design is docs/character-fatigue.md; this file is its implementation and
-// deviates from it in exactly three places, all of them David's rulings of
-// 2026-08-30 and all recorded in that doc's section 10:
+// Mechanics and design: docs/character-fatigue.md. Settings:
+// ckf.hardmode.d/fatigue.json (the switch is [Slices] Fatigue in
+// ckf.hardmode.cfg; defaults are in schema/fatigue.schema.json).
 //
-//   1. The first-stage trait id is a config key. 2009 Running Empty is the
-//      default; 2007 Checked Out is the milder alternative and swaps in without
-//      a rebuild. Both are TraitClass 6 and sit in their own TraitGroup, so
-//      neither collides with 2014 Off-Duty.
-//   2. `applyOnMissionFailure` is gone, key and code. Run45 established that a
-//      lost mission writes no GameScore row of any kind, so the hook below
-//      never fires on defeat and a failed mission costs no fatigue. Building it
-//      would mean a second patch on
-//      View_MissionRoomDefeat_Main.ProcessCharactersAfterDefeat with its own
-//      roster source; that is not in this mod.
-//   3. The Cyber Knight sits inside the min/max clamp like anyone else. He
-//      still rolls on his own odds and takes his own duration.
+// WHAT IT DOES (David's rules, as implemented here)
 //
-// Two things were added after the first build, on David's rulings of the same
-// day, and neither is in the design doc's sections 1-9:
+//   - THREE TIERS, each a timed trait: tier1.traitId, tier2.traitId,
+//     tier3.traitId. The shipped three are 2007 Checked Out, 2009 Running Empty
+//     and 2014 Off-Duty, all TraitClass 6 and each in its own TraitGroup, so one
+//     merc can hold several at once.
+//   - ONE ROLL AT EVERY TIER. Every merc who completes a mission rolls once
+//     against one chance, and a merc who fails moves up ONE tier from the
+//     highest they already carry. Moving up is not automatic: the same
+//     chancePercent and the same Wound Resist subtraction decide a first grant
+//     and a move to tier 2 or tier 3 alike. A merc already on the top tier is
+//     not rolled, because there is nowhere above it.
+//   - THE TIERS STACK. Moving up does not remove the tier below. Nothing in
+//     this file deletes a trait row; each one expires on its own ExpiresTurn,
+//     counted from the mission that granted it, so the lower tiers lapse first.
+//   - ONE DURATION FOR EVERY TIER. durationDays is the length of whichever tier
+//     was granted. There is one chance curve and one duration curve and no
+//     per-tier tunables at all; see the resolvers.
+//   - ONE POOL, ONE CLAMP. Everybody eligible to roll is in one pool whatever
+//     tier they are on, and minAffected and maxAffected bound the TOTAL number
+//     of grants the mission makes. A floor can therefore force a move up a tier
+//     and a ceiling can spare one, both reaching for the mercs whose roll landed
+//     nearest their own threshold.
+//   - A lost mission costs no fatigue: a lost mission writes no GameScore row
+//     of any kind [measured], so the hook below never fires on defeat.
+//     Covering defeat would need a second patch on
+//     View_MissionRoomDefeat_Main.ProcessCharactersAfterDefeat with its own
+//     roster source; this mod does not do that.
+//   - The Cyber Knight sits inside the min/max clamp like anyone else, but rolls
+//     on his own odds and takes his own duration (the "knight" block).
+//   - POWER-LEVEL SCALING. chancePercent, minAffected, maxAffected and
+//     durationDays come only from byPowerLevel curves: anchor points that
+//     interpolate, where an anchor holds below the level it names. There are
+//     no flat values.
+//   - WOUND RESIST MITIGATION. A merc's Wound Resist is subtracted from their
+//     chance, one point per percentage point. minChancePercent bounds what
+//     RESIST takes away; it never raises a chance already at or below it.
+//   - SOLO MISSIONS ARE EXEMPT. A mission whose roster is one character runs
+//     none of this: no roll, nothing written. See Resolve.
+//   - ARMOUR COUNTS toward Wound Resist, read as its own source through
+//     ReadGameArmorByCharacter (the "armor" ResistSource).
 //
-//   4. POWER-LEVEL SCALING. chancePercent, minAffected, maxAffected and
-//      durationDays can each vary with the mission's PowerLevel, given as
-//      anchor points that interpolate. See the byPowerLevel section below.
-//   5. WOUND RESIST MITIGATION. A merc's Wound Resist is subtracted from their
-//      chance, one point per percentage point, floored at minChancePercent.
-//      See the WoundRes section below.
+// A TIER IS A POSITION, NOT A BRANCH. Load builds Options.Tiers and
+// Options.TraitIds once, in order, and the trait scan, the grant, the
+// double-fire guard and Validate's distinctness check all walk those arrays.
+// Adding a fourth tier means a fourth block on Options, a fourth default
+// constant and a fourth entry in Load's array; no loop below changes.
 //
-// Two more on 2026-09-10:
+// THE 4.0 LAYOUT IS RETIRED. runningEmpty and offDuty were two stage blocks
+// with four byPowerLevel curves between them, escalation to Off-Duty took no
+// roll, and offDuty.clearsRunningEmpty deleted the first-stage row. Both keys
+// still parse — held as raw JsonElement, so any 4.0 shape loads rather than
+// being refused for keys that map to no member — and LegacyKeys names whichever
+// a file carries. Nothing reads them, and their curves do NOT stand behind the
+// 4.1 ones: a 4.0 file names no top-level byPowerLevel, so Validate refuses it
+// and says what to do.
 //
-//   6. SOLO MISSIONS ARE EXEMPT. David's ruling. A mission whose roster is one
-//      character runs none of this: no roll, no escalation, nothing written.
-//      See the check at the top of Resolve.
-//   7. WOUND RESIST NO LONGER DEPENDS ON THE JOINED EffectData. Run63 rolled
-//      four mercs at "no resist" with no warning. AddRows skipped any row whose
-//      EffectData was null without a word, and only the trait reader was ever
-//      shown to fill that join (Run44). A row without it now has its effect
-//      read from DataDb, and every roll line says how many rows each reader
-//      returned and how their effects were found. See ResistFor.
-//   8. ARMOUR COUNTS TOWARD WOUND RESIST. David's ruling, reversing the
-//      2026-08-30 one that kept gear out. Classification 9 ArmorEffect is no
-//      longer dropped, and the merc's armour is read as a fifth source through
-//      ReadGameArmorByCharacter. See the "armor" ResistSource.
-//
-// THE FLAT VALUES ARE GONE. David's ruling, 2026-09-07. Every setting that had
-// a byPowerLevel analogue is off the config surface: runningEmpty.chancePercent,
-// .durationDays, .minAffected, .maxAffected, runningEmpty.knight.chancePercent,
-// runningEmpty.knight.durationDays, offDuty.durationDays and
-// offDuty.knight.durationDays. A one-anchor curve at power level 1 does the same
-// job, because an anchor holds below the level it names. What this file used to
-// call "the base layer" is now the curves and nothing else:
-//
-//   * The properties that parse those eight keys are STILL HERE, marked legacy
-//     below, because Load refuses any file carrying a key that maps to no
-//     member and deleting them would make every existing player's
-//     ckf.hardmode.json fail to load. They are parsed and never read. A file
-//     that carries one gets one log line at load naming what it found.
-//   * Curve() no longer bails out on an unreadable PowerLevel. A PowerLevel of
-//     0 falls into `powerLevel <= pts[0].Key` and takes the curve's LOWEST
-//     ANCHOR, which is what makes a one-anchor PL 1 curve behave exactly like
-//     the flat value it replaces, in every case including that one. The
-//     once-only warning stays and now says that is what happened.
-//   * Validate refuses a runningEmpty.byPowerLevel that is absent or empty
-//     while "enabled" is true. Nothing backs it up any more.
+// Consequences of curves-only:
+//   * A PowerLevel of 0 (unreadable) falls into `powerLevel <= pts[0].Key` and
+//     takes the curve's LOWEST ANCHOR; a once-only warning says so.
+//   * Validate refuses an absent or empty byPowerLevel.
 //   * A resolver whose curve names no value for the field it needs returns
-//     "no value" rather than a number nobody configured, and the roll or the
-//     write it feeds does not happen and is logged. See the four resolvers.
+//     "no value", and the roll or write it feeds does not happen and is
+//     logged. See the four resolvers.
 //
-// THREE FIXES FROM THE 2.9.1 CODE REVIEW, all before the first launch. Each has
-// offline checks that fail without it; see tests/fatigue/ and
-// project memory `fatigue-code-review`:
+// SAFETY PROPERTIES (offline checks in tests/fatigue/ fail without them):
 //
-//   1. Escalation now deletes the first-stage trait ONLY after the Off-Duty
-//      insert succeeded. It used to delete unconditionally, so a refused insert
-//      left the merc carrying nothing at all and the mission REMOVED fatigue
-//      instead of escalating it.
-//   2. The Wound Resist dedupe covers all four readers, not just trait ->
-//      effect. Implants are the source that decides this mechanic's balance,
-//      and an implant mirrored into the effect table used to count twice.
-//   3. The minChancePercent floor bounds what RESIST takes away and no longer
-//      raises a chance that was already at or below it. A configured 0 used to
-//      come back as 5.
+//   - No merc is ever moved DOWN the track. The scan takes the HIGHEST tier a
+//     merc carries, so a merc holding tier 3 and not tier 2 is at the top of
+//     the track rather than half way up it, and a trait list that could not be
+//     read all the way through skips the merc instead of granting on it.
+//   - Two tiers sharing a trait id is refused by Validate: the scan could not
+//     tell them apart, and the merc on the lower of the pair would stop moving.
+//   - The Wound Resist dedupe covers every reader, so an implant mirrored into
+//     the effect table counts once.
+//   - The double-fire guard does not trust session memory alone. On a hit it
+//     asks the DATABASE whether the rows that resolution wrote are still there
+//     (every row this file writes is stamped CreatedTurn = the mission's turn,
+//     and any tier's trait counts). Present means a genuine second type-16 row
+//     and the guard blocks. Absent means the save was rolled back, so the
+//     mission resolves again instead of a reload silently ERASING fatigue. The
+//     safehouse total is read once per mission. A postfix on
+//     ViewModel_GameManagement.LoadGame/LoadGameSlot clears the session
+//     statics; whether that is the real load seam is a question only the log
+//     answers.
+//   - Validate reaches the curve anchors: CheckLevels covers every field on both
+//     curves, and a sweep over PL 1-20 rejects a curve whose ceiling drops below
+//     its floor.
+//   - ReadGameCharacter is checked for both a throw and a null return; either
+//     would otherwise cost every merc IsKnight and DisplayName silently.
 //
-// FOUR MORE FIXES FROM THE SAME REVIEW, shipped as 2.9.2 and again before the
-// first launch. Each has offline checks that fail without it:
+// THIS SUBSYSTEM WRITES TO THE SAVE. It inserts GameCharacterTrait rows — and,
+// since 4.1, deletes none. All of it was proven against a live save first, with
+// CKF Data Dump's [TraitProbe] [measured]:
 //
-//   4. The section 4.1 double-fire guard no longer trusts session memory alone.
-//      On a hit it asks the DATABASE whether the rows that resolution wrote are
-//      still there — every row this file writes is stamped CreatedTurn = the
-//      mission's turn, so a matching row is that resolution's own evidence.
-//      Present means a genuine second type-16 row and the guard blocks. Absent
-//      means the save was rolled back under us, so the mission resolves again
-//      instead of a reload silently ERASING fatigue. The safehouse total also
-//      moved from once per session to once per mission, so a Triage Clinic
-//      built mid-session takes effect and another save slot does not inherit
-//      the first one's number. A speculative postfix on
-//      ViewModel_GameManagement.LoadGame/LoadGameSlot clears the session
-//      statics outright; the interop assembly is stubs, so whether that is the
-//      real load seam is a question only the log answers.
-//   5. Validate reaches the curve anchors. CheckLevels covers durationDays,
-//      minAffected and maxAffected as well as chancePercent, knight.durationDays
-//      is range-checked on both blocks, and a sweep over PL 1-20 rejects a curve
-//      whose ceiling drops below its floor at any level.
-//   6. offDuty duration curves. offDuty.byPowerLevel and
-//      offDuty.knight.byPowerLevel both work and both interpolate durationDays,
-//      matching David's ruling 4; the other three fields are meaningless there
-//      and are warned about rather than ignored. David's call, 2026-08-30.
-//   7. The catch around ReadGameCharacter logs. It was the only silent catch in
-//      the file, and a renamed reader used to cost every merc IsKnight and
-//      DisplayName with a blank name in the log as the only tell. THAT COVERED
-//      THE THROWING CASE ONLY, and this note used to claim the hole was closed:
-//      a reader that RETURNED NULL instead of throwing produced the same blank
-//      name and the same unrecognised Knight with no log line at all. Both the
-//      throw and the null return are reported now.
+//   - a constructed row inserts and both readers see it;
+//   - the same insert works nested inside the InsertGameScore postfix, while
+//     the game's own insert is still unwinding through SqlNado;
+//   - the row survives a save, a load of another slot and a return, and the
+//     game's own SaveManager.ProcessTraits expires it on schedule;
+//   - the whole resolution order below works over a four-merc roster in one
+//     nested postfix, zero errors, and deterministic rolls matching a
+//     prediction made before the run.
 //
-// THIS IS THE FIRST SUBSYSTEM IN THIS PLUGIN THAT WRITES TO THE SAVE.
-// Everything else here is read-time — GetRow postfixes, in-memory row copies,
-// prefixes that adjust an input before the game computes with it. This inserts
-// and deletes GameCharacterTrait rows. What makes that acceptable rather than
-// reckless is that all of it was proven against a live save first, by
-// CKFDataDump's [TraitProbe] over four sessions:
-//
-//   Run44  a constructed row inserts and both readers see it
-//   Run45  the same insert nested inside the InsertGameScore postfix, while
-//          the game's own insert is still unwinding through SqlNado
-//   Run46  the row survives a save, a load of another slot and a return, and
-//          the game's own SaveManager.ProcessTraits expires it on schedule
-//   Run47  the whole resolution order below, over a real four-merc roster:
-//          two inserts and a delete in one nested postfix, zero errors, and
-//          deterministic rolls matching a prediction made before the run
+// [measured] The three-tier code's first live mission, turn 1464 over four
+// mercs, granted tier 1 to three of them: the tier chain, the per-merc "on
+// tier 0" state, the Knight's own chance and duration, and the per-tier summary
+// counts all logged as intended. Every merc was on tier 0, so that run did NOT
+// exercise a merc MOVING UP — the highest-tier-held scan, the tiers stacking,
+// and the top-tier skip are still [unverified], and so is Clamp, which had
+// nothing to force or spare.
 //
 // So the mod writes the row, sets ExpiresTurn, and the engine owns the rest of
 // its life cycle. No new table, no new column, no side file, and no tick of our
@@ -136,13 +122,11 @@
 //
 // WHAT THIS DELIBERATELY DOES NOT DO. It does not filter
 // ReadGameCharactersAvailableForMission. Roster restriction is the engine's
-// job, off Off-Duty's SpecialCode 90 BlockMissions, and doing it here would
+// job, off the top tier's SpecialCode 90 BlockMissions, and doing it here would
 // also throw away the game's own "unless required by mission" story override.
-// It does not touch MedicalTurn; that route is shelved in
-// docs/character-fatigue-injury-route.md and is not a fallback. It does not
-// force a save: GameDb is a live database and a save slot is a snapshot of it,
-// so a grant persists exactly when the player's own progress does, which is the
-// least surprising behaviour available.
+// It does not touch MedicalTurn. It does not force a save: GameDb is a live
+// database and a save slot is a snapshot of it, so a grant persists exactly
+// when the player's own progress does.
 
 using System;
 using System.Collections.Generic;
@@ -160,13 +144,13 @@ namespace CKFHardMode
     // WHERE THE POWER LEVEL COMES FROM
     //
     // GameDb.ReadGameMissionActive() -> GameMissionModel, zero-arg, and its
-    // PowerLevel column is the mission's effective level — the one [PowerLevel]
+    // PowerLevel column is the mission's effective level — the one PowerLevel
     // lifts past the stock ceiling of 10. PowerLevelUnscaled is the pre-scaling
     // number and is NOT what this uses.
     //
     // The type-16 and type-19 score rows carry no mission identity at all:
     // both have ScoreTargetId 0 and an empty ScoreKey across all 92 missions in
-    // the shipped save. Only type 8 AcceptMission and type 11 StartRoom carry a
+    // a measured save. Only type 8 AcceptMission and type 11 StartRoom carry a
     // ScoreKey, and neither carries a power level. So the level has to be read
     // off the active mission, and it is read at Phase A — the first type-19 row
     // — because by the time the type-16 terminator lands the game may already
@@ -181,7 +165,8 @@ namespace CKFHardMode
     // upgrade level. WoundRes is therefore the stat, and it is a plain integer
     // column on EffectModel and on SafehouseModuleModel.
     //
-    // 144 of the 1,678 EffectModel rows carry a non-zero WoundRes. By
+    // [measured, stock dump] 144 of the 1,678 EffectModel rows carry a
+    // non-zero WoundRes. By
     // EffectClassification — whose values are an EXPLICIT enum, not declaration
     // order; reading them as declaration order mislabels every one of them:
     //
@@ -189,39 +174,32 @@ namespace CKFHardMode
     //     3 Backstory            40 rows   -50..+25    always-active
     //     4 Wound                 4 rows   -20..-10    limited-time
     //     7 Cyberware            64 rows   -25..+25    always-active
-    //     9 ArmorEffect          22 rows    +3..+30    always-active, counted since 2026-09-10
+    //     9 ArmorEffect          22 rows    +3..+30    always-active (gear; counted)
     //    10 TalentDebuff          1 row    -25..-25    limited-time
     //    12 MutationTempTrait     4 rows  -100..+50    limited-time
     //
-    // CORRECTION, 2026-09-10: gear was out on David's 2026-08-30 ruling and
-    // classification 9 was dropped wherever it arrived. He reversed that on
-    // 2026-09-10: armour now counts, read from the merc's GameArmor row, and a
+    // Armour counts: it is read from the merc's GameArmor row, and a
     // classification-9 effect arriving through any other reader counts too
     // (once, through the same union). Job nodes are included for completeness
-    // and contribute nothing: 0 of 1,525 shipped JobNodeModel rows point at an
+    // and contribute nothing: 0 of 1,525 stock JobNodeModel rows point at an
     // effect carrying WoundRes.
     //
-    // CYBERWARE RUNS NEGATIVE, AND THAT IS THE POINT. 51 of the 83 implants
-    // that carry WoundRes are negative. Every merc in David's save is between
-    // -10 and -39 from implants alone, so against a 25% base a chromed crew
-    // rolls 35-64% rather than 25%. Ruled deliberate, 2026-08-30: chrome makes
-    // you tire faster. The same ruling kept armour from buying it back; that
-    // half was reversed on 2026-09-10 and armour now counts.
+    // CYBERWARE RUNS NEGATIVE, AND THAT IS THE POINT. 51 of the 83 stock
+    // implants that carry WoundRes are negative, so a chromed merc rolls a
+    // higher chance than the base. Deliberate (David's rule): chrome makes you
+    // tire faster. Armour can buy some of it back.
     //
-    // The readers, all per-character. CORRECTION, 2026-09-10: this comment
-    // used to say all four return rows carrying a joined EffectData "exactly
-    // as GameCharacterTraitModel does". That was measured for the trait reader
-    // only (Run44) and assumed for the other three, and AddRows skipped a null
-    // EffectData silently, so the assumption could fail with no log line.
-    // Run63 is the first live run of this path: four mercs, resist 0 each, no
-    // warning. A row without the join now has its effect read from DataDb
-    // through its own content row (ResistSource below).
+    // The readers, all per-character. Only the trait reader is measured to
+    // return rows with a joined EffectData; a row from any reader without the
+    // join has its effect read from DataDb through its own content row
+    // (ResistSource below), and every roll line says how many rows each reader
+    // returned and how their effects were found.
     //
     //     ReadGameCharacterTraitsByCharacter(Int64)  already called by Phase B
     //     ReadGameCharacterEffects(Int64)
     //     ReadGameCharacterImplants(Int64)
     //     ReadGameCharacterJobNodes(Int64)
-    //     ReadGameArmorByCharacter(Int64)            one row, not a list; 2026-09-10
+    //     ReadGameArmorByCharacter(Int64)            one row, not a list
     //
     // plus the safehouse, which is global rather than per-merc.
     //
@@ -238,7 +216,7 @@ namespace CKFHardMode
     {
         // 4 turns = 1 day. RuleModel 40 "Max Injury Time" is 100 turns and the
         // game describes it as "25 days default", which is where this comes
-        // from. Run46 confirmed it: a 1-day grant at turn 1386 expired at 1390.
+        // from. [measured] A 1-day grant at turn 1386 expired at 1390.
         private const long TurnsPerDay = 4;
 
         private const long ScoreTypeMissionComplete = 16;
@@ -267,7 +245,7 @@ namespace CKFHardMode
         // than assumed from declaration order. Only the ones this file reasons
         // about are named.
         private const long ClassWound = 4;
-        private const long ClassArmorEffect = 9;      // gear; counted since 2026-09-10
+        private const long ClassArmorEffect = 9;      // gear; counted
         private const long ClassMutationTempTrait = 12;
         private const long ClassMutationTempTraitFace = 15;
 
@@ -294,9 +272,9 @@ namespace CKFHardMode
         // RowClone carries the same flag for the same reason.
         [ThreadStatic] private static bool reentrant;
 
-        // Phase A's roster, and the section 4.1 guard. The guard is keyed on the
+        // Phase A's roster, and the double-fire guard. The guard is keyed on the
         // mission's turn AND its sorted roster, not the turn alone. What that
-        // actually buys is narrower than this comment used to claim: two missions
+        // buys is narrow: two missions
         // completing on one turn are told apart only when their SQUADS differ.
         // The SAME squad on two missions in one turn produces the identical key,
         // so the second one is blocked as a double-fire and its fatigue is lost
@@ -322,9 +300,9 @@ namespace CKFHardMode
 
         // The active mission's PowerLevel, captured at Phase A because the
         // mission may already be retired by the time the terminator lands.
-        // 0 means "not read". Since 2026-09-07 that is not a special case in
-        // the curve any more: 0 is below every sane anchor, so Curve() clamps it
-        // to the lowest one. Resolve still says so once.
+        // 0 means "not read". That is not a special case in the curve: 0 is
+        // below every sane anchor, so Curve() clamps it to the lowest one.
+        // Resolve says so once.
         private static long pendingPowerLevel;
 
         // Log-once flags, so a session that cannot read the power level or that
@@ -363,9 +341,8 @@ namespace CKFHardMode
         // EVERY CONFIG TYPE BELOW CARRIES AN `Unknown` BUCKET. [JsonExtensionData]
         // collects the keys that map to no member of its type, which
         // System.Text.Json otherwise drops without a word: "chancepercent" with
-        // a lower-case p used to vanish and leave ChancePercent at its shipped
-        // default of 25, so the mod wrote traits at that rate rather than the
-        // one in the file, with no log line anywhere. Load walks these buckets
+        // a lower-case p would vanish and the mod would run on a value other
+        // than the one in the file, with no log line anywhere. Load walks these buckets
         // and refuses the file. Matching stays case-SENSITIVE on purpose — a
         // misspelled key has to land in the bucket to be reported, and turning
         // on case-insensitive matching would hide exactly the typo this catches.
@@ -375,11 +352,21 @@ namespace CKFHardMode
         // and this project targets net6.0 (see CKFHardMode.csproj), so it does
         // not exist here.
 
+        // The three tiers' default trait ids. Each one equals its schema default
+        // (schema/fatigue.schema.json tier1.traitId, tier2.traitId,
+        // tier3.traitId) and applies only where the file names no id. They are
+        // constants rather than property initialisers because one TierBlock type
+        // serves all three tiers and a property can carry only one initialiser;
+        // Load applies them.
+        private const long DefaultTier1TraitId = 2007;
+        private const long DefaultTier2TraitId = 2009;
+        private const long DefaultTier3TraitId = 2014;
+
         // One anchor point on the power-level curve. Every field is optional and
         // each one interpolates independently over the anchors that name it, so
         // a curve can shape the chance across all 20 levels while leaving the
         // ceiling flat. A field named by NO anchor of any applicable curve has
-        // no value at all now that the flat settings are gone; what each
+        // no value at all (there are no flat settings); what each
         // resolver does about that is written out at the resolvers.
         private sealed class LevelPoint
         {
@@ -390,30 +377,36 @@ namespace CKFHardMode
             [JsonExtensionData] public Dictionary<string, JsonElement> Unknown { get; set; }
         }
 
-        // Used by BOTH runningEmpty.knight and offDuty.knight.
+        // The Cyber Knight's own curve, consulted before the general one for HIM
+        // and for nobody else. It carries chancePercent and durationDays only:
+        // he sits inside the general minAffected and maxAffected clamp (David's
+        // rule), so a floor or a ceiling here would have nothing to act on, and
+        // CheckLevels names one rather than ignoring it.
         private sealed class KnightBlock
         {
-            // LEGACY AND IGNORED, 2026-09-07. runningEmpty.knight.chancePercent
-            // and runningEmpty.knight.durationDays / offDuty.knight.durationDays
-            // are off the config surface; the Knight's numbers come from his
-            // byPowerLevel curve, or the general one where he has none. These
-            // two properties exist ONLY so a file written before the removal
-            // still parses — Load refuses any file with a key that maps to no
-            // member, so deleting them would lock every existing player out of
-            // their own config. Nothing reads them; LegacyKeys names them in one
-            // log line when a file carries them. offDuty.knight.chancePercent
-            // was never a real setting and is warned about separately in
-            // Validate, because escalation is not a roll.
-            [JsonPropertyName("chancePercent")] public int? ChancePercent { get; set; }
-            [JsonPropertyName("durationDays")]  public int? DurationDays { get; set; }
             [JsonPropertyName("byPowerLevel")]
             public Dictionary<string, LevelPoint> ByPowerLevel { get; set; }
             [JsonExtensionData] public Dictionary<string, JsonElement> Unknown { get; set; }
         }
 
+        // One tier. The trait id is the whole of it. The odds, the duration, the
+        // floor and the ceiling are shared by every tier and live in the single
+        // byPowerLevel curve — that sharing is what "the same roll at every
+        // tier" means in the config as much as in the code, and it is why there
+        // is nothing else in here.
+        //
+        // TraitId is nullable so that "the file named no id" and "the file named
+        // 0" stay different answers: the first takes the tier's default, the
+        // second is a typo Validate refuses.
+        private sealed class TierBlock
+        {
+            [JsonPropertyName("traitId")] public long? TraitId { get; set; }
+            [JsonExtensionData] public Dictionary<string, JsonElement> Unknown { get; set; }
+        }
+
         // A merc's Wound Resist, summed and subtracted from their chance one
-        // point per percentage point. Positive resist protects; negative resist
-        // — which is most cyberware — makes fatigue more likely.
+        // point per percentage point, at every tier. Positive resist protects;
+        // negative resist — which is most cyberware — makes fatigue more likely.
         private sealed class WoundResistBlock
         {
             [JsonPropertyName("enabled")] public bool Enabled { get; set; } = true;
@@ -425,87 +418,73 @@ namespace CKFHardMode
             [JsonExtensionData] public Dictionary<string, JsonElement> Unknown { get; set; }
         }
 
-        private sealed class RunningEmptyBlock
-        {
-            [JsonPropertyName("traitId")]       public long TraitId { get; set; } = 2009;
-
-            // LEGACY AND IGNORED, 2026-09-07. chancePercent, durationDays,
-            // minAffected and maxAffected are off the config surface; all four
-            // live in byPowerLevel and nowhere else. Kept, nullable and with no
-            // initialiser, for the same two reasons throughout: an old file has
-            // to keep parsing (Load refuses a key that maps to no member), and
-            // nullable is the only way to tell "the file set it" from "the file
-            // did not", which is what LegacyKeys reports. NOTHING READS THEM.
-            [JsonPropertyName("chancePercent")] public int? ChancePercent { get; set; }
-            [JsonPropertyName("durationDays")]  public int? DurationDays { get; set; }
-            [JsonPropertyName("minAffected")]   public int? MinAffected { get; set; }
-            [JsonPropertyName("maxAffected")]   public int? MaxAffected { get; set; }
-
-            [JsonPropertyName("byPowerLevel")]
-            public Dictionary<string, LevelPoint> ByPowerLevel { get; set; }
-            [JsonPropertyName("knight")]        public KnightBlock Knight { get; set; }
-            [JsonExtensionData] public Dictionary<string, JsonElement> Unknown { get; set; }
-        }
-
-        private sealed class OffDutyBlock
-        {
-            [JsonPropertyName("traitId")]            public long TraitId { get; set; } = 2014;
-
-            // LEGACY AND IGNORED, 2026-09-07. offDuty.durationDays is off the
-            // config surface; the Off-Duty duration lives in byPowerLevel. Kept
-            // so an old file parses; nothing reads it.
-            [JsonPropertyName("durationDays")]       public int? DurationDays { get; set; }
-
-            [JsonPropertyName("clearsRunningEmpty")] public bool ClearsRunningEmpty { get; set; } = true;
-            // Off-Duty duration scales with mission power level too — David's
-            // ruling 4, wired in 2.9.2, and since 2026-09-07 the only place it
-            // lives. Only durationDays means anything on these anchors; the
-            // other three fields belong to the roll, which escalation does not
-            // make.
-            [JsonPropertyName("byPowerLevel")]
-            public Dictionary<string, LevelPoint> ByPowerLevel { get; set; }
-            [JsonPropertyName("knight")]             public KnightBlock Knight { get; set; }
-            [JsonExtensionData] public Dictionary<string, JsonElement> Unknown { get; set; }
-        }
-
         private sealed class Options
         {
-            // RETIRED 2026-09-13. This used to be
-            //     [JsonPropertyName("enabled")] public bool Enabled { get; set; } = true;
-            // and Init branched on it. The gate is [Slices] Fatigue in
-            // ckf.hardmode.cfg now, because a gate cannot live inside the file
-            // it gates (design.md section 3). Still parsed, into a bool? so
-            // "absent" and "false" stay different answers, so an existing
-            // document is not refused for a key that maps to no member -- the
-            // same treatment LegacyKeys below gives the eight flat settings
-            // removed on 2026-09-07. Nothing branches on it.
+            // RETIRED gate. The switch is [Slices] Fatigue in ckf.hardmode.cfg,
+            // because a gate cannot live inside the file it gates. Still
+            // parsed, into a bool? so "absent" and "false" stay different
+            // answers, so a file carrying it is not refused for a key that maps
+            // to no member — the same treatment LegacyKeys gives the retired 4.0
+            // blocks. Nothing branches on it.
+            //
+            // Initialisers here and in the blocks above match the schema
+            // defaults (schema/fatigue.schema.json) and apply only when a key is
+            // absent from the file.
             //
             // woundResist.enabled is NOT retired. It gates a block inside this
             // subsystem rather than the subsystem, so it is a setting.
-            [JsonPropertyName("enabled")]            public bool? RetiredEnabled { get; set; }
-            [JsonPropertyName("runningEmpty")]       public RunningEmptyBlock RunningEmpty { get; set; }
-            [JsonPropertyName("offDuty")]            public OffDutyBlock OffDuty { get; set; }
+            [JsonPropertyName("enabled")] public bool? RetiredEnabled { get; set; }
+
+            // THE 4.0 LAYOUT, RETIRED AND UNREAD. runningEmpty and offDuty were
+            // two stage blocks with four byPowerLevel curves between them, and
+            // escalation to Off-Duty took no roll. Held as raw JsonElement
+            // rather than modelled, for two reasons: any 4.0 shape then parses,
+            // so a 4.0 file loads instead of being refused for keys that map to
+            // no member; and nothing inside them can be reported as an
+            // unrecognised key, which is right for a block nothing reads.
+            // LegacyKeys names whichever of them a file carries, and Validate
+            // refuses the file anyway because the 4.0 curves do not stand behind
+            // the 4.1 ones — an old file names no top-level byPowerLevel at all.
+            [JsonPropertyName("runningEmpty")] public JsonElement? RetiredRunningEmpty { get; set; }
+            [JsonPropertyName("offDuty")]      public JsonElement? RetiredOffDuty { get; set; }
+
+            // The one curve every tier reads: chancePercent, durationDays,
+            // minAffected and maxAffected. Required; Validate refuses an absent
+            // or empty one.
+            [JsonPropertyName("byPowerLevel")]
+            public Dictionary<string, LevelPoint> ByPowerLevel { get; set; }
+            [JsonPropertyName("knight")]             public KnightBlock Knight { get; set; }
+
+            [JsonPropertyName("tier1")]              public TierBlock Tier1 { get; set; }
+            [JsonPropertyName("tier2")]              public TierBlock Tier2 { get; set; }
+            [JsonPropertyName("tier3")]              public TierBlock Tier3 { get; set; }
+
             [JsonPropertyName("woundResist")]        public WoundResistBlock WoundResist { get; set; }
             [JsonPropertyName("deterministicRolls")] public bool DeterministicRolls { get; set; } = true;
-            [JsonPropertyName("logGrants")]          public bool LogGrants { get; set; } = true;
+            [JsonPropertyName("logGrants")]          public bool LogGrants { get; set; }
             [JsonExtensionData] public Dictionary<string, JsonElement> Unknown { get; set; }
-        }
 
+            // The tiers in order, index 0 being tier 1, built by Load once the
+            // defaults are in. Everything downstream — the trait scan, the
+            // grant, the double-fire guard, Validate's distinctness check —
+            // walks THIS rather than naming Tier1/Tier2/Tier3, so a tier is a
+            // position in a list and not a branch in the code.
+            [JsonIgnore] public TierBlock[] Tiers { get; set; }
+
+            // tierTraitIds[i] is Tiers[i].TraitId, resolved. Held separately so
+            // the hot paths compare longs rather than dereferencing a block per
+            // trait row per merc.
+            [JsonIgnore] public long[] TraitIds { get; set; }
+        }
         // ---- init ------------------------------------------------------------
 
         public static void Init(Harmony harmony)
         {
-            // CORRECTION, 2026-09-13. This used to read "3.0: one gate, not
-            // two. [Fatigue] Enabled is gone from ckf.hardmode.cfg and
-            // \"enabled\" in the \"fatigue\" section is the whole chain, so
-            // the file is read first and the switch is read out of it."
-            //
-            // It is still one gate, and it is the other one. [Slices] Fatigue
-            // in ckf.hardmode.cfg is the whole chain, and it is read BEFORE the
-            // section, because a gate cannot live inside the file it gates and
-            // a syntax error in ckf.hardmode.json must not be able to take a
-            // switch with it (design.md section 3). This subsystem WRITES TO
-            // THE SAVE, so that ordering matters more here than anywhere else.
+            // One gate: [Slices] Fatigue in ckf.hardmode.cfg, read BEFORE the
+            // settings file, because a gate cannot live inside the file it gates
+            // and a syntax error in fatigue.json must not be able to take a
+            // switch with it. This subsystem WRITES TO THE SAVE, so that
+            // ordering matters more here than anywhere else.
             if (!Slices.On("Fatigue"))
             {
                 Plugin.Log.LogInfo(Slices.OffBecause("Fatigue",
@@ -544,7 +523,7 @@ namespace CKFHardMode
             // no call graph can be read out of it offline — and these two are
             // the only methods in it that name loading a game. If they are the
             // wrong ones, or the game reloads by restarting the process, this
-            // patches nothing and says so; the section 4.1 guard checks the
+            // patches nothing and says so; the double-fire guard checks the
             // database rather than this hook, so nothing depends on the guess.
             // The log line below is what the first play session answers it with.
             int loadHooks = Patch(harmony, GameManagementTypeName, "LoadGame",
@@ -565,10 +544,8 @@ namespace CKFHardMode
             Plugin.Log.LogWarning("Fatigue: ACTIVE, and this subsystem WRITES TO YOUR SAVE.");
         }
 
-        // 3.0: the text comes from ConfigDoc — one merged document, one section
-        // each. Only the SOURCE of the text changed; the parse, the strays
-        // check, the defaulting and every error path below are as they were.
-        // `path` is only interpolated into messages.
+        // The text comes from ConfigDoc (fatigue.json). `path` is only
+        // interpolated into messages.
         private static Options Load()
         {
             var path = ConfigDoc.Where(ConfigDoc.Fatigue);
@@ -577,17 +554,9 @@ namespace CKFHardMode
                 var text = ConfigDoc.SectionText(ConfigDoc.Fatigue);
                 if (text == null)
                 {
-                    // AGENTS.md §3: an absent section and an unreadable document
-                    // are different findings and do not share a log level.
-                    //
-                    // CORRECTION, 2026-09-07. This used to end "delete
-                    // BepInEx/config/ckf.hardmode.json and relaunch — it is
-                    // written back whenever it is absent". That was true while
-                    // the DLL carried the defaults as embedded resources. It
-                    // does not carry them now: they ship as loose files in the
-                    // release zip, nothing writes one back, and following that
-                    // advice would delete the player's whole config surface
-                    // with no way for the mod to restore it. The zip is the
+                    // An absent file and an unreadable file are different
+                    // findings and do not share a log level (AGENTS.md).
+                    // Nothing writes the file back; the release zip is the
                     // place to restore from.
                     var why = $"Fatigue: {ConfigDoc.WhyNo(ConfigDoc.Fatigue)}, so there are no "
                         + "odds and no durations to work from. Doing nothing. To start again "
@@ -615,43 +584,59 @@ namespace CKFHardMode
                     return null;
                 }
 
-                // One line per unrecognised key, naming the key and the block it
-                // was written in. A dropped key does not fail loudly on its own:
-                // it leaves that setting at its DEFAULT, and a chancePercent
-                // that never arrived means the shipped 25% whatever the file
-                // says, so this refuses the file instead.
+                f.WoundResist = f.WoundResist ?? new WoundResistBlock();
+                f.Tier1 = f.Tier1 ?? new TierBlock();
+                f.Tier2 = f.Tier2 ?? new TierBlock();
+                f.Tier3 = f.Tier3 ?? new TierBlock();
+
+                // A tier the file named no id for takes its schema default. Done
+                // here rather than as a property initialiser because one
+                // TierBlock type serves all three and a property carries one
+                // initialiser; the constants sit beside the type with the schema
+                // paths they mirror.
+                if (!f.Tier1.TraitId.HasValue) f.Tier1.TraitId = DefaultTier1TraitId;
+                if (!f.Tier2.TraitId.HasValue) f.Tier2.TraitId = DefaultTier2TraitId;
+                if (!f.Tier3.TraitId.HasValue) f.Tier3.TraitId = DefaultTier3TraitId;
+
+                // THE ORDERED TIERS, built once. Everything after this point
+                // treats a tier as an index into these two arrays rather than as
+                // one of three named blocks, which is what keeps the trait scan,
+                // the grant, the guard and Validate from each carrying their own
+                // three-way branch.
+                f.Tiers = new[] { f.Tier1, f.Tier2, f.Tier3 };
+                f.TraitIds = new long[f.Tiers.Length];
+                for (int i = 0; i < f.Tiers.Length; i++)
+                    f.TraitIds[i] = f.Tiers[i].TraitId.Value;
+
+                // Built before UnknownKeys is asked anything, because that walk
+                // reads Tiers.
                 var strays = UnknownKeys(f);
                 if (strays.Count > 0)
                 {
                     foreach (var stray in strays)
                         Plugin.Log.LogError($"Fatigue: {path}: {stray}.");
                     Plugin.Log.LogError("Fatigue: keys are case-sensitive and every one above was "
-                        + "IGNORED, leaving that setting at its built-in default — \"chancepercent\" "
-                        + "is not \"chancePercent\", and the chance would have stayed 25. The "
-                        + "feature is OFF rather than running on defaults nobody chose; fix the "
-                        + "key(s) and restart.");
+                        + "IGNORED, leaving that setting at its built-in default or unset — "
+                        + "\"chancepercent\" is not \"chancePercent\". The feature is OFF rather "
+                        + "than running on values nobody chose; fix the key(s) and restart.");
                     return null;
                 }
 
-                f.RunningEmpty = f.RunningEmpty ?? new RunningEmptyBlock();
-                f.OffDuty = f.OffDuty ?? new OffDutyBlock();
-                f.WoundResist = f.WoundResist ?? new WoundResistBlock();
-
-                // The eight flat settings removed on 2026-09-07 still PARSE, so
-                // an old file loads instead of being refused for keys that map
-                // to no member. They are not read, and a setting that is read by
-                // nothing and reported by nothing is exactly the silent failure
-                // the Unknown buckets above exist to prevent. So: one line, at
-                // load, naming every one the file actually carries.
+                // The retired 4.0 blocks still PARSE, so a 4.0 file loads
+                // instead of being refused for keys that map to no member. They
+                // are not read, and a setting read by nothing and reported by
+                // nothing is exactly the silent failure the Unknown buckets
+                // exist to prevent. So: one line, at load, naming what it found.
                 var legacy = LegacyKeys(f);
                 if (legacy.Count > 0)
-                    Plugin.Log.LogWarning($"Fatigue: {path} still carries "
-                        + string.Join(", ", legacy) + ". Those settings were removed on "
-                        + "2026-09-07 and are IGNORED — the matching byPowerLevel curve is what "
-                        + "applies, at every power level including one that could not be read. "
-                        + "They are still accepted so an older file keeps loading; deleting them "
-                        + "changes nothing. A single anchor at power level 1 is how a flat value "
-                        + "is written now.");
+                    Plugin.Log.LogWarning($"Fatigue: {path} still carries the 4.0 "
+                        + string.Join(" and ", legacy) + " block(s). The layout changed in 4.1: "
+                        + "the two stage blocks and their four curves became ONE top-level "
+                        + "byPowerLevel curve plus an optional knight.byPowerLevel, and the three "
+                        + "traits are now tier1.traitId, tier2.traitId and tier3.traitId. Those "
+                        + "blocks are IGNORED and do not stand behind the new curve, so if this "
+                        + "file names no top-level byPowerLevel the next check refuses it. Replace "
+                        + "the file from the release zip, or open it in the config editor.");
                 return f;
             }
             catch (JsonException je)
@@ -669,7 +654,7 @@ namespace CKFHardMode
             }
             catch (Exception e)
             {
-                // Never throw past Init. A malformed sidecar turns the feature
+                // Never throw past Init. A malformed settings file turns the feature
                 // off; it does not take the plugin with it.
                 Plugin.Log.LogError($"Fatigue: could not read {path}: {e.GetType().Name}: "
                                   + e.Message + ". Doing nothing.");
@@ -679,39 +664,36 @@ namespace CKFHardMode
 
         // Every key in the file that mapped to no member, as finished sentences
         // naming the key and the block. Walks the Unknown buckets by hand
-        // because there are only ten places one can appear and a reflective walk
-        // over the graph would be harder to check than the list itself.
+        // because there are only eight places one can appear and a reflective
+        // walk over the graph would be harder to check than the list itself.
+        //
+        // The retired runningEmpty and offDuty blocks are NOT walked. They are
+        // held as raw JSON precisely so that nothing inside them has to map to a
+        // member, which is the right answer for a block nothing reads: a typo in
+        // a retired curve costs nothing, and refusing the file over one would
+        // stop a 4.0 file loading for no gain. LegacyKeys names the blocks
+        // themselves.
         private static List<string> UnknownKeys(Options f)
         {
             var bad = new List<string>();
             if (f == null) return bad;
 
             AddUnknown(f.Unknown, "top level of the file", bad);
+            AddUnknownLevels(f.ByPowerLevel, "byPowerLevel", bad);
 
-            var re = f.RunningEmpty;
-            if (re != null)
+            if (f.Knight != null)
             {
-                AddUnknown(re.Unknown, "runningEmpty block", bad);
-                AddUnknownLevels(re.ByPowerLevel, "runningEmpty.byPowerLevel", bad);
-                if (re.Knight != null)
-                {
-                    AddUnknown(re.Knight.Unknown, "runningEmpty.knight block", bad);
-                    AddUnknownLevels(re.Knight.ByPowerLevel, "runningEmpty.knight.byPowerLevel",
-                                     bad);
-                }
+                AddUnknown(f.Knight.Unknown, "knight block", bad);
+                AddUnknownLevels(f.Knight.ByPowerLevel, "knight.byPowerLevel", bad);
             }
 
-            var od = f.OffDuty;
-            if (od != null)
-            {
-                AddUnknown(od.Unknown, "offDuty block", bad);
-                AddUnknownLevels(od.ByPowerLevel, "offDuty.byPowerLevel", bad);
-                if (od.Knight != null)
-                {
-                    AddUnknown(od.Knight.Unknown, "offDuty.knight block", bad);
-                    AddUnknownLevels(od.Knight.ByPowerLevel, "offDuty.knight.byPowerLevel", bad);
-                }
-            }
+            // Walked off Tiers rather than Tier1/Tier2/Tier3 so that a fourth
+            // tier is picked up here by adding it to the array in Load, not by
+            // remembering to add a line to this method.
+            if (f.Tiers != null)
+                for (int i = 0; i < f.Tiers.Length; i++)
+                    if (f.Tiers[i] != null)
+                        AddUnknown(f.Tiers[i].Unknown, $"tier{i + 1} block", bad);
 
             if (f.WoundResist != null)
                 AddUnknown(f.WoundResist.Unknown, "woundResist block", bad);
@@ -719,43 +701,18 @@ namespace CKFHardMode
             return bad;
         }
 
-        // Every one of the eight removed flat settings that this file actually
-        // carries, named by its full config path. Walked by hand for the same
-        // reason UnknownKeys is: eight places, and the list is easier to check
-        // than a reflective walk would be.
-        //
-        // offDuty.knight.chancePercent is deliberately NOT here. It was never a
-        // real setting — escalation is not a roll — and Validate has its own
-        // warning for it, which says why rather than "removed on 2026-09-07".
+        // The retired 4.0 blocks this file carries, named so that a setting read
+        // by nothing is still reported by something — the silent failure the
+        // Unknown buckets exist to prevent. Unlike the flat keys they replaced,
+        // these are not merely ignored: a file that still has them almost
+        // certainly has no top-level byPowerLevel either, and Validate refuses
+        // it. The message at the call site says so.
         private static List<string> LegacyKeys(Options f)
         {
             var found = new List<string>();
             if (f == null) return found;
-
-            var re = f.RunningEmpty;
-            if (re != null)
-            {
-                if (re.ChancePercent.HasValue) found.Add("runningEmpty.chancePercent");
-                if (re.DurationDays.HasValue)  found.Add("runningEmpty.durationDays");
-                if (re.MinAffected.HasValue)   found.Add("runningEmpty.minAffected");
-                if (re.MaxAffected.HasValue)   found.Add("runningEmpty.maxAffected");
-                if (re.Knight != null)
-                {
-                    if (re.Knight.ChancePercent.HasValue)
-                        found.Add("runningEmpty.knight.chancePercent");
-                    if (re.Knight.DurationDays.HasValue)
-                        found.Add("runningEmpty.knight.durationDays");
-                }
-            }
-
-            var od = f.OffDuty;
-            if (od != null)
-            {
-                if (od.DurationDays.HasValue) found.Add("offDuty.durationDays");
-                if (od.Knight != null && od.Knight.DurationDays.HasValue)
-                    found.Add("offDuty.knight.durationDays");
-            }
-
+            if (f.RetiredRunningEmpty.HasValue) found.Add("runningEmpty");
+            if (f.RetiredOffDuty.HasValue) found.Add("offDuty");
             return found;
         }
 
@@ -782,29 +739,12 @@ namespace CKFHardMode
 
         private static bool Validate()
         {
-            var re = o.RunningEmpty;
-            var od = o.OffDuty;
             bool ok = true;
 
-            if (re.TraitId == 0 || od.TraitId == 0)
-            {
-                Plugin.Log.LogError("Fatigue: traitId is 0 on one of the blocks. Both stages need "
-                    + "a real TraitClass 6 id — 2009 Running Empty and 2014 Off-Duty are the "
-                    + "shipped pair; 2007 Checked Out is the milder first stage.");
-                ok = false;
-            }
-            if (re.TraitId == od.TraitId)
-            {
-                Plugin.Log.LogError($"Fatigue: both stages are trait {re.TraitId}. Escalation "
-                    + "would be indistinguishable from the first grant, so the merc would never "
-                    + "leave the first stage.");
-                ok = false;
-            }
-
-            // WHAT A traitId IS AND IS NOT CHECKED FOR. It is checked for 0,
-            // for the two stages being equal, for being negative, and for
-            // landing in the range this project reserves for RowClone's
-            // constructed rows. It is NOT checked against the content database:
+            // WHAT A traitId IS AND IS NOT CHECKED FOR. Each is checked for 0,
+            // for being negative, for being distinct from the other tiers, and
+            // for landing in the range this project reserves for RowClone's
+            // constructed rows. None is checked against the content database:
             // this file has no TraitModel reader, and answering "does 2009
             // exist?" would mean asserting something about the game's data that
             // nothing here can verify. So "20009" typed for "2009" is caught
@@ -819,72 +759,99 @@ namespace CKFHardMode
             // refused rather than warned about, because a dangling reference
             // this file would persist into the save is worse than a config that
             // has to move a deliberately cloned trait id out of the range.
-            if (re.TraitId < 0 || od.TraitId < 0)
-            {
-                Plugin.Log.LogError($"Fatigue: a negative traitId (runningEmpty {re.TraitId}, "
-                    + $"offDuty {od.TraitId}). Trait ids are positive.");
-                ok = false;
-            }
-            if (re.TraitId >= CloneReservedFrom || od.TraitId >= CloneReservedFrom)
-            {
-                Plugin.Log.LogError($"Fatigue: a traitId (runningEmpty {re.TraitId}, offDuty "
-                    + $"{od.TraitId}) is in the id range this project reserves for RowClone's "
-                    + $"constructed rows ({CloneReservedFrom}+). The game ships no rows up there, "
-                    + "so this is a typo, and every fatigued merc would carry a TraitTypeId that "
-                    + "resolves to nothing until it expires. The feature is off rather than "
-                    + "writing that into your save.");
-                ok = false;
-            }
-            // THE FLAT RANGE CHECKS THAT USED TO SIT HERE ARE GONE, with the
-            // settings they checked: runningEmpty.chancePercent 0-100,
-            // runningEmpty.knight.chancePercent 0-100, durationDays >= 1 on both
-            // blocks, minAffected >= 0, and maxAffected >= minAffected. Every
-            // one of them still runs — on the anchors, in CheckLevels, which has
-            // covered all four fields since 2.9.2, plus the PL 1-20 sweep below
-            // for the pair that can only cross on a curve. Nothing was dropped;
-            // the values simply moved.
             //
-            // runningEmpty.byPowerLevel is now REQUIRED. There is no flat layer
-            // behind it, so an absent or empty curve is a config that names no
-            // chance, no duration and no counts at all — the feature would have
-            // nothing to roll with. Refused rather than run on numbers nobody
-            // chose, which is the same call Load makes about a misspelled key.
-            if (!HasAnyCurve(re.ByPowerLevel))
+            // Walked over Tiers rather than written as three named comparisons,
+            // so the pairwise distinctness check below is one loop instead of
+            // three hand-written pairs that a fourth tier would turn into six.
+            for (int i = 0; i < o.Tiers.Length; i++)
             {
-                Plugin.Log.LogError("Fatigue: runningEmpty.byPowerLevel is absent or empty, and "
-                    + "since 2026-09-07 it is the only place the first stage's chance, duration, "
-                    + "floor and ceiling live — the flat settings that used to back it up were "
-                    + "removed. There is nothing to roll with, so the feature is OFF rather than "
-                    + "running on built-in numbers nobody chose. Add at least one anchor; a "
-                    + "single anchor at power level 1 applies at every level, which is what a "
-                    + "flat value is now.");
+                long id = o.TraitIds[i];
+                if (id == 0)
+                {
+                    Plugin.Log.LogError($"Fatigue: tier{i + 1}.traitId is 0. Every tier needs a "
+                        + "real TraitClass 6 id — 2007 Checked Out, 2009 Running Empty and 2014 "
+                        + "Off-Duty are the shipped three, in that order of severity.");
+                    ok = false;
+                }
+                if (id < 0)
+                {
+                    Plugin.Log.LogError($"Fatigue: tier{i + 1}.traitId is {id}. Trait ids are "
+                        + "positive.");
+                    ok = false;
+                }
+                if (id >= CloneReservedFrom)
+                {
+                    Plugin.Log.LogError($"Fatigue: tier{i + 1}.traitId is {id}, in the id range "
+                        + $"this project reserves for RowClone's constructed rows "
+                        + $"({CloneReservedFrom}+). The game ships no rows up there, so this is a "
+                        + "typo, and every merc granted that tier would carry a TraitTypeId that "
+                        + "resolves to nothing until it expires. The feature is off rather than "
+                        + "writing that into your save.");
+                    ok = false;
+                }
+            }
+
+            // Two tiers sharing an id would make the track unreadable in both
+            // directions: the scan could not tell which tier a merc is on, so a
+            // merc on the lower of the pair would be read as already holding the
+            // higher one and would stop moving up.
+            for (int i = 0; i < o.TraitIds.Length; i++)
+                for (int j = i + 1; j < o.TraitIds.Length; j++)
+                    if (o.TraitIds[i] == o.TraitIds[j])
+                    {
+                        Plugin.Log.LogError($"Fatigue: tier{i + 1} and tier{j + 1} are both trait "
+                            + $"{o.TraitIds[i]}. A merc on tier {i + 1} would be read as already "
+                            + $"carrying tier {j + 1}, so nobody would ever move past it. Every "
+                            + "tier needs its own id; the three shipped traits each sit in their "
+                            + "own TraitGroup so they can be held together.");
+                        ok = false;
+                    }
+
+            // The range rules (chancePercent 0-100, durationDays >= 1,
+            // minAffected >= 0, maxAffected >= minAffected) run on the anchors,
+            // in CheckLevels, plus the PL 1-20 sweep below for the pair that can
+            // only cross on a curve.
+            //
+            // byPowerLevel is REQUIRED. There is no flat layer behind it and no
+            // per-tier curve either, so an absent or empty curve is a config that
+            // names no chance, no duration and no counts at all — the feature
+            // would have nothing to roll with. Refused rather than run on numbers
+            // nobody chose, which is the same call Load makes about a misspelled
+            // key. A 4.0 file reaches exactly this line: its curves are inside
+            // the retired runningEmpty and offDuty blocks, which nothing reads.
+            if (!HasAnyCurve(o.ByPowerLevel))
+            {
+                Plugin.Log.LogError("Fatigue: byPowerLevel is absent or empty, and it is the only "
+                    + "place the chance, the duration, the floor and the ceiling live — for every "
+                    + "tier. There is nothing to roll with, so the feature is OFF rather than "
+                    + "running on built-in numbers nobody chose. Add at least one anchor; a single "
+                    + "anchor at power level 1 applies at every level, which is how a flat value "
+                    + "is written. If this file still has a 4.0 runningEmpty or offDuty block, its "
+                    + "curves are in there and are not read — replace the file from the release "
+                    + "zip, or open it in the config editor.");
                 ok = false;
             }
             else
             {
                 // A curve that exists but names neither field is the same hole
-                // one level down, and it used to be impossible: chancePercent
-                // and durationDays had initialisers and were range-checked, so
-                // a config Validate accepted always had both. Caught here
-                // rather than at the first mission completion, where it costs a
-                // pair of errors and a roster nothing happened to. The Knight's
-                // curve does not count — it is consulted first for HIM and
-                // falls through to this one for everybody else, so a config
-                // that names a chance only on his curve leaves every other merc
-                // with none.
-                if (!Names(re.ByPowerLevel, p => p.ChancePercent))
+                // one level down. Caught here rather than at the first mission
+                // completion, where it costs a pair of errors and a roster
+                // nothing happened to. The Knight's curve does not count — it is
+                // consulted first for HIM and falls through to this one for
+                // everybody else, so a config that names a chance only on his
+                // curve leaves every other merc with none.
+                if (!Names(o.ByPowerLevel, p => p.ChancePercent))
                 {
-                    Plugin.Log.LogError("Fatigue: no anchor of runningEmpty.byPowerLevel names "
-                        + "chancePercent, so there is no chance to roll any merc against. Give "
-                        + "at least one anchor a chancePercent.");
+                    Plugin.Log.LogError("Fatigue: no anchor of byPowerLevel names chancePercent, "
+                        + "so there is no chance to roll any merc against and nobody moves onto "
+                        + "any tier. Give at least one anchor a chancePercent.");
                     ok = false;
                 }
-                if (!Names(re.ByPowerLevel, p => p.DurationDays))
+                if (!Names(o.ByPowerLevel, p => p.DurationDays))
                 {
-                    Plugin.Log.LogError("Fatigue: no anchor of runningEmpty.byPowerLevel names "
-                        + "durationDays, so a merc who failed the roll would be granted a trait "
-                        + "with no expiry, which is PERMANENT. Give at least one anchor a "
-                        + "durationDays.");
+                    Plugin.Log.LogError("Fatigue: no anchor of byPowerLevel names durationDays, so "
+                        + "a merc who failed the roll would be granted a trait with no expiry, "
+                        + "which is PERMANENT. Give at least one anchor a durationDays.");
                     ok = false;
                 }
             }
@@ -897,40 +864,22 @@ namespace CKFHardMode
                 ok = false;
             }
 
-            // The two Knight durationDays >= 1 checks that used to sit here went
-            // with the settings they checked. CheckLevels applies the same rule
-            // to every anchor of runningEmpty.knight.byPowerLevel and
-            // offDuty.knight.byPowerLevel, so a zero-day Knight duration — a
-            // PERMANENT trait, which is what the rule exists to stop — is still
-            // rejected wherever it can now be written.
-            //
-            // offDuty.knight.chancePercent is NOT one of the removed settings.
-            // It was never a real one: KnightBlock is shared with
-            // runningEmpty.knight, so the key parses on the Off-Duty block too
-            // and means nothing there. It keeps its own warning, which says why.
-            if (od.Knight != null && od.Knight.ChancePercent.HasValue)
-                Plugin.Log.LogWarning("Fatigue: offDuty.knight.chancePercent is set and means "
-                    + "nothing. Escalation is not a roll — a merc who deploys carrying the first "
-                    + "stage goes Off-Duty every time.");
-
-            ok &= CheckLevels(re.ByPowerLevel, "runningEmpty.byPowerLevel", false);
-            if (re.Knight != null)
-                ok &= CheckLevels(re.Knight.ByPowerLevel, "runningEmpty.knight.byPowerLevel", false);
-
-            // Off-Duty anchors carry durationDays and nothing else; the roll
-            // belongs to the first stage.
-            ok &= CheckLevels(od.ByPowerLevel, "offDuty.byPowerLevel", true);
-            if (od.Knight != null)
-                ok &= CheckLevels(od.Knight.ByPowerLevel, "offDuty.knight.byPowerLevel", true);
+            // CheckLevels applies the durationDays >= 1 rule to the Knight's
+            // anchors too, so a zero-day Knight duration — a PERMANENT trait —
+            // is rejected wherever it can be written. The `true` marks the
+            // Knight's curve, whose anchors carry chancePercent and durationDays
+            // only: he is inside the general clamp, so a minAffected or
+            // maxAffected there is a misunderstanding and is named.
+            ok &= CheckLevels(o.ByPowerLevel, "byPowerLevel", false);
+            if (o.Knight != null)
+                ok &= CheckLevels(o.Knight.ByPowerLevel, "knight.byPowerLevel", true);
 
             // Every anchor can be legal on its own and the pair still cross at
             // some level in between — a floor anchored at PL 20 above a ceiling
             // anchored only at PL 1 is exactly the "ceiling undoes the floor"
-            // case. This sweep is now the ONLY check for it: the flat
-            // maxAffected-below-minAffected check went with the flat settings,
-            // and every crossing a config can still express is a crossing on the
-            // curve, which is what this walks.
-            if (ok && HasAnyCurve(re.ByPowerLevel))
+            // case. This sweep is the ONLY check for it: every crossing a config
+            // can express is a crossing on the curve, which is what this walks.
+            if (ok && HasAnyCurve(o.ByPowerLevel))
             {
                 var crossed = new List<string>();
                 for (long pl = 1; pl <= 20; pl++)
@@ -971,21 +920,18 @@ namespace CKFHardMode
             return false;
         }
 
-        // Every rule the flat blocks used to be checked against, checked on each
-        // anchor. Before 2.9.2 this validated chancePercent alone, so a curve
-        // could carry a durationDays of 0 — a PERMANENT trait — past a check
-        // that rejected exactly that written flat. Since 2026-09-07 there is no
-        // flat half left, so this is where those rules live, and it is the only
-        // place a chance outside 0-100, a zero-day duration or a negative count
-        // can now be caught.
+        // Every range rule, checked on each anchor. This is the only place a
+        // chance outside 0-100, a zero-day duration (a PERMANENT trait) or a
+        // negative count can be caught.
         //
-        // `durationOnly` marks the Off-Duty blocks, whose anchors interpolate
-        // durationDays and nothing else. A chance or a count there is a
+        // `knightCurve` marks knight.byPowerLevel, whose anchors interpolate
+        // chancePercent and durationDays and nothing else: the Knight is inside
+        // the general minAffected and maxAffected clamp (David's rule), so a
+        // floor or a ceiling there has nothing to act on. That is a
         // misunderstanding rather than a typo, so it is named and warned about
-        // instead of being silently ignored, which is how offDuty.knight
-        // .byPowerLevel got missed in the first place.
+        // instead of being silently ignored.
         private static bool CheckLevels(Dictionary<string, LevelPoint> byLevel, string where,
-                                        bool durationOnly)
+                                        bool knightCurve)
         {
             if (byLevel == null || byLevel.Count == 0) return true;
             bool ok = true;
@@ -1056,17 +1002,17 @@ namespace CKFHardMode
                     ok = false;
                 }
 
-                if (durationOnly)
+                if (knightCurve)
                 {
                     var ignored = new List<string>();
-                    if (p.ChancePercent.HasValue) ignored.Add("chancePercent");
                     if (p.MinAffected.HasValue) ignored.Add("minAffected");
                     if (p.MaxAffected.HasValue) ignored.Add("maxAffected");
                     if (ignored.Count > 0)
                         Plugin.Log.LogWarning($"Fatigue: {where}[{lvl}] sets "
-                            + string.Join(", ", ignored) + ", which mean nothing on an Off-Duty "
-                            + "anchor. Escalation is not a roll and has no floor or ceiling; only "
-                            + "durationDays is read here.");
+                            + string.Join(", ", ignored) + ", which mean nothing on a Cyber Knight "
+                            + "anchor. He is inside the general floor and ceiling like everyone "
+                            + "else (David's rule), so only chancePercent and durationDays are "
+                            + "read here.");
                 }
             }
             return ok;
@@ -1090,11 +1036,10 @@ namespace CKFHardMode
         }
 
         // Every il2cpp method pointer this file has already patched, across all
-        // of its Patch calls. Hoisted out of Patch: it used to be allocated
-        // fresh inside each call, so it only ever compared the overloads of ONE
-        // method name and the LoadGame/LoadGameSlot pair below — the case the
-        // check is described as existing for — was never compared at all. Init
-        // runs once, so one dictionary spans the whole patch pass.
+        // of its Patch calls. Outside Patch, so the check compares across
+        // method names — the LoadGame/LoadGameSlot pair below is the case it
+        // exists for. Init runs once, so one dictionary spans the whole patch
+        // pass.
         private static readonly Dictionary<IntPtr, string> patchClaims =
             new Dictionary<IntPtr, string>();
 
@@ -1181,8 +1126,8 @@ namespace CKFHardMode
 
         // GameDb.InsertGameScore(GameScoreModel) -> Int64. __instance IS the
         // GameDb, and it is used here and dropped. Never stored: a captured
-        // database instance that outlived its moment is what produced the Log7
-        // mission hang, and 2.7.2's fix was "the live instance wins".
+        // database instance that outlives its moment hangs the next mission
+        // load (see RowClone.Instance: the live instance wins).
         //
         // One mission writes one type-19 row per deployed merc, then exactly one
         // type-16 with CharacterId 0 as terminator. Type 20
@@ -1201,9 +1146,8 @@ namespace CKFHardMode
                 if (!TryNum(Get(score, "ScoreTypeId"), out typeId))
                 {
                     // Read as 0 this row would fall through both phases anyway;
-                    // the difference is that it is now said out loud, because
-                    // every mission would do the same and nobody would ever be
-                    // resolved.
+                    // it is said out loud because every mission would do the
+                    // same and nobody would ever be resolved.
                     NoteUnreadable("GameScoreModel", "ScoreTypeId");
                     return;
                 }
@@ -1214,12 +1158,12 @@ namespace CKFHardMode
                 {
                     // THE SESSION-STATE FALLBACK, and it is a SECOND signal, not
                     // a replacement for the LoadGame hook. pendingRoster and
-                    // pendingPowerLevel are session-global and used to be cleared
-                    // only by a resolve, by the catch below, or by that hook —
-                    // which is this file's one speculative patch, so where it
-                    // patches nothing, mission A's roster leaked into mission B
-                    // after a reload: mercs who never deployed on B rolled, and
-                    // B resolved on A's power level.
+                    // pendingPowerLevel are session-global and are otherwise
+                    // cleared only by a resolve, by the catch below, or by that
+                    // hook — which is this file's one speculative patch. Where it
+                    // patches nothing, mission A's roster would leak into mission
+                    // B after a reload: mercs who never deployed on B would roll,
+                    // and B would resolve on A's power level.
                     //
                     // THE RULE, chosen from what this source can establish: one
                     // mission's type-19 rows all carry one GameTurn — Phase B
@@ -1305,7 +1249,7 @@ namespace CKFHardMode
         // Postfix on ViewModel_GameManagement.LoadGame / .LoadGameSlot. Takes no
         // arguments on purpose: it wants the fact that a load happened, nothing
         // out of it, and a signature that cannot go stale when the model types
-        // move. The design doc's section 4.1 asks for exactly this.
+        // move.
         public static void AfterLoadGame()
         {
             if (!active) return;
@@ -1392,6 +1336,11 @@ namespace CKFHardMode
             public Resist Resist;       // null when mitigation is off
             public bool Floored;        // resist would have pushed it below the floor
 
+            // The highest tier this merc already carries, 1-based, 0 for none.
+            // The tier they move to on a failed roll is Held + 1, which is why
+            // a merc already on the top tier never becomes a Candidate.
+            public int Held;
+
             // Distance from the threshold, regardless of side. The clamp works
             // on this, so a merc who barely passed is the first one the floor
             // reaches for and a merc who barely failed is the first one the
@@ -1413,14 +1362,9 @@ namespace CKFHardMode
             if (powerLevel == 0 && !warnedNoPowerLevel)
             {
                 warnedNoPowerLevel = true;
-                // REWRITTEN 2026-09-07 with the ruling it describes. It used to
-                // say "the byPowerLevel curves do not apply and the flat values
-                // are used", which was true while there were flat values to fall
-                // back to. There are none now, and Curve() clamps a 0 to the
-                // lowest anchor instead, so the curves DO apply — at their low
-                // end. The warning stays because a mission whose level cannot be
-                // read is still worth knowing about: every such mission is
-                // priced as the cheapest one on the curve.
+                // Curve() clamps a 0 to the lowest anchor, so the curves DO
+                // apply — at their low end. Still worth knowing: every such
+                // mission is priced as the cheapest one on the curve.
                 Plugin.Log.LogWarning("Fatigue: could not read the mission's PowerLevel. The "
                     + "byPowerLevel curves still apply and every value is taken from the LOWEST "
                     + "anchor each curve names, as though this were the lowest level configured. "
@@ -1435,7 +1379,7 @@ namespace CKFHardMode
                 return;
             }
 
-            // SOLO MISSIONS ARE EXEMPT. David's ruling, 2026-09-10: a mission run
+            // SOLO MISSIONS ARE EXEMPT (David's rule): a mission run
             // by one character does not run the fatigue mechanic at all. No
             // roll, no escalation to Off-Duty, nothing written, so a merc who
             // goes out alone while Running Empty keeps the first stage and is
@@ -1462,10 +1406,9 @@ namespace CKFHardMode
                 // ask the database whether that resolution's rows are still
                 // there. Blocking on a stale key is the failure this check
                 // exists for: a reload to before the mission, replayed to the
-                // same end turn with the same roster, used to write NOTHING —
-                // the reload ERASED the fatigue instead of reproducing it,
-                // which is the exact inverse of what deterministic rolls are
-                // for.
+                // same end turn with the same roster, would write NOTHING — the
+                // reload would ERASE the fatigue instead of reproducing it,
+                // the exact inverse of what deterministic rolls are for.
                 if (AlreadyWritten(db, roster, turn))
                 {
                     if (interrupted.Contains(key))
@@ -1492,9 +1435,9 @@ namespace CKFHardMode
             // MARKED BEFORE ANY ROW IS WRITTEN, deliberately. A resolution that
             // throws half way through leaves the key set, so a re-fire is blocked
             // by session memory and cannot write a second row for the mercs the
-            // first pass already wrote — the bias is against double-writing. What
-            // that used to cost is that a partial resolution was indistinguishable
-            // from a complete one, so the key is ALSO recorded as interrupted here
+            // first pass already wrote — the bias is against double-writing. So
+            // that a partial resolution is not indistinguishable from a complete
+            // one, the key is ALSO recorded as interrupted here
             // and removed only where the write loop reaches its end; a guard hit
             // on an interrupted key says so above instead of reporting a clean
             // double-fire.
@@ -1507,16 +1450,18 @@ namespace CKFHardMode
             safehouseRead = false;
             lookupCache.Clear();
 
-            var re = o.RunningEmpty;
-            var od = o.OffDuty;
-
-            // `unconfigured` counts mercs the curves had no number for. It is
+            // `unconfigured` counts mercs the curve had no number for. It is
             // deliberately not folded into `passed` or `skipped`: both of those
-            // are statements about the merc — they rolled clear, or they were
-            // already Off-Duty — and neither is true of a merc nothing could be
-            // resolved for. NoteMissingCurve says which key is missing; this
-            // says how many mercs it cost on this mission.
-            int escalated = 0, granted = 0, passed = 0, skipped = 0, failed = 0, unconfigured = 0;
+            // are statements about the merc — they rolled clear, or they are
+            // already at the top of the track — and neither is true of a merc
+            // nothing could be resolved for. NoteMissingCurve says which key is
+            // missing; this says how many mercs it cost on this mission.
+            int granted = 0, passed = 0, skipped = 0, failed = 0, unconfigured = 0;
+
+            // grantedByTier[i] is how many mercs were granted tier i+1 on this
+            // mission, for the summary line. An array rather than three counters
+            // so the summary reads off the tiers instead of naming them.
+            var grantedByTier = new int[o.TraitIds.Length];
             var pool = new List<Candidate>();
 
             if (o.LogGrants)
@@ -1529,31 +1474,30 @@ namespace CKFHardMode
                     + $", roster {string.Join(", ", roster)}. Chance "
                     + (headChance.HasValue ? headChance.Value.ToString() + "%" : "UNSET")
                     + $", min {MinAffectedFor(powerLevel)}, max "
-                    + (headMax.HasValue ? headMax.Value.ToString() : "none") + ".");
+                    + (headMax.HasValue ? headMax.Value.ToString() : "none")
+                    + $". Tiers: " + string.Join(" -> ", o.TraitIds) + ".");
             }
 
             // Saved and restored rather than set true and cleared to false, the
-            // way ReadPowerLevel and AlreadyWritten do it. Resolve has one caller
-            // today so nothing reaches it already re-entrant; a second caller is
+            // way ReadPowerLevel and AlreadyWritten do it. With one caller nothing
+            // reaches Resolve already re-entrant; a second caller is
             // all it would take for the plain `false` to clear a flag it did not
             // set, and re-enter the game's own insert through our postfix.
             bool outerReentrant = reentrant;
             reentrant = true;
             try
             {
-                // Steps 1-3 of section 4: read, escalate, then build the pool
-                // out of whoever is left. Because the read happens before any
-                // write, "went out while Running Empty" needs no CreatedTurn
-                // arithmetic and no deploy-time hook.
+                // Read every merc's tiers first, then roll, then write. Because
+                // the read happens before any write, "how far up the track were
+                // they when they deployed" needs no CreatedTurn arithmetic and no
+                // deploy-time hook.
                 foreach (var who in roster)
                 {
                     // A reader that RETURNS NULL costs exactly what a reader
                     // that throws costs: `ch` is null, IsKnight reads 0 and
-                    // DisplayName reads "". Only the throw used to be reported,
-                    // so a null return was completely silent and the Knight
-                    // rolled on the general odds with nothing in the log. Both
-                    // arrive here as `chFailed` and both trip the same
-                    // once-per-session warning.
+                    // DisplayName reads "", and the Knight would roll on the
+                    // general odds. Both arrive here as `chFailed` and both trip
+                    // the same once-per-session warning.
                     object ch = null;
                     string chFailed = null;
                     try
@@ -1581,7 +1525,7 @@ namespace CKFHardMode
                     }
                     var name = Str(Get(ch, "DisplayName"));
 
-                    // IsKnight picks which block's odds and duration apply, so
+                    // IsKnight picks which curve's odds and duration apply, so
                     // an unreadable column is named rather than quietly read as
                     // "not the Knight". It gates no write, so the merc still
                     // rolls — on the general odds, as they would have anyway.
@@ -1609,10 +1553,10 @@ namespace CKFHardMode
                     }
 
                     // A trait list that could not be read all the way through is
-                    // "cannot look", not "carries nothing". Granting on it hands
-                    // the merc a second first-stage row every mission, and the
-                    // duplicates are then invisible to the escalation scan for
-                    // the same reason.
+                    // "cannot look", not "carries nothing". Granting on it moves
+                    // the merc up from a tier they may already be past, every
+                    // mission, and the extra rows are then invisible to the next
+                    // scan for the same reason.
                     bool traitsComplete;
                     var traitRows = Rows(rows, out traitsComplete);
                     if (!traitsComplete)
@@ -1624,14 +1568,16 @@ namespace CKFHardMode
                         continue;
                     }
 
-                    // TraitTypeId decides escalation and Id is what Revoke
-                    // deletes. Num() turns an unreadable column into 0 on every
-                    // row, which reads as "this merc carries nothing" forever:
-                    // the mod would never escalate anyone, never see the row it
-                    // granted last mission, and grant another one every mission.
-                    // So an unreadable column skips the merc instead.
-                    var firstStageRowIds = new List<long>();
-                    bool hasOffDuty = false, unreadableTrait = false;
+                    // WHICH TIERS THE MERC CARRIES. TraitTypeId is the only
+                    // column this needs now: the tiers stack, so no row is ever
+                    // deleted and the row Id is not wanted. Num() would turn an
+                    // unreadable column into 0 on every row, which reads as "this
+                    // merc carries nothing" forever — the mod would put everybody
+                    // back on tier 1 every mission and never see the rows it
+                    // granted. So an unreadable column skips the merc instead.
+                    var heldTiers = new bool[o.TraitIds.Length];
+                    var rowsPerTier = new int[o.TraitIds.Length];
+                    bool unreadableTrait = false;
                     foreach (var t in traitRows)
                     {
                         long tt;
@@ -1641,109 +1587,47 @@ namespace CKFHardMode
                             unreadableTrait = true;
                             break;
                         }
-                        if (tt == re.TraitId)
-                        {
-                            long rowId;
-                            // A 0 here is either the same reflection miss or a
-                            // row this code cannot address; deleting row 0 is
-                            // not something to try either way.
-                            if (!TryNum(Get(t, "Id"), out rowId) || rowId == 0)
-                            {
-                                NoteUnreadable("GameCharacterTraitModel", "Id");
-                                unreadableTrait = true;
-                                break;
-                            }
-                            firstStageRowIds.Add(rowId);
-                        }
-                        else if (tt == od.TraitId) hasOffDuty = true;
+                        for (int i = 0; i < o.TraitIds.Length; i++)
+                            if (tt == o.TraitIds[i]) { heldTiers[i] = true; rowsPerTier[i]++; }
                     }
                     if (unreadableTrait)
                     {
                         Plugin.Log.LogWarning($"Fatigue: a trait row for {who} {name} has an "
-                            + "unreadable or zero TraitTypeId/Id, so escalation cannot be decided "
-                            + "and a grant could duplicate a row already there. Skipped.");
+                            + "unreadable TraitTypeId, so which tier they are on cannot be decided "
+                            + "and a grant could put them back down the track. Skipped.");
                         failed++;
                         continue;
                     }
 
-                    if (hasOffDuty)
-                    {
-                        // Already locked out and deployed anyway, which the game
-                        // allows for a story-required mission. Nothing to add.
-                        if (o.LogGrants)
-                            Plugin.Log.LogInfo($"Fatigue:   {who} {name}: already Off-Duty, "
-                                             + "skipped.");
-                        skipped++;
-                        continue;
-                    }
-
-                    if (firstStageRowIds.Count > 0)
-                    {
-                        var offDutyDays = OffDutyDaysFor(knight, powerLevel);
-                        if (!offDutyDays.HasValue)
-                        {
-                            // No Off-Duty duration anywhere in the curves. The
-                            // merc KEEPS the first stage — the same call the
-                            // failed-insert branch below makes, and for the same
-                            // reason: the alternative is a row with a zero
-                            // ExpiresTurn, which the game reads as PERMANENT and
-                            // which would put this merc off the roster for the
-                            // rest of the save. NoteMissingCurve has already
-                            // named the key, once; this names the merc it cost.
-                            Plugin.Log.LogWarning($"Fatigue: {who} {name} deployed while carrying "
-                                + $"{re.TraitId} and is NOT escalated: offDuty.byPowerLevel names "
-                                + "no durationDays at this power level, so there is no length to "
-                                + "write. They keep the first stage and will escalate again next "
-                                + "mission, once the curve carries a duration.");
-                            unconfigured++;
-                            continue;
-                        }
-                        int days = offDutyDays.Value;
-
-                        // This file grants one first-stage row at a time, so more
-                        // than one on a merc is itself evidence of a defect
-                        // upstream and is named. All of them are revoked below;
-                        // keeping only the LAST match, as this used to, left the
-                        // others behind and the merc escalated again next mission
-                        // — the loop the revoke exists to prevent.
-                        if (firstStageRowIds.Count > 1)
+                    // This file grants one row per tier, so more than one is
+                    // itself evidence of a defect upstream and is named. Nothing
+                    // is done about it: the tiers stack, so a duplicate row is a
+                    // trait held twice and it expires on its own.
+                    for (int i = 0; i < rowsPerTier.Length; i++)
+                        if (rowsPerTier[i] > 1)
                             Plugin.Log.LogWarning($"Fatigue: {who} {name} carries "
-                                + $"{firstStageRowIds.Count} rows of trait {re.TraitId} (rows "
-                                + string.Join(", ", firstStageRowIds) + "). One is what this file "
-                                + "grants, so the rest came from somewhere else and are worth "
-                                + "reporting. All of them go with the escalation.");
+                                + $"{rowsPerTier[i]} rows of tier {i + 1}'s trait "
+                                + $"{o.TraitIds[i]}. One is what this file grants, so the rest "
+                                + "came from somewhere else and are worth reporting. They are left "
+                                + "alone and expire by themselves.");
 
+                    // THE HIGHEST TIER HELD, 1-based, 0 for none. The highest
+                    // rather than the count: a merc who somehow holds tier 3 and
+                    // not tier 2 is at the top of the track, not half way up it,
+                    // and must not be walked back down.
+                    int held = 0;
+                    for (int i = 0; i < heldTiers.Length; i++)
+                        if (heldTiers[i]) held = i + 1;
+
+                    if (held >= o.TraitIds.Length)
+                    {
+                        // Top of the track, and deployed anyway — which the game
+                        // allows for a story-required mission when the top tier
+                        // blocks missions. There is no tier above to move to.
                         if (o.LogGrants)
-                            Plugin.Log.LogInfo($"Fatigue:   {who} {name}{(knight ? " [KNIGHT]" : "")}"
-                                + $": deployed while carrying {re.TraitId} -> Off-Duty for "
-                                + $"{days} day(s), no roll.");
-
-                        if (Apply(db, who, od.TraitId, turn, days, "escalate"))
-                        {
-                            escalated++;
-
-                            // Without this the merc comes back off Off-Duty
-                            // still carrying the first stage, and the next
-                            // mission locks them again — a loop until the first
-                            // stage runs out. EVERY first-stage row goes, not
-                            // just the last one the scan found.
-                            if (od.ClearsRunningEmpty)
-                                foreach (var rowId in firstStageRowIds) Revoke(db, who, rowId);
-                        }
-                        else
-                        {
-                            // The escalation did NOT go in, so the first stage
-                            // is all the fatigue this merc has. Deleting it here
-                            // would leave them carrying nothing at all and the
-                            // mission would have REMOVED fatigue instead of
-                            // escalating it. Keep the rows — all of them — and
-                            // say so.
-                            failed++;
-                            Plugin.Log.LogWarning($"Fatigue: {who} {name} keeps trait "
-                                + $"{re.TraitId} (row(s) " + string.Join(", ", firstStageRowIds)
-                                + ") because the Off-Duty insert failed. They escalate again next "
-                                + "mission.");
-                        }
+                            Plugin.Log.LogInfo($"Fatigue:   {who} {name}: already on tier "
+                                             + $"{held}, the top of the track. Not rolled.");
+                        skipped++;
                         continue;
                     }
 
@@ -1760,8 +1644,8 @@ namespace CKFHardMode
                         if (o.LogGrants)
                             Plugin.Log.LogInfo($"Fatigue:   {who} {name}"
                                 + (knight ? " [KNIGHT]" : "")
-                                + ": not rolled — runningEmpty.byPowerLevel names no "
-                                + "chancePercent at this power level.");
+                                + ": not rolled — byPowerLevel names no chancePercent at this "
+                                + "power level.");
                         unconfigured++;
                         continue;
                     }
@@ -1772,7 +1656,8 @@ namespace CKFHardMode
                         Name = name,
                         Knight = knight,
                         BaseChance = chance,
-                        Threshold = chance
+                        Threshold = chance,
+                        Held = held
                     };
 
                     if (o.WoundResist.Enabled)
@@ -1787,8 +1672,11 @@ namespace CKFHardMode
                     pool.Add(c);
                 }
 
-                // Steps 4 and 5: roll, then clamp the count without disturbing
-                // who the odds picked.
+                // Roll, then clamp the count without disturbing who the odds
+                // picked. ONE POOL for every tier (David's rule): a merc moving
+                // from tier 1 to tier 2 and a merc taking tier 1 for the first
+                // time are the same kind of event and compete for the same floor
+                // and ceiling.
                 foreach (var c in pool)
                 {
                     c.Roll = o.DeterministicRolls ? StableRoll(turn, c.Id) : rng.Next(100);
@@ -1796,23 +1684,25 @@ namespace CKFHardMode
                 }
                 Clamp(pool, MinAffectedFor(powerLevel), MaxAffectedFor(powerLevel));
 
-                // Step 6.
                 foreach (var c in pool)
                 {
                     // Only asked for where it is needed. A merc who rolled clear
                     // needs no duration, so a curve with no durationDays does not
                     // turn their clear roll into a report about the config.
-                    int? grantDays = c.Gains
-                                   ? RunningEmptyDaysFor(c.Knight, powerLevel)
-                                   : (int?)null;
+                    int? grantDays = c.Gains ? DaysFor(c.Knight, powerLevel) : (int?)null;
+
+                    // The tier they move TO, 1-based. Bounded by the `held >=
+                    // Length` test above, so the index is always in range.
+                    int toTier = c.Held + 1;
+                    long traitId = o.TraitIds[toTier - 1];
 
                     if (o.LogGrants)
                         Plugin.Log.LogInfo($"Fatigue:   {c.Id} {c.Name}{(c.Knight ? " [KNIGHT]" : "")}"
-                            + $": rolled {c.Roll} vs {c.Threshold}{Explain(c)} -> "
+                            + $": on tier {c.Held}, rolled {c.Roll} vs {c.Threshold}{Explain(c)} -> "
                             + (!c.Gains ? "clear"
                                : grantDays.HasValue
-                                 ? "trait " + re.TraitId + " for " + grantDays.Value + " day(s)"
-                                 : "NOT GRANTED, no durationDays on the curve")
+                                 ? $"tier {toTier}, trait {traitId} for {grantDays.Value} day(s)"
+                                 : $"NOT GRANTED, no durationDays on the curve")
                             + (c.Forced ? "  (pulled in by minAffected)" : "")
                             + (c.Spared ? "  (spared by maxAffected)" : ""));
 
@@ -1825,13 +1715,20 @@ namespace CKFHardMode
                         // is written and it is counted apart from both a clear
                         // roll and a failed write, because it is neither.
                         Plugin.Log.LogWarning($"Fatigue: {c.Id} {c.Name} rolled a hit and takes "
-                            + "NOTHING: runningEmpty.byPowerLevel names no durationDays at this "
-                            + "power level, and a grant with no duration would be a PERMANENT "
-                            + "trait.");
+                            + "NOTHING: byPowerLevel names no durationDays at this power level, "
+                            + "and a grant with no duration would be a PERMANENT trait.");
                         unconfigured++;
                         continue;
                     }
-                    if (Apply(db, c.Id, re.TraitId, turn, grantDays.Value, "roll")) granted++;
+                    // The tier below is NOT removed: the tiers stack (David's
+                    // rule), each row carries its own ExpiresTurn counted from
+                    // the mission that granted it, and the lower tier therefore
+                    // lapses first on its own.
+                    if (Apply(db, c.Id, traitId, turn, grantDays.Value, $"tier {toTier}"))
+                    {
+                        granted++;
+                        grantedByTier[toTier - 1]++;
+                    }
                     else failed++;
                 }
 
@@ -1845,9 +1742,15 @@ namespace CKFHardMode
             }
             finally { reentrant = outerReentrant; }
 
+            // Per tier rather than one total, because "3 fatigued" says nothing
+            // about whether anyone was put out of action.
+            var byTier = new List<string>();
+            for (int i = 0; i < grantedByTier.Length; i++)
+                if (grantedByTier[i] > 0) byTier.Add($"{grantedByTier[i]} to tier {i + 1}");
+
             var line = $"Fatigue: mission at turn {turn}, {roster.Count} merc(s) — {granted} "
-                     + $"fatigued, {escalated} sent Off-Duty, {passed} clear, {skipped} already "
-                     + $"Off-Duty";
+                     + "granted" + (byTier.Count > 0 ? " (" + string.Join(", ", byTier) + ")" : "")
+                     + $", {passed} clear, {skipped} already at the top of the track";
             // Reported apart from `failed`. A write that failed and a merc the
             // config had no number for are different findings and do not share a
             // log level either: the second is a config that needs an anchor, and
@@ -1857,12 +1760,12 @@ namespace CKFHardMode
                 line += $", {unconfigured} not resolved for want of a configured value";
             if (failed > 0) Plugin.Log.LogError(line + $", {failed} FAILED TO WRITE.");
             else if (unconfigured > 0) Plugin.Log.LogWarning(line + ".");
-            else if (o.LogGrants || granted + escalated > 0) Plugin.Log.LogInfo(line + ".");
+            else if (o.LogGrants || granted > 0) Plugin.Log.LogInfo(line + ".");
         }
 
         // Does the database still carry the rows a previous resolution of this
         // exact mission wrote? Every row Apply writes is stamped
-        // CreatedTurn = the mission's turn, so a first-stage or Off-Duty row at
+        // CreatedTurn = the mission's turn, so a row carrying ANY tier's trait at
         // that turn on any roster merc is that resolution's own evidence, and a
         // save loaded back to before the mission rolls it away with everything
         // else. That is the whole difference between a genuine second type-16
@@ -1933,7 +1836,12 @@ namespace CKFHardMode
                                 + "written cannot be told. Treating it as already resolved.");
                             return true;
                         }
-                        if (tt != o.RunningEmpty.TraitId && tt != o.OffDuty.TraitId) continue;
+                        // Any tier's trait counts as evidence: the resolution
+                        // being checked for may have granted any one of them.
+                        bool ours = false;
+                        for (int i = 0; i < o.TraitIds.Length && !ours; i++)
+                            if (tt == o.TraitIds[i]) ours = true;
+                        if (!ours) continue;
                         long created;
                         if (!TryNum(Get(t, "CreatedTurn"), out created))
                         {
@@ -1966,9 +1874,9 @@ namespace CKFHardMode
             if (r.Gear != 0) parts.Add($"gear {r.Gear:+#;-#;0}");
             if (r.Overlapped != 0) parts.Add($"{r.Overlapped:+#;-#;0} counted once");
 
-            // "no resist" used to be the whole bracket whenever the total was 0,
-            // and Run63 showed that is not enough: it reads the same for a merc
-            // with no WoundRes anywhere and for one whose rows were never seen.
+            // "no resist" alone is not enough when the total is 0: it reads the
+            // same for a merc with no WoundRes anywhere and for one whose rows
+            // were never seen.
             // The read summary is what tells those apart.
             return "  [" + (r.Total == 0 ? $"{c.BaseChance} base, no resist"
                                         : $"{c.BaseChance} base - {r.Total:+#;-#;0} resist")
@@ -2001,7 +1909,7 @@ namespace CKFHardMode
         // bound it. Ties break on character id so a reload reproduces the same
         // set, which is the whole point of deterministicRolls.
         //
-        // The Cyber Knight is in this pool like anyone else — David, 2026-08-30.
+        // The Cyber Knight is in this pool like anyone else (David's rule).
         private static void Clamp(List<Candidate> pool, int minAffected, int? maxAffected)
         {
             if (pool.Count == 0) return;
@@ -2042,15 +1950,14 @@ namespace CKFHardMode
         // `pick` chooses which field of the anchor this call is interpolating,
         // so each field walks only the anchors that actually name it.
         //
-        // AN UNREADABLE POWER LEVEL TAKES THE LOWEST ANCHOR. David's ruling,
-        // 2026-09-07. This used to return null for `powerLevel <= 0`, which sent
-        // the caller to the flat value; with the flat values gone that would
-        // have been a resolver with no answer on the one path that is nobody's
-        // fault. 0 is below every anchor a sane config names, so it falls into
-        // the `powerLevel <= pts[0].Key` clamp two lines down and comes back
-        // with the curve's lowest value — which is exactly what the flat value
-        // it replaces would have produced. Resolve still warns once that the
-        // level could not be read. The only remaining null is a curve that names
+        // AN UNREADABLE POWER LEVEL TAKES THE LOWEST ANCHOR (David's rule).
+        // There is no flat value to fall back to, and a resolver with no answer
+        // on the one path that is nobody's fault would be worse. 0 is below
+        // every anchor a sane config names, so it falls into the
+        // `powerLevel <= pts[0].Key` clamp two lines down and comes back with
+        // the curve's lowest value, the same as a flat value would. Resolve
+        // warns once that the level could not be read. The only null is a
+        // curve that names
         // no value for this field at all.
         private static int? Curve(Dictionary<string, LevelPoint> byLevel,
                                   Func<LevelPoint, int?> pick, long powerLevel)
@@ -2091,38 +1998,43 @@ namespace CKFHardMode
 
         // ---- the four tunables, resolved for one merc at one power level -----
         //
-        // Knight curve beats general curve, and that is the whole chain now: the
-        // flat settings each of these used to fall back to were removed on
-        // 2026-09-07 (David's ruling). Two consequences worth stating plainly,
-        // because both used to be impossible:
+        // Knight curve beats general curve, and that is the whole chain: there
+        // are no flat settings to fall back to and no per-tier curves either
+        // (David's rule). Two consequences:
         //
-        // 1. An unreadable PowerLevel is no longer a fallback path. Curve()
+        // 1. An unreadable PowerLevel is not a fallback path. Curve()
         //    clamps a 0 to the lowest anchor, so these return a real configured
         //    number for it, the same one a PL 1 mission gets.
         // 2. A curve that names NO value for the field being asked for is a
         //    config with no value, and these say so instead of inventing one.
         //    WHAT THEY DO ABOUT IT:
         //
-        //    * ChanceFor, RunningEmptyDaysFor and OffDutyDaysFor return null.
-        //      There is no safe number to substitute — a chance nobody chose is
-        //      the silent-default failure the Unknown buckets exist to prevent,
-        //      and a duration of 0 is how the game marks a trait PERMANENT, so a
-        //      0 here would lock a merc off the roster for good. The CALLER does
-        //      not roll and does not write, and logs which key is missing. A
-        //      merc who cannot be rolled for is counted separately in the
-        //      mission summary rather than folded into "clear".
+        //    * ChanceFor and DaysFor return null. There is no safe number to
+        //      substitute — a chance nobody chose is the silent-default failure
+        //      the Unknown buckets exist to prevent, and a duration of 0 is how
+        //      the game marks a trait PERMANENT, so a 0 here would lock a merc
+        //      out of the roster for good at the top tier. The CALLER does not
+        //      roll and does not write, and logs which key is missing. A merc who
+        //      cannot be rolled for is counted separately in the mission summary
+        //      rather than folded into "clear".
         //    * MinAffectedFor returns NoMinAffected (0) and says so once. A
-        //      missing floor has a safe, stateable meaning — no floor — and 0 is
-        //      what the removed setting's own default was, so this is the one
-        //      case where a named constant is honest rather than a guess.
+        //      missing floor has a safe, stateable meaning — no floor — so this
+        //      is the one case where a named constant is honest rather than a
+        //      guess.
         //    * MaxAffectedFor returns null, which is not a missing value: null
-        //      has always meant "no ceiling" here and still does. Unchanged.
+        //      means "no ceiling".
+        //
+        // ONE CHANCE AND ONE DURATION FOR EVERY TIER. There is no tier parameter
+        // on any of these, and that is the point: the number that grants tier 1
+        // is the number that moves a merc to tier 2 or tier 3, and the duration
+        // written on a tier-3 row is the one written on a tier-1 row. A per-tier
+        // curve would be a fifth and sixth tunable and a second pair of resolvers.
         //
         // In a config Validate accepted, only case 2 with a PARTIAL curve can
-        // reach these — runningEmpty.byPowerLevel is required, but a curve whose
-        // anchors name chancePercent and nothing else is legal, and offDuty
-        // .byPowerLevel is not required at all, so OffDutyDaysFor is the one
-        // most likely to come back empty.
+        // reach these — byPowerLevel is required and must name a chancePercent
+        // and a durationDays somewhere, but the Knight's curve is optional and
+        // may name one field and not the other, and minAffected and maxAffected
+        // need not be named at all.
 
         // 0 is a floor of zero, which is no floor: the clamp reaches for nobody.
         // Named so the log can say what it used rather than printing a bare 0.
@@ -2136,13 +2048,13 @@ namespace CKFHardMode
 
         // `blocking` is false only for minAffected, whose absence has a legal
         // meaning — no floor — and so is a WARNING rather than an ERROR. The
-        // other three cost a roll or a write, and are errors.
+        // other two cost a roll or a write, and are errors.
         private static void NoteMissingCurve(string what, string consequence,
                                              bool blocking = true)
         {
             if (!missingCurveWarned.Add(what)) return;
             var msg = $"Fatigue: no anchor of {what} names a value, and there is no flat setting "
-                + "behind it any more — those were removed on 2026-09-07. " + consequence
+                + "behind it. " + consequence
                 + " Said once. Add the field to at least one anchor; an anchor holds at every "
                 + "level below the one it names, so a single one at power level 1 covers the "
                 + "whole range.";
@@ -2151,91 +2063,63 @@ namespace CKFHardMode
         }
 
         // Null means the curves name no chance for this merc. The caller does not
-        // roll them.
+        // roll them, at any tier.
         private static int? ChanceFor(bool knight, long pl)
         {
-            var re = o.RunningEmpty;
-            if (knight && re.Knight != null)
+            if (knight && o.Knight != null)
             {
-                var k = Curve(re.Knight.ByPowerLevel, p => p.ChancePercent, pl);
+                var k = Curve(o.Knight.ByPowerLevel, p => p.ChancePercent, pl);
                 if (k.HasValue) return k.Value;
             }
-            var g = Curve(re.ByPowerLevel, p => p.ChancePercent, pl);
+            var g = Curve(o.ByPowerLevel, p => p.ChancePercent, pl);
             if (g.HasValue) return g.Value;
-            NoteMissingCurve("runningEmpty.byPowerLevel chancePercent",
-                "No merc can be rolled for, so none of them takes the first stage from any "
-                + "mission; escalation of a merc who already carries it still happens.");
+            NoteMissingCurve("byPowerLevel chancePercent",
+                "No merc can be rolled for, so nobody moves onto any tier from any mission.");
             return null;
         }
 
-        // Null means the curves name no first-stage duration for this merc. The
-        // caller does not write the trait: a 0-day grant is a PERMANENT trait,
-        // which is the one outcome worse than no grant at all.
-        private static int? RunningEmptyDaysFor(bool knight, long pl)
+        // The length of whichever tier the merc is granted — one duration for all
+        // three (David's rule). Null means the curves name none for this merc,
+        // and the caller does not write the trait: a 0-day grant is a PERMANENT
+        // trait, which is the one outcome worse than no grant at all, and at the
+        // top tier it would keep the merc off the roster for the rest of the save.
+        private static int? DaysFor(bool knight, long pl)
         {
-            var re = o.RunningEmpty;
-            if (knight && re.Knight != null)
+            if (knight && o.Knight != null)
             {
-                var k = Curve(re.Knight.ByPowerLevel, p => p.DurationDays, pl);
+                var k = Curve(o.Knight.ByPowerLevel, p => p.DurationDays, pl);
                 if (k.HasValue) return k.Value;
             }
-            var g = Curve(re.ByPowerLevel, p => p.DurationDays, pl);
+            var g = Curve(o.ByPowerLevel, p => p.DurationDays, pl);
             if (g.HasValue) return g.Value;
-            NoteMissingCurve("runningEmpty.byPowerLevel durationDays",
-                "The first-stage trait is not granted to anyone: without a duration the row "
-                + "would carry a zero ExpiresTurn, which is how the game marks a trait "
-                + "PERMANENT.");
-            return null;
-        }
-
-        // Off-Duty duration, resolved the same way the first stage's is: a
-        // Knight curve beats the general curve. Wired in 2.9.2 — before it,
-        // offDuty.knight.byPowerLevel parsed and was never read, and Off-Duty
-        // had no curve at all; since 2026-09-07 the curves are all there is.
-        // Null means neither names a duration, and the caller does not escalate:
-        // the merc keeps the first stage rather than being locked off the roster
-        // permanently by a zero-day Off-Duty row.
-        private static int? OffDutyDaysFor(bool knight, long pl)
-        {
-            var od = o.OffDuty;
-            if (knight && od.Knight != null)
-            {
-                var k = Curve(od.Knight.ByPowerLevel, p => p.DurationDays, pl);
-                if (k.HasValue) return k.Value;
-            }
-            var g = Curve(od.ByPowerLevel, p => p.DurationDays, pl);
-            if (g.HasValue) return g.Value;
-            NoteMissingCurve("offDuty.byPowerLevel durationDays",
-                "Nobody is sent Off-Duty: without a duration the row would carry a zero "
-                + "ExpiresTurn, which is how the game marks a trait PERMANENT, and the merc "
-                + "would be off the roster for good. They keep the first stage instead.");
+            NoteMissingCurve("byPowerLevel durationDays",
+                "No tier is granted to anyone: without a duration the row would carry a zero "
+                + "ExpiresTurn, which is how the game marks a trait PERMANENT.");
             return null;
         }
 
         // No curve value means no floor, which is NoMinAffected. Reported once so
-        // "no floor" is a stated outcome rather than a silent zero.
+        // "no floor" is a stated outcome rather than a silent zero. There is no
+        // Knight variant: he is inside the general clamp (David's rule).
         private static int MinAffectedFor(long pl)
         {
-            var c = Curve(o.RunningEmpty.ByPowerLevel, p => p.MinAffected, pl);
+            var c = Curve(o.ByPowerLevel, p => p.MinAffected, pl);
             if (c.HasValue) return c.Value;
-            NoteMissingCurve("runningEmpty.byPowerLevel minAffected",
+            NoteMissingCurve("byPowerLevel minAffected",
                 $"No floor is applied ({NoMinAffected}): the rolls alone decide how many mercs "
-                + "take the first stage, and a mission where everybody passes fatigues nobody. "
-                + "That is a legal way to configure this, so it is a warning rather than an "
-                + "error.",
+                + "move up a tier, and a mission where everybody passes fatigues nobody. That is "
+                + "a legal way to configure this, so it is a warning rather than an error.",
                 false);
             return NoMinAffected;
         }
 
         // Null means no ceiling, and always has — that is this value's own
         // documented absent state, not a missing configuration, so it is not
-        // reported. A curve that names maxAffected wins; nothing else is left to
-        // try.
+        // reported. No Knight variant, for the same reason as the floor.
         private static int? MaxAffectedFor(long pl)
         {
-            return Curve(o.RunningEmpty.ByPowerLevel, p => p.MaxAffected, pl);
+            return Curve(o.ByPowerLevel, p => p.MaxAffected, pl);
         }
-
         // ---- Wound Resist ----------------------------------------------------
 
         // One point of resist per percentage point of chance, as ruled. The
@@ -2244,13 +2128,11 @@ namespace CKFHardMode
         // otherwise be asked to roll under 120.
         private static int ThresholdFor(int chance, int resist, out bool floored)
         {
-            // A configured chance of 0 means NO ROLL, whatever the resist, and
-            // the code now does what the comment below has always said. It did
-            // not: the floor is Math.Min(minChancePercent, chance), which is 0
-            // when the chance is 0, and `chance - resist` against the NEGATIVE
-            // resist most cyberware carries is positive — so 0% against a merc
-            // at -25 came back as 25 and they fatigued a quarter of the time.
-            // Returning here leaves every other path's arithmetic untouched.
+            // A configured chance of 0 means NO ROLL, whatever the resist. Without
+            // this return, the floor below (Math.Min(minChancePercent, chance))
+            // is 0, and `chance - resist` against the NEGATIVE resist most
+            // cyberware carries is positive — so 0% against a merc at -25 would
+            // come back as 25.
             if (chance <= 0) { floored = false; return 0; }
 
             int v = chance - resist;
@@ -2280,10 +2162,9 @@ namespace CKFHardMode
             public readonly List<SourceStats> Sources = new List<SourceStats>();
         }
 
-        // What one reader returned for one merc. Run63 is why this exists: four
-        // mercs logged "no resist" and nothing could say whether the readers
-        // returned no rows, rows whose effects carry no WoundRes, or rows whose
-        // effect this file never saw.
+        // What one reader returned for one merc, so "no resist" can be told
+        // apart: the readers returned no rows, rows whose effects carry no
+        // WoundRes, or rows whose effect this file never saw.
         private sealed class SourceStats
         {
             public string Name;
@@ -2298,7 +2179,7 @@ namespace CKFHardMode
 
         // How a row of each reader leads to its EffectModel when the joined
         // EffectData is null. Column names are read off CoreRPG_v1.dll's
-        // property tables (2026-09-10): the content row is joined as `Join` on
+        // property tables: the content row is joined as `Join` on
         // the game row, or read by `Key` through DataDb.`ContentReader`, and its
         // `EffectColumn` is an EffectModel.EffectId for DataDb.ReadEffect. A
         // GameCharacterEffect row names its effect directly in EffectTypeId.
@@ -2330,7 +2211,7 @@ namespace CKFHardMode
                 Join = "NodeData", Key = "JobNodeId", ContentReader = "ReadJobNode",
                 EffectColumn = "NodeEffect1Id" },
 
-            // 2026-09-10. GameArmorModel (CoreRPG_v1.dll): CharacterId,
+            // GameArmorModel (CoreRPG_v1.dll): CharacterId,
             // ArmorTypeId, GameEffectId; joined ArmorData (ArmorModel, which
             // carries ArmorEffectId), EffectData and EffectDataCrafted, both
             // typed EffectModel. EffectData is the armour's own effect.
@@ -2449,7 +2330,8 @@ namespace CKFHardMode
             if (rows == null)
             {
                 // TryRead has already logged a throw; a reader that RETURNED null
-                // has not, and used to read exactly like a merc with nothing.
+                // has not, and would otherwise read exactly like a merc with
+                // nothing.
                 st.Unreadable = true;
                 if (resistNoted.Add("null|" + src.Name))
                     Plugin.Log.LogWarning($"Fatigue: {src.Reader} gave no list, so {src.Name} "
@@ -2482,8 +2364,8 @@ namespace CKFHardMode
             NoteSource(src, st);
         }
 
-        // One effect's WoundRes into the sum. Split out of AddSourceRows on
-        // 2026-09-10 because an armour row carries two effects.
+        // One effect's WoundRes into the sum. Separate from AddSourceRows
+        // because an armour row carries two effects.
         private static void AddEffect(object eff, object row, Resist r, HashSet<long> seen,
                                       HashSet<long> mine, ResistSource src, SourceStats st)
         {
@@ -2628,8 +2510,7 @@ namespace CKFHardMode
 
         // The safehouse total is the same for every merc and does not change
         // mid-mission, so it is read once per MISSION — Resolve clears
-        // safehouseRead on each resolution, which this comment used to describe
-        // wrongly as once per session. Three paths, because the
+        // safehouseRead on each resolution. Three paths, because the
         // computed property read 0 on a row dumped straight out of the reader —
         // its Modules dictionary was not populated on that path — and a silent 0
         // here would quietly delete the Triage Clinic from the mechanic.
@@ -2656,7 +2537,7 @@ namespace CKFHardMode
                 }
                 if (count > 1)
                     Plugin.Log.LogWarning($"Fatigue: {count} safehouses returned; using the first. "
-                        + "The shipped save has exactly one, so this is new behaviour worth a look.");
+                        + "A normal save has exactly one, so this is new behaviour worth a look.");
 
                 int computed = (int)Num(Get(house, "GetWoundRes"));
                 var summary = Get(house, "ModuleSummary");
@@ -2703,8 +2584,8 @@ namespace CKFHardMode
 
         // ---- writes ----------------------------------------------------------
 
-        // Route A, construct. Run44 settled this against Route B (borrow an
-        // existing row and overwrite it): Activator.CreateInstance allocates a
+        // Construct, rather than borrow an existing row and overwrite it
+        // [measured, TraitProbe]: Activator.CreateInstance allocates a
         // usable il2cpp object, and a borrowed row arrives carrying its source's
         // id, which an insert could write over.
         private static bool Apply(object db, long charId, long traitId, long turn, int days,
@@ -2725,12 +2606,11 @@ namespace CKFHardMode
             long expires = turn + (long)days * TurnsPerDay;
 
             // EVERY Set is checked. Set returns false and logs when the property
-            // is missing, read-only, or the conversion throws, and all nine
-            // returns used to be dropped and the row inserted regardless. A
-            // renamed ExpiresTurn left the field at 0, which is how this file's
-            // own rules (Validate, CheckLevels) say the game marks a trait
-            // PERMANENT — so one reflection miss wrote a save-resident trait the
-            // mod cannot take back. A missed CharacterId wrote an orphan row on
+            // is missing, read-only, or the conversion throws; a row with any
+            // miss is not inserted. A renamed ExpiresTurn would leave the field
+            // at 0, which is how the game marks a trait PERMANENT — so one
+            // reflection miss would write a save-resident trait the mod cannot
+            // take back. A missed CharacterId would write an orphan row on
             // character 0.
             //
             // None of the nine is treated as optional. What a constructed il2cpp
@@ -2748,8 +2628,8 @@ namespace CKFHardMode
             if (!Set(row, "ExpiresTurn", expires)) unwritten.Add("ExpiresTurn");
             if (!Set(row, "IsNew", 1L)) unwritten.Add("IsNew");
             // TraitData, EffectData and MatrixEffectData are joined content rows
-            // rather than columns, and they fill themselves in: Run44 saw a
-            // constructed row go in with all three null and come back out of
+            // rather than columns, and they fill themselves in [measured]: a
+            // constructed row inserted with all three null comes back out of
             // ReadGameCharacterTraitsByCharacter fully joined. Nothing to do.
 
             if (unwritten.Count > 0)
@@ -2791,31 +2671,18 @@ namespace CKFHardMode
             }
         }
 
-        private static void Revoke(object db, long charId, long rowId)
-        {
-            try
-            {
-                var n = Call(db, "DeleteGameCharacterTrait", new[] { typeof(long) },
-                             new object[] { rowId });
-                if (o.LogGrants)
-                    Plugin.Log.LogInfo($"Fatigue:     --- row {rowId} removed from {charId} "
-                                     + $"(clearsRunningEmpty) -> {Str(n)}");
-            }
-            catch (Exception e)
-            {
-                var inner = e.InnerException ?? e;
-                // The escalation itself already went in, so the merc is locked
-                // out either way. This only costs them the first stage lingering
-                // underneath until it expires on its own.
-                Plugin.Log.LogError($"Fatigue: DELETE THREW {inner.GetType().Name}: "
-                    + $"{inner.Message} — row {rowId} on {charId}. The Off-Duty grant stands.");
-            }
-        }
+        // NOTHING DELETES A TRAIT ROW. The 4.0 layout removed the first-stage row
+        // when a merc escalated, behind offDuty.clearsRunningEmpty. The tiers
+        // stack now (David's rule), so every row this file writes is left to the
+        // engine's own SaveManager.ProcessTraits sweep and there is no delete
+        // path at all. That is one fewer write to the save, and it retires the
+        // failure mode the old code guarded hardest against: a refused insert
+        // followed by a delete that took fatigue away instead of adding it.
 
         // splitmix64 over (turn, characterId). Stable across sessions and
         // machines, which is what makes reloading the victory screen reproduce
-        // the same outcome instead of turning fatigue into a reroll button. Run47
-        // checked this against values computed offline before the run: turn 1388
+        // the same outcome instead of turning fatigue into a reroll button.
+        // [measured] Checked in play against values computed offline: turn 1388
         // gave 27, 61 and 97 for characters 1, 16 and 19, exactly as predicted.
         // Do not change the constants without accepting that every save's future
         // rolls change with them.
@@ -2926,10 +2793,10 @@ namespace CKFHardMode
         //
         // `complete` is false whenever the caller must not conclude anything
         // from a row being ABSENT: a Count that threw, an element that came back
-        // null, an enumerator that stopped early. This used to use
-        // ListShape.Count, which reports both "empty" and "Count threw" as 0 and
-        // logs neither — so an unreadable trait list looked exactly like a merc
-        // with no traits and the mod granted them another row every mission.
+        // null, an enumerator that stopped early. ListShape.Count reports both
+        // "empty" and "Count threw" as 0 and logs neither, so with it an
+        // unreadable trait list would look exactly like a merc with no traits
+        // and the mod would grant them another row every mission.
         // ListShape.TryCount exists for that distinction and Elapse.ReadRows is
         // the model for the rest of this.
         private static List<object> Rows(object list, out bool complete)
@@ -3025,7 +2892,7 @@ namespace CKFHardMode
         // Num() collapses "could not read" into 0. On any path that decides a
         // write, or that keys a merc, that difference is the one that matters:
         // an unreadable TraitTypeId read as 0 makes every merc look untouched,
-        // so nobody is ever escalated and the row granted last mission is
+        // so nobody ever moves up a tier and the row granted last mission is
         // invisible to the next one. Elapse.cs carries the same pair.
         private static bool TryNum(object v, out long n)
         {

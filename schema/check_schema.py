@@ -8,8 +8,7 @@ Reports four classes of drift. Exit code 1 if any STALE, MISSING, RANGE or
 INVARIANT problem is found.
 
   STALE      a key on disk that no schema field declares, or an overlay CSV in
-             ckf.hardmode.d that no schema's targets.overlays names. This is the check
-             that would have caught the 12 dead cfg keys without a manual grep.
+             ckf.hardmode.d that no schema's targets.overlays names.
   MISSING    a schema field with no key on disk, unless that field declares
              "optional": true, which says omission from the file is legal.
              "optional" is NOT implied by "absent" and does not imply it:
@@ -29,9 +28,9 @@ A 'requires' it could not evaluate -- a declared key that is not on disk, or
 --no-cfg, under which the cfg dict is empty by construction -- is NOT silence.
 Every such group prints a SKIPPED line and is counted on the 'requires:' census
 line, which is printed on every run whether or not anything was skipped.
-'ordered' and 'linkedEnable' carry the same census, for the same reason and
-since 2026-09-13: without it a group whose keys no longer resolve is skipped in
-silence and the run still prints '0 problem(s).' An
+'ordered' and 'linkedEnable' carry the same census, for the same reason:
+without it a group whose keys no longer resolve is skipped in silence and the
+run still prints '0 problem(s).' An
 instrument that can decline to look has to say when it declined.
 """
 
@@ -106,11 +105,11 @@ def table_rows(val, keyed_by, cols):
     folded back into its row before the range check, coerced to the type the
     column declares.
 
-    This used to be `list(val.values())`, which threw the keys away: a keyedBy
-    column was the one column in the file no layer range-checked. Measured
-    2026-09-01 -- powerLevel 9999 against a declared range of [1, 20] was
-    accepted into ckf.hardmode.fatigue.json and reported clean, while the same
-    value in an array-shaped table was correctly blocked.
+    `list(val.values())` would throw the keys away, and a keyedBy column would
+    be the one column in the file no layer range-checks (powerLevel 9999
+    against a declared range of [1, 20] reported clean in an object-shaped
+    table while the same value in an array-shaped table was blocked
+    [measured]).
     """
     if not isinstance(val, dict):
         return val
@@ -135,21 +134,10 @@ def inv_key(key):
     normalise to the bare form, which is what load_cfg's dict and declared_cfg
     hold. A '<json file>#<dotted path>' key is returned unchanged.
 
-    CORRECTION, 2026-09-13. tasks.md's Phase 2 checkbox 2 says "inv_value
-    already reads a key in either space via mirror's <file>#<path> notation, so
-    no new key resolution is needed", and design.md section 4's `requires`
-    example spells its key 'ckf.hardmode.cfg#Slices.CyberweaponsLasers'. Both
-    cannot be true, and it is the checkbox that is wrong. The two spellings
-    inv_value read were 'Section.Key' and '<json file>#<path>'; a key prefixed
-    with the .cfg's own name took the '#' branch, handed an INI file to
-    load_jsonc and raised
-
-        json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
-
-    -- an uncaught traceback, not a miss and not a problem line. Measured
-    2026-09-13 against the unmodified check_schema.py, with that spelling on a
-    linkedEnable over the live 43-key ckf.hardmode.cfg. This function is the
-    new key resolution the checkbox says is not needed, and it is two lines.
+    Without this, a key prefixed with the .cfg's own name (the spelling
+    split-config-into-toggleable-slices design.md uses for `requires`) takes
+    inv_value's '#' branch, hands an INI file to load_jsonc and dies with an
+    uncaught JSONDecodeError rather than a miss or a problem line.
     """
     return key[len(CFG_FILE) + 1:] if key.startswith(CFG_FILE + '#') else key
 
@@ -157,13 +145,13 @@ def inv_key(key):
 def inv_value(key, cfg, files, cfgdir):
     """The live value of a key named by an invariant. -> (value, found)
 
-    Two spellings, because 3.0 moved 21 of the 22 cfg keys into the merged
-    document and two invariants named keys that moved:
+    Two spellings, after inv_key has normalised a cfg-prefixed one:
 
-      "PowerLevel.MinCap"                    a cfg key; comes back as its raw
-                                             string, the way load_cfg holds it
-      "ckf.hardmode.json#powerlevel.minCap"  a path inside a config document;
-                                             comes back parsed
+      "Slices.PowerLevel"                        a cfg key; comes back as its
+                                                 raw string, the way load_cfg
+                                                 holds it
+      "ckf.hardmode.d/powerlevel.json#minCap"    a path inside a JSON file;
+                                                 comes back parsed
 
     The second is the spelling `mirror` has always used for its source and
     target, so this is one notation across all three invariant kinds rather
@@ -278,7 +266,7 @@ def main():
     # columns -- so it is checked for EXISTENCE and never parsed. Pointing
     # targets.json at one instead raises an uncaught JSONDecodeError out of
     # load_jsonc and the run dies with a traceback rather than a graded
-    # problem. [measured 2026-09-13]
+    # problem. [measured]
     claimed_overlays = {}
     for sch in schemas:
         for rel in (sch.get('targets') or {}).get('overlays') or []:
@@ -292,7 +280,7 @@ def main():
         # AN ABSENT OVERLAY IS A PROBLEM, NOT A SKIP. A pack that lists three
         # files and finds two would otherwise read as "that class has no rules
         # for this model", which is the instrument-silence failure AGENTS.md
-        # section 3 names and Phase 4's own checkbox calls out by name.
+        # names.
         for rel in tgt.get('overlays') or []:
             if not os.path.exists(os.path.join(cfgdir, rel)):
                 problems.append(('MISSING',
@@ -406,14 +394,12 @@ def main():
 
     # ---- invariants
     #
-    # THREE CENSUSES, NOT ONE. 'requires' got a skip census when it was added
-    # and 'ordered' and 'linkedEnable' did not, so those two could decline to
-    # look and still let the run print "0 problem(s)." That is what happened
-    # when Phase 3 split the merged document: powerlevel's ordered pair named
-    # ckf.hardmode.json, inv_value returned not-found, the for/else below took
-    # the break, and nothing said so. minCap 20 above maxCap 1 reported 0
-    # problems at rc 0. [measured 2026-09-13] Every kind now counts what it
-    # declared, what it actually compared, and what it skipped and why.
+    # THREE CENSUSES, NOT ONE. Without a census, a group whose key no longer
+    # resolves takes the for/else break below and the run prints
+    # "0 problem(s)" over a comparison it never made (an ordered pair naming a
+    # file that had moved reported minCap 20 above maxCap 1 as clean
+    # [measured]). Every kind counts what it declared, what it actually
+    # compared, and what it skipped and why.
     req_total = req_checked = req_vacuous = 0
     req_skipped = []
     ord_total = ord_checked = 0
@@ -421,21 +407,16 @@ def main():
     link_total = link_checked = 0
     link_skipped = []
     for sch in schemas:
-        # `name` was NOT rebound here before 2026-09-13. It held whatever the
-        # field loop above left in it -- the last schema in sorted order,
-        # Progression -- so any invariant message naming `name` named the wrong
-        # subsystem. No existing kind's message used it, so nothing showed it;
-        # the first `requires` message did, reporting a CyberweaponsClaws
-        # declaration as "Progression:". [measured 2026-09-13]
+        # Rebound here: otherwise `name` holds whatever the field loop above
+        # left in it, and an invariant message names the wrong subsystem.
         name = sch['subsystem']
         for inv in sch.get('invariants', []):
             if inv['kind'] == 'linkedEnable':
                 link_total += 1
-                # A PARTIALLY READ GROUP IS NOT A CLEAN ONE. This used to keep
-                # whichever keys resolved and compare those: one key of a pair
-                # readable and the other not gave a single state, which can
-                # never disagree with itself, so the group passed without
-                # anything being compared. A group is compared only when every
+                # A PARTIALLY READ GROUP IS NOT A CLEAN ONE. Comparing only the
+                # keys that resolved gives one key of a pair a single state,
+                # which can never disagree with itself, so the group would pass
+                # without anything being compared. A group is compared only when every
                 # key in it was read.
                 states, unread = {}, []
                 for k in inv['keys']:
@@ -592,10 +573,9 @@ def main():
 
     # ---- overlay census
     #
-    # 33 overlay files and 312 rows landed in ckf.hardmode.d on 2026-09-13 and
-    # this run's output did not move by one character, because nothing declared
-    # them. [measured] A file nothing claims is applied by the plugin and
-    # validated by no one. The four below are claimed by no schema ON PURPOSE
+    # A file nothing claims is applied by the plugin and validated by no one,
+    # and without this census it would not move this run's output by one
+    # character. The four below are claimed by no schema ON PURPOSE
     # and are named rather than counted as findings: the three enemy-gear
     # overlays are out of scope per the proposal's non-goals, and the teampl
     # mirror is a schema OUTPUT, generated by scripts/gen_teampl_labels.py and

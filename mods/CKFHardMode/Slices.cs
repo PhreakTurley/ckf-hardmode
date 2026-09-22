@@ -1,61 +1,40 @@
-// Slices — every toggle in ckf.hardmode.cfg, bound once, read from one place.
+﻿// Slices — every toggle in ckf.hardmode.cfg, bound once, read from one place.
 //
 // WHY THIS FILE EXISTS
 //
-// A gate cannot live inside the file it gates. Until this change the eight
-// subsystem gates were an "enabled" key at the root of their own section of
-// ckf.hardmode.json, so turning a subsystem off meant editing the file that
-// turning it off was supposed to stop being read — and a syntax error anywhere
-// in that document cost every subsystem its switch as well as its settings
-// (ConfigDoc.cs's header says so). ckf.hardmode.cfg is the one file that has to
-// parse before any other loading happens, so that is where every gate goes.
-// split-config-into-toggleable-slices design.md section 3.
+// A gate cannot live inside the file it gates: turning a subsystem off must
+// not depend on reading the file that turning it off stops being read, and a
+// syntax error in a settings file must not cost that subsystem its switch.
+// ckf.hardmode.cfg is the one file that has to parse before any other loading
+// happens, so that is where every gate goes.
 //
 // WHAT A SLICE IS. The unit a player turns on and off: one toggle, one concern.
 // Most slices are one file; a talent pack is two or three, because its rows are
 // rows of two or three game tables and the overlay dialect keys the target
-// table off the filename (design.md section 2). Nine slices are not files at
-// all — they are the nine sections of ckf.hardmode.json, and their toggle is
-// now a .cfg key rather than a field inside the section.
+// table off the filename. The nine settings subsystems are slices too, each
+// with its own settings file in ckf.hardmode.d.
 //
-// EVERY KEY IS BOUND, EAGERLY, ON EVERY LAUNCH.
+// EVERY KEY IS BOUND, EAGERLY, ON EVERY LAUNCH. Init binds every row of
+// Binds.All (Plugin.Binds.g.cs), because BepInEx only writes a .cfg line for a
+// key something bound.
 //
-// CORRECTION, 2026-09-13. Plugin.Binds.g.cs's class doc still says:
+// ORDER. Init runs ABOVE the [General] Enabled bail-out in Plugin.Load.
+// Binding below it would mean a player who sets Enabled = false on a fresh
+// install never gets the [Slices] lines written, so the config editor would
+// have nothing to show and schema/check_schema.py would report them MISSING.
 //
-//     "Bind is still a real ConfigFile.Bind call made at the same point in
-//      startup as the hand-written call it replaced: BepInEx writes the file
-//      from the set of keys actually bound, and a key nothing binds is left in
-//      place as an orphan. Binding every key eagerly would change that, so this
-//      class does not do it."
-//
-// That paragraph described the state in which the table declared 22 keys and
-// Plugin.cs bound exactly one of them. It is stale as of this change and the
-// wrong half is the last sentence: Slices.Init below binds all 43, because
-// design.md section 3 requires every toggle to be a line in ckf.hardmode.cfg
-// and BepInEx only writes a line for a key something bound. The paragraph lives
-// in scripts/gen_binds.py's HEADER and has to be corrected there, in the
-// generator, not here and not in the generated file.
-//
-// ORDER. Init runs ABOVE the [General] Enabled bail-out in Plugin.Load, not
-// below it. Binding below would mean a player who sets Enabled = false on a
-// fresh install never gets the 42 [Slices] lines written at all, so the config
-// editor would have nothing to show and schema/check_schema.py would report
-// them MISSING. Binding above costs 43 dictionary writes on a launch that then
-// does nothing else.
-//
-// AN UNREADABLE GATE IS NOT AN OFF GATE. AGENTS.md section 3. A key whose bind
-// throws is recorded Unknown, reported at Error by name, and treated as ON —
-// because a silent "off" here would turn a player's tuning off and look exactly
-// like them having turned it off themselves. design.md section 3 makes the same
-// choice for enable_index: "An unreadable gate is unknown, never off."
+// AN UNREADABLE GATE IS NOT AN OFF GATE (AGENTS.md). A key whose bind throws
+// is recorded Unknown, reported at Error by name, and treated as ON, because a
+// silent "off" would turn a player's tuning off and look exactly like them
+// having turned it off themselves.
 //
 // SAMPLING MOMENTS. This instrument has exactly three, all at load:
 //
 //   1. Init()             once, per launch, above the master-switch bail-out.
 //   2. VerdictForOverlay  once per file in ckf.hardmode.d, before the file is
 //                         opened.
-//   3. ReportRetiredGate  once per subsystem section, when that subsystem reads
-//                         its section out of ckf.hardmode.json.
+//   3. ReportRetiredGate  once per settings subsystem, when that subsystem
+//                         reads its settings file.
 //
 // There is NO sampling moment after load. Nothing re-reads ckf.hardmode.cfg,
 // so an edit made while the game is running is not seen and is not reported as
@@ -71,8 +50,8 @@ namespace CKFHardMode
     internal static class Slices
     {
         /// <summary>The section every slice toggle lives in. [General] Enabled
-        /// keeps its own section and its own name — a player's existing .cfg
-        /// must still turn the mod off after the upgrade.</summary>
+        /// keeps its own section and its own name, so an older .cfg still turns
+        /// the mod off.</summary>
         internal const string Section = "Slices";
 
         internal enum Gate
@@ -99,36 +78,21 @@ namespace CKFHardMode
         //
         // Overlay filename -> the slice key that gates it. Transcribed from the
         // "Files this toggle gates:" block in each schema's `doc` array, which
-        // is where the pairing is declared; schema/ is not this phase's file to
-        // edit, so this table is a copy of a declaration rather than a second
-        // declaration. 54 files across 33 slices [measured, schema/*.schema.json
-        // 2026-09-13], plus ONE row no schema declares -- the
-        // MissionPowerLevelModel mirror, whose own comment below says why.
+        // is where the pairing is declared; keep the two in step by hand. One
+        // row no schema's block declares: the MissionPowerLevelModel mirror
+        // (see its own comment).
         //
-        // CORRECTION, 2026-09-13 (Phase 3). This block used to end: "55 files
-        // across 34 slices. Eight of the nine subsystem slices name no file;
-        // Progression is the exception, through that mirror." Both sentences
-        // were true only while the nine subsystems shared one file that no
-        // slice could claim. Phase 3 gave each of them its own file in
-        // ckf.hardmode.d, so all nine name a file now and the table is 64 files
-        // across 42 slices. The mirror row is still the one row no schema
-        // declares.
-        //
-        // MOST OF THESE FILES DO NOT EXIST YET. They arrive in Phases 4 through
-        // 8. The ten that do exist are the nine subsystem settings files and
-        // implants-global.json, written in Phase 3. A name here that never
-        // appears on disk costs nothing; a file on disk with no entry here is
-        // reported as unclaimed rather than silently skipped, which is the half
-        // that matters.
+        // A name here that is not on disk costs nothing; a file on disk with no
+        // entry here is reported as unclaimed rather than silently skipped.
         //
         // THE TEN SETTINGS FILES ARE IN THIS TABLE AND ARE NOT OVERLAY FILES.
         // ConfigDoc reads them; Overlays skips them by name before it opens
         // them (ConfigDoc.OwnsFile), because a settings file deserialised as a
-        // RuleFile yields zero rules and no error. They are listed here anyway
-        // for the other reader of this member: scripts/validate_rules.py
-        // --enabled-set parses this table at run time to decide which files the
-        // enabled set contains, and a settings file absent from it would be
-        // reported as claimed by no slice.
+        // RuleFile yields zero rules and no error. They are listed here for the
+        // other reader of this member: scripts/validate_rules.py --enabled-set
+        // parses this table at run time to decide which files the enabled set
+        // contains, and a settings file absent from it would be reported as
+        // claimed by no slice. Keep the one-entry-per-line shape it parses.
         //
         // OrdinalIgnoreCase: the names come off a Windows filesystem, and a
         // case difference must not quietly unclaim a file and hand it the
@@ -158,15 +122,17 @@ namespace CKFHardMode
             { "JobNodeModel.wg.csv",        "TalentsWraith" },
             { "JobNodeModel.wm.csv",        "TalentsWarMachine" },
             { "MatrixEffectModel.hkr.csv",  "TalentsHacker" },
-            // ADDED 2026-09-13, and it is NOT one of the 54 rows the schemas'
-            // "Files this toggle gates:" blocks declare. gen_teampl_labels.py
-            // generates this file from teampl.override merged over teampl.table,
-            // which is Progression's own data, and teampl.schema.json's
-            // linkedEnable `reason` describes the ungated state as "a stock
-            // award with a lying label. Neither direction logs anything."
-            // design.md section 2 lists it under "enemy gear, unchanged" and is
-            // wrong on both counts; section 1 names it as this subsystem's
-            // mirror. The coordinator is correcting section 2.
+            // The limit-break trait effects. Its own slice, not Fatigue's: this
+            // file changes what a limit-break trait DOES, while Slices.Fatigue
+            // decides who is granted one and when. The game grants these same
+            // traits through its own Stress Limit Break with no help from this
+            // mod, so the two are separable and are separate switches.
+            { "EffectModel.limitbreak.csv", "LimitBreakTraits" },
+            // Not declared by any schema's "Files this toggle gates:" block.
+            // gen_teampl_labels.py generates this file from teampl.override
+            // merged over teampl.table, which is Progression's own data, so it
+            // belongs to the Progression slice. Ungated, it would give a stock
+            // award with a label that disagrees, and nothing would log it.
             { "MissionPowerLevelModel.generated.json", "Progression" },
             { "RuleModel.csv",              "RuleModel" },
             { "TalentModel.aex.csv",        "TalentsAEX" },
@@ -180,9 +146,9 @@ namespace CKFHardMode
             { "TalentModel.vg.csv",         "TalentsVanguard" },
             { "TalentModel.wm.csv",         "TalentsWarMachine" },
             { "consumables-chems.csv",      "ConsumablesChems" },
-            // The nine subsystem settings files and the implant globals, added
-            // in Phase 3. Read by ConfigDoc, not by Overlays. See the note at
-            // the head of this table.
+            // The nine subsystem settings files (implants-global.json is below).
+            // Read by ConfigDoc, not by Overlays. See the note at the head of
+            // this table.
             { "difficulty.json",            "Difficulty" },
             { "elapse.json",                "Elapse" },
             { "fatigue.json",               "Fatigue" },
@@ -200,6 +166,23 @@ namespace CKFHardMode
             { "cyberweapons-claws.csv",     "CyberweaponsClaws" },
             { "cyberweapons-lasers.csv",    "CyberweaponsLasers" },
             { "gear-classes.csv",           "GearClasses" },
+            // Twelve spawn pools, not thirteen. MonsterGroupId 500 (the Corp
+            // shared pool) is fielded only by Demo Corp, whose
+            // FactionModel.ProcGenSelect is 0, so no generated mission builds
+            // it and gen_spawn_weights.py writes no file for it. See
+            // schema/spawnweights.schema.json and docs/tuning-enemies.md.
+            { "MonsterGroupMemberModel.spawn-corp-a.csv", "SpawnWeights" },
+            { "MonsterGroupMemberModel.spawn-gang.csv", "SpawnWeights" },
+            { "MonsterGroupMemberModel.spawn-syndicate.csv", "SpawnWeights" },
+            { "MonsterGroupMemberModel.spawn-corp-c.csv", "SpawnWeights" },
+            { "MonsterGroupMemberModel.spawn-fsc.csv", "SpawnWeights" },
+            { "MonsterGroupMemberModel.spawn-bravestar.csv", "SpawnWeights" },
+            { "MonsterGroupMemberModel.spawn-warnerbraun.csv", "SpawnWeights" },
+            { "MonsterGroupMemberModel.spawn-ultratek.csv", "SpawnWeights" },
+            { "MonsterGroupMemberModel.spawn-matsumoto.csv", "SpawnWeights" },
+            { "MonsterGroupMemberModel.spawn-mckellen.csv", "SpawnWeights" },
+            { "MonsterGroupMemberModel.spawn-jupiter.csv", "SpawnWeights" },
+            { "MonsterGroupMemberModel.spawn-kemco.csv", "SpawnWeights" },
             { "implants-global.json",       "ImplantsGlobal" },
             { "implants-slot01.csv",        "ImplantsSlot01" },
             { "implants-slot02.csv",        "ImplantsSlot02" },
@@ -219,8 +202,8 @@ namespace CKFHardMode
         /// <summary>Bind every declared key and say what the .cfg answered.
         ///
         /// Called from Plugin.Load ABOVE the [General] Enabled bail-out, so the
-        /// file BepInEx writes carries all 43 lines on every launch including
-        /// one where the mod is switched off. See the header on why.
+        /// file BepInEx writes carries every key on every launch, including one
+        /// where the mod is switched off. See the header on why.
         ///
         /// Returns the [General] Enabled entry, which is the one key with its
         /// own section and the one the caller bails out on.</summary>
@@ -233,8 +216,8 @@ namespace CKFHardMode
 
             foreach (var def in Binds.All)
             {
-                // Every key in the table is a bool today and the generator has
-                // no other type for a slice toggle. A non-bool is a defect in
+                // Every key in the table is a bool and the generator has no
+                // other type for a slice toggle. A non-bool is a defect in
                 // the schema, not a configuration a player can reach, so it is
                 // named rather than skipped.
                 if (def.ValueType != typeof(bool))
@@ -257,7 +240,7 @@ namespace CKFHardMode
                 }
                 catch (Exception e)
                 {
-                    // NOT "off". Nobody looked. AGENTS.md section 3.
+                    // NOT "off". Nobody looked (AGENTS.md).
                     gates[def.Id] = Gate.Unknown;
                     unknownKeys.Add(def.Id);
                     Plugin.Log.LogError("Slices: could not bind \"" + def.Id + "\": "
@@ -274,8 +257,8 @@ namespace CKFHardMode
 
             // THE SUMMARY LINE. It names the three outcomes separately and
             // names every key that is not On, because a line reporting only a
-            // total cannot tell "off" from "there were none" (AGENTS.md section
-            // 3). The Off list is what a later "skipped" line is checked
+            // total cannot tell "off" from "there were none" (AGENTS.md). The
+            // Off list is what a later "skipped" line is checked
             // against; the Unknown list is what says the instrument could not
             // look.
             var off = gates.Where(kv => kv.Value == Gate.Off)
@@ -339,28 +322,26 @@ namespace CKFHardMode
         // ---- the retired JSON gates -------------------------------------------
 
         /// <summary>Report an "enabled" key still sitting at the root of a
-        /// subsystem's section of ckf.hardmode.json.
+        /// subsystem's settings file.
         ///
-        /// The eight subsystem gates moved to ckf.hardmode.cfg in Phase 1 of
-        /// split-config-into-toggleable-slices. The key is still PARSED, so an
-        /// existing document keeps loading instead of being refused for a key
-        /// that maps to no member — the same treatment Fatigue.cs already gives
-        /// the eight flat settings removed on 2026-09-07. It is not read, and
+        /// The subsystem gates are in ckf.hardmode.cfg. The retired key is
+        /// still PARSED, so a file carrying it keeps loading instead of being
+        /// refused for a key that maps to no member. It is not read, and
         /// nothing branches on it: it is a retired key, not a second gate.
         ///
         /// A retired key that is reported by nothing is the silent failure the
         /// unknown-key buckets exist to prevent, and a retired key whose value
         /// is FALSE is worse than that — the player switched something off and
-        /// it is now on. That case gets its own sentence.</summary>
-        /// <param name="value">null when the section does not carry the key.
+        /// it is ON. That case gets its own sentence.</summary>
+        /// <param name="value">null when the file does not carry the key.
         /// </param>
         internal static void ReportRetiredGate(string subsystem, string section,
                                                string sliceKey, bool? value)
         {
             if (value == null) return;
 
-            var head = subsystem + ": the \"" + section + "\" section of " + ConfigDoc.FileName
-                     + " still carries \"enabled\": "
+            var head = subsystem + ": " + ConfigDoc.Where(section)
+                     + " carries \"enabled\": "
                      + (value.Value ? "true" : "false") + ". That key is RETIRED and is not "
                      + "read. The gate is [" + Section + "] " + sliceKey
                      + " in ckf.hardmode.cfg, which is "
@@ -371,7 +352,7 @@ namespace CKFHardMode
                 Plugin.Log.LogError(head + " YOUR SETTING HAS NOT CARRIED OVER: you had this "
                     + "subsystem switched off in the JSON and it is ON this launch. Set ["
                     + Section + "] " + sliceKey + " = false in ckf.hardmode.cfg to switch it "
-                    + "off again, then delete the \"enabled\" line from the section.");
+                    + "off again, then delete the \"enabled\" line from that file.");
             else
                 Plugin.Log.LogWarning(head + " Deleting the line changes nothing.");
         }
@@ -391,9 +372,8 @@ namespace CKFHardMode
         }
 
         /// <summary>The verdict for one overlay filename. Called once per file,
-        /// before the read. A file no slice claims is OPENED — the three enemy
-        /// gear overlays and the teampl mirror are in that state today and
-        /// turning them off here would be a silent tuning change — and the
+        /// before the read. A file no slice claims is OPENED — turning the
+        /// enemy gear overlays off here would be a silent tuning change — and the
         /// caller counts and names them so "nothing claims this" is never
         /// indistinguishable from "a slice claims it and it is on".</summary>
         internal static Verdict VerdictForOverlay(string fileName)

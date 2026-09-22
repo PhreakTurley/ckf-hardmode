@@ -1,37 +1,36 @@
-# Limit break traits — the temporary trait pool
+# Limit break traits
 
-`TraitClass 6` in `TraitModel` is the limit-break temporary trait pool: 19 rows,
-`TraitId` 2000–2018, each `TraitLevel 1` and each in its **own `TraitGroup`**
-(`TraitGroup` = `TraitId`), so any number of them can sit on one merc at once
-with no group collision.
+Use this page to identify the shipped temporary-trait pool
+(`TraitModel.TraitClass 6`), resolve each trait to its effect, and distinguish
+the general and Face classifications. The separate mission-fatigue grant path
+is documented in [`character-fatigue.md`](character-fatigue.md).
 
-`TraitScore` is the tier and the direction: magnitude 1 = mild, 2 = severe;
-sign = buff or debuff. That holds for every row **except** the four Face rows in
-§3, where all four are `-2` and the field carries no information.
+The table values below are the game's own, [measured] from the dumped
+`TraitModel`, `EffectModel`, `MatrixEffectModel` and `_id_constants.csv`. Live
+behavior can differ when an overlay edits an effect row.
 
-Grant duration is not in the data. Every effect row has `Duration 0`; the
-shipped Stress Limit Break grants for 30 days (120 turns at 4 turns/day). See
-[`character-fatigue.md`](character-fatigue.md).
+## Shape of the pool
 
-## 1. The split — `EffectClassification`
+- 19 rows, `TraitId` 2000–2018. Each row is `TraitLevel 1` and is its own `TraitGroup` (`TraitGroup = TraitId`), so any number can sit on one merc.
+- `TraitScore` gives the tier and direction: magnitude 1 is mild, 2 is severe, and the sign marks a buff or a debuff. The four Face rows are the exception: all are `-2`, so the field carries no information for them.
+- The duration is not in these rows. Every effect row has `Duration 0`.
+  [measured] A captured Stress Limit Break granted a trait for 30 days; see
+  [`mission-elapse-penalty.md`](mission-elapse-penalty.md#the-four-character-bars).
+- These fields are identical on all 19 rows:
+  - on the trait: `TraitLevel 1`, `HealTime 0`, `HealCost 0`, `TagMatch` empty;
+  - on the effect: `EffectClearType`, `EffectPurgeType`, `EffectGroupId`, `EffectOwner`, `EffectHealType`, `Heals`, `Duration`, `Instant` and `SpecialMerge` are all 0, `VFX` is empty, and `IconAsset` is `talent_soldier_marker_sights`.
 
-`EffectClassification` on the joined `EffectModel` row separates the two pools
-cleanly, and is the only field that does:
+## Pool split by `EffectClassification`
 
-| Value | Rows in all of `EffectModel` | Meaning |
+| Value | Rows in all of `EffectModel` | Pool |
 |---|---|---|
-| `12 MutationTempTrait` | 13 | the general pool (§2) |
-| `15` | **exactly 4** | the Face-exclusive pool (§3) |
+| 12 `MutationTempTrait` | 13 | General |
+| 15 `MutationTempTraitFace` | 4 (effects 10508–10511, nowhere else) | Face only |
 
-`15` appears on effect ids 10508–10511 and **nowhere else in the shipped
-`EffectModel`** (1,680 rows scanned). Testing `EffectClassification == 15` is a
-zero-false-positive filter for the Face set.
+- `EffectClassification == 15` identifies the Face set with no false positives.
+- The 13 class-12 rows cover the general pool except 2004 and 2005. Those two have no `EffectTypeId`; they point at `MatrixEffectModel` 50000 and 50001 through `MatrixEffectTypeId`, and those two matrix rows are also classification 12.
 
-The 13 class-12 rows are the general pool minus 2004/2005, which carry no
-`EffectTypeId` at all — they point at `MatrixEffectModel` 50000/50001 through
-`MatrixEffectTypeId`, and those two rows are also classification 12.
-
-## 2. General pool — `EffectClassification 12`
+## General pool
 
 ### Debuffs, mild (`TraitScore -1`)
 
@@ -45,18 +44,14 @@ The 13 class-12 rows are the general pool minus 2004/2005, which carry no
 | Name | TraitId | EffectTypeId | Effect |
 |---|---|---|---|
 | Malcontent | 2008 | 10506 | `WoundRes -50`, `StressRes -50`, `SpecialCode 28 StressRipples` 100 |
-| Running Empty | 2009 | 10507 | `InitBonus -4`, `XpBonus -50` |
-| Off-Duty | 2014 | 10512 | `SpecialCode 90 BlockMissions` 1 — no stat penalty at all |
+| Running Empty | 2009 | 10507 | `InitBonus -4`, `XpBonus -50`. The effect's locale name is "Bloodless" |
+| Off-Duty | 2014 | 10512 | `SpecialCode 90 BlockMissions` 1, with no stat penalty |
 | Cash Grab | 2015 | 10513 | `SpecialCode 92 PayRateIncrease` 6 |
 | Seeing Red | 2016 | 10514 | `SpecialCode 91 LeftInSafehouseNoHype` 50 |
 | Backseat | 2017 | 10515 | `SpecialCode 89 GoOnMission` 100 |
 | Vulnerable | 2018 | 10516 | `MaxHitPoints -50`, `WoundRes -100`, `StressRes -100` |
 
-2009's effect name in locale is **"Bloodless"**, not "Running Empty".
-
-Beyond the enum names above, the behaviour of codes 28, 89, 91 and 92 is
-**[unverified]**. Only `90 BlockMissions` has been observed — it is the whole of
-Off-Duty's content.
+Code 90 is covered in [`character-fatigue.md`](character-fatigue.md).
 
 ### Buffs (`TraitScore +1` / `+2`)
 
@@ -69,56 +64,53 @@ Off-Duty's content.
 | Data-Inferno | 2004 | — (matrix 50000) | `ActionPoints +5`, `DamageBoost +25` |
 | Data-Fusion | 2005 | — (matrix 50001) | `ActionPoints +20`, `DumpShockRes +25`, `DeckArmor +2` |
 
-## 3. Face pool — `EffectClassification 15`
+## Face pool
 
-Face-exclusive. All four are `TraitScore -2`; **ignore the score here.** The set
-is two mirrored pairs on the same field, buff at `n`, debuff at `n+2`:
+These four are Face-only. All four are `TraitScore -2`, so ignore the score. They form two mirrored pairs, with the buff at `n` and the debuff at `n+2`.
 
 | Name | TraitId | EffectTypeId | Effect | Direction |
 |---|---|---|---|---|
-| High Baller | 2010 | 10508 | `SpecialCode 54 MissionPriceBonus` **+25** | buff |
+| High Baller | 2010 | 10508 | `SpecialCode 54 MissionPriceBonus` +25 | buff |
 | Leadership Surge | 2011 | 10509 | `AttWill +12` | buff |
-| Low Baller | 2012 | 10510 | `SpecialCode 54 MissionPriceBonus` **−35** | debuff |
+| Low Baller | 2012 | 10510 | `SpecialCode 54 MissionPriceBonus` −35 | debuff |
 | Leadership Slump | 2013 | 10511 | `AttWill -12` | debuff |
 
-These four are also the only `TraitClass 6` rows whose effect names do not
-resolve in locale — the dump emits `Effect.Name.10508`–`10511` verbatim.
+These are the only `TraitClass 6` rows whose effect names do not resolve in the locale. The dump emits `Effect.Name.10508`–`10511` verbatim.
 
-## 4. Reading payload sign
+## Reading the sign of a payload
 
-Sign of the payload tells you buff or debuff **only once you know what the
-`SpecialCode` does**, and only reliably within a mirrored pair:
+No trait or effect row carries a generic "is this a buff" flag. The sign of a payload tells direction only once the special code's meaning is known:
 
-- `54 MissionPriceBonus` modifies the mission's payout to the player, so
-  High Baller's **+25 is good** and Low Baller's **−35 is bad**.
-- `92 PayRateIncrease` raises the merc's own salary, so Cash Grab's **+6 is the
-  penalty** — a debuff carrying a positive number.
+- `54 MissionPriceBonus` changes the player's payout, so +25 is good.
+- `92 PayRateIncrease` raises the merc's own salary, so Cash Grab's +6 is the penalty.
 
-There is no generic "is this a buff" flag anywhere in the trait or effect rows.
+## Limits of the dumped data
 
-## 5. What is *not* in the data
+- Which traits a given limit break can draw, and the Face gate, are in code.
+- Every column of every dumped `raw` and `raw-save` table was scanned for EffectIds 10504–10516 and TraitIds 2000–2018. Outside `TraitModel` and `EffectModel`, the only real reference is `GameCharacterTraitModel` in the save. The other hits are unrelated id spaces, such as `WeaponId 2010`.
 
-Which traits a given limit break can draw, and the Face gate on §3, live in code.
-Every column of all 62 `raw` and 64 `raw-save` tables was scanned for exact-value
-references to EffectIds 10504–10516 and TraitIds 2000–2018 used as trait or
-effect references. Outside `TraitModel` and `EffectModel` there are none — every
-apparent hit is an unrelated id namespace (`WeaponId 2010`, `MatrixFileId 2010`,
-`BlockModel.Id 2010`, …). The single genuine reference is
-`GameCharacterTraitModel` in the save, holding granted rows (2006 and 2007 in the
-reference save).
+So what a trait does can be changed with an `EffectModel` row edit. Which trait a limit break grants cannot be changed through an overlay; that needs a code patch.
 
-Consequence for modding: a trait pool cannot be re-pointed through an overlay.
-Changing *what a trait does* is a row edit on `EffectModel`; changing *which
-trait a break grants* needs a patch.
+## What the mod overlays
 
-## Uniform fields
+`ckf.hardmode.d/EffectModel.limitbreak.csv` is owned by `[Slices]
+LimitBreakTraits`; it applies only while that slice and `ModelRules` are on. The
+switch is separate from `Fatigue`: one controls effect-row edits, while the
+other controls the mission-fatigue grant path. See
+[`overlays.md`](overlays.md#files) for overlay ownership and inspect the live
+file for its current cells.
 
-Across all 19 rows, these carry no information — every row is identical:
-`TraitLevel 1`, `HealTime 0`, `HealCost 0`, `TagMatch` empty, and on the effect
-row `EffectClearType`, `EffectPurgeType`, `EffectGroupId`, `EffectOwner`,
-`EffectHealType`, `Heals`, `Duration`, `Instant`, `SpecialMerge` all `0`, `VFX`
-empty, `IconAsset` always `talent_soldier_marker_sights`.
+The shipped values remain in the tables above. Clearing an overlay cell reverts
+that column to the shipped value. The `MoveSpeed` versus `MoveSpeedDebuff`
+trade-off is recorded in [`gotchas.md`](gotchas.md).
 
-Source: `sheets/raw/TraitModel.csv`, `sheets/raw/EffectModel.csv`,
-`sheets/raw/MatrixEffectModel.csv`, `sheets/raw/_id_constants.csv`
-(dump 26-9-12).
+## Open questions
+
+- [unverified] The runtime meanings of special codes 28, 89, 91 and 92 beyond
+  their enum names.
+
+## Related
+
+- [`character-fatigue.md`](character-fatigue.md)
+- [`overlays.md`](overlays.md#files)
+- [`talent-value-specialcodes.md`](talent-value-specialcodes.md)

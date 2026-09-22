@@ -12,9 +12,10 @@
     "CKF Hard Mode - Team Power Level award.",
     "",
     "Team PL is a SUM over GameMissionScoreModel joined to MissionPowerLevelModel",
-    "on (ActionClass, MissionPowerLevel). 'table' below is the game's own values,",
-    "REFERENCE ONLY - the mod reconciles against it before it substitutes anything,",
-    "and editing it changes no award. 'override' is what you edit.",
+    "on (ActionClass, MissionPowerLevel). 'table' below is the reference copy",
+    "of the game's values: the mod reconciles against it before it",
+    "substitutes anything, and editing it changes no award. 'override' is",
+    "what you edit.",
     "",
     "It is a sum, not a counter, and that was verified exactly rather than",
     "approximately: the reference save's 127 mission rows sum to 7.7075 and its",
@@ -45,21 +46,14 @@
     "",
     "The victory screen reads a different path at a different time. The label rules",
     "that make it agree are generated into ckf.hardmode.d/ from 'override' - see the",
-    "mirror invariant. Do not hand-write MissionPowerLevelModel rules in rules.json.",
-    "",
-    "REMOVED, 2026-09-01: a closing line reading 'Generated from",
-    "schema/teampl.schema.json.' It was the footer of the sidecar header",
-    "comment this doc used to be written into, and it named this file as the",
-    "place to edit instead of the comment. The sidecars are pure JSON now and",
-    "nothing writes a comment into one, so the line described an origin the",
-    "text it followed no longer has."
+    "mirror invariant. Do not hand-write MissionPowerLevelModel rules in any overlay."
   ],
   "uiDoc": [
     "Your Team Power Level is a running total over every mission the crew has finished. Each completed mission is worth a fraction, looked up by what class of mission it was and what level it was at, and the total is the sum of all of them. This page replaces that table.",
     "",
     "The new PL gains apply to missions you have already finished, which means you may see your PL spike up or down when you first load in.",
     "",
-    "The reference table is the game's own list for comparison.",
+    "The reference table is a copy of the game's own values, for comparison.",
     "",
     "The four mission classes are 0 for legwork, which grants nothing; 1 for story and Power Play missions; 2 for typical proc-gen missions; and 3 for solo hacks.",
     "",
@@ -70,7 +64,7 @@
       "path": "Slices.Progression", "in": "cfg", "type": "bool",
       "default": true, "ui": "form",
       "label": "Enable Team Power Level Award",
-      "doc": "Slice toggle. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice never enters RulePlan. THIS IS THE GATE. Slices.Init binds every key in Binds.All (Slices.cs) and is called from Plugin.Load (Plugin.cs), above the master-switch bail-out, so BepInEx writes the line whether the mod is on or off. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg is 3,238 bytes carrying [General] and [Slices] and all 43 keys, and check_schema.py --game printed \"0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s).\" at rc 0 [measured, Logs\\gates-phase1b.txt]. The tag on this sentence used to sit before that run: it read \"[measured 2026-09-13]\" when what had been measured was the C#, not the file. The file has now been measured too. CORRECTION, 2026-09-13: this doc used to say \"the section's own \\\"enabled\\\" field is still on disk and is still the gate the plugin reads\" and \"NOT ON DISK ... check_schema.py reports it MISSING\". Both were true when written and are false now. The section's \"enabled\" field is deleted from this schema and the gate is this key. The RETIRED KEY IS STILL PARSED, into a report-only bool? RetiredEnabled ([JsonPropertyName(\"enabled\")]), because four subsystems refuse a whole section on an unknown key (ConfigDoc.ReadSection, ConfigDoc.cs) and an upgraded document would otherwise switch OFF. Slices.ReportRetiredGate (Slices.cs) names it: Warning normally, Error when the retired value is false and this key is not. Nothing branches on it -- grep RetiredEnabled finds one declaration and one report call per subsystem and no read. It is a migration report, not a second gate. The key is named for the subsystem, Progression, not for its document section, which is \"teampl\". FILES THIS TOGGLE GATES: ckf.hardmode.d/MissionPowerLevelModel.generated.json. That file is the victory-screen label mirror of this subsystem's own award. scripts/gen_teampl_labels.py writes it from teampl.override merged over teampl.table (the mirror invariant below, and gen_teampl_labels.py:24-36), and serve.py regenerates it inside the same save transaction (design.md section 1). It reaches the game through the overlay path, not through Progression: Overlays.cs:38-45 makes a .json in ckf.hardmode.d an ordinary rules file, so ModelRules postfixes the materialised MissionPowerLevelModel row the victory screen re-reads, while Progression postfixes GameDb.SumGameMissionScore, which is a SQL aggregate that materialises no row. Two layers, one number. WHY THE SLICE CLAIMS IT: leave it unclaimed and [Slices] Progression = false reverts the award to stock while the mirror still rewrites the label -- a stock award with a lying label, which is the exact half-applied state design.md section 3 exists to make unreachable and which this schema's own linkedEnable reason already names as logging nothing. CORRECTION, 2026-09-13: design.md section 2 lists this file in the \"enemy gear, unchanged\" block at lines 78-81, alongside ArmorModel.csv, WeaponModel.csv and MonsterTypeModel.csv. That grouping is wrong twice. It is not enemy gear -- no armour, weapon or monster row is involved -- and it is not unchanged: it is rewritten every time teampl.override is edited. The four files were grouped by what this change does not create, not by what their rows are. Sections 1 and 12 are the ones to follow: section 1 names this file as this subsystem's mirror, and section 12 puts Progression in Systems and leaves Enemy Gear uneditable.",
+      "doc": "Slice toggle. It lives in ckf.hardmode.cfg because a gate cannot live inside the file it gates, and the .cfg is parsed before anything else loads. Slices.Init binds every [Slices] key above the [General] Enabled bail-out, so BepInEx writes the line even when the mod is off. A key that cannot be read is reported at Error and treated as on. Off: the subsystem logs why and does nothing this launch. The retired \"enabled\" key inside the subsystem's JSON file is still parsed (RetiredEnabled) so that Slices.ReportRetiredGate can report it: a Warning, or an Error when it is false and this key is not. Nothing branches on it. The key is named for the subsystem, Progression; its file is teampl.json. It also gates ckf.hardmode.d/MissionPowerLevelModel.generated.json (Slices.OverlayOwner), the victory-screen label mirror of the award. scripts/gen_teampl_labels.py writes it from teampl.override merged over teampl.table, and serve.py regenerates it in the same save. It reaches the game through the overlay path: a .json in ckf.hardmode.d is an ordinary rules file, so ModelRules postfixes the materialised MissionPowerLevelModel row the victory screen re-reads, while Progression postfixes GameDb.SumGameMissionScore, a SQL aggregate that materialises no row. Two layers, one number. The slice claims the mirror so that turning Progression off cannot leave a stock award with a modded label.",
       "uiDoc": "Turn this off and this part of the mod does nothing; the game uses its own values. The master switch on the first page turns off everything at once."
     },
     {
@@ -79,8 +73,8 @@
       "type": "table",
       "ui": "readonly",
       "label": "Game's own table (reference)",
-      "uiDoc": "The game's shipped values. The mod checks its own arithmetic against these before substituting.",
-      "doc": "The game's shipped values. The mod checks its own arithmetic against these before substituting. Editing changes no award and can make the reconcile fail, which silently disables the retroactive path. It ships 63 cells: classes 1-3 across MissionPowerLevel 0-10, plus a negative-level band from -1 to -10 whose fractions are negative. Regenerate it from D:\\ckf-data-modding\\sheets\\raw\\MissionPowerLevelModel.csv if the game updates. [unverified: ckf.hardmode.teampl.json:97-98 records that no negative level has been seen on an awarded row and that their purpose is unknown; nothing in this repository confirms or explains them.]",
+      "uiDoc": "The game's own values, for reference. The mod checks its own arithmetic against these before substituting.",
+      "doc": "Reference copy of the game's MissionPowerLevelModel values. The mod checks its own arithmetic against these before substituting. Editing changes no award and can make the reconcile fail, which silently disables the retroactive path. The game's table has 63 cells: classes 1-3 across MissionPowerLevel 0-10, plus a negative-level band from -1 to -10 whose fractions are negative [measured]. Regenerate it from sheets/raw/MissionPowerLevelModel.csv if the game updates. [unverified: no negative level has been seen on an awarded row, and their purpose is unknown.]",
       "row": [
         {
           "name": "ActionClass",
@@ -104,7 +98,7 @@
       "retroactive": true,
       "label": "Award override",
       "uiDoc": "Per-cell replacement of PL gains. A cell absent here keeps its reference value. I've picked the initial numbers to roughly have completionist playthroughs end around PL 10 and keep PL gains flat in order to have enemies continue scaling at a similar pace in the late game.",
-      "doc": "Per-cell replacement for the award. A cell absent here keeps its 'table' value, and a cell present here replaces it outright - the value is used verbatim, with no snapping to a shipped cell and no clamp of any kind in the code (Progression.cs:150-152, 340-342). A cell with no 'table' value works too: it simply contributes its own figure to the sum, and gen_teampl_labels.py emits its label rule marked '(no stock cell)'. THE RANGES BELOW ARE GUARD RAILS FOR THE EDITOR, NOT ENGINE LIMITS. ActionClass runs 0-3 because that is what the save files rows under; the shipped table has no class-0 band, so a class-0 override has no stock value behind it and re-prices every LEGWORK row from zero. PowerLevelFraction is allowed to go negative because the game's own table does. A worked example: an override cell of ActionClass 2, MissionPowerLevel 7, PowerLevelFraction 0.015 makes Treaty contracts at PL 7 pay a solo hack's rate, 0.03 down to 0.015, and setting the same cell to 0 stops that class and level advancing the team at all.",
+      "doc": "Per-cell replacement for the award. A cell absent here keeps its 'table' value, and a cell present here replaces it outright - the value is used verbatim, with no snapping to a game cell and no clamp of any kind in the code (Progression.cs:150-152, 340-342). A cell with no 'table' value works too: it simply contributes its own figure to the sum, and gen_teampl_labels.py emits its label rule marked '(no stock cell)'. THE RANGES BELOW ARE GUARD RAILS FOR THE EDITOR, NOT ENGINE LIMITS. ActionClass runs 0-3 because that is what the save files rows under; the game's table has no class-0 band, so a class-0 override has no stock value behind it and re-prices every LEGWORK row from zero. PowerLevelFraction is allowed to go negative because the game's own table does. A worked example: an override cell of ActionClass 2, MissionPowerLevel 7, PowerLevelFraction 0.015 makes Treaty contracts at PL 7 pay a solo hack's rate, 0.03 down to 0.015, and setting the same cell to 0 stops that class and level advancing the team at all.",
       "axes": {
         "row": "ActionClass",
         "col": "MissionPowerLevel",
@@ -159,7 +153,7 @@
         "Slices.Progression",
         "Slices.ModelRules"
       ],
-      "reason": "Progression alone gives a correct award with a stock label; ModelRules alone gives a stock award with a lying label. Neither direction logs anything. 3.0 moved both switches out of the cfg and into the merged document, so the keys are file#path rather than Section.Key. CORRECTION, 2026-09-13: that move is reversed and so is the spelling. Phase 1 of split-config-into-toggleable-slices put both gates back in ckf.hardmode.cfg, and these keys are Section.Key again. They HAD to move with them: check_schema.py's inv_value reads the live document for a file#path key (check_schema.py:128-137), and the retired \"enabled\" keys are still on disk by design so an upgraded section is not refused for an unknown key, so the old spelling went on enforcing a pairing between two keys nothing reads -- and a half-on pair is INVARIANT, which serve.py's BLOCKING refuses a save on. Both spellings are supported by the same function: Section.Key resolves against load_cfg's dict (check_schema.py:138-140) and inv_bool coerces the raw string (check_schema.py:143-147). ONE COVERAGE LOSS, stated rather than hidden: under --no-cfg the cfg dict is empty (check_schema.py:199), inv_value returns not-found, and the group is skipped in silence rather than reported. The file#path spelling was checked under --no-cfg because the document is read either way. [measured 2026-09-13, fixture run of both spellings against check_schema.py]"
+      "reason": "Progression alone gives a correct award with a stock label; ModelRules alone gives a stock award with a lying label. Neither direction logs anything. check_schema.py reports a half-on pair as INVARIANT, which the editor refuses to save. A run that cannot read both keys (for example under --no-cfg) does not compare the pair; it prints a SKIPPED line and counts it on the 'linkedEnable:' census line."
     }
   ]
 }

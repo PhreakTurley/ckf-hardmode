@@ -1,191 +1,254 @@
-# Workflow
+# Run the development workflow
 
-Install, dump, edit, test. This is the only copy of this procedure; the plugin
-READMEs cover building from source and nothing else.
+Use this page for the dump, edit, validate, test, build, and release sequence. Read the [architecture map](architecture.md) first if you do not yet know which component owns the change.
 
-## Files
+## Locate the live files
 
-| Path | Owner |
+All relative paths in this table start at the game directory:
+
+| Path | Purpose |
 |---|---|
-| `BepInEx/config/ckf.hardmode.json` | Hard Mode settings — nine sections, one per subsystem |
-| `BepInEx/config/ckf.hardmode.cfg` | one key, `[General] Enabled`, the master switch. BepInEx owns this file |
-| `BepInEx/config/ckf.hardmode.rules.json` | Hard Mode row edits (player gear, talents, effects) |
-| `BepInEx/config/ckf.hardmode.d/*.csv` | Hard Mode overlays — enemy gear and archetypes |
-| `BepInEx/config/ckf.hardmode.selfcheck.csv` | the regression suite's expectations |
-| `BepInEx/config/ckf.hardmode.{elapse,fatigue,missions,rewardcurve,teampl}.json` | the 2.x sidecars, if a 2.x install left them there. Nothing reads them |
+| `BepInEx/config/ckf.hardmode.cfg` | Hard Mode master and slice switches |
+| `BepInEx/config/ckf.hardmode.d/*.json` | Ten settings documents and generated JSON overlays |
+| `BepInEx/config/ckf.hardmode.d/*.csv` | Direct overlays and lever sheets |
+| `BepInEx/config/ckf.hardmode.selfcheck.csv` | Self-check expectations |
+| `BepInEx/ckf-hardmode/selfcheck.csv` | Default self-check report |
 | `BepInEx/config/ckf.datadump.cfg` | Data Dump settings |
-| `D:\ckf-data-modding\sheets\raw\*.csv` | Data Dump output — save tables go to `D:\ckf-data-modding\sheets\raw-save\` |
-| `BepInEx/interop/CoreRPG_v1.dll` | where `RPG.Database.*` lives — **not** `Assembly-CSharp.dll` |
-| `BepInEx/LogOutput.log` | what every mod reports at startup |
-| `<game>/StreamingAssets/Locales/en-US.json` | unencrypted; maps numeric ids to display names |
+| `BepInEx/ckf-dump/*.csv` | Default Data Dump output |
+| `BepInEx/interop/CoreRPG_v1.dll` | Generated interop assembly containing `RPG.Database.*` |
+| `BepInEx/LogOutput.log` | BepInEx and plugin log |
+| `StreamingAssets/Locales/en-US.json` | Unencrypted display-name lookup |
+| `%USERPROFILE%\AppData\LocalLow\TreseBrothersGames\CyberKnights\` | Save directory |
 
-**Correction, 2026-09-07.** That row used to read
-"`BepInEx/config/ckf.hardmode.*.json.pre-3.0-backup` | the 2.x sidecars. Nothing
-reads them". Nothing produces a file with that suffix any more: `Defaults.cs`
-used to migrate a 2.x config directory into `ckf.hardmode.json` and rename each
-sidecar `.pre-3.0-backup` as it went, and that migration was removed today along
-with everything else it wrote. A sidecar already renamed by an earlier 3.0
-launch is still on disk under the old suffix and is still read by nothing; a 2.x
-directory that has not seen one keeps its sidecars under their own names, which
-is what the row now says.
+The game installation contains the only tuning copy. Hard Mode does not create missing settings files. `Defaults.Install` reports the 17 required paths declared by `Defaults.Expected` and stops there.
 
-Every one of these arrives by extracting the release zip over the game folder.
-Nothing in the mod creates a config file, so a file you delete stays deleted
-until you extract the zip again — and that overwrites the settings files with
-the shipped ones, so copy anything you have retuned somewhere else first.
+Current settings documents and the plugin both carry version `4.1.0`; the settings-layout stamp and public plugin version remain independent and may diverge again.
 
-Back up saves before the first real run:
-`%USERPROFILE%\AppData\LocalLow\TreseBrothersGames\CyberKnights\`
+Remove these legacy files when they appear:
 
-## The loop
+- `ckf.hardmode.json`: the pre-4.0 merged config. Its presence beside any current settings document stops the plugin
+- `ckf.hardmode.rules.json`: retired rule file. The plugin still reads it first and logs its presence as an error
 
-1. Both plugins installed, Data Dump `[General] Enabled = false`.
-2. Need column names, or want to see what exists? Set `Enabled = true`, launch,
-   reach the main menu, quit, set it back to `false`.
-3. Read `D:\ckf-data-modding\sheets\raw\<Table>.csv`. **The header row is the real column
-   names** — that is what rules and overlays are written against.
-4. Edit `ckf.hardmode.rules.json` (see [`rule-engine.md`](rule-engine.md)) or an
-   overlay CSV (see [`overlays.md`](overlays.md)).
-5. Run `python scripts/validate_rules.py`. It catches the dangling pointers that
-   otherwise show up as a black screen.
-6. Relaunch. Rules and overlays are a text edit, not a rebuild — only new C#
-   needs `dotnet build`. That is true of the shipped defaults too: retuning
-   what the zip carries is an edit to the live `BepInEx\config\` (in the editor
-   or by hand) plus `python scripts/make_release.py`, with no build in the loop.
+## Follow the normal change loop
 
-**Close the game before editing a `.cfg`.** BepInEx rewrites it on exit and will
-undo an edit made while it is running. Keep every `.cfg` value on one line.
+1. Identify the owning schema, subsystem, overlay, or lever sheet
+2. Capture fresh shipped data when the change depends on game rows
+3. Edit the live configuration or source file
+4. Regenerate any machine-owned outputs
+5. Run schema, pointer, and subsystem checks
+6. Relaunch or rebuild as required
+7. Exercise the affected path in game and save the live log
 
-## What a dump actually contains
+Close the game before editing a `.cfg`. BepInEx rewrites the file when the process exits, and Hard Mode reads it once at startup.
 
-192 tables exist across the three databases. A default run — `Databases =
-DataDb`, `SkipIrrelevantTables = true` — captures about 50 and skips about 28 as
-art, writing or map placement. `_coverage.csv` lists what was captured with row
-and column counts; `_skipped_tables.csv` lists what was skipped and why;
-`_readers.csv` lists every reader attempted.
+## Capture shipped table data
 
-| You need | Do this |
+Keep Data Dump at `[General] Enabled = false` between sweeps. Before a stock-data sweep, also set Hard Mode's `[General] Enabled = false` so Hard Mode does not rewrite rows before Data Dump records them.
+
+For a normal content sweep:
+
+1. Set Data Dump `[General] Enabled = true`
+2. Launch to the main menu
+3. Quit the game
+4. Restore `[General] Enabled = false`
+5. Inspect the configured output directory
+
+`[General] Enabled` gates the table sweep and mission probes only. Diagnostics, ID collection, and specialized probes use their own settings. `TraitProbe` and `WriteProbe` can write to a save even while the general switch is false. Read `mods/CKFDataDump/README.md` before enabling a probe.
+
+The main coverage files are:
+
+| File | What it establishes |
 |---|---|
-| Per-save tables (`Game*`) | `[Dump] Databases = DataDb, GameDb` **and dump from inside a mission** — they are genuinely empty at the menu |
-| Mission generation data (`_mission_*.csv`) | Leave Data Dump enabled and play a few in-game days; nothing is written until the factory builds a mission. These files **append** across sessions, so coverage accumulates |
-| The reward curve (`_reward_curve.csv`) | A direct-call sweep, finished before the main menu — but check `[Mission] CurveSweepMaxPowerLevel`. The shipped config sets it to 10, which hides the flatline above PL 10. It can never show a *patched* curve; use `rewardcurve.logEffectiveCurve` for that |
-| Mission keys and goal structure | Nothing — `BlockModel` is in the default sweep (~1.9 MB). It holds story and dialogue blocks, so you get the `SN_*` mission keys and the goal chains, **not** price or XP modifiers |
-| A column that was trimmed away | Check `_dropped_columns.csv`; it records the value of every constant column removed |
+| `_coverage.csv` | Declared, captured, capped, row, and column counts |
+| `_readers.csv` | Bulk readers attempted by the sweep |
+| `_skipped_tables.csv` | Tables excluded and the reason |
+| `_dropped_columns.csv` | Columns omitted from table CSVs and their recorded values |
+| `_id_constants.csv` | Runtime constant and enum names mapped to numeric IDs |
 
-`[Dump] OutputDirectory` points at `D:\ckf-data-modding\sheets\raw`, and that
-is where the CSVs land. The game lives under `Program Files`, where Windows may
-block the write, so keep it pointed at a path you own.
+An empty file or absent row is not evidence until the hook, reader, sampling moment, and cap are known to cover it. A passive run records only rows the game happens to materialize.
 
-## Finding an id
+Use these capture modes for specific questions:
 
-Names are numeric ids everywhere. `en-US.json` is the index, keyed by the same
-numbers: `WeaponName.20000`, `Monster.Name.400`, `Talent.Name.<id>`,
-`ArmorName.<id>`, `JobNode.Name.<id>`, `Effect.Name.<id>`.
-
-A talent, its base effect and its locale entries usually **share one id**
-(`Talent.Name.11013` / `Effect.Name.11013`), which is the fastest way to find a
-talent's effect row.
-
-For ids that are not names — loot groups, file groups, reward types — read
-`_id_constants.csv`, which resolves every named constant off the running game.
-
-## Testing a change in game
-
-Which action exercises which kind of change:
-
-| Change | What tests it |
+| Need | Capture method |
 |---|---|
-| Gear stats on an existing row | Reload a save and open a mission — rows are re-materialised on read |
-| A cloned gear tier | Reload and enter a mission at a power level that reaches that tier |
-| Roster composition, spawn pools | A **restart**, not a reload — the roster is built once at mission generation |
-| Rewards, Team PL | Complete a mission and read the victory screen, then the log |
-| Fatigue, elapse | Advance turns; both hook the timeline |
+| Save and per-mission tables | Add `GameDb, CoreDb` and sweep from inside a mission |
+| Generated mission samples | Enable mission probes and play through mission generation; `_mission_*` files append |
+| Stock reward curve | Enable the `curve` mission probe with Hard Mode off |
+| Patched reward curve | Use Hard Mode `rewardcurve.json` logging |
+| Mission keys and goal chains | Read `BlockModel.csv` |
+| Cloned Hard Mode rows | Use `RowClone: built` and `RowClone: served` log lines; clones do not appear in a dump |
 
-**Turn Data Dump off before testing gear.** Its sweep calls `ReadArmors()`, the
-clones get appended to the returned list, and the game then resolves armour out
-of that list rather than by id and dies on a null.
+## Edit the live configuration
 
-### Reading the log
+Run the editor from the repository:
 
-| Line | Means |
-|---|---|
-| `ModelRules: loaded N rule(s) across M model type(s)` | the rules file parsed |
-| `ModelRules: 192 materializer(s) found` | every table's row builder was hooked |
-| `<table>: no index` | every row tests every rule — fine, just slower |
-| `matched, nothing changed` | the rule found the row and the write was discarded. Usually a computed column; see [`gotchas.md`](gotchas.md) |
-| `RowClone: N clone(s) built, N served` | clones materialised and were handed out. `built` without `served` means nothing is reaching them |
-| `RowClone: <reader>(<id>) found nothing` | a dangling pointer. Fix it before launching again |
-| `Difficulty: GameDifficultyModel — N properties, M Min/Max pair(s), widened M by xK` | the slider ranges were stretched |
-| `Fatigue: a save was loaded` | the load postfix found the real seam |
-| `Elapse: first tick` | the elapse reader is alive. A quiet session with `0 of them` is a broken reader, not a quiet board |
-
-Set `traceRules` in the `modelrules` section to N to log the first N row edits with before and
-after values. Keep a copy of the **live** log — it carries Unity messages the
-saved copy does not.
-
-For a full verification pass, set `selfcheck.enabled` true for one launch,
-read the result, and turn it back off. Against a stale baseline it reports a
-retune as a regression.
-
-## Building a release
-
-One command, from the repo root:
-
+```bat
+python gui\serve.py
 ```
+
+You can also use `CKF-Config-Editor.exe` or edit files directly. The editor writes the live config and keeps no backup, so copy the configuration before a large retune.
+
+Use these format references:
+
+- [Overlay CSV and TSV format](overlays.md)
+- [Rule engine and JSON rules](rule-engine.md)
+- [Schema declarations and invariants](../schema/SCHEMA-FORMAT.md)
+- [Generated configuration reference](config-reference.md)
+
+## Validate configuration and pointers
+
+Run both validators from the repository root:
+
+```bat
+python schema\check_schema.py --game "C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint"
+python scripts\validate_rules.py --game "C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint" --dump "D:\ckf-data-modding\sheets\raw"
+```
+
+`check_schema.py` checks declared files, values, ranges, and cross-file invariants. `validate_rules.py` needs a non-empty dump and checks table names, columns, clone sources, ID collisions, and pointers.
+
+Use `--enabled-set` on `validate_rules.py` to resolve pointers against only the slices currently enabled in `ckf.hardmode.cfg`.
+
+Do not launch with a dangling pointer. A missing target row can stop mission loading without a useful game log entry.
+
+## Regenerate machine-owned files
+
+After a schema change, regenerate all schema-derived outputs:
+
+```bat
+python scripts\gen_binds.py
+python scripts\gen_cfg_template.py
+python scripts\gen_docs.py
+```
+
+After a Team Power Level table change, regenerate its label mirror:
+
+```bat
+python scripts\gen_teampl_labels.py --game "C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint"
+```
+
+Never hand-edit these outputs:
+
+- `mods/CKFHardMode/Plugin.Binds.g.cs`
+- `release/ckf.hardmode.cfg.in`
+- `docs/config-reference.md`
+- `BepInEx/config/ckf.hardmode.d/MissionPowerLevelModel.generated.json`
+
+## Run offline checks
+
+Use the checks that cover the changed surface:
+
+| Surface | Commands |
+|---|---|
+| Schema | `python schema\check_schema.py --config config_dir` |
+| Generated files | `python scripts\gen_binds.py --check`, `python scripts\gen_cfg_template.py --check`, `python scripts\gen_teampl_labels.py --check --config config_dir` |
+| Editor | `python gui\serve.py --selftest --config config_dir`, `python gui\serve.py --selftest-js` |
+| Release builder | `python scripts\make_release.py --selftest` |
+| Rules and pointers | `python scripts\validate_rules.py --game game_root --dump dump_dir` |
+| Lever converters | Each expander's `--check` and `--selftest` modes |
+| C# | `dotnet build -c Release project.csproj` |
+
+The private `scripts\run_gates.cmd phase` wrapper records each gate's exit code under `Logs/`. Some gates deliberately return non-zero for planted faults. The [build and release gotchas](gotchas.md#build--release) identify those cases.
+
+Retired 3.x ruleset comparisons remain available only through `--ruleset-3x` on the relevant converters. The obsolete byte-for-byte migration comparison was deleted because the live config became a tuning bench. `gui/serve.py --migrate` remains available for maintainer use.
+
+## Test the change in game
+
+Choose the action that materializes the changed data:
+
+| Change | Exercise |
+|---|---|
+| Existing gear row | Reload a save and enter a mission |
+| Cloned gear tier | Enter a mission whose power level reaches that tier |
+| Roster or spawn pool | Generate the mission again from the safehouse; a reload is insufficient |
+| Reward or Team Power Level | Complete a mission and inspect the victory screen and log |
+| Fatigue or elapse | Advance turns and inspect the subsystem log |
+
+Set `traceRules` in `modelrules.json` to a small positive number when you need before-and-after row values. Restore it to `0` after the capture.
+
+The live `LogOutput.log` can contain Unity messages that a later saved copy does not. Copy it before the next launch.
+
+## Run the Hard Mode self-check
+
+1. Set `[Slices] SelfCheck = true`
+2. Launch and enter a mission
+3. Quit and run the log checker
+4. Restore `SelfCheck = false`
+
+```bat
+python scripts\check_run.py "C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint\BepInEx\LogOutput.log"
+```
+
+The self-check compares against explicit expectations. A valid retune can therefore look like a regression until the expectations are reviewed.
+
+## Build Hard Mode
+
+Run the build on the machine with the game and generated BepInEx interop files:
+
+```bat
+dotnet build -c Release -p:GameDir="C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint" mods\CKFHardMode\CKFHardMode.csproj
+```
+
+The project deploys the DLL to `BepInEx\plugins` when that directory exists. A tuning-only change needs no C# build.
+
+## Build a player release
+
+Run the release builder from the repository root:
+
+```bat
 python scripts\make_release.py
 ```
 
-It rebuilds `CKF-Config-Editor.exe`, runs `gui\serve.py --selftest
---frozen-exe` against it, and writes `dist\CKF-Hard-Mode-<version>.zip`.
-Every check except the gate runs before anything is written, so those refusals
-leave `dist\` as they found it. The gate needs the rebuilt exe, so a gate
-refusal leaves it in `dist\`, with `dist\selftest-failed.log`. (**Correction,
-2026-09-11:** this used to say every refusal left `dist\` untouched; `build()`
-writes the exe before `gate()` runs.) `--selftest` proves each refusal can fire;
-`--skip-exe` reuses the binary already in `dist\`. PyInstaller's scratch goes
-to `dist\build\`.
+The full build requires:
 
-Two things it needs and will not create:
+- A current `CKFHardMode.dll`
+- The pinned private BepInEx vendor tree
+- The live configuration or an explicit `--config` directory
+- All templates under `release/`
+- PyInstaller for the frozen editor
 
-| | |
+`make_release.py` snapshots the configuration before validation. It refuses an editor save journal, any schema problem, a stale Team Power Level mirror, mismatched layout stamps, a version mismatch, an invalid vendor tree, or a failed editor gate.
+
+The current release declaration requires 16 files from the live config plus the rendered `ckf.hardmode.cfg`. It also packages every additional `.csv`, `.tsv`, or `.json` in `ckf.hardmode.d`, because the plugin reads those extensions.
+
+The builder writes:
+
+```text
+dist\CKF-Config-Editor.exe
+dist\CKF-Hard-Mode-4.1.0.zip
+```
+
+`dist/` is private and ignored. Attach the finished archive to the GitHub Release manually.
+
+Useful flags:
+
+| Flag | Effect |
 |---|---|
-| `mods\CKFHardMode\bin\Release\net6.0\CKFHardMode.dll` | `dotnet build -c Release`. It refuses if the DLL predates the version bump |
-| `vendor\BepInEx-6.0.0-be.785\` | the pinned BepInEx build, unpacked once from https://builds.bepinex.dev/projects/bepinex_be. It refuses on any other build or commit |
+| `--config config_dir` | Package an explicit config directory |
+| `--skip-exe` | Reuse the existing editor executable and still run its gate |
+| `--out output_dir` | Change the output directory |
+| `--dll plugin_path` | Use an explicit plugin DLL |
+| `--vendor vendor_dir` | Use an explicit vendor tree |
+| `--selftest` | Exercise release-builder refusal paths without building a release |
 
-The config files ship as loose files under `BepInEx\config\`, not inside the
-DLL, and they come from the live config directory: the one the editor edits
-(`gui\settings.json`), or `--config DIR`. `CONFIG_FILES` in `make_release.py`
-names the seven it requires; a missing one refuses by name. Any other `.csv`,
-`.tsv` or `.json` in `ckf.hardmode.d\` ships too, because the loader reads it;
-anything else there is left out and named. The master switch is rendered from
-`release\ckf.hardmode.cfg.in`, not copied from the live `.cfg`.
+## Maintain the two versions
 
-An editor save journal left in the live directory refuses. Otherwise the files
-are copied to a temporary snapshot, and everything after reads the snapshot:
-`schema\check_schema.py` (any problem refuses), `scripts\gen_teampl_labels.py
---check`, `Defaults.DocVersion` against the document's `_version`, the gate
-(run with `--config <snapshot>`), and the zip. An editor save made during the
-build cannot reach the zip unchecked.
+The plugin version changes only for a public release. `scripts/make_release.py:check_versions` requires these values to agree:
 
-**Correction, 2026-09-11.** This section used to say the sources were in this
-repo — three in `mods\CKFHardMode\defaults\`, four in `overlays\`. Those were
-hand-synced copies of the live files and were deleted today; the live directory
-is now the only copy.
+- `mods/CKFHardMode/CKFHardMode.csproj` `<Version>`
+- `Plugin.PluginVersion`
+- The built DLL metadata
 
-**A retune is a config edit and this one command.** Editing the live config and
-re-running `make_release.py` is the whole loop; `dotnet build` is only for
-changed C#.
+The settings-layout stamp changes whenever the shape of a settings document changes. `check_doc_version` requires `Defaults.DocVersion` and every one of the ten settings documents to agree.
 
-A `FAIL` from the gate refuses the release. A `NOT RUN` is printed with its
-reason and does not — the one that fires in practice is antivirus holding a
-just-executed exe.
+`MIGRATION_PLUGIN_VERSION` and `MIGRATION_DOC_VERSION` in `gui/serve.py` are hand-maintained literals. No active check compares them with the C# declarations after the old migration comparison was removed. Review them explicitly when either version changes.
 
-The version lives in `CKFHardMode.csproj` `<Version>` and in `Plugin.cs`
-`PluginVersion`, and the two have to agree. `release/README.md` covers the two
-text files that go in the zip.
+## Recover after a game update
 
-## After a game update
+The next launch after `GameAssembly.dll` changes regenerates the interop assemblies. If a plugin can no longer resolve a type or member:
 
-`GameAssembly.dll` changes and BepInEx regenerates the interop assemblies on the
-next launch — slow, expected. If a mod then logs "could not resolve", point Data
-Dump's `[Diagnostics] DumpMembers` at the type and compare names.
+1. Use Data Dump `DumpMembers` or `FindMethods` to inspect the current runtime type
+2. Compare the new member names with the source
+3. Refresh `docs/_gamedb_surface.txt` when the database surface changed
+4. Re-run the affected gates and game path
+
+The [patching rules](patching-rules.md) explain why method names and interop metadata do not establish implementation behavior.

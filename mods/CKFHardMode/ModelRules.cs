@@ -10,36 +10,27 @@
 // GetRow*Model method sees each record *after* the game has decrypted and
 // materialized it, and can rewrite any field before the game ever uses it.
 //
-// So rules are declarative JSON rather than code — retuning is a text edit
-// and a relaunch, no rebuild.
+// So rules are data (overlay CSVs, lever sheets, JSON rules) rather than
+// code — retuning is a text edit and a relaunch, no rebuild.
 //
 // THIS FILE APPLIES RULES AND NOTHING ELSE.
 //
-// It used to carry the discovery machinery too — dumping a table's columns,
-// logging every row, and calling bulk readers to force whole tables through
-// the materializer. All of that has moved to the CKF Data Dump plugin, a
-// separate assembly with its own config file that shares no code with this
-// one and can be installed or removed independently.
-//
-// The split is not tidiness. Discovery and application want opposite things.
-// Discovery wants to touch every table in the database once and is happy to
-// cost seconds of load time; application wants to touch only the handful of
-// tables a rule targets and runs on the game's hot path for every row it
-// reads. Holding both meant paying for a dump you were not taking, and only
-// hooking tables you had named twice — in the rules file and again in
-// PreloadTables — which is how twelve tables passed for a complete capture
-// across a dozen runs.
+// Discovery (dumping a table's columns, logging every row, forcing whole
+// tables through the materializer) lives in the CKF Data Dump plugin.
+// Discovery wants to touch every table once and can cost seconds of load
+// time; application wants to touch only the tables a rule targets and runs on
+// the game's hot path for every row it reads.
 //
 // Write rules against the CSVs the dump plugin produces. Column names are the
 // header row of BepInEx/ckf-dump/<Table>.csv.
 //
-// TWO THINGS LIVE NEXT DOOR AND ARE DRIVEN FROM THE SAME FILE:
+// TWO THINGS LIVE NEXT DOOR AND ARE DRIVEN FROM THE SAME RULE SET:
 //
 //   RowClone.cs     a rule carrying "clone"/"as" INSERTS a row rather than
 //                   editing one. The GetRow* materializer cannot do that — it
 //                   only ever sees rows the game already decided to read — so
 //                   cloning hooks the Read* readers instead.
-//   Writability.cs  the write-probe behind "modelrules": probeWritableColumns.
+//   Writability.cs  the write-probe behind modelrules.json probeWritableColumns.
 //                   Tells you which columns actually accept a write, as
 //                   opposed to having a setter that recomputes and discards.
 
@@ -64,10 +55,8 @@ namespace CKFHardMode
         [JsonPropertyName("whereMax")] public Dictionary<string, double> WhereMax { get; set; }
         [JsonPropertyName("set")]      public Dictionary<string, JsonElement> Set { get; set; }
 
-        // These four were Dictionary<string, double>. They now take either a
-        // number, exactly as before, or a curve object — see Term below. Plain
-        // numbers deserialize identically, so every rule written against the
-        // old shape still loads.
+        // Each value is either a plain number or a curve object — see Term
+        // below.
         [JsonPropertyName("multiply")] public Dictionary<string, JsonElement> Multiply { get; set; }
         [JsonPropertyName("add")]      public Dictionary<string, JsonElement> Add { get; set; }
         [JsonPropertyName("clampMin")] public Dictionary<string, JsonElement> ClampMin { get; set; }
@@ -106,9 +95,7 @@ namespace CKFHardMode
         // Set ONLY by GearClasses.Expand, never by JSON: there is no
         // [JsonPropertyName] on either, so no rules file and no overlay can
         // carry one, and Rule.Unknown will name the spelling if someone tries.
-        // This is a SELECTOR, not a new operation — proposal.md's non-goal
-        // "no new rule-engine operators" is untouched; set, multiply, add,
-        // clampMin, clampMax, clone, as and serveOn are what they were.
+        // This is a SELECTOR, not a new operation.
         //
         // ExcludeIds is the MonsterTypeModel pointer set resolved at load, and
         // ExcludeIdColumn names the column to test it against. Together with
@@ -261,13 +248,9 @@ namespace CKFHardMode
 
         // ---- property resolution ------------------------------------------
         //
-        // Rules are matched and applied per ROW, so a single mistyped column
-        // name used to produce one warning per row, forever — JobNodeModel
-        // alone is ~1557 rows per read. Worse, the lookup went through
-        // AccessTools.Property, which logs its own warning on every miss, so
-        // silencing ours would only have halved the flood.
-        //
-        // Both problems have the same fix: resolve through plain reflection,
+        // Rules are matched and applied per ROW, so a mistyped column name must
+        // not produce one warning per row. AccessTools.Property also logs its
+        // own warning on every miss. So: resolve through plain reflection,
         // cache the answer (including the misses), and complain exactly once
         // per type+property.
         private static readonly Dictionary<string, PropertyInfo> PropCache =
@@ -324,21 +307,14 @@ namespace CKFHardMode
         // list to everyone who needs it.
         internal static readonly List<Type> ResolvedDbs = new List<Type>();
 
-        // The starter file ships with an EMPTY "rules" array and the examples
-        // parked under "_examples", which the deserializer ignores.
+        // A description of the JSON rules dialect. Nothing writes it to disk.
+        // "rules" is EMPTY and the examples sit under "_examples", which the
+        // deserializer ignores, so this text used as a file applies nothing.
         //
-        // They used to live in "rules". That was a bug with two halves. The
-        // engine skips applying them on the run that writes the file, but every
-        // later launch loads them like any other rule — so a user who never
-        // edited the file got a silent 25% weapon buff and a warning per bad
-        // column, forever. And all four examples were wrong: "Damage" and
-        // "Cooldown" are not columns (they are BallisticDamage1/2 and
-        // RechargeTurns), "Id" is an inherited UI column that reads -1 so it
-        // never matches, and CharacterTypeModel is the five-row player-class
-        // table with no HitPoints and no numbers at all — enemy archetypes are
-        // MonsterTypeModel.
-        //
-        // Every column named below is verified against a real dump.
+        // Column-name traps the examples avoid: damage is BallisticDamage1/2
+        // and cooldown is RechargeTurns; "Id" is an inherited UI column that
+        // reads -1 and never matches; enemy archetypes are MonsterTypeModel,
+        // not CharacterTypeModel (the player-class table, with no HitPoints).
         public static string DefaultRulesJson =>
 @"{
   ""_readme"": [
@@ -436,27 +412,21 @@ namespace CKFHardMode
 }
 ";
 
-        // 3.0: the five [ModelRules] cfg keys are the "modelrules" section of
-        // ckf.hardmode.json. The section is new — it has no 2.x sidecar behind
-        // it — and it is flat, so ConfigDoc.ReadSection does the grading and
-        // the unknown-key report rather than forty lines of it here.
+        // modelrules.json. It is flat, so ConfigDoc.ReadSection does the
+        // grading and the unknown-key report. Initialisers match the schema
+        // defaults and apply only when a key is absent from the file.
         private sealed class Options : ConfigDoc.IHasUnknownKeys
         {
-            // RETIRED 2026-09-13. This used to be
-            //     [JsonPropertyName("enabled")] public bool Enabled { get; set; } = true;
-            // and Init branched on it. The gate is [Slices] ModelRules in
-            // ckf.hardmode.cfg now, because a gate cannot live inside the file
-            // it gates (design.md section 3). The key is still PARSED, into a
-            // bool? so that "absent" and "false" stay different answers, purely
-            // so an existing ckf.hardmode.json is not refused for a key that
-            // maps to no member -- the same treatment Fatigue.cs gives the eight
-            // flat settings removed on 2026-09-07. NOTHING BRANCHES ON IT;
-            // Slices.ReportRetiredGate names it in the log and stops there.
+            // RETIRED gate. The switch is [Slices] ModelRules in
+            // ckf.hardmode.cfg, because a gate cannot live inside the file it
+            // gates. "enabled" is still PARSED, into a bool? so "absent" and
+            // "false" stay different answers, so that a file still carrying it
+            // is not refused for a key that maps to no member. NOTHING BRANCHES
+            // ON IT; Slices.ReportRetiredGate names it in the log.
             [JsonPropertyName("enabled")]              public bool? RetiredEnabled { get; set; }
             [JsonPropertyName("traceRules")]           public int TraceRules { get; set; }
             [JsonPropertyName("probeWritableColumns")] public bool ProbeWritableColumns { get; set; }
-            // A stringList is a JSON array once it is in the document; it was a
-            // comma-separated string only because the .cfg has one line per key.
+            // A JSON array. Null (absent) is read as empty in Init.
             [JsonPropertyName("probeTables")]          public List<string> ProbeTables { get; set; }
             [JsonPropertyName("probeOutput")]          public string ProbeOutput { get; set; } = "";
             [JsonExtensionData] public Dictionary<string, JsonElement> Unknown { get; set; }
@@ -465,9 +435,8 @@ namespace CKFHardMode
 
         public static void Init(Harmony harmony, string rulesPath)
         {
-            // THE GATE IS READ FIRST, and it is read from ckf.hardmode.cfg. The
-            // section below is only settings now, so an unreadable document can
-            // no longer take this subsystem's switch with it.
+            // THE GATE IS READ FIRST, from ckf.hardmode.cfg, so an unreadable
+            // settings file cannot take this subsystem's switch with it.
             if (!Slices.On("ModelRules"))
             {
                 Plugin.Log.LogInfo(Slices.OffBecause("ModelRules",
@@ -487,16 +456,16 @@ namespace CKFHardMode
             TraceLimit = Math.Max(0, opt.TraceRules);
 
             // Always on. It changes no result — the numeric conversion is the same
-            // round-to-nearest, halves-to-even that Convert.ChangeType did — and it is
-            // the single largest saving on the rule hot path.
+            // round-to-nearest, halves-to-even that Convert.ChangeType does — and it
+            // is the single largest saving on the rule hot path.
             Accessors.Configure(true);
 
             LoadRules(rulesPath);
             Overlays.Load(Path.Combine(Path.GetDirectoryName(rulesPath) ?? ".",
                                        "ckf.hardmode.d"), Adopt);
 
-            // THE PLAN-WIDE TOTAL. Both halves of the mod-slices requirement
-            // "A disabled slice never enters the rule plan" are asserted here.
+            // THE PLAN-WIDE TOTAL. It shows that a disabled slice never enters
+            // the rule plan, in both count and order.
             //
             // The COUNT half: N is every rule that reached Adopt, from the rules
             // file and from every overlay file that was opened. A disabled
@@ -514,21 +483,16 @@ namespace CKFHardMode
             //
             // WHAT THIS CANNOT SAY: how many rules a skipped file would have
             // contributed. Nothing opened it. The files are named instead, so
-            // "skipped" and "contributed nothing" stay distinguishable --
-            // AGENTS.md §3.
+            // "skipped" and "contributed nothing" stay distinguishable
+            // (AGENTS.md).
             var skippedFiles = Overlays.SkippedFiles;
             Plugin.Log.LogInfo($"ModelRules: loaded {ByModel.Values.Sum(v => v.Count)} rule(s) "
                 + $"across {ByModel.Count} model type(s)"
                 + (CloneRules.Count > 0 ? $", plus {CloneRules.Count} clone rule(s)" : "")
                 + $"; {nextIndex} load-order index(es) allocated, from "
-                // CORRECTION, 2026-09-14 (Phase 9). This clause used to read
-                //     "from ckf.hardmode.rules.json plus {Overlays.FilesRead} overlay file(s) read"
-                // unconditionally. ckf.hardmode.rules.json is deleted, so that
-                // named a file that is not there as a source of the plan on every
-                // launch -- the reader would have had to know the count could be
-                // zero to tell "contributed nothing" from "was not there".
-                // rulesFileRules is -1 until LoadRules sets it, so "not read at
-                // all" is a third answer rather than a zero.
+                // A legacy rules file is normally absent, and the clause says
+                // so. rulesFileRules is -1 until LoadRules sets it, so "not read
+                // at all" is a third answer rather than a zero.
                 + (rulesFileRules < 0
                     ? "no rules-file read"
                     : rulesFileRules == 0
@@ -631,11 +595,10 @@ namespace CKFHardMode
             // point at an id. A rule left pointing at a clone that was not
             // created stops missions loading, so it is named at load.
             //
-            // Runs whether or not there are clone rules. It used to sit inside
-            // the branch above, which skipped it exactly when it was most
-            // needed: with no clone rules nothing is declared, so every id a
-            // rule writes into the reserved range is undeclared — and that is
-            // the answer the check exists to give.
+            // Runs whether or not there are clone rules: with no clone rules
+            // nothing is declared, so every id a rule writes into the reserved
+            // range is undeclared, and that is the answer the check exists to
+            // give.
             RowClone.WarnAboutDanglingReferences(ByModel.Values.SelectMany(v => v));
 
             // SelfCheck is initialised from Plugin.Load, not here, so that its
@@ -649,37 +612,20 @@ namespace CKFHardMode
             {
                 if (!File.Exists(path))
                 {
-                    // CORRECTION, 2026-09-14 (Phase 9). These four lines used to be
+                    // Absent is the expected 4.0 answer. The file is NOT
+                    // created: Defaults would then count it present and every
+                    // later launch would read a legacy rules file ahead of the
+                    // overlay directory. THIS CLASS WRITES NOTHING TO THE
+                    // CONFIG DIRECTORY.
                     //
-                    //     Directory.CreateDirectory(Path.GetDirectoryName(path));
-                    //     File.WriteAllText(path, DefaultRulesJson);
-                    //     Plugin.Log.LogInfo($"ModelRules: wrote a starter rules file to {path}");
-                    //     Plugin.Log.LogInfo("ModelRules: 'rules' is empty, so nothing is applied. ...");
-                    //
-                    // and they WROTE THE FILE BACK. That was right while
-                    // ckf.hardmode.rules.json was the mod's content: a first launch
-                    // with no rules file got a commented starter one to edit. It is
-                    // wrong now and it is not a tidy-up -- the file was DELETED on
-                    // 2026-09-14 (its 269 rules are all in ckf.hardmode.d), and this
-                    // branch would have re-created it on the very next launch, at
-                    // Info, in the directory the deletion had just cleared. Defaults
-                    // would then have counted it present, and every later launch
-                    // would read a file the 4.0 layout says does not exist.
-                    //
-                    // Nothing else calls DefaultRulesJson now. It is left declared
-                    // (member DefaultRulesJson) rather than deleted, because it is
-                    // the only remaining description of the rules dialect in this
-                    // assembly and scripts/validate_rules.py grades against the same
-                    // grammar.
-                    //
-                    // THIS CLASS NO LONGER WRITES ANYTHING TO THE CONFIG DIRECTORY.
+                    // DefaultRulesJson is not written anywhere. It stays as the
+                    // in-assembly description of the JSON rules dialect, the
+                    // grammar scripts/validate_rules.py also grades against.
                     Plugin.Log.LogInfo($"ModelRules: no {Path.GetFileName(path)} in "
                         + $"{Path.GetDirectoryName(path)}; 0 rule(s) adopted from it. This is "
                         + "the 4.0 layout and it is EXPECTED -- Plugin.Load has already said "
-                        + "so by name above. The file is NOT re-created: what it held is in "
-                        + ConfigDoc.DirName + ", which is walked next, and writing a starter "
-                        + "file back into a directory it was deleted from would make the next "
-                        + "launch read a layout this one says does not exist.");
+                        + "so by name above. The file is NOT created: the rule set is "
+                        + ConfigDoc.DirName + ", which is walked next.");
                     rulesFileRules = 0;
                     return;   // nothing to load, and nothing written
                 }
@@ -690,24 +636,10 @@ namespace CKFHardMode
                 var file = JsonSerializer.Deserialize<RuleFile>(File.ReadAllText(path), opts);
                 foreach (var r in file?.Rules ?? new List<Rule>()) Adopt(r);
 
-                // CORRECTION, 2026-09-13. This line used to be
-                //
-                //     "ModelRules: loaded {ByModel.Values.Sum(v => v.Count)} rule(s)
-                //      across {ByModel.Count} model type(s)" (+ the clone clause)
-                //
-                // and it was emitted HERE, which is before Overlays.Load runs.
-                // Its total was therefore never the plan: Run63.log lines 32-33
-                // read "ModelRules: loaded 293 rule(s) across 8 model type(s)."
-                // immediately followed by "Overlays: 4 file(s), 3022 row(s)
-                // merged, 372 of them inserts." [measured, Logs/Run63.log] --
-                // 293 counted ckf.hardmode.rules.json alone and excluded all
-                // 3022 overlay rows, with nothing saying so.
-                //
-                // The sentence the mod-slices spec pins, "ModelRules: loaded N
-                // rule(s) across M model type(s).", now lives at the end of
-                // Init, after the overlay directory has been walked, so N is
-                // the whole plan and excluding a slice from it means something.
-                // What is left here names only this file's own contribution.
+                // Only this file's own contribution. The plan-wide
+                // "ModelRules: loaded N rule(s) across M model type(s)" line is
+                // emitted at the end of Init, after the overlay directory has
+                // been walked, so N is the whole plan.
                 rulesFileRules = nextIndex - before;
                 Plugin.Log.LogInfo($"ModelRules: {nextIndex - before} rule(s) adopted from "
                     + $"{Path.GetFileName(path)} (load-order indices {before}"
@@ -725,24 +657,24 @@ namespace CKFHardMode
         // directory so that Rule.Index still says which edit runs first.
         private static int nextIndex;
 
-        /// <summary>How many rules ckf.hardmode.rules.json contributed this
+        /// <summary>How many rules a legacy ckf.hardmode.rules.json contributed this
         /// launch. -1 means LoadRules did not run at all, 0 means it ran and the
         /// file was not there; the plan summary prints all three differently so
         /// "absent" is never indistinguishable from "not looked at".</summary>
         private static int rulesFileRules = -1;
 
-        // Register one rule, wherever it was read from. The rules file is
-        // adopted first and the overlay directory after it, so an overlay line
-        // naming a row wins over a broad sweep that also caught it.
+        // Register one rule, wherever it was read from. A legacy rules file,
+        // if present, is adopted first and the overlay directory after it, in
+        // filename order; a later rule sees the result of an earlier one.
         internal static void Adopt(Rule r)
         {
             if (r == null) return;
             r.Index = nextIndex++;
             if (string.IsNullOrWhiteSpace(r.Model))
             {
-                // This used to return without a word. A rule with no "model"
-                // targets nothing and is dropped, which is indistinguishable
-                // from a rule that ran and changed nothing unless it is named.
+                // A rule with no "model" targets nothing and is dropped, which is
+                // indistinguishable from a rule that ran and changed nothing
+                // unless it is named.
                 Plugin.Log.LogWarning($"ModelRules: rule #{r.Index} has no \"model\", so there is "
                     + "no table for it to target and it is dropped. The number is its position in "
                     + "load order, counting from 0 through the rules file first and then the "
@@ -750,9 +682,9 @@ namespace CKFHardMode
                 return;
             }
 
-            // OrdinalIgnoreCase, matching ByModel's comparer. Ordinal was the
-            // bug: "weaponmodel" does not end with "Model" ordinally, so it
-            // became "weaponmodelModel" and was then reported as an orphan.
+            // OrdinalIgnoreCase, matching ByModel's comparer. With Ordinal,
+            // "weaponmodel" would become "weaponmodelModel" and be reported as
+            // an orphan.
             r.Model = r.Model.EndsWith("Model", StringComparison.OrdinalIgnoreCase)
                     ? r.Model : r.Model + "Model";
 
@@ -1030,8 +962,8 @@ namespace CKFHardMode
             // One step per Every levels — the number of COMPLETED intervals,
             // not the level count rounded down to a multiple. With step 1 and
             // every 5 that is +1 at the fifth level above the threshold, not
-            // +5. Multiplying back was the 2.4.0 bug: it made 'every' scale the
-            // increment instead of spacing it.
+            // +5. Multiplying back would make 'every' scale the increment
+            // instead of spacing it.
             if (t.Every > 1.0) steps = Math.Floor(steps / t.Every);
 
             var result = t.Geometric
@@ -1072,16 +1004,16 @@ namespace CKFHardMode
         //
         // __instance is the database object the game called this materializer
         // on. It is the only thing here SelfCheck needs, and taking it from this
-        // hook is what lets SelfCheck run on a rules file with no clone rules:
-        // RowClone.Remember used to be the sole source of an instance, and
-        // RowClone is only installed when a clone rule exists.
+        // hook is what lets SelfCheck run on a rule set with no clone rules:
+        // RowClone, the other source of an instance, is only installed when a
+        // clone rule exists.
         //
         // ORDERING. MissionRewards patches GameDb.GetRowGameMissionRewardModel
         // too, and a rule naming GameMissionRewardModel puts this postfix on the
-        // same method. Both write RewardQuantity, so before this attribute the
-        // result depended on which Harmony owner happened to sort first — and
-        // MissionRewards caches the first value it sees for the session, so the
-        // wrong answer was stable rather than obviously wrong. Harmony runs
+        // same method. Both write RewardQuantity, so without this attribute the
+        // result would depend on which Harmony owner sorts first — and
+        // MissionRewards caches the first value it sees for the session, so a
+        // wrong answer would be stable rather than obviously wrong. Harmony runs
         // higher-priority postfixes first, so MissionRewards.AfterGetRowMissionReward
         // is Priority.First and this is Priority.Last: MissionRewards snapshots
         // the game's stock quantity, then the rules engine multiplies it.
@@ -1091,8 +1023,8 @@ namespace CKFHardMode
         {
             if (Halted || __result == null) return;
 
-            // One static bool read per row when SelfCheck is off, which is the
-            // shipped default. Offer itself is guarded too; this keeps the call
+            // One static bool read per row when SelfCheck is off, which is its
+            // default. Offer itself is guarded too; this keeps the call
             // off the hot path entirely.
             if (SelfCheck.Wants && __instance != null)
                 SelfCheck.Offer(__originalMethod.DeclaringType, __instance);
@@ -1146,8 +1078,8 @@ namespace CKFHardMode
         // Per-row exceptions are keyed on the RULE, not the message. A numeric
         // selector pointed at a string column throws a FormatException whose
         // text quotes the offending value, so keying on the message makes every
-        // distinct value in the table its own "reported once" — 1,557 of them
-        // on JobNodeModel, and the set grows for as long as the game runs.
+        // distinct value in the table its own "reported once", up to one per
+        // row, and the set grows for as long as the game runs.
         internal static void ReportRuleError(string modelName, Rule rule, Exception e)
         {
             var key = modelName + "|#" + rule.Index + "|" + e.GetType().Name;
@@ -1169,8 +1101,8 @@ namespace CKFHardMode
         }
 
         // A numeric selector against a column that holds no number cannot be
-        // satisfied. It used to throw a FormatException per row and be reported
-        // through the rule-error path; say what is actually wrong instead.
+        // satisfied. Say so once, rather than throwing a FormatException per
+        // row through the rule-error path.
         private static bool Numeric(Accessor a, Type t, string clause)
         {
             if (a.Numeric) return true;
@@ -1191,7 +1123,7 @@ namespace CKFHardMode
             // that a row we could not classify gets tuned as player gear, which
             // for a class enemies also carry means buffing the guards — and it
             // would be silent, because the column reads fine for every other
-            // row. "Could not look" is not "not an enemy" (AGENTS.md §3).
+            // row. "Could not look" is not "not an enemy" (AGENTS.md).
             //
             // Matchable/Numeric already warn once per column per type, so a
             // wholesale failure here is named rather than inferred from a rule
@@ -1215,14 +1147,10 @@ namespace CKFHardMode
             }
 
             // The overlay selector: one number compare, and the most selective
-            // thing on the rule.
-            //
-            // CORRECTION, 2026-09-13. This comment used to read "tested first".
-            // It is tested second now — the gear partition above runs ahead of
-            // it, because a rule that must not touch enemy gear has to decide
-            // that before it decides anything else. No overlay rule carries an
-            // ExcludeIdColumn, so for every rule that existed before this change
-            // the branch above is one null test and the order is unchanged.
+            // thing on the rule. Tested after the gear partition above, because
+            // a rule that must not touch enemy gear has to decide that first.
+            // No overlay rule carries an ExcludeIdColumn, so for them the branch
+            // above is one null test.
             if (rule.OverlayKeyColumn != null)
             {
                 var k = Matchable(t, rule.OverlayKeyColumn, "the overlay id column");
@@ -1265,9 +1193,9 @@ namespace CKFHardMode
                     }
                     else
                     {
-                        // A number matched against a non-numeric column: keep
-                        // the old Convert behaviour, which parses "5" out of a
-                        // string column rather than refusing outright.
+                        // A number matched against a non-numeric column: use
+                        // Convert, which parses "5" out of a string column
+                        // rather than refusing outright.
                         var raw = a.GetRaw(row);
                         if (raw == null) return false;
                         try { v = Convert.ToDouble(raw, CultureInfo.InvariantCulture); }
@@ -1281,10 +1209,9 @@ namespace CKFHardMode
                     if (raw == null) return false;
 
                     // Invariant, like Changes, Label and the numeric branch
-                    // above. raw.ToString() used the machine's current culture,
-                    // so on a de-DE machine a float column rendered "1,5" and
-                    // never matched the "1.5" the rule was written with — and
-                    // nothing complained, because the column exists and reads.
+                    // above. raw.ToString() would use the machine's culture, so
+                    // on a de-DE machine a float column would render "1,5" and
+                    // silently never match the "1.5" the rule was written with.
                     var text = Convert.ToString(raw, CultureInfo.InvariantCulture);
                     if (!string.Equals(text, kv.Value.GetString(),
                                        StringComparison.Ordinal)) return false;
@@ -1297,10 +1224,9 @@ namespace CKFHardMode
                 }
                 else
                 {
-                    // null, [] or {}. There is nothing to compare against, and
-                    // the old behaviour was to let the clause pass — which
-                    // turned one malformed selector into a whole-table edit.
-                    // Refuse instead.
+                    // null, [] or {}. There is nothing to compare against.
+                    // Letting the clause pass would turn one malformed selector
+                    // into a whole-table edit, so refuse.
                     if (FirstComplaint(t, kv.Key, "where-value-kind"))
                         Plugin.Log.LogWarning($"  {t.Name}: 'where.{kv.Key}' is "
                             + $"{kv.Value.ValueKind}, which is not a number, a string or a "
@@ -1434,11 +1360,9 @@ namespace CKFHardMode
 
         // Through Accessors, not PropertyInfo.GetValue.
         //
-        // This used to be a second resolution path against the same property
-        // cache, and the two did not agree: Accessor.GetRaw hands back the
+        // One resolution path with the engine: Accessor.GetRaw hands back the
         // compiled getter's boxed value where GetValue hands back the raw enum,
-        // so the trace could report a column the rules engine had read
-        // differently. One path now, so the trace says what the engine acted on.
+        // so a separate path could trace a value the engine read differently.
         internal static Dictionary<string, object> Snapshot(object row, List<string> columns)
         {
             var t = row.GetType();
@@ -1543,13 +1467,12 @@ namespace CKFHardMode
                     case JsonValueKind.String:
                         var s = kv.Value.GetString();
 
-                        // A JSON string on a numeric column used to go to SetRaw
-                        // untouched, so {"WeaponTypeId": "20020"} — a plausible
-                        // typo — loaded clean, matched rows and changed nothing.
-                        // Parse it invariantly instead, the way every other
-                        // number in this file is read. A string that is not a
-                        // number (an enum member's name, say) still cannot be
-                        // written, but it is now reported rather than dropped.
+                        // A JSON string on a numeric column, e.g.
+                        // {"WeaponTypeId": "20020"}: parse it invariantly, the
+                        // way every other number in this file is read, rather
+                        // than hand it to SetRaw to change nothing. A string that
+                        // is not a number (an enum member's name, say) cannot be
+                        // written and is reported rather than dropped.
                         if (a.Numeric)
                         {
                             double parsed;
@@ -1576,7 +1499,7 @@ namespace CKFHardMode
                     default:
                         // null, [], {} — and {} under "set" is a curve, handled
                         // by SetTerms. Everything else has no value to write and
-                        // used to be dropped without a word.
+                        // is reported, not dropped silently.
                         if (kv.Value.ValueKind == JsonValueKind.Object
                             && string.Equals(block, "set", StringComparison.Ordinal)) break;
                         if (FirstComplaint(t, kv.Key, "assign-kind"))
@@ -1589,7 +1512,7 @@ namespace CKFHardMode
             }
         }
 
-        // A number on a non-numeric column, converted the way the old code did.
+        // A number on a non-numeric column, converted with Convert.ChangeType.
         // Returns null when it will not convert, which SetRaw reports as
         // NullValue rather than throwing on the game's call path.
         private static object Converted(double d, Accessor a)
@@ -1600,11 +1523,9 @@ namespace CKFHardMode
 
         // The arithmetic a term asks for, as an operand rather than a lambda.
         //
-        // Every call site used to build a fresh closure per ROW — one allocation
-        // per term per row on a reader that hands back ~1,557 rows — which is
-        // exactly the cost Accessors.cs and RulePlan.cs exist to avoid. The
-        // results are unchanged: each case below is the body of the lambda it
-        // replaced.
+        // An operand, not a closure: a lambda per call site would allocate once
+        // per term per ROW, the cost Accessors.cs and RulePlan.cs exist to
+        // avoid.
         private enum ArithOp { Multiply, Add, ClampMin, ClampMax, Gap }
 
         private static void Arith(object row, Type t, string name, ArithOp op, double k,
@@ -1639,9 +1560,9 @@ namespace CKFHardMode
 
         // A write that was attempted and rejected, once per (type, column,
         // reason). An overflow on an int column — "multiply": {"X": 1e7} on a
-        // column holding 400 — used to leave the column at 400 and print
-        // "matched, nothing changed", which names neither the column nor the
-        // cause.
+        // column holding 400 — leaves the column at 400, and without this the
+        // only trace would be "matched, nothing changed", which names neither
+        // the column nor the cause.
         private static void ReportWrite(Type t, Accessor a, string name, WriteResult r,
                                         string value, string clause)
         {
@@ -1678,7 +1599,8 @@ namespace CKFHardMode
                 if (FirstComplaint(t, name, "writable-readonly"))
                     Plugin.Log.LogWarning($"  {t.Name}.{name} is read-only. This rule will do " +
                         "nothing; further rows are not reported. Turn on probeWritableColumns " +
-                        "in the \"modelrules\" section of ckf.hardmode.json for the full list " +
+                        "in " + ConfigDoc.DirName + "/" + ConfigDoc.FileFor(ConfigDoc.ModelRules) +
+                        " for the full list " +
                         "of what this table accepts.");
                 return false;
             }

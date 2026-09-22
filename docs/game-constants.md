@@ -1,38 +1,58 @@
-# Global game constants (RuleModel)
+# Game constants (RuleModel)
 
-All 76 rows. Every one has a human-readable `ConfigName` and a **writable
-`Value`**. Match a single constant with `RuleId`, or a whole category with
-`GroupId`. Most of these knobs are exposed nowhere in the UI.
+Use this page to look up a `RuleModel.RuleId` and its shipped integer `Value`.
+Use [`overlays.md`](overlays.md) for CSV syntax and
+[`rule-engine.md`](rule-engine.md) for JSON selectors and operations.
+
+The table contains 76 rows. Every row has a readable `ConfigName` and a writable
+integer `Value`; the values below are [measured] from the shipped `RuleModel`
+dump.
+
+## How the mod edits them
+
+- **The overlay.** The `RuleModel` slice (`[Slices] RuleModel`) gates
+  `ckf.hardmode.d/RuleModel.csv`. Its columns are `RuleId,Value,_comment`; a
+  blank `Value` leaves that row alone. Which rows it changes is up to the file;
+  read it or `LogOutput.log`.
+- **Header operators.** The overlay header takes the usual operator suffixes,
+  for example `Value*` to multiply (see [`overlays.md`](overlays.md)).
+- **Whole groups.** To edit a whole `GroupId`, use a JSON rule in a `.json` file
+  in `ckf.hardmode.d` (see [`rule-engine.md`](rule-engine.md)):
 
 ```json
-{ "model": "RuleModel", "where": { "RuleId": 13 }, "set": { "Value": 4 } }
 { "model": "RuleModel", "where": { "GroupId": "HEAT" }, "multiply": { "Value": 1.5 } }
 ```
 
-Re-dump with CKF Data Dump to refresh; the live values are in
-`D:\ckf-data-modding\sheets\raw\RuleModel.csv`.
+- **`GroupId` matching** is exact and case-sensitive. The groups are `HEAT`,
+  `COMBAT`, `CHARACTER`, `MAP`, `MATRIX`, `ECONOMY`, `CONTACT`, `SAFEHOUSE`
+  and `STORY`.
+- **Rounding.** `Value` is an integer, so fractional results round to the
+  nearest whole number with halves to even (`Accessors.SetNumber`).
+- **Negative values.** `multiply` works on them: -50 × 1.3 = -65.
+- **COMBAT group.** Its shipped values mix signs and units. Target rows by
+  `RuleId` unless one operation is intentionally defined for the whole group.
 
 ## COMBAT (17)
 
-| Id | Value | Name | Notes |
-|---|---|---|---|
-| 3 | -10 | Obstructed Penalty | to-hit penalty through obstruction |
-| 4 | -25 | Soft Cover Penalty | |
-| 5 | -50 | Hard Cover Penalty | **more negative = cover is stronger** |
-| 14 | 50 | Default Crit Dmg | |
-| 15 | 3 | FA Shots Max | full-auto shots |
-| 16 | 4 | FA Targets Max | |
-| 17 | 80 | Glancing Limit | |
-| 18 | 60 | Precision Burst Limit | |
-| 19 | 70 | Max Glancing Reduction | damage shaved off a glancing hit |
-| 20 | 30 | Min Glancing Reduction | |
-| 22 | 25 | Surprised Bonus | lower it to weaken ambush play |
-| 23 | 5 | Glancing Distance Limit | |
-| 40 | 100 | Max Injury Time | raise for longer recoveries |
-| 60 | 25 | Smoke Minimum Penalty | |
-| 61 | 60 | Smoke Maximum Penalty | |
-| 62 | 5 | Smoke Minimum Penalty Distance | |
-| 63 | 25 | Smoke Maximum Penalty Distance | |
+| Id | Value | Name |
+|---|---|---|
+| 3 | -10 | Obstructed Penalty |
+| 4 | -25 | Soft Cover Penalty |
+| 5 | -50 | Hard Cover Penalty |
+| 14 | 50 | Default Crit Dmg |
+| 15 | 3 | FA Shots Max |
+| 16 | 4 | FA Targets Max |
+| 17 | 80 | Glancing Limit |
+| 18 | 60 | Precision Burst Limit |
+| 19 | 70 | Max Glancing Reduction |
+| 20 | 30 | Min Glancing Reduction |
+| 22 | 25 | Surprised Bonus |
+| 23 | 5 | Glancing Distance Limit |
+| 40 | 100 | Max Injury Time |
+| 60 | 25 | Smoke Minimum Penalty |
+| 61 | 60 | Smoke Maximum Penalty |
+| 62 | 5 | Smoke Minimum Penalty Distance |
+| 63 | 25 | Smoke Maximum Penalty Distance |
 
 ## CHARACTER (15)
 
@@ -65,10 +85,6 @@ Re-dump with CKF Data Dump to refresh; the live values are in
 | 51 | 10 | Heat from Security Devices |
 | 59 | 6 | Heat from Hack Only Mission |
 
-The whole group scales cleanly together — a single `GroupId: "HEAT"` rule with
-a multiply makes the world react much harder to how loud you are. This is the
-single best value-for-effort difficulty lever in the table.
-
 ## MAP (2)
 
 | Id | Value | Name |
@@ -76,9 +92,7 @@ single best value-for-effort difficulty lever in the table.
 | 6 | 40 | AI Sleepy Distance |
 | 12 | 30 | AI Skip Turn Distance |
 
-Beyond these distances the AI dozes or skips its turn.
-
-## MATRIX (1) · ECONOMY (1) · CONTACT (2) · SAFEHOUSE (1)
+## MATRIX, ECONOMY, CONTACT, SAFEHOUSE
 
 | Id | Value | Name | Group |
 |---|---|---|---|
@@ -111,36 +125,32 @@ Beyond these distances the AI dozes or skips its turn.
 | 54 | 3 | Proc-Gen Legwork Turn Rate |
 | 56 | 42 | First Turn for Any Story to Proc |
 | 57 | 60 | First Turn for Proc-Gen Mission |
-| 65 | 40 | Next Vignette Delay **for PL 3** |
-| 66 | 20 | Next Chatter Delay **for PL 3** |
-| 67 | 60 | Next Recruit Delay **for PL 3** |
-| 68 | 20 | Vignette Base Chance **for PL 3** |
-| 69 | 12 | Chatter Base Chance **for PL 3** |
-| 70 | 20 | Recruit Base Chance **for PL 3** |
-| 71 | 2 | Vignette Turn Rate **for PL 3** |
-| 72 | 5 | Chatter Turn Rate **for PL 3** |
-| 73 | 2 | Recruit Turn Rate **for PL 3** |
-| 74 | 50 | Next Proc-Gen Mission Delay **for PL 3** |
-| 75 | 44 | Proc-Gen Mission Base Chance **for PL 3** |
-| 76 | 3 | Proc-Gen Mission Turn Rate **for PL 3** |
+| 65 | 40 | Next Vignette Delay for PL 3 |
+| 66 | 20 | Next Chatter Delay for PL 3 |
+| 67 | 60 | Next Recruit Delay for PL 3 |
+| 68 | 20 | Vignette Base Chance for PL 3 |
+| 69 | 12 | Chatter Base Chance for PL 3 |
+| 70 | 20 | Recruit Base Chance for PL 3 |
+| 71 | 2 | Vignette Turn Rate for PL 3 |
+| 72 | 5 | Chatter Turn Rate for PL 3 |
+| 73 | 2 | Recruit Turn Rate for PL 3 |
+| 74 | 50 | Next Proc-Gen Mission Delay for PL 3 |
+| 75 | 44 | Proc-Gen Mission Base Chance for PL 3 |
+| 76 | 3 | Proc-Gen Mission Turn Rate for PL 3 |
 
-**Ids 65–76 mirror 28–39 for power level 3 and above.** Edit both or the change
-only holds early — this is the easiest way to retune story and proc-gen pacing
-and then watch it silently stop working.
+The `ConfigName` values on ids 65–76 mirror ids 28–39 with `for PL 3`
+suffixes [measured]. When the game selects the second set has not been observed
+[unverified]; do not infer the selection rule from the names alone.
 
-`Base Head Hunter Chance` (49) and `Head Hunter Chance Per Heat` (50) are the
-pressure valve: raise them and building heat gets you actively hunted rather
-than merely inconvenienced. Pairs well with the HEAT group multiplier.
+## Validate an edit
 
-## Notes on editing
+Run the rule validator before launch, then read `LogOutput.log` to see which
+`RuleModel` rows the enabled files changed. Use `traceRules` only when the normal
+summary does not identify the row; reset it afterward. Commands and log paths
+are in [`workflow.md`](workflow.md).
 
-- `multiply` works correctly on negative values, so cover penalties scale as
-  you'd expect (-50 × 1.3 = -65).
-- `Value` is an integer column, so fractional results round to the nearest whole
-  number (halves to even).
-- `GroupId` matching is exact and case-sensitive: `"HEAT"`, `"COMBAT"`,
-  `"CHARACTER"`, `"MAP"`, `"MATRIX"`, `"ECONOMY"`, `"CONTACT"`,
-  `"SAFEHOUSE"`, `"STORY"`.
-- Be careful with blanket `GroupId: "COMBAT"` multipliers — the group mixes
-  penalties, limits and thresholds, so a single scalar pushes some values in
-  helpful directions and others in harmful ones. Target COMBAT by `RuleId`.
+## Related
+
+- [`rule-engine.md`](rule-engine.md)
+- [`overlays.md`](overlays.md)
+- [`gotchas.md`](gotchas.md)

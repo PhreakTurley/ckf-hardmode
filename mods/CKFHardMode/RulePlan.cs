@@ -1,15 +1,13 @@
 // RulePlan — what the per-row postfix actually walks.
 //
-// The postfix used to test EVERY rule for a table against EVERY row. At 433
-// rules a full ReadArmors() is ~127k Matches() calls, and the cost grows with
-// the file: the whole point of the CSV overlays is that the file gets much
-// bigger.
+// Testing EVERY rule for a table against EVERY row costs rules x rows
+// Matches() calls per bulk read, and the CSV overlays make the rule count
+// large.
 //
-// It does not need to. Of the 325 non-clone rules in the live file, 283 are a
-// single exact match on a domain id — where: { "EffectId": 1234 }. All 133
-// EffectModel rules are that shape, and so are all 72 JobNodeModel rules. A
-// row carrying EffectId 1234 can only ever match the handful of rules that
-// named 1234, and testing it against the other 132 is pure waste.
+// Most rules are a single exact match on a domain id — where:
+// { "EffectId": 1234 } — and every overlay edit line compiles to that shape. A
+// row carrying EffectId 1234 can only ever match the rules that named 1234,
+// and testing it against the rest is pure waste.
 //
 // So each model gets a plan: one column chosen as the index, a bucket per
 // value of it, and a list of everything that could not be indexed (range
@@ -17,14 +15,14 @@
 // read and one dictionary lookup, and then only the rules that could possibly
 // match get tested.
 //
-// ORDER IS PRESERVED. Rules apply in file order and some files depend on it —
+// ORDER IS PRESERVED. Rules apply in load order and some files depend on it —
 // a broad multiply followed by a narrow clampMax is not the same as the
-// reverse. Both the bucket and the unindexed list are in file order, so Run
+// reverse. Both the bucket and the unindexed list are in load order, so Run
 // merge-walks them on Rule.Index rather than concatenating.
 //
 // The index is chosen, never configured. If a model's rules do not share a
-// dominant exact-match column the plan holds no index and behaves exactly as
-// before, which is why a whole-table sweep rule still works.
+// dominant exact-match column the plan holds no index and every rule is tested
+// against every row, which is why a whole-table sweep rule still works.
 
 using System;
 using System.Collections.Generic;
@@ -39,7 +37,7 @@ namespace CKFHardMode
         public readonly List<Rule> Rules;
 
         // The column the buckets are keyed on. Null means no index — every
-        // rule is tested against every row, as it was before.
+        // rule is tested against every row.
         public string IndexColumn { get; private set; }
 
         private Dictionary<long, List<Rule>> buckets;

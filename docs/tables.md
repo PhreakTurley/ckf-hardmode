@@ -1,10 +1,16 @@
 # Table reference
 
-This file says which table controls what, which column is the key, and what is
-worth knowing before you edit it. Column names themselves come from
-`D:\ckf-data-modding\sheets\raw\<Table>.csv` — see [`workflow.md`](workflow.md).
+Game data reference: which table controls what, which column is the key, and
+what the shipped data holds. Column names come from the dump's `<Table>.csv`
+([`workflow.md`](workflow.md)); rule syntax is in
+[`rule-engine.md`](rule-engine.md).
 
-192 tables across three databases. 191 carry a zero-arg bulk reader
+Start with **What controls what**, then jump to the table's section for its key
+and writable columns. Use the **Full inventory** only when no focused section
+exists. Re-check the current dump after a game update; this page is a map, not a
+replacement for the data.
+
+192 tables across three databases [measured]. 191 carry a zero-arg bulk reader
 (`ReadWeapons()`), which is how the dumper captures everything in one launch;
 the exception is `CoreGameSaveSlotModel`.
 
@@ -28,7 +34,7 @@ Which verbs are safe on which database — and why `multiply` compounds on
 | Enemy stats | `MonsterTypeModel` |
 | Enemy abilities and AI weighting | `MonsterTalentModel` |
 | Squad composition | `MonsterGroupModel`, `MonsterGroupMemberModel`, `MonsterSpawnModel` |
-| Weapon damage / accuracy / AP | `WeaponModel` (ids 20000+ are enemy weapons) |
+| Weapon damage / accuracy / AP | `WeaponModel` (see [`player-vs-enemy-gear.md`](../overlays/_reference/player-vs-enemy-gear.md)) |
 | Armor values | `ArmorModel` |
 | Player talent cost, range, cooldown | `TalentModel` |
 | Talent upgrade tiers | `JobNodeModel` and the `EffectModel` rows it points at |
@@ -38,9 +44,10 @@ Which verbs are safe on which database — and why `multiply` compounds on
 | Consumable behaviour | the `TalentId` an `ItemModel` row points at |
 | Matrix deck performance | `CyberdeckModel`, `CyberdeckProgramModel` |
 | Global constants not exposed in the UI | `RuleModel` — see [`game-constants.md`](game-constants.md) |
-| Team Power Level per mission | `MissionPowerLevelModel` — see [`progression.md`](progression.md) |
+| Team Power Level per mission | `MissionPowerLevelModel` — see [`power-level.md`](power-level.md) |
 | Drops | `MissionLootModel` — see [`loot.md`](loot.md) |
-| Alarm escalation | `SecurityDeckCardModel`, `SecurityDataModel` |
+| Alarm escalation | `SecurityDeckCardModel` — see [`escalation.md`](escalation.md) |
+| Security device placement | `SecurityDataModel` (one row per device per level GUID), `GameSecurityDeviceModel` for its live state |
 | Contact pay modifiers | `ContactEffectModel` for the flat trait percentages — but the dominant term is **Trust**, on `GameContactModel`. See [`mission-rewards.md`](mission-rewards.md) |
 
 ---
@@ -53,10 +60,10 @@ The main enemy lever. `DataDb`, so no save risk and no compounding. Changes
 apply to every enemy of that type in every mission. **2,427 rows**, ~120 at
 every power level from 1 to 20.
 
-PL 11–20 archetypes exist, but only `HitPoints` scales into that range —
-`ActionPoints`, `MaxTalentCount` and enemy weapon damage are flat above PL 10.
-Read [`power-and-progression.md`](power-and-progression.md) before lifting the
-Power Level cap.
+In the shipped data PL 11–20 archetypes exist, but only `HitPoints` scales into
+that range; `ActionPoints`, `MaxTalentCount` and enemy weapon damage are flat
+above PL 10. See [`power-level.md`](power-level.md) and
+[`tuning-enemies.md`](tuning-enemies.md).
 
 Key: `MonsterTypeId`, which is what `GameMonsterModel.MonsterTypeId` points at.
 
@@ -74,7 +81,7 @@ Key: `MonsterTypeId`, which is what `GameMonsterModel.MonsterTypeId` points at.
 | `FieldOfView` / `FlankAllowance` | 90 / 120 | degrees |
 | `InitBonus` / `StartInit` | 2 / 0 | |
 | `MonsterTalentGroup` | 100 | → `MonsterTalentModel.MonsterTalentGroup` |
-| `MaxTalentCount` | 2 | how many talents this enemy gets — high leverage, low risk |
+| `MaxTalentCount` | 2 | |
 | `WeaponTypeId` | 21001 | → `WeaponModel` |
 | `ArmorTypeId` | 22202 | → `ArmorModel` |
 | `EffectId` | 64158 | → `EffectModel` |
@@ -100,9 +107,8 @@ Writable: `MonsterTalentGroup`, `MonsterTalentTypeId`, `MinPowerLevel`,
 `Volume`, `FilterTypeId`, `Counter`, `Token`, `TokenCount`, `TokenDuration`,
 `TokenCancel`, `Summon`, `TargetEffect`, `TargetEffectDuration`.
 
-`Weight` and `AiUsePriority` control how often the AI reaches for a talent — a
-subtler difficulty lever than raw numbers. `MinPowerLevel` / `MaxPowerLevel`
-gate when enemies gain access to it.
+The exact runtime selection semantics of `Weight`, `AiUsePriority`,
+`MinPowerLevel` and `MaxPowerLevel` are not established here.
 
 ### Squad composition
 
@@ -114,7 +120,9 @@ gate when enemies gain access to it.
 `MaxPowerLevel`, `MinSecLevel` / `MaxSecLevel`, `Exclusive`, `Faction`.
 
 `WeightedRoll` biases which archetype fills a slot; the Min/Max pairs gate
-eligibility. *[unverified] — these semantics are read from the column names.*
+eligibility. The power-level gate and `WeightedRoll` are confirmed in play
+([`cloning-rows.md`](cloning-rows.md#spawn-pools)); the `SecLevel` pair and
+`Faction` are read from the column names [unverified].
 
 ### `GameMonsterModel` — live enemies (save state)
 
@@ -139,7 +147,7 @@ Key: `WeaponId`. **No column says whether a row is player or enemy gear — the
 only thing that makes a row enemy gear is that `MonsterTypeModel` points at
 it.** Id ranges do not separate the two groups cleanly; the canonical split, and
 the `whereMin` / `whereMax` pairs that express it, is in
-[`../overlays/_reference/player-vs-enemy-gear.md`](../overlays/_reference/player-vs-enemy-gear.md).
+[`player-vs-enemy-gear.md`](../overlays/_reference/player-vs-enemy-gear.md).
 
 Every weapon has two firing modes with a full stat block each. **Write the
 suffixed columns** — see [`gotchas.md`](gotchas.md).
@@ -162,6 +170,12 @@ Weapon-wide, writable: `Rarity`, `PowerLevel`, `Cost`, `MaxRange`, `FAShots`,
 `ReloadActionPoints`, `ReloadSize`, `ReloadClipMax`, `CritMultiBase`,
 `CritMultiStealth`, `ShotVolume`, `WeaponClass`, `FactionId`, `PrecisionRule`,
 `SpecialRule`, `WeaponEffect`, `Locked`, `ServiceOptionId`.
+
+Player weapon class names, from `WeaponClassName` (one name per class id across
+535 rows) [measured]: 1 Melee, 2 Pistol, 3 AR (Assault Rifle), 4 Shotgun,
+5 E-Rifle, 6 Sniper Rifle, 10 SMG, 11 Revolver, 12 UAR (Urban Assault Rifle),
+14 Railgun. `WeaponClassModModel` spells 3, 5 and 12 differently; players see
+`WeaponModel`'s names.
 
 Read-only: `Id`, all `*Name` columns, `IsHeavyWeapon`, `AmmoReady`,
 `RarityType`, and every unsuffixed combat stat.
@@ -281,7 +295,7 @@ tiers, and follow any `NodeTalentTriggerEffect` into `EffectModel.csv`.
 129 rows: three `LevelType` values — **1, 2 and 6** — with 43 rows each covering
 levels 1–43. Columns: `Id`, `Level`, `Xp`, `Job`, `Talent`, `LevelType`.
 
-⚠️ **Off by one against the cap.** `RuleModel` id 1 (`Max Character Level`) is
+**Off by one against the cap.** `RuleModel` id 1 (`Max Character Level`) is
 **42**, so a 43-row band is one row longer than the cap allows. Most likely one
 row is a level-0 or seed row and the reachable levels are 1–42, but that has not
 been checked against a dump — *[unverified]*. If you retune the curve, confirm
@@ -326,13 +340,14 @@ Key: `TraitId`. Writable: `TraitGroup`, `TraitClass`, `EffectTypeId` (→
 
 ## `EffectModel` — the master modifier table
 
-1,678 rows, 74 columns after trimming. How essentially every buff, debuff,
-talent, implant and armor effect modifies a character. Key: `EffectId`.
+1,678 rows. How essentially every buff, debuff, talent, implant and armor
+effect modifies a character. Key: `EffectId`.
 
-Seven of the columns below ship as 0 on every row and so are trimmed out of the
-CSV: `DeathSave`, `ActionPointsPet`, `AttackDetectRangeReduction`, `CommsOut`,
-`Immobilized`, `LevePoints`, `TalentLimit`. They are writable, but nothing in
-the shipped game uses them.
+Seven of the columns below are 0 on every shipped row: `DeathSave`,
+`ActionPointsPet`, `AttackDetectRangeReduction`, `CommsOut`, `Immobilized`,
+`LevePoints`, `TalentLimit`. They are writable, but nothing in the shipped game
+uses them. A dump taken with `[Dump] DropConstantColumns = true` omits them and
+lists them in `_dropped_columns.csv`.
 
 | Group | Columns |
 |---|---|
@@ -378,11 +393,11 @@ fitting every talent checked *[fitted]*.
 | `TalentModel.PreReq` | `TalentPreReq` | 1 NeedHealing, 2 NeedReloadPrimary, 3 NeedAlarmSub, 4 NeedArmorHealing, 5 AllowedOnDowned, 6 NeedsReloadSpecial, 7 OnStreak, 8 NotOnStreak, 9 SpottedByEnemy, 10 HasCover, 11 HealthAdvantage, 12 OnDualSMGStreak |
 | `JobNodeModel.NodeTalentTriggerType` | `TalentTriggerType` | 1 OnChargeUsed, 2 OnChargeGain, 3 OnChargeFull, 4 OnChargeZero |
 
-Consequences worth knowing: `Heals = 50` on Tox-Cloud is 50 damage per turn
-(type 10), and Burn Surge's `Heals = 20` costs 20 HP (type 15). `FilterTypeId =
-1` is on EMP, Leech, Quantum Assault, Disentangle, Downed Shields, N-Coat
-Bullet, Counter Static, Flash Hack and Upchain. Morass (12) and Tox-Cloud (13)
-use both-sides tokens.
+[fitted] `Heals = 50` on Tox-Cloud maps to 50 damage per turn (type 10), and
+Burn Surge's `Heals = 20` maps to a 20 HP cost (type 15). `FilterTypeId = 1` is
+on EMP, Leech, Quantum Assault, Disentangle, Downed Shields, N-Coat Bullet,
+Counter Static, Flash Hack and Upchain. Morass (12) and Tox-Cloud (13) use
+both-sides tokens.
 
 **Attributes** (`AttFast` … `AttTech` above) convert as the locale's
 `Att.*.BonusesDesc` strings state *[measured, game text]*: Reaction +1% Move

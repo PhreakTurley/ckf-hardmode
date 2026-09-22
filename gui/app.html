@@ -17,11 +17,9 @@
   --hh:44px;
 }
 /* DENSITY. One window, one user, tabular numeric data, long sessions: width
-   for the grids is worth more than whitespace. The type scale used to start at
-   16.25px with a 338px nav; at a laptop width that left a 24-column table
-   scrolling sideways inside a pane narrower than the table. Base is 14.5px and
-   the nav is 244px, which is ~110px of grid back on every page. Nothing was
-   removed to get it -- the same rows are drawn, in less room. */
+   for the grids is worth more than whitespace: at a laptop width a wide table
+   should not scroll sideways inside a pane narrower than itself. Base is 14.5px
+   and the nav is 244px. */
 *{box-sizing:border-box}
 html,body{margin:0;height:100%}
 body{background:var(--bg);color:var(--ink);
@@ -47,13 +45,11 @@ nav{width:244px;flex:0 0 244px;border-right:1px solid var(--line);
   overflow:auto}
 
 /* THE NAV ROW READS NAME FIRST.
-   It used to be built as togs.concat([title]).concat(pills) -- every gate
-   checkbox of the section, THEN the name. A section of 12 slices therefore
-   drew 12 unlabelled boxes before its title and pushed the title off the right
-   edge of a 338px nav [measured off SECTION_GROUPS, 2026-09-14: 12 for
-   Cyberware, 6 for Consumables]. The name is what the row is FOR, so it is
-   first and it is the element that gets the leftover width; every control
-   after it is fixed-width and cannot displace it. */
+   A section can hold many slices (Cyberware has twelve), and a row that drew
+   every gate checkbox before the title would push the title out of the nav.
+   The name is what the row is FOR, so it is first and it is the element that
+   gets the leftover width; every control after it is fixed-width and cannot
+   displace it. */
 nav .navitem{display:flex;gap:7px;align-items:center;padding:4px 6px 4px 11px;
   cursor:pointer;border-left:3px solid transparent;min-width:0}
 nav .navitem:hover{background:var(--panel)}
@@ -111,8 +107,8 @@ p.doc+p.doc{margin-top:7px}
 .field.disabled{opacity:.5}
 .field label.lab{font-weight:600}
 .field label.lab code{display:block;color:var(--faint);font-weight:400;font-size:12.25px}
-/* The subsystem gate, merged 2026-09-14 out of a pill, a chain line and a
-   checkbox row. It sits at the top of the header card and is the most
+/* The subsystem gate: one control (checkbox, state word and pill) per
+   subsystem. It sits at the top of the header card and is the most
    consequential control on the page, so it gets a wider label column than an
    ordinary lever and its box and state word sit on one line. */
 .field.gate{grid-template-columns:24ch 1fr;align-items:start;border-top:0;
@@ -164,11 +160,10 @@ table.grid tr:hover td{background-color:#1f232a}
 /* DISCLOSURE. The house rule is "hiding is never dropping": everything a
    <details> closes is still in the page and still in its text, one click away
    and searchable by the browser's own find. It exists because the notes a
-   sheet carries are per-column-PAIR and therefore quadratic -- one sheet ships
-   81 of them and one section 89, 98,113 characters of note text across 53
-   sheets, 76% of every word on the page [measured off the live config,
-   2026-09-14]. Stacked as 517 loose lines they buried the grids they annotate.
-   Nothing was cut from the schema or from the server payload. */
+   sheet carries are per-column-PAIR and therefore quadratic, and most of the
+   words on a sheet's page are notes. Stacked as loose lines they bury the
+   grids they annotate. Nothing is cut from the schema or from the server
+   payload. */
 details.disc{margin:6px 0 0}
 details.disc>summary{cursor:pointer;color:var(--dim);font-size:12.25px;
   list-style:none;display:inline-flex;gap:6px;align-items:center;
@@ -183,12 +178,10 @@ details.disc .discbody{padding:6px 0 2px 10px;border-left:2px solid var(--line);
 details.disc .discbody .legend{margin:0 0 5px}
 details.disc .discbody .legend:last-child{margin-bottom:0}
 
-/* WAS "SEAM, not yet wired" until 2026-09-14. The second wave landed: overlay
-   lever cells carry inputs and a column that holds one value across every row
-   is collapsed. Both rules below are now set -- `editable` on a lever cell's
-   own td, `constant` on the header and cells of a collapsed column that the
-   reader has put back. The comment is kept because it is the record of why
-   these two rules existed before anything used them. */
+/* Overlay lever cells carry inputs and a column that holds one value across
+   every row is collapsed: `editable` goes on a lever cell's own td, `constant`
+   on the header and cells of a collapsed column that the reader has put
+   back. */
 table.grid td.editable input{background:var(--panel2)}
 table.grid th.constant,table.grid td.constant{opacity:.62}
 /* A DIRTY CELL IS A STRIPE, NOT A BADGE. It has to survive a re-render and be
@@ -330,7 +323,7 @@ const CKF = (function () {
   }
 
   // The AND-chain. A gate that could not be read is 'unknown', never 'off':
-  // an instrument's silence is not evidence (AGENTS.md section 3).
+  // an instrument's silence is not evidence (AGENTS.md).
   function effective(states) {
     if (!states.length) return 'n/a';
     if (states.some(function (s) { return s === false; })) return 'off';
@@ -396,11 +389,8 @@ const CKF = (function () {
     return cells;
   }
 
-  // REMOVED IN 3.0: pairState. Elapse and Fatigue used to be gated twice -- a
-  // cfg key read before the sidecar was opened, the sidecar's own flag after it
-  // loaded -- and one checkbox stood for both, with a 'mixed' state for the one
-  // thing a single box cannot honestly render. Phase 3 deleted the outer cfg
-  // gate, so no subsystem has two gates and there is no pair to collapse.
+  // No subsystem has two gates, so there is no gate pair to collapse into one
+  // box and no 'mixed' state.
 
   // Reference material sorts after the controls it is a reference for. Keyed
   // off the `ui` value, which is the dispatch everywhere else in this page;
@@ -428,14 +418,12 @@ const CKF = (function () {
     return { shown: shown, hidden: hidden, outside: outside };
   }
 
-  // REMOVED, 2026-09-07: hasUnsetControl, and the explicit unset controls it
-  // gated -- the per-cell null-set button and the document field's unset
-  // toggle. David's ruling: editing the box is the whole gesture. Clearing a
-  // numeric box still drops the key, which is what coerceCell above returns;
-  // clearing a text box now leaves an empty string, which is a value the file
-  // carries rather than a key it loses. The server side is untouched -- a null
-  // cell in an edit payload still drops the key -- so a file that already has
-  // an absent text key keeps it until someone types in that cell.
+  // NO EXPLICIT UNSET CONTROL. Editing the box is the whole gesture (David's
+  // rule). Clearing a numeric box drops the key, which is what coerceCell
+  // above returns; clearing a text box leaves an empty string, which is a
+  // value the file carries rather than a key it loses. A null cell in an edit
+  // payload still drops the key on the server, so a file that already has an
+  // absent text key keeps it until someone types in that cell.
 
   function fmtCell(v) {
     if (v == null) return '';
@@ -459,11 +447,9 @@ const CKF = (function () {
 
   // How wide a grid column's input should be, in ch.
   //
-  // Every column used to be 11ch, or 20ch for a string, which is the whole
-  // spacing complaint: the mission overrides' key column holds ids up to 46
-  // characters and showed 20 of them, while the adjustment slots beside it
-  // hold "x1.5" and were given 11. So the width comes from what the column
-  // actually holds:
+  // One fixed width per type does not work: the mission overrides' key column
+  // holds long ids while the adjustment slots beside it hold "x1.5". So the
+  // width comes from what the column actually holds:
   //
   //   the longest value in it, plus one so the caret has somewhere to sit;
   //   a floor by kind, because an empty column still needs to be typed into;
@@ -523,48 +509,24 @@ const CKF = (function () {
 
   // WHICH COLUMNS A LEVER-SHEET GRID MAY COLLAPSE.
   //
-  // David asked to "suppress any column that never changes within a table".
-  // Taken literally against these sheets it hides most of the tool, and the
-  // measurement is why. Of the 563 editable lever columns the live config
-  // ships: 169 VARY, 3 are constant at a real value, and 391 are constant ONLY
-  // BECAUSE EVERY CELL IN THEM IS BLANK. On 19 of the 53 sheets not one
-  // editable column varies [measured off api_model, 2026-09-14].
+  // Columns that never change within a table are suppressed (David's rule).
+  // Taken literally against these sheets that hides most of the tool: most
+  // editable lever columns are constant ONLY BECAUSE EVERY CELL IN THEM IS
+  // BLANK, and on many sheets not one editable column varies.
   //
   // A blank override column is not "nothing to edit". It is NO OVERRIDE SET --
-  // it is exactly the empty cell there was no way to type into, which is the
-  // complaint this wave exists to answer. Collapsing those 391 would put 19
-  // sheets back into that state, so the rule has three exceptions and each one
-  // is a measurement, not a preference:
+  // exactly the empty cell a player needs to type into. So the rule has three
+  // exceptions:
   //
   //   1. NEVER the key column. It is the row's name. On a one-row sheet it is
   //      "constant" by arithmetic, and collapsing it leaves a grid of nothing.
   //   2. NEVER a sheet with fewer than two rows. A column is constant across
   //      one row by definition; that is a tautology, not an observation about
-  //      the data, and TalentModel.cs.csv (one row, one lever column, constant)
-  //      would otherwise lose its only editable cell.
-  //   3. NEVER an editable column whose one value is blank -- the 391 above.
+  //      the data, and a one-row sheet would otherwise lose its editable cells.
+  //   3. NEVER an editable column whose one value is blank.
   //
-  // What is left, counted AFTER the three exceptions rather than before them:
-  // 8 non-editable columns, EVERY ONE of them holding nothing at all, and 2
-  // editable columns pinned at a real value. Ten columns in the shipped config
-  // [measured off api_model, 2026-09-14].
-  //
-  // CORRECTION, 2026-09-14, left visible because the sentence contradicted its
-  // own conclusion and still reached the right total, which is the shape of
-  // wrongness that survives a proofread. This read: "a non-editable column
-  // holding one value on every row (16 of them, 9 of which hold nothing at
-  // all), and an editable column pinned at a REAL value on every row (3, of
-  // which 2 are on sheets of two rows or more)". The 16, the 9 and the 3 are
-  // the CANDIDATE set -- every constant column, before exceptions 1 and 2 run
-  // -- not what survives them. Exception 2 removes 8 of the 16 non-editable
-  // candidates (7 of them holding a real value, 1 holding nothing) and the
-  // third real-valued editable candidate as well; all nine of those sit on the
-  // two one-row sheets. Exception 1 removes nothing further on its own, because
-  // the only constant key columns are on those same two sheets. So the
-  // survivors are 8 and 2, and all 8 hold nothing -- not 9 of 16, and not 7.
-  // The "(3, of which 2 ...)" clause was already right; its 2 is the 2 above.
-  // The code was never wrong. Only the prose, which counted what the rule looks
-  // at instead of what it keeps.
+  // What is left is non-editable columns holding one value on every row, and
+  // editable columns pinned at a real value on every row.
   //
   // COLLAPSING IS NOT DROPPING. The caller keeps every column in the model and
   // in the save; this only says which ones the grid need not draw, and the
@@ -591,21 +553,21 @@ const CKF = (function () {
 
   // WHICH COLUMNS ARE HIDDEN BY NAME, AND WHY. -> [reason string | null]
   //
-  // THE SECOND, INDEPENDENT REASON A COLUMN CAN BE OFF THE SCREEN, added
-  // 2026-09-14: David asked for five named columns to be suppressed everywhere
-  // they appear, because they are item metadata rather than combat levers.
+  // THE SECOND, INDEPENDENT REASON A COLUMN CAN BE OFF THE SCREEN: a set of
+  // named columns is suppressed everywhere they appear, because they are item
+  // metadata rather than combat levers (David's rule).
   //
   // THE NAMES ARE NOT HERE AND MUST NOT COME HERE. This page names no column,
   // and two selftests keep that true. The names are a declared presentation
-  // table in the server, beside the four that were already there, with the
-  // measurement that justified each one; this reads the per-column reason the
+  // table in the server (HIDDEN_COLUMNS), beside the other presentation
+  // tables; this reads the per-column reason the
   // server sends and does not know one name from another.
   //
   // IT IS NOT THE CONSTANCY RULE AND MUST NOT BE FOLDED INTO IT.
   //   - The constancy rule EXEMPTS a sheet of fewer than two rows, because
   //     every column of a one-row sheet is constant by arithmetic. This one has
   //     no row-count exemption: a declared hide says nothing about the cells,
-  //     so it holds at one row exactly as at twenty-seven.
+  //     so it holds at one row exactly as at many.
   //   - The two reasons get two sentences in the fold. Telling a reader that a
   //     column "never changes" when it was hidden for being metadata is a false
   //     statement they have no way to catch.
@@ -743,10 +705,9 @@ function tableKey(name, path) { return name + '|' + path; }
 
 // WHERE A FIELD LIVES, one identifying part per line.
 //
-// This used to be a single line -- "ckf.hardmode.json#difficulty -> path" --
-// which read as one run-on token: the file, the section inside it and the key
-// are three different kinds of thing, and the separators were the only thing
-// distinguishing them. Split on the separators the server already keys by
+// The file, the section inside it and the key are three different kinds of
+// thing, and on one line the separators would be the only thing distinguishing
+// them. Split on the separators the server already keys by
 // ("#" between file and section, "." between the steps of a key path) and give
 // each part its own line, outermost first. Nothing here names a path; the
 // parts come from the schema's own targets, exactly as before.
@@ -813,12 +774,11 @@ function linkedGroups() {
 // cannot be mis-parsed and a key naming something this build does not have
 // simply does not resolve.
 //
-// THE CFG SPELLING WAS UNREACHABLE HERE UNTIL 2026-09-13. This function looked
-// only in W.json, so when split-config-into-toggleable-slices moved the linked
-// pair back into ckf.hardmode.cfg every key in that group resolved to null,
-// ticking either gate moved only itself, and nothing said so. That is the
-// defect AGENTS.md section 3 is about; `linkedKeysUnresolved` below is what
-// says it out loud now.
+// THE CFG IS READ FIRST. A lookup in W.json alone would resolve every cfg key
+// in a group to null, so ticking either gate would move only itself and
+// nothing would say so -- the defect AGENTS.md is about.
+// `linkedKeysUnresolved` below is what says it out loud if a key still
+// resolves to nothing.
 function linkedSlot(key) {
   if (W.cfg[key] !== undefined) return W.cfg[key];
   for (const unit in W.json)
@@ -893,11 +853,8 @@ function requiresGroups() {
                    needs: (inv.needs || []).map(reqKey), reason: inv.reason || '' });
   return out;
 }
-// THE FAILURE MODE THIS EXISTS TO STOP is the one Phase 1 found in linkedSlot:
-// it looked only in W.json, so once the group's keys moved into the .cfg every
-// one of them resolved to null, ticking a gate moved only itself, and nothing
-// said so. linkedSlot reads the cfg first now and is reused here rather than
-// copied, so requires cannot drift away from the fix; requiresKeysUnresolved
+// linkedSlot (which reads the cfg first) is reused here rather than copied, so
+// requires resolves keys exactly the way linkedEnable does; requiresKeysUnresolved
 // below is what says it out loud if a key still resolves to nothing.
 function reqSlot(key) { return linkedSlot(reqKey(key)); }
 
@@ -909,12 +866,11 @@ function reqDefault(key) {
   return undefined;
 }
 // Is the key on? A KEY THE FILE DOES NOT CARRY IS NOT "OFF" -- its schema
-// declares a default and that is what applies until the key is written, and
-// every slice schema on disk declares true. check_schema cannot use that: it
+// declares a default and that is what applies until the key is written.
+// check_schema cannot use that: it
 // grades what is in the file and reports an absent key SKIPPED. So on a fresh
-// install this page is the stricter of the two, deliberately, and the hole
-// tasks.md records for linkedEnable -- "the editor cannot protect a linked
-// group on a fresh install" -- is not reproduced here. null is "cannot tell".
+// install this page is the stricter of the two, deliberately: a linked group
+// is protected on a fresh install too. null is "cannot tell".
 function reqOn(key) {
   const slot = reqSlot(key);
   if (!slot) return null;
@@ -1298,7 +1254,7 @@ function renderBanners() {
 
   // A linkedEnable key that resolves to nothing moves nothing when its gate is
   // ticked. Before this banner it did that silently, which is the shape
-  // AGENTS.md section 3 is about.
+  // AGENTS.md is about.
   const unresolved = linkedKeysUnresolved();
   if (unresolved.length) {
     box.appendChild(banner('warn',
@@ -1372,11 +1328,9 @@ function renderBanners() {
                     + 'done for you rather than refused — but never silently.'])));
   }
 
-  // Top-level keys the files carry that no schema declares. The server
-  // computed this all along and showed it to nobody; the checker's own
-  // stray-key guard stopped running when the Phase 3 split removed the
-  // sections it keyed off, so this page is the only place the state is
-  // visible. Nothing is graded: a key deliberately left behind by an older
+  // Top-level keys the files carry that no schema declares. The checker's own
+  // stray-key guard does not look at slice files (serve.py stray_keys), so
+  // this page is the only place the state is visible. Nothing is graded: a key deliberately left behind by an older
   // version and a key someone misspelled look exactly alike from disk, and
   // the spec requires both to be read, left without a control, and written
   // back untouched. Named, counted, and not called wrong.
@@ -1441,12 +1395,9 @@ function chainText(e) {
 
 // ONE GATE BOX, BUILT ONCE, WORN TWO WAYS.
 //
-// The nav and the panel used to build their own checkbox for the same gate,
-// and by 2026-09-14 the two had drifted into disagreeing about it: the nav was
-// three-state and disabled an absent key, the panel was two-state and left an
-// absent key live. Both behaviours were asserted, and both assertions passed.
-// That is what a duplicated control does. There is one now, and the two
-// callers add only their own chrome.
+// The nav and the panel share this one control, so they cannot disagree about
+// a gate (two separate controls drifted into asserting opposite rules, and
+// both assertions passed). The two callers add only their own chrome.
 //
 // -> { cb, unreadable, state } or null when the schema declares no gate.
 // `state` is the word for what the box is showing, and it is the SAME
@@ -1473,23 +1424,10 @@ function gateBox(sch) {
   cb.indeterminate = unreadable;
   cb.setAttribute('aria-checked', unreadable ? 'mixed' : (cb.checked ? 'true' : 'false'));
   if (f.label) cb.setAttribute('aria-label', f.label);
-  // NOT DISABLED WHEN THE KEY IS ABSENT, and this is a correction.
-  //
-  // WAS, in this function, until 2026-09-14:
-  //   cb.disabled = !slot || (f.in === 'cfg' && !slot.present);
-  // with the reason "The same rule the control in the panel uses: this tool
-  // replaces a value line in ckf.hardmode.cfg and does not create one, because
-  // BepInEx writes that file from the keys the plugin binds."
-  //
-  // THE PANEL'S CONTROL HAD ALREADY STOPPED USING THAT RULE and this comment
-  // was the last place claiming the two agreed. split-config-into-toggleable-
-  // slices reversed it there: CfgFile.set_value APPENDS a key the file does not
-  // carry, 43 schemas declare a cfg gate, and disabling an absent key greyed
-  // out every slice toggle until somebody launched the game once. The nav kept
-  // disabling, so the same gate was writable on one screen and not on the
-  // other. Merging the two controls forced the question, and the measured
-  // answer is that the key IS writable — so the box stays live and the row
-  // says that saving adds it. `slot` missing entirely is still dead, because
+  // NOT DISABLED WHEN THE KEY IS ABSENT. CfgFile.set_value APPENDS a key the
+  // file does not carry, so the box stays live and the row says that saving
+  // adds it; disabling it would grey out every slice toggle until the game
+  // had been launched once. `slot` missing entirely is still dead, because
   // there is then nothing to write into.
   cb.disabled = !slot;
   return { cb: cb, unreadable: unreadable, f: f, slot: slot,
@@ -1525,18 +1463,16 @@ function statePill(e) {
 
 // A section's gates, folded into a summary that says how many are on.
 //
-// WHAT THIS REPLACES. navItem built its row as togs.concat([title]).concat(
-// pills): one bare checkbox per subsystem, ahead of the name, plus one pill
-// per subsystem after it. A section of twelve slices therefore opened with
-// twelve unlabelled boxes and the name never fitted [reported by David,
-// 2026-09-14]. Twelve boxes is also twelve targets told apart only by hover.
+// WHY A FOLD. One bare checkbox per subsystem ahead of the name would open a
+// section of twelve slices with twelve unlabelled boxes, told apart only by
+// hover, and push the name out of the row.
 //
-// WHAT SURVIVES UNCHANGED. These are the same gateToggle() nodes, built in the
-// same order, still descendants of the nav item: three-state (indeterminate
+// These are the gateToggle() nodes, built in section order, still
+// descendants of the nav item: three-state (indeterminate
 // means COULD NOT BE READ, never false), the chain tooltip, cb.disabled where
 // the key is not in the file, and the stopPropagation that keeps a tick from
-// also navigating. Only where they sit changed. Open, each box now stands
-// beside its own slice's name and state pill, which the bare row never gave.
+// also navigating. Open, each box stands beside its own slice's name and
+// state pill.
 //
 // A section of ONE gate keeps its checkbox on the row: one box after the name
 // costs nothing and is the fast path for two thirds of the nav.
@@ -1710,15 +1646,9 @@ function formControl(sch, f) {
   if (f.type === 'bool') {
     const cb = el('input', { type: 'checkbox' });
     cb.checked = !!slot.value;
-    // THE DISABLE THAT WAS HERE UNTIL split-config-into-toggleable-slices:
-    //   cb.disabled = !slot.present && f.in === 'cfg';
-    // with the reason "a cfg key this tool can see but the file does not carry
-    // is not something it will create". That was right while ckf.hardmode.cfg
-    // held every key the plugin bound. It is wrong now: 43 schemas declare a
-    // cfg key and the live file carries one, so this greyed out all 42 slice
-    // toggles and the editor could not set a slice at all until someone
-    // launched the game. CfgFile.set_value appends a key the file does not
-    // carry, so the control stays live. setBool sets slot.present, which is
+    // NOT DISABLED WHEN THE KEY IS ABSENT: CfgFile.set_value appends a key
+    // the file does not carry, and a .cfg the game has not rewritten may lack
+    // every slice key. So the control stays live. setBool sets slot.present, which is
     // what puts the flipped key into buildEdits' payload.
     cb.addEventListener('change', function () { setBool(sch, f, cb.checked); });
     ctl.appendChild(el('label', { class: 'chk' }, [cb,
@@ -1783,9 +1713,8 @@ function formControl(sch, f) {
   return ctl;
 }
 
-// REMOVED IN 3.0: pairRow, the one checkbox that wrote two gates. No subsystem
-// declares both a cfg gate and a document gate any more -- Phase 3 deleted the
-// outer one -- so every gate is an ordinary bool field rendered by fieldRow.
+// No subsystem declares two gates, so every gate is an ordinary bool field
+// rendered by fieldRow.
 
 function fieldRow(sch, f) {
   const gate = gateState(sch, f);
@@ -2238,24 +2167,15 @@ function referenceFor(sch, f) {
 //
 // A talent pack declares no field per file and no row[]: `targets.overlays` is
 // the whole declaration, and the COLUMNS COME FROM EACH FILE'S OWN HEADER at
-// render time. rules_to_overlays.py derives them per file from what that
-// pack's rules touch and they range 2 to 15 across the 32 files, so a static
-// row[] would be 32 hand-copies that go stale on its next run.
+// render time, so no static row[] can go stale.
 //
-// WAS, until 2026-09-14: "READ ONLY. rules_to_overlays.py is the only thing
-// that may write these, so nothing here builds a control: every cell is text,
-// no cell is in an edit set, and a save cannot reach one."
-//
-// CORRECTION. David reversed that on 2026-09-14, scoped to LEVER AND OVERRIDE
-// COLUMNS ONLY. The reason the old rule carried — that rules_to_overlays.py
-// was the only thing that might write these files — had already lapsed when
-// Phase 9 retired that script together with its subject. What replaced it is
-// not a policy in this file: the server grades every column identity, lever or
-// control and publishes `writable` per sheet and `editable` per column, and
-// this page offers a box exactly where `editable` is true and nowhere else.
-// An identity cell names WHICH row a line is about, a control cell is a
-// comment, and the key is the id Overlays.LoadTable refuses the line without;
-// none of the three is an override and none of the three takes an edit.
+// LEVER AND OVERRIDE COLUMNS TAKE AN EDIT (David's rule). The policy is not
+// in this file: the server grades every column identity, lever or control and
+// publishes `writable` per sheet and `editable` per column, and this page
+// offers a box exactly where `editable` is true and nowhere else. An identity
+// cell names WHICH row a line is about, a control cell is a comment, and the
+// key is the id Overlays.LoadTable refuses the line without; none of the
+// three is an override and none of the three takes an edit.
 function overlaysOf(sch) {
   const t = sch.targets || {};
   const o = t.overlays;
@@ -2360,14 +2280,10 @@ function overlayGroups(sch, ov) {
 // at once. HIDING IS NEVER DROPPING: every line is still in the document, still
 // in its textContent, found by the browser's own search, one click from view.
 //
-// It exists because of a measurement, not a preference. The notes a sheet
-// carries about its blanks are per column PAIR and therefore quadratic: one
-// sheet ships 81 of them, one section 89, and across the 53 sheets the live
-// config draws that is 517 lines and 98,113 characters -- 76% of every word on
-// the page [measured off the live config with serve.py's own api_model,
-// 2026-09-14]. Stacked as loose <div class=legend> they buried the grid each
-// one annotates. Nothing left the schema or the payload; they left the DEFAULT
-// VIEW.
+// The notes a sheet carries about its blanks are per column PAIR and
+// therefore quadratic, and they make up most of the words on a sheet's page.
+// Stacked as loose <div class=legend> they bury the grid each one annotates.
+// Nothing leaves the schema or the payload; they leave the DEFAULT VIEW.
 //
 // `summary` says how many and what of, so the reader can tell a sheet with
 // nothing to say from one with a page of it without opening anything.
@@ -2383,21 +2299,17 @@ function disclosure(summary, nodes) {
   return det;
 }
 
-// ONE LEVER CELL'S BOX, shared by the grid and by the one-row form so the two
-// cannot drift. It writes into W.overlays and nowhere else; MODEL keeps what
+// ONE LEVER CELL'S BOX. It writes into W.overlays and nowhere else; MODEL keeps what
 // the server read, which is what `dirty` is measured against and what the save
 // address is built from.
 //
 // A BLANK CELL IS BOTH TYPEABLE AND LEGIBLE, which is the whole difficulty.
-// The greyed "ships 130" used to be a <span> in the cell, and it was there
-// because "an empty box and 'ships 130, untouched' look identical otherwise".
-// A box and a span cannot occupy the same cell without one of them being a
-// lie, so the shipped value became the box's PLACEHOLDER: same grey, same
-// place, same words, and now the reader can type over it. Clearing the box
+// An empty box and "ships 130, untouched" would look identical, and a box
+// and a span cannot share a cell, so the shipped value is the box's
+// PLACEHOLDER: greyed, in place, and the reader can type over it. Clearing the box
 // brings it straight back, and an empty box is sent as an empty FIELD — not 0,
 // not "" — so "leave the game's column alone" stays expressible. Where the
-// sheet's comment records no shipped value the placeholder is an em dash,
-// which is what the span said too.
+// sheet's comment records no shipped value the placeholder is an em dash.
 function overlayInput(ov, rel, ri, ci, opts) {
   opts = opts || {};
   const host = opts.host;
@@ -2518,14 +2430,10 @@ function overlayBlock(sch, rel) {
     (role === 'control' ? ctlCols : role === 'identity' ? idCols : valCols)
       .push(rec);
   });
-  // THE HEADLINE IS TWO FACTS, NOT SEVEN. This line used to spell out every
-  // column count and then restate the read-only rule in a sentence, on every
-  // one of the 53 sheets [6,624 characters of it, measured 2026-09-14]. The
-  // counts describe a table the reader is looking at, so they moved into the
-  // sheet's own notes fold; what stays is what the table cannot show by
-  // itself -- which table it is, how big it is, and that it cannot be edited.
-  // The full read-only sentence is the pill's tooltip and is repeated in the
-  // fold, so the reason is still two ways reachable.
+  // THE HEADLINE IS SHORT. The column counts describe a table the reader is
+  // looking at, so they live in the sheet's own notes fold; the headline says
+  // what the table cannot show by itself -- which table it is, how big it is,
+  // and whether and where it can be edited (the pill, with its tooltip).
   // The shape counts EVERY column the file has, collapsed ones included — it
   // is a description of the file, not of what fits on screen.
   let nId = 0, nVal = 0, nCtl = 0, nEdit = 0;
@@ -2539,10 +2447,8 @@ function overlayBlock(sch, rel) {
     + nVal + ' override column(s)'
     + (nCtl ? ', ' + nCtl + ' control column(s)' : '')
     + (gcol ? ', grouped into ' + groups.length : '') + '.';
-  // WAS "read only", on every sheet, until 2026-09-14. That pill and its
-  // tooltip were true for three phases and are not any more: David reversed the
-  // rule and the server now publishes `writable` and `editable` per sheet and
-  // per column. The pill reads the payload rather than stating a policy, so a
+  // The pill reads the server's `writable` and `editable` rather than
+  // stating a policy, so a
   // sheet that refuses a write still says so — WITH THE SERVER'S OWN REASON,
   // which is the part that must never be dropped. A sheet that cannot be
   // written and a sheet with nothing in it to write look identical otherwise,
@@ -2568,25 +2474,9 @@ function overlayBlock(sch, rel) {
       + 'because a save could not reach one.' }));
   }
 
-  // REMOVED 2026-09-14: THE ONE-ROW FORM. A branch stood here, taken when the
-  // server sent `ov.form` (an expanded sheet of exactly one row), and it drew
-  // the row as a stack of labelled values instead of a grid. Its reason read:
-  //
-  //   "ONE ROW IS A FORM, NOT A GRID. design.md section 7. The row count is in
-  //    the file and this has already read it to draw it, so nothing declares
-  //    the shape and no schema field carries it — a header row above a single
-  //    line is a table of one, which is a worse way to read four values."
-  //
-  // David opened the editor in a browser on 2026-09-14, looked at that page,
-  // and overruled it: the one-row sheet is drawn as a table like every other
-  // sheet in its family. The reasoning is kept because it was right about
-  // everything it measured and wrong only about the preference it inferred.
-  // The fix is on the server — `form` is no longer computed or sent — so there
-  // is no dead branch here and no dead key there. Everything below this point
-  // now runs for every sheet at every row count, which is the whole of the
-  // change: a one-row sheet gets the same header, the same key column, the
-  // same lever boxes, the same "ships N" placeholders and the same key-tuple
-  // address as a twenty-seven-row one.
+  // NO ONE-ROW FORM (David's rule). Everything below runs for every sheet at
+  // every row count: a one-row sheet gets the same header, key column, lever
+  // boxes, "ships N" placeholders and key-tuple address as a many-row one.
 
   const wrap = el('div', { class: 'grid-wrap' });
   const tbl = el('table', { class: 'grid' });
@@ -2759,12 +2649,11 @@ function overlayBlock(sch, rel) {
   // taken off the screen, and the button puts it back. Same standard as
   // AXIS_WINDOWS in serve.py, which draws a windowed-out column anyway when a
   // row occupies it and says why.
-  // EACH COLLAPSED COLUMN GETS THE REASON THAT APPLIES TO IT. Until
-  // 2026-09-14 there was one reason and one sentence, and the button said "N
-  // column(s) that never change". A second, unrelated reason landed that day —
-  // five columns hidden by name because they are item metadata — and saying
-  // "never changes" about one of those would be telling the reader something
-  // false about a column that may well change. So the sentence branches on the
+  // EACH COLLAPSED COLUMN GETS THE REASON THAT APPLIES TO IT. There are two
+  // unrelated reasons -- the column never changes, or it is hidden by name as
+  // item metadata -- and saying "never changes" about a column hidden by name
+  // would tell the reader something false about a column that may well
+  // change. So the sentence branches on the
   // reason, the button counts both and claims neither, and a column hidden for
   // both reasons is named once, under the declared one, because that is the
   // one that would still hide it if every cell differed.
@@ -2851,25 +2740,13 @@ function fieldBlock(sch, f) {
 // ONE CONTROL THAT SHOWS THE STATE AND SETS IT. The subsystem's gate, drawn
 // once, in the header card, directly under the title.
 //
-// WHAT THIS REPLACES, and why — David, 2026-09-14, having opened the editor in
-// a browser: "The 'On' and 'true' checkbox sections are functionally
-// duplicates: They both talk about whether or not a section is on. Combine
-// them." He was looking at ONE FACT RENDERED THREE TIMES, twice in one card
-// and once in another:
+// ONE FACT, ONE CONTROL (David's rule). The gate used to be shown three ways
+// (a pill read off the server's enable index, an "enable chain" line, and a
+// checkbox field row read off the WORKING copy), and the pill and the box
+// could disagree between an unsaved flip and a save. One control removes a
+// state in which the page contradicts itself.
 //
-//   1. a pill in the <h3> reading on / off / always on / off (master), read
-//      off the enable index the SERVER computed at load;
-//   2. an "enable chain: Slices.X = true" meta line under it, also server-side;
-//   3. down in the body card, an ordinary field row: a checkbox labelled
-//      "Enable <title>", ticked, with "default true" under it, read off the
-//      WORKING copy.
-//
-// 1 and 3 could disagree, and did: the pill reads what was on disk at load and
-// the box reads the working copy, so between an unsaved flip and a save the
-// page said "on" beside a box that was not ticked. Merging them is not only
-// tidying — it removes a state in which the page contradicts itself.
-//
-// WHAT SURVIVES, each of it written after something went wrong:
+// WHAT IT KEEPS:
 //   - THREE STATES. gateBox: checked on, unchecked off, indeterminate COULD
 //     NOT BE READ. The word beside the box says which, in the same vocabulary
 //     the nav and the chain use.
@@ -2968,8 +2845,7 @@ function renderSubsystem(p, sch, fields) {
   for (const f of fields) {
     const ui = f.ui || 'form';
     if (ui === 'hidden') continue;
-    // The gate is drawn once, in the header card above. It used to be drawn
-    // there AND here, which is the duplication this change removes.
+    // The gate is drawn once, in the header card above, not again here.
     if (gateField && f === gateField) continue;
     any = true;
     if (ui === 'form') { body.appendChild(fieldRow(sch, f)); continue; }
@@ -2993,10 +2869,8 @@ function renderPanel() {
   if (!schs.length) return;
 
   if (schs.length > 1) {
-    // WAS, until 2026-09-13: "Two pages, shown together because they are two
-    // halves of one question." A section could only ever hold two subsystems
-    // then. It can now hold as many as its group declares, so the count is
-    // counted rather than spelled.
+    // A section can hold as many subsystems as its group declares, so the
+    // count is counted rather than spelled.
     p.appendChild(el('div', { class: 'card' }, [
       el('h3', { text: sec.title }),
       el('p', { class: 'doc', text:
@@ -3061,11 +2935,10 @@ async function load() {
   // wrote — keeping these would show the same fact twice, in the past tense.
   REQ_NOTES = [];
   REQ_REFUSAL = null;
-  // REMOVED 2026-09-07: `RETRO_OK = {}`. It was the per-field acknowledgement
-  // map behind the retroactive confirm-before-saving gate, which 3.0 deleted --
-  // `retroactive` is data, not a warning. The write outlived both its
-  // declaration and its only reader, and under 'use strict' an assignment to an
-  // undeclared name is a ReferenceError, so load() threw here on every start.
+  // No per-field retroactive acknowledgement: `retroactive` is data, not a
+  // warning. (Under 'use strict' an assignment to an undeclared name here is a
+  // ReferenceError that stops load(); undeclared_globals_in_app_html in
+  // serve.py guards that.)
   if (!SEL || !sectionOf(SEL)) SEL = MODEL.sections[0].id;
   $('#gamedir').value = MODEL.configDirOverride || MODEL.gameDir || '';
   renderProbe();

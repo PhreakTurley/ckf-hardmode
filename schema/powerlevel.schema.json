@@ -15,35 +15,31 @@
     "the offset and the scalar - is set on the sliders, and read back off the",
     "same GameDifficultyModel instance the postfix is handed.",
     "",
-    "SEVEN KEYS WERE REMOVED IN 2.12.0",
-    "and are now consts, because each was a measured fact about the game rather",
-    "than a preference:",
+    "These are consts in PowerLevelCap.cs, not settings, because each is a",
+    "measured fact about the game:",
     "",
-    "  DerivedCallMode        PassThrough. Run25 pinned arg0 to",
-    "                         max(1, Floor(teamPowerLevel)) across three saves -",
-    "                         the game handing its own standing back to itself,",
-    "                         which is a reward calculation and not a request for",
-    "                         a mission's difficulty. Recompute is the setting",
-    "                         that turned a reward of 1 into 2.",
-    "  MatrixOffsetMode       Replace. Run21. The Matrix path uses",
-    "                         MatrixPowerLevelOffset INSTEAD of the base offset.",
-    "  OffsetProperty         BasePowerLevelOffset  ) GameDifficultyModel's own",
-    "  ScalarProperty         PowerLevelScalar      ) column names.",
-    "  MatrixOffsetProperty   MatrixPowerLevelOffset)",
-    "  InstanceTeamProperty   teamPowerLevel",
-    "  TeamPowerLevelOverride deleted outright, not frozen - at its value of 0",
-    "                         the branch reading it was unreachable.",
+    "  Derived calls     pass through. arg0 was pinned to",
+    "                    max(1, Floor(teamPowerLevel)) across three saves",
+    "                    [measured]: the game handing its own standing back to",
+    "                    itself, a reward calculation rather than a request for",
+    "                    a mission's difficulty. Recomputing it turned a reward",
+    "                    of 1 into 2.",
+    "  Matrix offset     MatrixPowerLevelOffset REPLACES the base offset",
+    "                    [measured].",
+    "  Property names    BasePowerLevelOffset, PowerLevelScalar,",
+    "                    MatrixPowerLevelOffset and teamPowerLevel, the model's",
+    "                    own names.",
     "",
-    "THERE IS NO FALLBACK SOURCE for Team Power Level. The database-discovery",
-    "machinery went in 2.11.0 (section 7.4). If the instance carries no readable",
-    "teamPowerLevel, or carries one that reads 0 - which a freshly constructed",
-    "model does before the game fills it in - this subsystem logs an error and",
-    "leaves the game's own result alone. It never proceeds on a default: a",
-    "default here is not a missing mission difficulty, it is a silently wrong one."
+    "THERE IS NO FALLBACK SOURCE for Team Power Level. If the instance carries",
+    "no readable teamPowerLevel, or carries one that reads 0 - which a freshly",
+    "constructed model does before the game fills it in - this subsystem logs",
+    "an error and leaves the game's own result alone. It never proceeds on a",
+    "default: a default here is not a missing mission difficulty, it is a",
+    "silently wrong one."
   ],
 
   "uiDoc": [
-    "By default the game clamps mission to a PL of 10. Here, the upper clamp ships at 20 as enemy archetypes exist up to PL 20. The lower clamp must stay at or below the upper one; set it higher and this refuses to run at all.",
+    "By default the game clamps mission to a PL of 10. Here, the upper clamp defaults to 20 as enemy archetypes exist up to PL 20. The lower clamp must stay at or below the upper one; set it higher and this refuses to run at all.",
     "",
     "Matrix calls have their own upper clamp, so hacking can have its own maximum difficultt. Set it to 0 to use the same clamp for both. Where the two differ, the lower one wins.",
     "",
@@ -55,7 +51,7 @@
       "path": "Slices.PowerLevel", "in": "cfg", "type": "bool",
       "default": true, "ui": "form",
       "label": "Enable Mission Power Level Ceiling",
-      "doc": "Slice toggle. One key per slice in ckf.hardmode.cfg, because a gate cannot live inside the file it gates and the .cfg is the one file that must parse before any other loading happens (split-config-into-toggleable-slices design.md section 3). Off means the slice never enters RulePlan. THIS IS THE GATE. Slices.Init binds every key in Binds.All (Slices.cs) and is called from Plugin.Load (Plugin.cs), above the master-switch bail-out, so BepInEx writes the line whether the mod is on or off. CONFIRMED ON DISK 2026-09-13, after a launch: ckf.hardmode.cfg is 3,238 bytes carrying [General] and [Slices] and all 43 keys, and check_schema.py --game printed \"0 problem(s). 43 cfg key(s) on disk, 43 declared across 43 schema file(s).\" at rc 0 [measured, Logs\\gates-phase1b.txt]. The tag on this sentence used to sit before that run: it read \"[measured 2026-09-13]\" when what had been measured was the C#, not the file. The file has now been measured too. CORRECTION, 2026-09-13: this doc used to say \"the section's own \\\"enabled\\\" field is still on disk and is still the gate the plugin reads\" and \"NOT ON DISK ... check_schema.py reports it MISSING\". Both were true when written and are false now. The section's \"enabled\" field is deleted from this schema and the gate is this key. The RETIRED KEY IS STILL PARSED, into a report-only bool? RetiredEnabled ([JsonPropertyName(\"enabled\")]), because four subsystems refuse a whole section on an unknown key (ConfigDoc.ReadSection, ConfigDoc.cs) and an upgraded document would otherwise switch OFF. Slices.ReportRetiredGate (Slices.cs) names it: Warning normally, Error when the retired value is false and this key is not. Nothing branches on it -- grep RetiredEnabled finds one declaration and one report call per subsystem and no read. It is a migration report, not a second gate.",
+      "doc": "Slice toggle. It lives in ckf.hardmode.cfg because a gate cannot live inside the file it gates, and the .cfg is parsed before anything else loads. Slices.Init binds every [Slices] key above the [General] Enabled bail-out, so BepInEx writes the line even when the mod is off. A key that cannot be read is reported at Error and treated as on. Off: the subsystem logs why and does nothing this launch. The retired \"enabled\" key inside the subsystem's JSON file is still parsed (RetiredEnabled) so that Slices.ReportRetiredGate can report it: a Warning, or an Error when it is false and this key is not. Nothing branches on it.",
       "uiDoc": "Turn this off and this part of the mod does nothing; the game uses its own values. The master switch on the first page turns off everything at once."
     },
     {
@@ -90,7 +86,7 @@
     {
       "kind": "ordered",
       "keys": ["ckf.hardmode.d/powerlevel.json#minCap", "ckf.hardmode.d/powerlevel.json#maxCap"],
-      "reason": "maxCap below minCap leaves nothing to clamp into; PowerLevelCap.Init logs an error and installs no hook. 3.0 moved both keys out of the cfg and into the merged document, so they are spelled file#path rather than Section.Key. CORRECTION, 2026-09-13: the file half of that spelling is now ckf.hardmode.d/powerlevel.json, because Phase 3 split the merged document and each slice file holds its fields at the top level -- so the path is #minCap, not #powerlevel.minCap. The old spelling was not merely stale: inv_value resolves a file#path key by reading <cfgdir>/<file> off disk, so with the merged document present it graded THAT file's values rather than the live slice file's, and with it deleted it returned not-found and the pair was skipped in silence. Both were measured on 2026-09-13: minCap 20 above maxCap 1 in the live powerlevel.json reported 0 problem(s) at rc 0 with the merged document absent, and a correctly-ordered slice file reported an INVARIANT read out of a stale merged document that was still present."
+      "reason": "maxCap below minCap leaves nothing to clamp into; PowerLevelCap.Init logs a warning and does not patch. The keys are spelled file#path because both live at the top level of ckf.hardmode.d/powerlevel.json, which check_schema.py's inv_value reads off disk."
     }
   ]
 }

@@ -11,14 +11,14 @@
 // cyberweapon is TWO ROWS IN TWO TABLES. `TalentModel.Weapon` holds the
 // `WeaponId`; there are exactly 33 non-zero values in the whole 384-row talent
 // table and they are precisely the 33 cyberweapons, one talent per weapon per
-// tier [measured, design.md section 6]. The weapon row carries the damage, the
+// tier [measured, stock dump]. The weapon row carries the damage, the
 // accuracy and the crit multipliers; the talent row carries the range, the AP
 // cost and the effects. A player editing "Photon Lance 3" is editing both.
 //
 // So ONE SHEET ROW BECOMES TWO RULES — a WeaponModel rule keyed on WeaponId
 // and a TalentModel rule keyed on TalentId — and a row that sets nothing on
 // one side emits only the other. Neither is a new operator: both are ordinary
-// exact-selector rules of the kind ckf.hardmode.rules.json has always carried.
+// exact-selector rules.
 //
 // TWO SHEETS, BECAUSE THE LIVE COLUMNS BARELY OVERLAP
 //
@@ -26,18 +26,13 @@
 // MaxRange — both zero on all 17 — and their reach is the TALENT's Range.
 // Claws (WeaponClass 16, ImplantClass 27) have no BallisticDamage and no
 // effect columns of any kind, and their range and AP are hard constants.
-// [measured, design.md section 6] A single table would be about half empty and
+// [measured, stock dump] A single table would be about half empty and
 // the lever-sheets spec forbids a column dead for its own rows.
 //
-// THE CLAW SHEET SHIPS BLANK, AND THAT IS THE POINT
-//
-// All 16 claws and all 16 claw talents are untouched by the mod today. The
-// sheet presents them with their shipped values in `_comment` and no override,
-// so the file emits NO RULE AT ALL. A shipped override here would be a balance
-// change and proposal.md's non-goals forbid it. The load line below says "0
-// rule(s)" for that file rather than staying silent, because a file that
-// contributed nothing in silence cannot be told from a file nothing read
-// (AGENTS.md section 3).
+// A SHEET THAT EMITS NOTHING SAYS SO. When every lever cell of a sheet is
+// blank the file emits NO RULE AT ALL, and the load line says "0 rule(s)" for
+// that file rather than staying silent, because a file that contributed
+// nothing in silence cannot be told from a file nothing read (AGENTS.md).
 //
 // WHAT THIS FILE DOES NOT DO
 //
@@ -46,13 +41,12 @@
 // These sheets select by exact id, so they reach the 33 rows they name and
 // nothing else. The question is still asked, once, repo-side:
 // scripts/cyberweapons.py's P4 asserts that no MonsterTypeModel row points at
-// any of the 33, in the shipped table and in this mod's own overlay. Today
-// neither does — 0 of 208 and 0 of 405. [measured] It is REPO-SIDE ONLY on
-// purpose: players have no dumps and design.md section 10 is explicit that no
-// runtime behaviour may depend on one being present.
+// any of the 33, in the stock table and in this mod's own overlay. It is
+// REPO-SIDE ONLY on purpose: players have no dumps, and no runtime behaviour
+// may depend on one being present.
 //
-// NO CLONE. EVER. design.md section 11 makes splitting a shared row an
-// explicit per-row opt-in, and this dialect does not carry one: `_clone` and
+// NO CLONE. EVER. Splitting a shared row needs an explicit per-row opt-in, and
+// this dialect does not carry one: `_clone` and
 // `_serveOn` in a header REFUSE THE WHOLE FILE rather than being ignored.
 // RowClone.cs is the path that produces a mission that will not load, and
 // Plugin.cs already calls that failure "the mission-hang shape RowClone.cs
@@ -60,14 +54,14 @@
 // exactly the shape that gets there.
 //
 // KEYS ARE (table, id), NEVER id ALONE. The registry below that refuses a key
-// claimed twice is keyed on (model, id). It has to be: this sheet's talent ids
-// are 80003-80010, 80015-80038 and 80060, and EffectModel independently
+// claimed twice is keyed on (model, id). It has to be: the stock laser talent
+// ids are 80003-80010, 80015-80038 and 80060, and EffectModel independently
 // carries rows 80000-80018, so a registry keyed on the number alone would call
-// the laser sheet's TalentModel 80007 a collision with the slot-8 implant
-// table's EffectModel 80007 in Phase 7. design.md section 11 names that and
-// two more: EffectModel 50000/50001 against MatrixEffectModel 50000/50001.
-// Table-wide the overlap is 221 ids between TalentModel and EffectModel and
-// 130 between EffectModel and MatrixEffectModel. [measured]
+// laser TalentModel 80007 a collision with the slot-8 implant sheet's
+// EffectModel 80007. EffectModel 50000/50001 against MatrixEffectModel
+// 50000/50001 is the same. Table-wide the overlap is 221 ids between
+// TalentModel and EffectModel and 130 between EffectModel and
+// MatrixEffectModel. [measured, stock dump]
 
 using System;
 using System.Collections.Generic;
@@ -113,25 +107,19 @@ namespace CKFHardMode
         // docs/gotchas.md is explicit that WeaponModel's unsuffixed Accuracy,
         // PureDamage, PhysicalDamage, BallisticDamage and ActionPoints are
         // read-only aliases for the SELECTED firing mode: a write to one is
-        // taken and discarded with no diagnostic. design.md section 6 names the
-        // sheet columns without the suffix, which is the right name for a grid
+        // taken and discarded with no diagnostic. The sheet columns are named
+        // without the suffix, which is the right name for a grid
         // whose rows have no second mode — ModeType2 is -1 on all 33 [measured]
         // — so the suffix is added HERE and the emitted rule always names
-        // PureDamage1, never PureDamage. Asserted repo-side against the
-        // 2026-09-12 WeaponModel header by scripts/cyberweapons.py's P-COL.
+        // PureDamage1, never PureDamage. Asserted repo-side against the dumped
+        // WeaponModel header by scripts/cyberweapons.py's P-COL.
         //
-        // SpecialRule AND ApCost ARE HERE AND design.md section 6 DOES NOT LIST
-        // THEM. That is a correction, not an addition: they are the two columns
-        // the mod's own laser rules actually write. The rules file today sets
-        // WeaponModel SpecialRule = 0 on weapons 25000-25015 ("SpecialRule 3
-        // 'Rapid Fire' removed") and TalentModel ApCost = 10 on talents
-        // 80007-80010 and 80027-80038 ("talent AP cost 2 -> 1"). Both columns
-        // are CONSTANT across the 17 shipped rows — SpecialRule 3, ApCost 20
-        // [measured] — which is why "no column dead for its own rows" would
-        // drop them; that requirement is about columns carrying no lever, and
-        // these carry the only lever the mod pulls here. A sheet without them
-        // silently gives sixteen lasers back Rapid Fire and sixteen laser
-        // talents back their second AP, which is a balance change.
+        // SpecialRule AND ApCost ARE LEVERS although both are CONSTANT across
+        // the 17 stock lasers — SpecialRule 3 ('Rapid Fire'), ApCost 20
+        // [measured]. "No column dead for its own rows" is about columns that
+        // carry no lever; these are the levers for removing Rapid Fire and for
+        // cutting a laser talent's AP cost, and a sheet without them could not
+        // express either.
         internal static readonly Lever[] LaserLevers =
         {
             new Lever("PowerLevel",           WeaponModel, "PowerLevel"),
@@ -180,8 +168,8 @@ namespace CKFHardMode
         {
             { "_clone", "a clone is never emitted from a lever sheet. RowClone.cs is "
                       + "the path that produces a mission that will not load, and "
-                      + "design.md section 11 makes splitting a shared row an explicit "
-                      + "per-row opt-in that this dialect does not carry." },
+                      + "splitting a shared row needs an explicit per-row opt-in that "
+                      + "this dialect does not carry." },
             { "_serveOn", "serveOn belongs to a clone rule, and these sheets emit none." },
         };
 
@@ -290,7 +278,7 @@ namespace CKFHardMode
                 Plugin.Log.LogWarning($"Cyberweapons: {name} header column '{h}' is not "
                     + $"one of the {levers.Length} levers this sheet declares and is not "
                     + "a control column; it is ignored. Check the spelling against "
-                    + "design.md section 6.");
+                    + "the header the config editor writes for this sheet.");
             }
 
             int rows = 0, emitted = 0, cells = 0, refused = 0;
@@ -368,7 +356,7 @@ namespace CKFHardMode
                     cells++;
 
                     // A POINTER CELL IS A REPOINT, NOT AN EDIT OF WHAT IT POINTS
-                    // AT. design.md section 11: EffectModel 2051 is Lumen Spear
+                    // AT. In the stock game EffectModel 2051 is Lumen Spear
                     // 4's self effect AND Luem Trident's, so an edit to what
                     // that effect DOES reaches both owners. Writing this cell
                     // does not do that — it aims this one talent somewhere else
@@ -456,12 +444,11 @@ namespace CKFHardMode
                 + "declared for this sheet.");
 
             // THE RUNTIME SHARED-ROW MARKING. A repoint that lands two talents
-            // of this sheet on one effect row is the state design.md section 11
-            // is about, and it is named the moment it happens rather than
-            // discovered in the editor. Today no cell repoints anything, so
-            // this prints nothing — and the line above it prints the count
-            // whether or not it is zero, so "no repoints" and "the instrument
-            // did not run" stay different answers.
+            // of this sheet on one effect row is a shared row, and it is named
+            // the moment it happens rather than discovered in the editor. With
+            // no repoints this prints nothing — and the line below it prints
+            // the count whether or not it is zero, so "no repoints" and "the
+            // instrument did not run" stay different answers.
             // `sharedSeen.Count(pred)` does not compile: Dictionary has a Count
             // PROPERTY, so the Linq extension is not reachable through it
             // (CS1955). Counted through Where(...).Count() instead.
@@ -470,35 +457,32 @@ namespace CKFHardMode
                 Plugin.Log.LogWarning($"Cyberweapons: {name} repoints {kv.Value.Count} "
                     + $"talent(s) ({string.Join(", ", kv.Value)}) at the same {kv.Key}. "
                     + "They now SHARE that effect row: an edit to what it does reaches "
-                    + "all of them. design.md section 11 makes splitting a shared row an "
-                    + "explicit per-row opt-in and nothing here emits a clone.");
+                    + "all of them. Splitting a shared row needs an explicit per-row "
+                    + "opt-in and nothing here emits a clone.");
             Plugin.Log.LogInfo($"Cyberweapons: {name} — {sharedSeen.Count} distinct "
                 + "effect pointer value(s) written by this sheet, "
                 + $"{collided.Count} of them landing two or "
                 + "more talents on one row. WHAT THIS CANNOT SEE, said rather than left "
-                + "blank: the sheet carries no shipped values — a blank cell means "
-                + "\"leave that column alone\" — so sharing that exists in the SHIPPED "
-                + "data is invisible here. EffectModel 2051 is shipped as both Lumen "
-                + "Spear 4's and Luem Trident's self effect and this line will not "
+                + "blank: this walk reads override cells, not the game's stock values — a "
+                + "blank cell means \"leave that column alone\" — so sharing that exists "
+                + "in the stock data is invisible here. EffectModel 2051 is stock as both "
+                + "Lumen Spear 4's and Luem Trident's self effect and this line will not "
                 + "mention it. That half is owned repo-side by scripts/cyberweapons.py's "
                 + "P-SHARED, which measures it from the dump, and by the editor's cell "
                 + "marking. Nothing here can edit an EffectModel row in any case.");
 
             if (rows > 0 && blankRows == rows)
-                Plugin.Log.LogInfo($"Cyberweapons: {name} produced NO RULE AT ALL, and "
-                    + $"that is the intended state: all {rows} row(s) are present with "
-                    + "their shipped values in _comment and no override set. The mod "
-                    + "does not tune these today and a shipped override would be a "
-                    + "balance change (proposal.md non-goals). Said rather than left as "
-                    + "a silent zero — a file that contributed nothing cannot otherwise "
-                    + "be told from a file nothing read.");
+                Plugin.Log.LogInfo($"Cyberweapons: {name} produced NO RULE AT ALL: all "
+                    + $"{rows} row(s) were read and every lever cell was blank, which "
+                    + "means 'leave that column alone'. Said rather than left as a silent "
+                    + "zero — a file that contributed nothing cannot otherwise be told "
+                    + "from a file nothing read.");
 
             Plugin.Log.LogInfo($"Cyberweapons: {name} emits no clone and cannot. "
                 + "_clone and _serveOn in a header refuse the whole file, and no "
                 + "EffectModel or MatrixEffectModel column exists in either sheet, so "
                 + "no rule from here can edit a shared effect row's payload. Splitting a "
-                + "shared row is an explicit per-row opt-in (design.md section 11) and "
-                + "nothing has opted in.");
+                + "shared row needs an explicit per-row opt-in and nothing has opted in.");
 
             return emitted;
         }

@@ -9,21 +9,13 @@ Generate the victory-screen Team PL label rules from whichever file the
 
 WHICH FILE IT READS, AND WHY IT IS NOT WRITTEN DOWN HERE
 
-Three layouts have held the award rows now: ckf.hardmode.teampl.json in 2.x,
-the "teampl" section of the merged ckf.hardmode.json in 3.0, and since Phase 3
-of split-config-into-toggleable-slices a slice file, ckf.hardmode.d/teampl.json.
-This script used to carry the last two as a written-down list, so against the
-split directory it exited 1 with
-`not found: <dir>\\ckf.hardmode.json (nor the legacy <dir>\\ckf.hardmode.teampl.json)`
-and gate 05 went with it [measured 2026-09-13, against the split layout].
-
-It now resolves the file from the declaration that already names it -- the
+The file is resolved from the declaration that already names it -- the
 `mirror` invariant whose `target` is this script's own output. That invariant
-gives the source rows (`source`), the reference rows to merge under them
-(`mergeWith`) and the file to write (`target`), so a fourth layout moves all
-three by editing the schema and nothing here. serve.py's
-`_teampl_first_fraction` was fixed the same way and for the same reason; this
-is the same resolution, one layer up.
+gives the source rows (`source`, ckf.hardmode.d/teampl.json in the 4.0
+layout), the reference rows to merge under them (`mergeWith`) and the file to
+write (`target`), so a layout change moves all three by editing the schema and
+nothing here. serve.py resolves the same file the same way. A hard-coded list
+of filenames would fail on the next layout.
 
 WHY THIS EXISTS
 
@@ -35,15 +27,13 @@ have no mechanism keeping them equal:
   label  The victory screen re-reads MissionPowerLevelModel through the row
          materialiser after the row is inserted. ModelRules postfixes THAT.
 
-The aggregate materialises no row, so it never sees a rules.json edit.
-closed-routes.md:133-136 has the measured proof: a rule set to 3.0 printed
+The aggregate materialises no row, so it never sees a label rule.
+docs/power-level.md has the measured proof: a rule set to 3.0 printed
 "Team gained 3 PL" on screen while the sum moved 0.015.
 
 So teampl.json's "override" is canonical and the label rules are generated from
-it. They are emitted into ckf.hardmode.d/ rather than written back into
-rules.json, because Overlays.cs:38-45 makes a .json in that directory an
-ordinary rules file merged after rules.json in filename order. rules.json stays
-hand-authored and no tool ever touches it again.
+it, into ckf.hardmode.d/, where Overlays.Load reads a .json as an ordinary
+rules file.
 
 WHAT GETS EMITTED
 
@@ -55,12 +45,12 @@ byte for byte and a diff shows only real edits.
 
 WHAT IT WILL NOT TOUCH
 
-teampl.json's "table" section. It is reference only: Load() puts it in Cells
-(Progression.cs:446-447) and Merged() reads Overrides ahead of Cells
-(:340-342), so no cell of it is ever substituted. The mod reconciles its own
-arithmetic against it before substituting anything, and corrupting it makes
-that reconcile fail, which sets retroDead (Progression.cs:298-312) and silently
-reverts awards to stock while the labels stay modded.
+teampl.json's "table" section. It is reference only: Progression.Load() puts it
+in Cells and Merged() reads Overrides ahead of Cells, so no cell of it is ever
+substituted. The mod reconciles its own arithmetic against it before
+substituting anything, and corrupting it makes that reconcile fail, which sets
+retroDead (Progression.cs) and silently reverts awards to stock while the
+labels stay modded.
 """
 
 import argparse, json, os, re, shutil, sys
@@ -81,10 +71,9 @@ SCHEMA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 
 
 # --------------------------------------------------------------------------
-# JSONC. The five sidecars became pure JSON in gui-plan.md 5.5 and nothing
-# writes a comment into one any more, but a hand-added // or trailing comma is
-# still legal input (SCHEMA-FORMAT.md), and ckf.hardmode.rules.json is still
-# hand-authored JSONC. This stays.
+# JSONC. Nothing writes a comment into a slice file, but a hand-added // or
+# trailing comma is still legal input (SCHEMA-FORMAT.md), and a 3.x
+# ckf.hardmode.rules.json (--strip-rules) is hand-authored JSONC.
 
 def strip_jsonc(s):
     out, instr, esc, i = [], False, False, 0
@@ -265,30 +254,23 @@ def rules_for(merged, stock):
 
 
 def render(rules, srcname):
-    """Pure JSON. gui-plan.md 3 and 5.3: every file the GUI writes is data.
+    """Pure JSON: every file the GUI writes is data.
 
-    DIVERGENCE FROM THE PLAN, RECORDED RATHER THAN HIDDEN (AGENTS.md 5).
-    gui-plan.md 5.3 says "Strip the // header from render() -- that file is data
-    too." The // header is gone, but its CONTENT was not deleted: it is now a
-    top-level "_comment" array. That is data, in exactly the way each rule's own
-    "comment" key is, so the plan's stated reason -- the file must be data, not
-    JSONC -- is met; its literal instruction, delete the prose, is not.
+    The prose lives in a top-level "_comment" array rather than a // header.
+    It is the only DO-NOT-EDIT warning a reader who opens the generated overlay
+    will see, and the only statement of why the mirror exists at all; without
+    it the next person hand-edits a file that the next generate silently
+    overwrites. refresh_mission_roster.py writes REFERENCE_NOTE as a top-level
+    "_note" for the same reason, and every rule carries its own "comment".
 
-    Why the prose was kept. It is the only DO-NOT-EDIT warning a reader who
-    opens the generated overlay will ever see, and the only statement of why the
-    mirror exists at all. Deleting it sends the next person to hand-edit a file
-    that the next generate silently overwrites. The same choice is already made
-    twice in this repository: refresh_mission_roster.py writes REFERENCE_NOTE as
-    a top-level "_note", and every rule carries its own "comment".
-
-    Why it is safe. ModelRules.cs:209-211 declares RuleFile with "rules" and
-    nothing else. Overlays.LoadJson (Overlays.cs:125-135) sets only
-    ReadCommentHandling and AllowTrailingCommas, and leaves
+    Why it is safe. ModelRules.cs declares RuleFile with "rules" and nothing
+    else. Overlays.LoadJson sets only ReadCommentHandling and
+    AllowTrailingCommas, and leaves
     UnmappedMemberHandling at its default of Skip, so "_comment" is ignored and
     the overlay loads unchanged. [measured]
 
-    If David would rather have the file with no prose in it at all, delete the
-    "_comment" key below and regenerate; nothing else depends on it.
+    For a file with no prose in it, delete the "_comment" key below and
+    regenerate; nothing else depends on it.
     """
     doc = {
         "_comment": [
@@ -427,9 +409,8 @@ def main():
                     print(f'STALE  ActionClass {k[0]} PL {k[1]}: label {have[k]} vs award {want[k]}')
             print(f'\n{OUTNAME} is out of date. Regenerate.')
             return 1
-        # Names the file it actually read. The old wording said "teampl.json"
-        # whichever of the three layouts it had opened, so a run against the
-        # wrong one looked exactly like a run against the right one.
+        # Names the file it actually read, so a run against the wrong layout
+        # does not look like a run against the right one.
         print(f'{OUTNAME} current — {len(rules)} rule(s) match {srcname}.')
         return 0
 

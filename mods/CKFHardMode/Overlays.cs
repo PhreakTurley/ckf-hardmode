@@ -1,10 +1,8 @@
 // Overlays — the bulk authoring format.
 //
-// ckf.hardmode.rules.json is the right shape for a rule that says something
-// general: "every enemy above PL 10 gains 2.2 crit per level". It is the wrong
-// shape for the other job, which is stating what one specific row's numbers
-// are. That rule is twenty lines of JSON to carry four numbers, and retuning
-// 77 armour families one row at a time means tens of thousands of lines of it.
+// A JSON rule is the right shape for something general: "every enemy above
+// PL 10 gains 2.2 crit per level". It is the wrong shape for stating what one
+// specific row's numbers are: twenty lines of JSON to carry four numbers.
 //
 // An overlay is the same edit as a table:
 //
@@ -40,73 +38,48 @@
 // filename before the first dot, so ArmorModel.csv and
 // ArmorModel.guard-standard.csv both target ArmorModel and one table can be
 // split across as many files as suits. .tsv is the same thing tab-separated,
-// and a .json file in that directory is an ordinary rules file — which is how
-// the big rules.json gets split up per table too.
+// and a .json file in that directory (other than a settings file, below) is an
+// ordinary rules file.
 //
-// ORDER: rules.json first, then the directory in filename order. Overlays
-// therefore win over the broad rules, which is the useful way round — a sweep
-// sets the shape of a family and a single line overrides the one row that
-// should not follow it.
+// ORDER: a legacy ckf.hardmode.rules.json, if one is on disk, first (Plugin.cs
+// reports it at Error); then the directory in Ordinal filename order. Later
+// rules see the result of earlier ones, so a single line can override the row
+// a broad rule shaped.
 //
-// ONE FILE, ONE SLICE, AND THE SKIP HAPPENS BEFORE THE OPEN. Since 2026-09-13
-// each file here may be claimed by a slice toggle in ckf.hardmode.cfg. Load
-// asks Slices.VerdictForOverlay for every file BEFORE it opens it, and a file
-// whose slice is off is never read: no line is parsed, no Rule is built, and
-// ModelRules.Adopt never sees one, so no Rule.Index is allocated for it. That
-// is the point. Adopting a rule and discarding its effect afterwards would be
-// too late — RulePlan preserves load order, so a rule that was adopted has
-// already changed what a later rule sees.
+// ONE FILE, ONE SLICE, AND THE SKIP HAPPENS BEFORE THE OPEN. Each file here
+// may be claimed by a slice toggle in ckf.hardmode.cfg (Slices.OverlayOwner).
+// Load asks Slices.VerdictForOverlay for every file BEFORE it opens it, and a
+// file whose slice is off is never read: no line is parsed, no Rule is built,
+// and ModelRules.Adopt never sees one, so no Rule.Index is allocated for it.
+// Adopting a rule and discarding its effect afterwards would be too late:
+// RulePlan preserves load order, so an adopted rule has already changed what a
+// later rule sees.
 //
-// Relative order survives a skip. Files are still walked in Ordinal filename
-// order and rules are still adopted in the order their lines appear, so
-// removing a file from the walk shifts the absolute Rule.Index of everything
-// after it and reorders nothing.
+// Relative order survives a skip. Removing a file from the walk shifts the
+// absolute Rule.Index of everything after it and reorders nothing.
 //
-// A FILE NO SLICE CLAIMS IS STILL READ. The three enemy-gear overlays are in
-// that state today; skipping them would be a silent tuning change. They are
-// counted and named separately in the summary line, so "nothing claims this
-// file" can never be mistaken for "a slice claims it and the slice is on".
+// A FILE NO SLICE CLAIMS IS STILL READ (the enemy-gear overlays ArmorModel.csv,
+// WeaponModel.csv, MonsterTypeModel.csv); skipping it would be a silent tuning
+// change. Such files are counted and named separately in the summary line, so
+// "nothing claims this file" is never mistaken for "a slice claims it and the
+// slice is on".
 //
-// CORRECTION, 2026-09-13 (Phase 3). The paragraph above used to name four files
-// in that state: "The three enemy-gear overlays and the MissionPowerLevelModel
-// mirror". The mirror has been claimed by the Progression slice since
-// 2026-09-13 -- Slices.OverlayOwner carries the row and its own comment says
-// why -- so it is three, not four. design.md section 2 carries the same
-// correction.
+// A SETTINGS FILE IS NOT A RULES FILE, AND THE PARSER CANNOT TELL. The ten
+// settings files (ConfigDoc) live in this directory and end in .json. RuleFile
+// has one property, "rules", and no extension-data bag, so deserialising
+// elapse.json as one would succeed, yield ZERO rules and log NOTHING. Load asks
+// ConfigDoc.OwnsFile about every file before it opens it, skips the ones
+// ConfigDoc reads, and NAMES them on their own line so "not parsed as rules" is
+// never indistinguishable from "parsed and held nothing".
 //
-// A SETTINGS FILE IS NOT A RULES FILE, AND THE PARSER CANNOT TELL. Since Phase
-// 3 of split-config-into-toggleable-slices the ten settings files -- the nine
-// subsystem slices plus implants-global.json -- live in this same directory and
-// end in .json. RuleFile has one property, "rules", and no extension-data bag,
-// so deserialising elapse.json as one would succeed, yield ZERO rules and log
-// NOTHING: the exact silent instrument AGENTS.md section 3 forbids. Load asks
-// ConfigDoc.OwnsFile about every file before it opens it and skips the ones
-// ConfigDoc reads, then NAMES them on their own line so "not parsed as rules"
-// is never indistinguishable from "parsed and held nothing".
-//
-// AN ID-ONLY LINE IS A SPACER, NOT A FAULT.
-//
-// CORRECTION, 2026-09-13 (Phase 4). Until this date BuildRule treated a line
-// whose id parsed but whose every value cell was blank as a BAD line: one
-// Warning each, reading
-//
-//     "Overlays[RuleModel.csv:2]: RuleId 1 is named but every value cell is
-//      empty, so there is nothing to apply to it."
-//
-// and a contribution to the "N line(s) skipped" clause of the summary. That is
-// backwards. "An empty cell means leave that column alone" is the dialect this
-// file defines, and a generator emits an empty cell wherever no change is
-// intended (design.md section 9) -- so every cell empty is the same statement
-// about the whole row: leave the row alone. RuleModel.csv, which arrived in
-// Phase 4, is 76 data lines of which 74 are exactly that, because the mod tunes
-// rows 22 and 23 and states the other 74 so the editor can list them. Those 74
-// produced 74 Warnings per launch, which is how a real one gets buried.
-//
-// They are counted as `untouched` now, separately from `bad`, reported at Info,
-// and NOT silenced: the summary carries the count unconditionally -- zero is an
-// answer too -- and any file with untouched lines gets ONE line naming it and
-// the proportion. scripts/validate_rules.py already grades these INFO ("empty
-// overlay line"), so the runtime and the repo-side gate now agree.
+// AN ID-ONLY LINE IS A SPACER, NOT A FAULT. A line whose id parses and whose
+// every value cell is blank says "leave this row alone", the same as an empty
+// cell does for one column. Generators emit such lines so the editor can list
+// rows the mod does not tune. They are counted as `untouched`, separately from
+// `bad`, and reported at Info: the summary carries the count every launch (zero
+// is an answer too), and any file with untouched lines gets ONE line naming it
+// and the proportion. scripts/validate_rules.py grades them INFO ("empty
+// overlay line") too.
 //
 // A line that carries text which could not be applied is still BAD and still
 // warns. The two are told apart by whether any value cell held anything at all,
@@ -187,11 +160,10 @@ namespace CKFHardMode
 
             // The consumable sheets' registry is static for the same reason and
             // has the same second one: the SIX sheets must see each other's
-            // claims WITHIN one walk. Their keys are (table, id) and they have
-            // to be -- inside this phase's own 194 (table, id) pairs, 31 ids
-            // appear under two different models, so an id-alone key collapses
-            // 194 pairs to 163 and sends 31 writes to the wrong table
-            // [measured]. Reset here, not inside Expand.
+            // claims WITHIN one walk. Their keys are (table, id) because the
+            // same id appears under different models among the consumable
+            // pairs, and an id-alone key would send writes to the wrong table.
+            // Reset here, not inside Expand.
             Consumables.Reset();
 
             if (!Directory.Exists(dir))
@@ -257,7 +229,7 @@ namespace CKFHardMode
                     //
                     // The expander owns the whole parse — its first column is a
                     // player concept, not an id, and its header names levers,
-                    // not game columns. design.md section 1.
+                    // not game columns.
                     if (GearClasses.Owns(name))
                     {
                         lever.Add(name);
@@ -278,11 +250,11 @@ namespace CKFHardMode
                     }
                     else if (Implants.Owns(name))
                     {
-                        // The THIRD lever sheet shape, Phase 7, and it needs the
-                        // same guard for the same reason: TableOf takes the
+                        // The THIRD lever sheet shape, and it needs the same
+                        // guard for the same reason: TableOf takes the
                         // filename up to the first dot, so
                         // "implants-slot08.csv" would become a model called
-                        // "implants-slot08Model" and 26 rows would build rules
+                        // "implants-slot08Model" and every row would build rules
                         // against a table that does not exist. Like the
                         // cyberweapon sheets it expands into TWO tables per row
                         // -- ImplantModel keyed on ImplantTypeId and EffectModel
@@ -294,13 +266,13 @@ namespace CKFHardMode
                     }
                     else if (Consumables.Owns(name))
                     {
-                        // The FOURTH lever sheet shape, Phase 8, and it needs the
-                        // same guard for the same reason: TableOf takes the
+                        // The FOURTH lever sheet shape, and it needs the same
+                        // guard for the same reason: TableOf takes the
                         // filename up to the first dot and appends "Model"
                         // because it does not already end in one, so
                         // "consumables-medical.csv" would become a model called
                         // "consumables-medicalModel". That is NON-NULL, so it
-                        // does not trip LoadTable's null guard, and 18 rows
+                        // does not trip LoadTable's null guard, and every row
                         // would build rules against a table that does not exist
                         // -- surfacing only as an orphan warning long
                         // afterwards. Unlike the other three this one expands
@@ -324,7 +296,7 @@ namespace CKFHardMode
                 }
             }
 
-            // NAMED, NOT JUST COUNTED. AGENTS.md §3: a line reporting a total
+            // NAMED, NOT JUST COUNTED (AGENTS.md). A line reporting a total
             // without reporting what it left out cannot tell "skipped" from
             // "found nothing". Every skipped file is named with the key that
             // skipped it; a rule count for those files is NOT reported, and
@@ -355,21 +327,12 @@ namespace CKFHardMode
             // Implants.ExpandGlobal is what puts them there: ONE unscoped
             // ImplantModel rule, no `where`, adopted here at the end of the
             // walk. It logs the three numbers it read whether or not it
-            // emitted, because a file read and not applied in silence is the
-            // instrument AGENTS.md section 3 is about.
+            // emitted, because a file read and not applied in silence is a
+            // silent instrument (AGENTS.md).
             //
-            // CORRECTION, PHASE 9. This call was Implants.RefuseGlobal and the
-            // paragraph here said it "emitted nothing and why: its three
-            // multipliers duplicate a MULTIPLY rule that is still live in
-            // ckf.hardmode.rules.json, and emitting them would apply the
-            // multipliers twice." That was true and is not any more. The rule
-            // was deleted from ckf.hardmode.rules.json in the SAME COMMIT that
-            // replaced the refusal with this expander, and neither half moves
-            // alone: rule + expander applies x0.5 twice, rule-gone + refusal
-            // applies it zero times, and only the pair leaves every shipped
-            // value where it was. `set` is idempotent and `multiply` is not,
-            // which is why the nine EffectModel rules could ship in Phase 7
-            // beside a live rules file and these three could not.
+            // These are MULTIPLY rules, and `multiply` is not idempotent: if
+            // the same multipliers also arrived from another rules file they
+            // would apply twice.
             //
             // Its count joins `lines` like every other expander's, so the total
             // below includes it. It is NOT added to `lever`: that list names
@@ -382,12 +345,10 @@ namespace CKFHardMode
 
             // `untouched` is printed whether or not it is zero. A counter that
             // appears only when it is non-zero is one a reader cannot tell from
-            // an instrument that stopped running (AGENTS.md §3), and zero here
+            // an instrument that stopped running (AGENTS.md), and zero here
             // is a real answer: every line that named a row also set something.
-            //
-            // The trailing "." used to come out of the `bad` clause's else
-            // branch, so a launch WITH malformed lines ended the sentence
-            // without one. It is its own term now.
+            // The trailing "." is its own term so every branch ends the
+            // sentence.
             Plugin.Log.LogInfo($"Overlays: {files.Count} file(s) in the directory, "
                 + $"{settings.Count} of them settings files ConfigDoc reads, "
                 + $"{read} read here, {lever.Count} of them lever sheet(s) expanded "
@@ -403,7 +364,7 @@ namespace CKFHardMode
         /// <summary>Files the last Load skipped because their slice is off,
         /// each as "&lt;file&gt; [Slices] &lt;Key&gt;". ModelRules' rule-count line
         /// names them, because a total that does not say what it left out cannot
-        /// tell "skipped" from "found nothing" (AGENTS.md §3). Empty, never
+        /// tell "skipped" from "found nothing" (AGENTS.md). Empty, never
         /// null, once Load has run; empty before it has, which is why ModelRules
         /// only reads it after the call.</summary>
         internal static List<string> SkippedFiles { get; private set; } = new List<string>();
@@ -424,8 +385,8 @@ namespace CKFHardMode
             int n = 0;
             foreach (var r in file?.Rules ?? new List<Rule>())
             {
-                // A literal null element in the array. It used to go straight
-                // to ModelRules.Adopt and be counted as a merged row.
+                // A literal null element in the array: skip it rather than
+                // hand it to ModelRules.Adopt and count it as a merged row.
                 if (r == null)
                 {
                     Plugin.Log.LogWarning($"Overlays[{Path.GetFileName(path)}]: \"rules\" holds a "
@@ -442,10 +403,10 @@ namespace CKFHardMode
         // ---- the table format -------------------------------------------------
 
         // ArmorModel.csv and ArmorModel.guard-standard.csv both mean ArmorModel.
-        // Null when there is no table name before the first dot: ".csv" and
-        // ".gitkeep.csv" used to yield "" + "Model" == "Model", and every line
-        // in such a file then built rules against a model called "Model", which
-        // surfaced only as an orphan warning long afterwards.
+        // Null when there is no table name before the first dot: otherwise
+        // ".csv" and ".gitkeep.csv" would yield "" + "Model" == "Model", and
+        // every line in such a file would build rules against a model called
+        // "Model", surfacing only as an orphan warning long afterwards.
         private static string TableOf(string path)
         {
             var name = Path.GetFileName(path);
@@ -488,10 +449,8 @@ namespace CKFHardMode
 
                 // A row whose every cell is blank — ",,,," — is a spacer, and
                 // is not counted at all: it names no row, so there is nothing
-                // for a reader to look up. The code has always called it a
-                // spacer; it just counted it as a bad line anyway, so the
-                // summary read "N line(s) skipped — see the warnings above"
-                // with no warning above it.
+                // for a reader to look up. Counting it as bad would make the
+                // summary say "see the warnings above" with no warning there.
                 //
                 // A line that names a row and leaves every value cell blank is
                 // a DIFFERENT thing and is counted, as `untouched` — see the
@@ -530,12 +489,10 @@ namespace CKFHardMode
             if (header == null)
                 Plugin.Log.LogWarning($"Overlays[{name}]: no header row found.");
 
-            // ONE line per file, not one per row. 74 Warnings is how a real one
-            // gets buried, and saying nothing is how "this file has 74 untouched
-            // rows" becomes indistinguishable from "this file has 74 malformed
-            // lines" — which is the whole point of counting them apart. Info,
-            // matching the judgement scripts/validate_rules.py already makes on
-            // the same lines.
+            // ONE line per file, not one per row: a Warning per row is how a
+            // real one gets buried, and saying nothing makes "N untouched rows"
+            // indistinguishable from "N malformed lines". Info, matching
+            // scripts/validate_rules.py's grading of the same lines.
             if (untouchedHere > 0)
                 Plugin.Log.LogInfo($"Overlays[{name}]: {untouchedHere} of "
                     + $"{rows + untouchedHere + badHere} data line(s) name a row and set "
@@ -682,12 +639,7 @@ namespace CKFHardMode
                 // BLANK MEANS UNTOUCHED. No value cell carried anything, so this
                 // line says "leave this row alone" — the row-level form of the
                 // empty cell. Not a fault, not logged here, counted apart.
-                //
-                // CORRECTION, 2026-09-13. This branch used to warn
-                // unconditionally: "{keyColumn} {id} is named but every value
-                // cell is empty, so there is nothing to apply to it." and return
-                // false, which put the line in the `bad` count. RuleModel.csv
-                // made that 74 Warnings on every launch. See the header.
+                // See the header.
                 if (!text) return LineResult.Untouched;
 
                 // Text was there and none of it survived. Every cell that failed
@@ -710,7 +662,7 @@ namespace CKFHardMode
         }
 
         // An insert goes through the ordinary clone machinery, so it is built
-        // as JSON and handed to the same deserializer the rules file uses.
+        // as JSON and handed to the same deserializer JSON rules files use.
         // There are far fewer of these than edits — one per row that does not
         // exist — so the cost of a small document each is not worth avoiding,
         // and it means RowClone sees nothing new.

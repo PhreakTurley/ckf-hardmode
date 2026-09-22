@@ -3,140 +3,67 @@
 //   MissionPowerLevel = round( (TeamPowerLevel + offset) * scalar )
 //   clamped to [minCap, maxCap]
 //
-// WHERE TEAM POWER LEVEL ACTUALLY LIVES (Run22)
-// ---------------------------------------------
-// Run21 concluded the value belonged to the save and therefore to GameDb.
-// Run22 tested that and it is wrong. GameDb's row has no such column:
+// Mechanics and evidence: docs/power-level.md.
 //
-//   GameDataModel numeric fields — Id=1  GameTurn=2040  Credits=1306
-//                                  Heat=3  LastMissionTurn=0
-//
-// There is no PowerLevel on GameDataModel at all, which is why the priority
-// list silently fell through to CoreDb every time and why every poll logged
-// "AccessTools.Property: Could not find property ... PowerLevel" — roughly
-// ninety percent of Run22's log was that one warning.
-//
-// CoreGameDataModel does carry it, and the profile holds one row per
-// playthrough:
-//
-//   CoreGameDataModel — PowerLevel=6.62  Id=31  ActiveGame=1  DifficultyIndex=7
-//
-// The materializer fires for EVERY row, so Run22 absorbed a parade of other
-// saves' values — 6.62, 5.565, 7.6925, 8.335, 8.53, 4.8625, 0.34, 3.37 ... —
-// each one overwriting the last because they all share a rank. Only the row
-// with ActiveGame = 1 was this playthrough, and a row filter was needed to
-// say so.
-//
-// None of that machinery is here any more. It was deleted 2026-08-31 under
-// docs/deprecation-plan.md §7.4: the readers, the row materializers, the
-// setter hooks, the model priority ranking, the row filter and the poller,
-// together with their five config keys — TeamPowerLevelSources,
-// TeamRowSources, TeamModelPriority, TeamRowFilter and TeamPowerLevelProperty.
-// The record above is kept because the wrong turn is the reusable part; the
-// code is not.
-//
-// THE SOURCE, FOUND (Run23 + the Run14 member dump)
-// -------------------------------------------------
-// Run23 killed the database theory outright. With the row filter on, `team=`
-// held still at 6.62 all session — and the game's own answers did not. Under
-// identical settings, consecutive calls implied roughly 7, then roughly 8,
-// then 7 again. A value that alternates between adjacent calls is not a stat
-// being read from a row; no amount of picking a better row was going to
-// reproduce it.
-//
-// The answer was sitting in Run14's member dump the whole time:
+// THE SOURCE OF TEAM POWER LEVEL
+// ------------------------------
+// GameDifficultyModel carries its own `teamPowerLevel`:
 //
 //   ===== RPG.Database.Models.GameDifficultyModel =====
 //     FIELD  static IntPtr NativeFieldInfoPtr_teamPowerLevel
 //     PROP   Single teamPowerLevel get/set
 //
-// GameDifficultyModel carries its own `teamPowerLevel`. It is on the instance
-// the postfix is already handed as `__instance` — the same object we read
-// BasePowerLevelOffset and PowerLevelScalar off. There was never anything to
-// look up.
+// It is on the instance the postfix is already handed as `__instance`, the
+// same object BasePowerLevelOffset and PowerLevelScalar are read off. It is the
+// only source. Traps that rule out the alternatives [measured]:
 //
-// So that property is the only source, and there is nothing left to fall
-// through to. If the instance carries no readable property, or carries
-// one that reads 0 — which a freshly constructed model does before the game
-// fills it in — this file logs an error and leaves the game's own result
-// alone. It never proceeds on a default: a default here is not a missing
-// mission difficulty, it is a silently wrong one.
+//   - GameDataModel (GameDb) has no PowerLevel column at all.
+//   - CoreGameDataModel (CoreDb) carries PowerLevel, but one row per
+//     playthrough in the profile, and its materializer fires for EVERY row,
+//     so a naive read takes other saves' values.
+//   - Consecutive difficulty calls under identical settings imply different
+//     team levels, which no stored stat can reproduce.
 //
-// The back-solve is the proof: `team=` and `implied team` should now agree on
-// every unclamped line, including the Matrix ones that never fit 6.62.
+// If the instance carries no readable property, or carries one that reads 0
+// (which a freshly constructed model does before the game fills it in), this
+// file logs an error and leaves the game's own result alone. It never
+// proceeds on a default: a default here is a silently wrong mission
+// difficulty.
 //
-// TWO KINDS OF CALL — DIFFICULTY AND REWARD (Run24, Run25)
-// --------------------------------------------------------
-// Run24 confirmed the instance read: `team=` tracked 6.62, 7.8 and 7.44 across
-// save loads, and eleven of thirteen calculations matched round(team + offset)
-// exactly. The two that did not both carried a non-zero arg0.
+// The back-solve is the check: `team=` and `implied team` should agree on
+// every unclamped line.
 //
-// Run25 identified arg0. It is not a mission level the game happens to be
-// carrying around — it is the team's own standing, floored:
+// TWO KINDS OF CALL — DIFFICULTY AND REWARD
+// -----------------------------------------
+// arg0 == 0 is the difficulty path, worked out from teamPowerLevel. arg0 > 0
+// carries the team's own standing, floored [measured]:
 //
-//     team 7.44 -> arg0 7        team 6.62 -> arg0 6        team 0.34 -> arg0 1
+//     arg0 == max(1, Floor(teamPowerLevel))
 //
-//     arg0 == max(1, Floor(teamPowerLevel))     7/7 calls, 3 different saves
+// A method handed Floor(TeamPowerLevel) and asked for a number looks like a
+// REWARD calculation (payout tier, XP band, loot level), and a hard mode must
+// not scale rewards. So a derived call always passes through: when arg0 > 0
+// the postfix returns before reading, scaling or clamping anything. This is
+// inference from the input, not the caller [unverified]; instrumenting a
+// reward site directly would settle it.
 //
-// 6.62 is the case that settles it: Round would give 7, and the game passed 6.
+// Matrix gets its own ceiling on the difficulty path. matrixMaxCap at 10 keeps
+// hacking at the game's stock ceiling while ground missions climb to maxCap.
 //
-// A method being handed Floor(TeamPowerLevel) and asked for a number is the
-// shape of a REWARD calculation — payout tier, XP band, loot level — not a
-// request for how hard to make a mission. Difficulty modifiers are not
-// supposed to scale rewards; a hard mode that pays more for being hard is not
-// a hard mode. Earlier versions of this file scaled those results anyway,
-// which in Run25 turned a reward of 1 into 2 and one of 8 into 10.
-//
-// So a derived call always passes through: when arg0 > 0 the postfix returns
-// immediately, before reading, scaling or clamping anything. The difficulty
-// path — arg0 = 0, worked out from teamPowerLevel — is the only thing this file
-// rewrites. That was DerivedCallMode; it is not configurable any more, because
-// Recompute is the setting that turned a reward of 1 into 2.
-//
-// This is inference, not proof: the log shows the input, not the caller. What
-// would settle it is instrumenting a reward site directly and watching whether
-// its number tracks these returns.
-//
-// Matrix gets its own ceiling on the difficulty path. matrixMaxCap defaults to
-// the stock 10, so hacking stays where the game put it while ground missions
-// climb to maxCap.
-//
-// 3.0 moved these five keys out of the [PowerLevel] section of
-// ckf.hardmode.cfg and into the "powerlevel" section of ckf.hardmode.json:
-//
-//   "powerlevel": {
-//     "enabled": true,
-//     "minCap": 1,
-//     "maxCap": 20,
-//     "matrixMaxCap": 10,        // 0 = use maxCap for Matrix too
-//     "logFirst": 40
-//   }
-//
-// That is the whole section. Seven keys were removed 2026-08-31 — DerivedCallMode,
-// MatrixOffsetMode, TeamPowerLevelOverride, OffsetProperty, ScalarProperty,
-// MatrixOffsetProperty and InstanceTeamProperty. Every one of them was a measured
-// fact about the game's own model rather than a preference, and each is now a
-// const at the top of the class with the run that pinned it named beside it.
+// SETTINGS: ckf.hardmode.d/powerlevel.json (the switch is [Slices] PowerLevel
+// in ckf.hardmode.cfg). Keys: minCap, maxCap, matrixMaxCap (0 = use maxCap for
+// Matrix too), logFirst. Defaults are in schema/powerlevel.schema.json.
 //
 // ONE INTERFACE FOR DIFFICULTY
 // ----------------------------
-// ScalarOverride, UseOffsetOverride and OffsetOverride are gone. They were
-// duplicates: [Difficulty] PowerLevelScalar, BasePowerLevelOffset and
-// MatrixPowerLevelOffset are the game's own settings under the game's own
-// names, they are written onto this very model, and this file reads them off
-// __instance. Two knobs for one value is a bug waiting to happen, and it had
-// already produced one — the back-solve below subtracted the mod's offset from
-// the game's answer, quietly reporting an implied Team Power Level that was
-// off by the difference whenever OffsetOverride was set.
+// The game's own PowerLevelScalar, BasePowerLevelOffset and
+// MatrixPowerLevelOffset are set on the in-game sliders (widened by
+// difficulty.json) and read here off __instance. This file has no second copy
+// of them: two knobs for one value would also make the back-solve report an
+// implied Team Power Level off by the difference. It keeps only what the
+// sliders cannot express, the ceiling of 10 the game clamps its result to.
 //
-// So set difficulty in [Difficulty], or on the in-game sliders now that
-// SliderRangeMultiplier gives them the range. This section keeps only what the
-// sliders cannot express: the ceiling of 10 the game clamps its own result to.
-//
-// The Matrix offset REPLACING the base offset rather than adding to it is not a
-// duplicate but a fact: it is this file's model of what the GAME does with
-// MatrixPowerLevelOffset, Run21 confirmed it, and it is needed to reconstruct
-// the game's own arithmetic. It is a const now for the same reason.
+// The facts about the game's model are consts, not settings (below).
 
 using System;
 using System.Collections.Generic;
@@ -158,16 +85,13 @@ namespace CKFHardMode
 
         private static bool enabled;
         private static long minCap = 1, maxCap = 20, matrixMaxCap = 10;
-        // Not configurable. David's ruling 2026-08-31: these are settled facts
-        // about the game's own model, not knobs — each was pinned by a measured
-        // run and there is no reason to type a different value.
+        // Not configurable (David's rule): these are measured facts about the
+        // game's own model, not knobs.
         //
-        //   PassThrough on a derived call — Run25 pinned arg0 to
-        //     max(1, Floor(teamPowerLevel)) across three saves: the game handing
-        //     its own standing back to itself, which is a reward calculation and
-        //     not a request for a mission's difficulty.
-        //   Matrix offset REPLACES the base offset rather than adding — Run21.
-        //   The three property names are GameDifficultyModel's own columns.
+        //   PassThrough on a derived call — see the header.
+        //   Matrix offset REPLACES the base offset rather than adding
+        //     [measured]; needed to reconstruct the game's own arithmetic.
+        //   The property names are GameDifficultyModel's own columns.
         private const bool MatrixOffsetReplaces = true;
         private const string OffsetProp = "BasePowerLevelOffset";
         private const string ScalarProp = "PowerLevelScalar";
@@ -176,7 +100,7 @@ namespace CKFHardMode
         private static bool warnedNoInstanceProp;
         private static bool warnedZeroInstance;
         private static bool loggedArg1Type;
-        private static int logFirst = 40, logged;
+        private static int logFirst, logged;
 
         // Reflection cache. AccessTools.Property logs a warning on every miss,
         // and these lookups run once per calculation, so they go through plain
@@ -184,22 +108,19 @@ namespace CKFHardMode
         private static readonly Dictionary<string, PropertyInfo> propCache =
             new Dictionary<string, PropertyInfo>(StringComparer.Ordinal);
 
-        // 3.0: the five [PowerLevel] cfg keys are the "powerlevel" section of
-        // ckf.hardmode.json. The section is new — it has no 2.x sidecar behind
-        // it — and it is flat, so ConfigDoc.ReadSection does the grading and
-        // the unknown-key report.
+        // powerlevel.json. It is flat, so ConfigDoc.ReadSection does the
+        // grading and the unknown-key report. Initialisers match the schema
+        // defaults and apply only when a key is absent from the file.
         private sealed class Options : ConfigDoc.IHasUnknownKeys
         {
-            // RETIRED 2026-09-13. This used to be
-            //     [JsonPropertyName("enabled")] public bool Enabled { get; set; } = true;
-            // and Init branched on it. The gate is [Slices] PowerLevel in
-            // ckf.hardmode.cfg now. Still parsed so an existing document is not
+            // RETIRED gate. The switch is [Slices] PowerLevel in
+            // ckf.hardmode.cfg. Still parsed so a file carrying it is not
             // refused for a key that maps to no member; nothing branches on it.
             [JsonPropertyName("enabled")]      public bool? RetiredEnabled { get; set; }
             [JsonPropertyName("minCap")]       public int MinCap { get; set; } = 1;
             [JsonPropertyName("maxCap")]       public int MaxCap { get; set; } = 20;
             [JsonPropertyName("matrixMaxCap")] public int MatrixMaxCap { get; set; } = 10;
-            [JsonPropertyName("logFirst")]     public int LogFirst { get; set; } = 40;
+            [JsonPropertyName("logFirst")]     public int LogFirst { get; set; }
             [JsonExtensionData] public Dictionary<string, JsonElement> Unknown { get; set; }
             public Dictionary<string, JsonElement> UnknownKeys { get { return Unknown; } }
         }
@@ -232,11 +153,10 @@ namespace CKFHardMode
                 Plugin.Log.LogWarning($"PowerLevel: maxCap {maxCap} < minCap {minCap}. Not patching.");
                 return;
             }
-            // matrixMaxCap was never checked against minCap, and the clamp at
-            // the bottom of After() is max(minCap, min(ceiling, rounded)) — so a
-            // matrixMaxCap below minCap made minCap win and returned a Matrix
-            // result ABOVE the very ceiling this key exists to impose, higher
-            // than the game's own stock clamp, with nothing logged. Rather than
+            // The clamp at the bottom of After() is
+            // max(minCap, min(ceiling, rounded)), so a matrixMaxCap below minCap
+            // would make minCap win and return a Matrix result ABOVE the very
+            // ceiling this key exists to impose. Rather than
             // refuse the whole subsystem for one bad key, refuse the SEPARATE
             // MATRIX CEILING only: 0 is the file's existing spelling of "use
             // maxCap for Matrix too", and maxCap has just been checked against
@@ -341,8 +261,8 @@ namespace CKFHardMode
             }
 
             // arg0 > 0 is the game handing its own Team Power Level back to
-            // itself — Run25 pinned it to max(1, Floor(teamPowerLevel)) exactly,
-            // across three different saves. That is a reward calculation, not a
+            // itself: max(1, Floor(teamPowerLevel)) [measured; see the header].
+            // That looks like a reward calculation, not a
             // request for a mission's difficulty, and difficulty modifiers are
             // not meant to touch rewards. Bail out before we read, scale or
             // clamp anything.
@@ -350,15 +270,10 @@ namespace CKFHardMode
 
             // The value the game's own arithmetic uses lives on the instance we
             // were handed. It cannot be stale and cannot belong to another
-            // playthrough, and since §7.4 it is the only source there is.
+            // playthrough, and it is the only source there is.
             double? live = ReadOrNull(__instance, InstanceTeamProp);
 
-            // ONE path for "there is no readable value". This condition used to
-            // be handled twice: a warning here that did not return, and a second
-            // !HasValue block further down that returned but said only "Team
-            // Power Level unknown". Both fired for the same call and the second
-            // was reachable in no other case. Collapsed to this block; the
-            // message below carries what both of them said.
+            // ONE path for "there is no readable value", with one message.
             if (!live.HasValue)
             {
                 if (!warnedNoInstanceProp)
@@ -374,8 +289,8 @@ namespace CKFHardMode
             }
 
             // A freshly constructed model reads 0 before the game fills it in,
-            // and Team Power Level is never legitimately 0. There is no database
-            // fallback to divert to any more, so this cannot be papered over:
+            // and Team Power Level is never legitimately 0. There is no fallback
+            // source, so this cannot be papered over:
             // say so once and leave the game's own answer alone. Computing on
             // through would drive every mission to minCap, which is not a
             // missing number — it is a wrong one that looks like a real one.
@@ -395,9 +310,9 @@ namespace CKFHardMode
             double team = live.Value;
             string teamSrc = InstanceTeamProp;
 
-            // Every term now comes off the model. The [Difficulty] section writes
-            // these same properties, so setting PowerLevelScalar there is what
-            // steers this — there is no second copy of the knob to disagree with.
+            // Every term comes off the model. The in-game sliders write these
+            // same properties, so there is no second copy of the knob to
+            // disagree with.
             double baseOff = Read(__instance, OffsetProp, 0.0);
             double mtxOff = Read(__instance, MatrixOffsetProp, 0.0);
             double scalar = Read(__instance, ScalarProp, 1.0);

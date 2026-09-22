@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
     <AssemblyName>CKFHardMode</AssemblyName>
-    <Version>4.0.0</Version>
+    <Version>4.1.0</Version>
     <LangVersion>latest</LangVersion>
     <!-- BepInEx loads plugins by reflection; no entry point needed -->
     <OutputType>Library</OutputType>
@@ -37,33 +37,32 @@
   </ItemGroup>
 
   <!--
-    THE SHIPPED DEFAULTS ARE NOT IN THIS ASSEMBLY. This project embeds no
-    resources at all: the DLL is the engine and nothing else.
+    THE CONFIG FILES ARE NOT IN THIS ASSEMBLY. This project embeds no
+    resources: the DLL is the engine and nothing else.
 
-    The eight config files a player needs travel as loose files in the release
-    zip, under BepInEx\config\, and extracting the zip is what puts them on
-    disk. scripts/make_release.py collects them and refuses to build a release
-    if any is missing.
+    The config files a player needs travel as loose files in the release zip,
+    under BepInEx\config\, and extracting the zip is what puts them on disk.
+    scripts/make_release.py collects them and refuses to build a release if
+    any is missing. They come from two places:
 
-    They come from two places:
-
-      <game>\BepInEx\config\       the live config, the directory the config
-                                   editor edits (gui/settings.json), or one
-                                   named on make_release.py's command line.
-                                   Seven files by the names in CONFIG_FILES,
-                                   plus any other .csv/.tsv/.json in
-                                   ckf.hardmode.d. The repo holds no copy: the
-                                   ones in mods/CKFHardMode/defaults/ and
-                                   overlays/ were deleted 2026-09-11.
-      release/ckf.hardmode.cfg.in  the one-key master switch, rendered by
+      <game>\BepInEx\config\       the live config the config editor edits
+                                   (gui/settings.json), or a directory named
+                                   on make_release.py's command line: the
+                                   names in CONFIG_FILES plus the other
+                                   .csv/.tsv/.json files in ckf.hardmode.d.
+                                   The repo holds no copy.
+      release/ckf.hardmode.cfg.in  the switches ([General] Enabled and one
+                                   [Slices] key per slice), rendered by
                                    make_release.py with the version filled in.
 
-    What this buys: retuning the mod is editing the live config and re-running
-    make_release.py. No dotnet build in the loop unless the C# changed.
+    Retuning the mod is editing the live config and re-running
+    make_release.py, with no dotnet build unless the C# changed.
 
-    Defaults.cs no longer writes anything. It checks that the eight files are on
-    disk and reports what is missing, which is the only thing left to say once
-    the zip carries them.
+    Defaults.cs writes nothing. It checks that the expected files are on disk
+    and reports what is missing.
+
+    <Version> matches Plugin.PluginVersion and changes only for a public
+    release; make_release.py refuses a build where the two disagree.
   -->
 
   <!-- Copy the built plugin straight into the game on build -->

@@ -1,117 +1,82 @@
 // CKF Hard Mode — custom difficulty beyond the in-game sliders.
 //
 // SCOPE. This plugin changes how the game plays and does nothing else.
-// Eight subsystems, in the order Load() initialises them — that sequence is
-// the canonical list. Each name is its section in ckf.hardmode.json, which
-// since 3.0 is where every setting except the master switch lives:
+// Settings subsystems, in the order Load() initialises them (that sequence is
+// the canonical list). Each reads its own settings file,
+// ckf.hardmode.d/<file>.json, through ConfigDoc:
 //
-//   "modelrules"   apply declarative row edits from ckf.hardmode.rules.json
-//   "selfcheck"    the regression suite (a diagnostic; the one thing off by
-//                  default), initialised beside ModelRules because it reads
-//                  the database types ModelRules resolved
-//   "powerlevel"   lift the mission Power Level ceiling of 10
-//   "teampl"       scale the Team Power Level a mission awards
-//   "fatigue"      tire mercs out across missions, using the game's own
-//                  temporary traits
-//   "elapse"       charge the crew when a mission's window closes unplayed:
-//                  credits off the balance, Stress onto linked mercs
-//   "missions"     adjust payment, XP and Team PL per mission type
-//   "rewardcurve"  replace the base reward-per-power-level curve
-//   "difficulty"   widen the custom-difficulty sliders past their stock
-//                  bounds so the values are set on the in-game sliders
+//   ModelRules    the rule engine: applies every overlay and lever sheet in
+//                 ckf.hardmode.d and inserts cloned rows (modelrules.json)
+//   SelfCheck     the regression suite (a diagnostic; the one switch off by
+//                 default), initialised beside ModelRules because it reads
+//                 the database types ModelRules resolved (selfcheck.json)
+//   PowerLevel    lift the mission Power Level ceiling of 10 (powerlevel.json)
+//   Progression   replace the Team Power Level a mission awards (teampl.json)
+//   Fatigue       tire mercs out across missions, using the game's own
+//                 temporary traits (fatigue.json)
+//   Elapse        charge the crew when a mission's window closes unplayed:
+//                 credits off the balance, Stress onto linked mercs
+//                 (elapse.json)
+//   MissionRewards  adjust payment, XP and Team PL per mission type
+//                 (missions.json)
+//   RewardCurve   replace the base reward-per-power-level curve
+//                 (rewardcurve.json)
+//   Difficulty    widen the custom-difficulty sliders past their stock
+//                 bounds so values are set on the in-game sliders
+//                 (difficulty.json)
 //
-// The mod's own files SHIP AS LOOSE FILES IN THE RELEASE ZIP, under
-// BepInEx\config: the config document, ckf.hardmode.rules.json,
-// ckf.hardmode.selfcheck.csv, ckf.hardmode.cfg and the four files of
-// ckf.hardmode.d/. Extracting the zip is what puts them there, and
+// The content slices (lever sheets and talent overlays) have no Init of their
+// own; Overlays.Load expands them while ModelRules loads.
+//
+// SWITCHES. ckf.hardmode.cfg holds [General] Enabled plus one [Slices] key per
+// slice. Slices.Init binds them all and is the only place a gate is read. A
+// gate lives in the .cfg rather than in the file it gates, so a syntax error
+// in a settings file cannot take its switch with it. [General] Enabled keeps
+// its own section and name, so an older .cfg still turns the mod off.
+//
+// FILES. The mod's config files ship as loose files in the release zip, under
+// BepInEx\config. They are not embedded in this DLL, so retuning the mod is a
+// file edit and a re-run of scripts/make_release.py, with no rebuild.
 // Defaults.Install only reports which of them arrived.
 //
-// CORRECTION, 2026-09-07. Until this date they were EmbeddedResources in this
-// DLL and Defaults.Install wrote any that were absent, so the DLL alone was a
-// complete mod. That coupled every tuning change to a rebuild — an edited
-// default and no `dotnet build` shipped a zip whose numbers were not the ones
-// in the repository, which is the failure make_release.py's check_embedded
-// existed to catch. The files are the release's now, and retuning the mod is a
-// file edit and a re-run of scripts/make_release.py.
+// Fatigue and Elapse are the only subsystems that WRITE to the save.
+// Everything else reads the game and adjusts what it reads. Fatigue inserts
+// and deletes GameCharacterTrait rows, which the game then expires by itself;
+// Elapse spends credits through the engine's own SpendCredits and updates a
+// merc's NegativeTraitValue. Their switches default to on, so an install
+// with default switches writes to the save from the first mission.
 //
-// CORRECTION, 2026-09-13. Until this date this comment read:
+// Everything that only READS the game (column dumps, row logs, table sweeps,
+// method traces, member lists) lives in CKF Data Dump, a separate assembly
+// with its own GUID and config file. Neither plugin depends on the other. You
+// want balance changes on every launch and a full data dump rarely, so the
+// dump's hooks and load time are not carried here.
 //
-//     "ckf.hardmode.cfg has exactly one key left, [General] Enabled. It stays
-//      a BepInEx bind because it is the switch that has to work when the merged
-//      document does not exist at all. One consequence worth stating: a syntax
-//      error anywhere in ckf.hardmode.json now costs every subsystem its
-//      settings AND its switch, where in 2.x the switch came from the cfg and
-//      survived. ConfigDoc says so at Error, and each subsystem says which of
-//      the two it is."
-//
-// The first sentence is no longer true and the consequence it warned about is
-// what got fixed. ckf.hardmode.cfg now has 43 keys: [General] Enabled plus one
-// [Slices] key per slice. The eight subsystem "enabled" fields are gone from
-// ckf.hardmode.json, because a gate cannot live inside the file it gates and a
-// syntax error in that document must not be able to take a switch with it
-// (split-config-into-toggleable-slices design.md section 3). Slices.cs binds
-// all 43 and is the only place a gate is read.
-//
-// [General] Enabled keeps its own section and its own name, so a .cfg written
-// by an older build still turns the mod off.
-//
-// [Fatigue] and [Elapse] are the odd ones out and worth flagging here: they
-// are the only subsystems that WRITE to the save. Everything else reads the
-// game and adjusts what it reads. Fatigue inserts and deletes
-// GameCharacterTrait rows, which the game then expires by itself; Elapse
-// spends credits through the engine's own SpendCredits and updates a merc's
-// NegativeTraitValue. Both now ship ON — David's ruling 2026-08-31 that every
-// feature switch defaults true — so a fresh install writes to the save from the
-// first mission. The numbers they write come from the "fatigue" and "elapse"
-// sections of ckf.hardmode.json.
-//
-// Everything that only READ the game — dumping a table's columns, logging
-// every row, sweeping tables into CSV, tracing a method's arguments, listing a
-// type's members — has moved to CKF Data Dump. That is a separate assembly
-// with its own GUID and its own config file. It shares no code with this one,
-// neither declares a dependency on the other, and either works alone.
-//
-// The reason is cost asymmetry. You want balance changes on every launch and a
-// full data dump roughly never. Bundling them meant carrying the dump's hooks
-// and load time forever, and it is why twelve tables passed for a complete
-// capture across a dozen runs: the dump only ever reached tables that had been
-// named by hand, twice.
-//
-// The game already has a full custom-difficulty system (WindowCustomizeDifficulty)
-// whose values are clamped by Min/Max pairs on RPG.Database.Models.GameDifficultyModel.
-// The original worry was that those clamps might be compile-time constants inlined
-// by IL2CPP, and therefore unpatchable, so this plugin let the game configure
-// difficulty normally and then overwrote the resulting values afterwards.
-//
-// The member dump settled that: they are ordinary settable properties.
+// DIFFICULTY. The game already has a full custom-difficulty system
+// (WindowCustomizeDifficulty) whose values are clamped by Min/Max pairs on
+// RPG.Database.Models.GameDifficultyModel. Those bounds are ordinary settable
+// properties, and they are STATIC:
 //
 //   PROP Single PowerLevelScalarMin get/set     PROP Single PowerLevelScalarMax get/set
 //   PROP Single BasePowerLevelOffsetMin get/set PROP Single BasePowerLevelOffsetMax get/set
 //
-// They are also STATIC, which took two failed runs to notice. Run28 dumped a
-// materialized GameDifficultyModel row: 66 instance properties, not one of them
-// a bound. They are limits of the difficulty system rather than per-save data,
-// so there is a single set for the whole game and widening is a one-shot at
-// load. The reason the earlier member dump showed them at all is that it passed
-// BindingFlags.Static and the scan did not. (That member dump now lives in the
-// CKF Data Dump plugin, under [Diagnostics] DumpMembers.)
+// A materialized GameDifficultyModel row carries no bound among its instance
+// properties; they are limits of the difficulty system, one set for the whole
+// game, so widening is a one-shot at load. A member scan that omits
+// BindingFlags.Static does not see them.
 //
-// So the sliders can simply be given a longer run, which is what
-// SliderRangeMultiplier does, and it is the only key this section has left.
+// So the sliders are given a longer run (sliderRangeMultiplier, the only key
+// in difficulty.json), and the in-game window is the only place a value is
+// set. PowerLevelCap reads whatever ends up on the model, and "PowerLevel"
+// does the one thing this cannot: lift the ceiling of 10 the game clamps its
+// own result to.
 //
-// The "difficulty" section no longer carries copies of the game's own knobs
-// either. Widening the Min/Max bounds is all it does, so the in-game
-// custom-difficulty window is the one and only place a value is set.
-// PowerLevelCap reads whatever ends up on the model, so it picks up whatever
-// the slider set, and "powerlevel" is left doing the one thing this section
-// cannot: lifting the ceiling of 10 that the game clamps its own result to.
+// Because the values land on the model the game itself uses, everything
+// downstream (power level calculation, writing into the save database) stays
+// consistent. We never touch the encrypted database; the game writes it.
 //
-// Because the values land on the model the game itself uses, everything downstream
-// (power level calculation, writing into the save database) stays consistent. We
-// never touch the encrypted database; the game writes it for us.
-//
-// Members are resolved reflectively, so this compiles without needing exact
-// signatures up front and tolerates the game renaming things between patches.
+// Members are resolved reflectively, so this compiles without exact
+// signatures and tolerates the game renaming things between patches.
 
 using System;
 using System.Collections.Generic;
@@ -133,19 +98,17 @@ namespace CKFHardMode
     {
         public const string PluginGuid = "ckf.hardmode";
         public const string PluginName = "CKF Hard Mode";
-        public const string PluginVersion = "4.0.0";
+        public const string PluginVersion = "4.1.0";
 
         internal static new ManualLogSource Log;
         internal static ConfigEntry<bool> Enabled;
 
-        /// <summary>[Difficulty] SliderRangeMultiplier, which since 3.0 is
-        /// "sliderRangeMultiplier" in the "difficulty" section of
-        /// ckf.hardmode.json. 1.0 means "leave the stock ranges alone", which
-        /// is also what a section that could not be read leaves behind.
-        /// </summary>
+        /// <summary>"sliderRangeMultiplier" from difficulty.json. 1.0 means
+        /// "leave the stock ranges alone", which is also what a settings file
+        /// that could not be read leaves behind.</summary>
         internal static double SliderRange = 1.0;
 
-        // The whole of the "difficulty" section: one key.
+        // The whole of difficulty.json: one key.
         private sealed class DifficultyOptions : ConfigDoc.IHasUnknownKeys
         {
             [JsonPropertyName("sliderRangeMultiplier")]
@@ -162,37 +125,27 @@ namespace CKFHardMode
             Log = base.Log;
 
             // Section, key, type and default come from Plugin.Binds.g.cs, which
-            // scripts/gen_binds.py generates from schema/*.schema.json. The
-            // descriptions these calls used to carry are gone on purpose: they
-            // were BepInEx's source for the "## " prose in ckf.hardmode.cfg, and
-            // that prose now lives in docs/config-reference.md (gui-plan.md 3.2).
-            //
-            // CORRECTION, 2026-09-13. Until this date this comment read "3.0:
-            // this is the ONLY bind. The other 21 keys are sections of
-            // ckf.hardmode.json, read below." Both halves are now wrong. Every
-            // one of the 43 declared keys is bound here, through Slices.Init,
-            // because design.md section 3 requires every toggle to be a line in
-            // ckf.hardmode.cfg and BepInEx only writes a line for a key that
-            // something bound.
+            // scripts/gen_binds.py generates from schema/*.schema.json. The binds
+            // carry no descriptions: the key prose lives in
+            // docs/config-reference.md. Every declared key is bound here,
+            // through Slices.Init, because BepInEx only writes a .cfg line for a
+            // key that something bound.
             //
             // ORDER. This is ABOVE the bail-out below on purpose. Binding under
-            // it would mean a fresh install with Enabled = false never gets the
-            // 42 [Slices] lines written at all, so the config editor would have
-            // nothing to show and check_schema.py would report every one of them
-            // MISSING. The reason [General] Enabled itself is a bind is
-            // unchanged: it is the switch that has to work when the merged
-            // document does not exist at all, and BepInEx owns ckf.hardmode.cfg
-            // and writes it whether or not anything else on disk is intact.
+            // it would mean an install with Enabled = false never gets its
+            // [Slices] lines written, so the config editor would have nothing to
+            // show and check_schema.py would report every one of them MISSING.
+            // [General] Enabled is a bind because it has to work when no
+            // settings file exists at all, and BepInEx writes ckf.hardmode.cfg
+            // whether or not anything else on disk is intact.
             Enabled = Slices.Init(Config);
 
             // ORDER MATTERS. This bail-out has to come before any subsystem is
-            // initialised. It used to sit underneath, which meant Enabled =
-            // false still let ModelRules rewrite every row and PowerLevelCap
-            // overwrite every calculation — the master switch turned off the
-            // [Difficulty] knobs and nothing else.
+            // initialised, or Enabled = false would still let ModelRules
+            // rewrite rows and PowerLevelCap overwrite calculations.
             //
             // A master switch that could NOT BE READ is not a master switch set
-            // to false (AGENTS.md §3). Slices.Init reports the bind failure by
+            // to false (AGENTS.md). Slices.Init reports the bind failure by
             // name at Error; this runs on rather than turning the mod off on an
             // answer nobody got, which would look identical to the player having
             // turned it off themselves.
@@ -209,39 +162,33 @@ namespace CKFHardMode
             }
 
             // COUNT the config files before anything reads them. This writes
-            // nothing: the eight files arrive with the release zip, and all
-            // this call does is say which of them are on disk, so a partial
+            // nothing: the files arrive with the release zip, and all this
+            // call does is say which of them are on disk, so a partial
             // extraction is a named error at the top of the log rather than
             // one subsystem at a time reporting that it has nothing to read.
             //
             // ORDER. Above ConfigDoc.Init(), so the count is the first thing in
-            // the log and a reader knows whether the document it is about to
-            // complain about is even there; and below the master-switch
+            // the log and a reader knows whether the files about to be
+            // complained about are even there; and below the master-switch
             // bail-out, because a disabled mod has nothing to check.
             Defaults.Install();
 
-            // Read ckf.hardmode.json before any subsystem asks for a section,
-            // so its summary line and its stray-key Errors land at the TOP of
-            // the log rather than wherever the first reader happens to be — and
-            // so the stray-key guard runs even on a launch where every
-            // subsystem that reads the document is switched off. AGENTS.md §3:
-            // the guard has to be able to produce a row, and a guard that only
-            // runs when someone asks is one that can go quiet.
+            // Read the settings files before any subsystem asks for one, so
+            // ConfigDoc's summary line and stray-key Errors land at the TOP of
+            // the log, and so the stray-key guard runs even on a launch where
+            // every settings subsystem is switched off. A guard that only runs
+            // when someone asks is one that can go quiet (AGENTS.md).
             ConfigDoc.Init();
 
-            // BOTH LAYOUTS PRESENT IS A REFUSAL, NOT A PREFERENCE.
-            // specs/config-surface/spec.md. ConfigDoc has already logged the
-            // Error naming both layouts and saying the migrator has not been
-            // run; this is the half that makes "and does not apply any rule"
-            // true. It returns ABOVE the difficulty hook, above
-            // ModelRules.Init and above everything below them, so no rule is
+            // BOTH LAYOUTS PRESENT IS A REFUSAL, NOT A PREFERENCE. ConfigDoc
+            // has already logged the Error naming both layouts and what to do;
+            // this is the half that makes "nothing is applied" true. It returns
+            // ABOVE ModelRules.Init and the difficulty hook, so no rule is
             // compiled, no row is edited and no slider bound is widened.
             //
-            // It returns BELOW Slices.Init, on purpose and for the same reason
-            // Slices.Init sits above the master-switch bail-out: BepInEx writes
-            // ckf.hardmode.cfg from the keys something bound, and a launch that
-            // refused before binding would leave the config editor with nothing
-            // to show and check_schema.py reporting 42 keys MISSING.
+            // It returns BELOW Slices.Init for the same reason Slices.Init sits
+            // above the master-switch bail-out: BepInEx writes
+            // ckf.hardmode.cfg only from the keys something bound.
             if (ConfigDoc.BothLayouts)
             {
                 Log.LogError("Plugin: stopping here. The game runs UNMODIFIED this launch. "
@@ -251,16 +198,10 @@ namespace CKFHardMode
                 return;
             }
 
-            // Every subsystem's settings, including its switch, now come from
-            // that document. [ModelRules] Enabled used to be bound and read
-            // ABOVE this call; ModelRules.Init reads it out of the "modelrules"
-            // section itself, which is why it can no longer be read too early.
-
-            // [Difficulty] only. This used to `return` on a null type, which
-            // took the whole plugin down with it: ModelRules has no dependency
-            // on GameDifficultyModel, and a failure to resolve one type left the
-            // entire row-edit engine unloaded with nothing in the log saying so.
-            // The section that needs the type is guarded on it below instead.
+            // Difficulty only. A null type must not `return` here: ModelRules
+            // has no dependency on GameDifficultyModel, and returning would
+            // leave the whole row-edit engine unloaded. The section that needs
+            // the type is guarded on it below instead.
             var type = AccessTools.TypeByName(DifficultyTypeName);
             if (type == null)
             {
@@ -273,51 +214,32 @@ namespace CKFHardMode
 
             var harmonyEarly = new Harmony(PluginGuid + ".models");
 
-            // THE 4.0 LAYOUT HAS NO RULES FILE, AND THIS SAYS SO OUT LOUD.
+            // THE 4.0 LAYOUT HAS NO RULES FILE, AND THIS SAYS SO.
             //
-            // What this path feeds, measured rather than assumed: it is handed
-            // to ModelRules.Init (ModelRules.cs, member Init), which uses it
-            // for TWO things -- LoadRules(rulesPath) reads the rules out of it,
-            // and Overlays.Load is handed
-            // Path.GetDirectoryName(rulesPath) + "ckf.hardmode.d". The second
-            // is why this variable still exists: the overlay directory is
-            // derived from it, and that directory is the whole rule set now.
-            // GetDirectoryName of this path is Paths.ConfigPath whether or not
-            // the file is there, so the directory walk is unaffected by the
-            // absence.
+            // ModelRules.Init uses this path for two things: LoadRules reads
+            // rules from it, and Overlays.Load is handed
+            // GetDirectoryName(rulesPath) + "ckf.hardmode.d". The second is why
+            // the variable still exists: the overlay directory is the whole
+            // rule set, and it is derived the same way whether or not the file
+            // is there.
             //
-            // ckf.hardmode.rules.json was deleted on 2026-09-14. It held 269
-            // rules -- 263 exact, 6 range, 0 unscoped, 76,451 bytes -- and all
-            // 269 are in ckf.hardmode.d now: 238 as direct overlay CSVs, 22 in
-            // the two cyberweapon sheets and 9 in implants-slot08.csv. The
-            // compiled set was compared with the file and without it over
-            // 42,471 (table, id, column) triples: 0 differences, and every one
-            // of the 448 writes it made is matched by an identical
-            // (operator, value) write from a shipping sheet [measured,
-            // 2026-09-14].
-            //
-            // SO THE POLARITY OF THIS CHECK IS INVERTED FROM WHAT IT WAS.
-            // "Not there" is the expected 4.0 answer and is stated at Info --
-            // unconditionally, because an instrument that speaks only on
-            // failure has gone quiet (AGENTS.md section 3, and the same
-            // argument Defaults.cs opens with). "There" is the surprise, and
-            // it is an Error: a rules file that comes back is read FIRST and
-            // its rules are applied BEFORE the sheets, so any rule in it that
-            // is not a plain `set` -- a multiply, an add, a clamp, a clone --
-            // lands on top of the sheet that replaced it. That is the Phase 5
-            // double-application shape, reached backwards.
+            // "Not there" is the expected answer and is stated at Info, every
+            // launch, because an instrument that speaks only on failure has
+            // gone quiet (AGENTS.md). "There" is an Error: a rules file is read
+            // FIRST and its rules apply BEFORE the sheets, so any rule in it
+            // that is not a plain `set` (multiply, add, clamp, clone) lands on
+            // top of the sheet that replaced it.
             //
             // NEITHER BRANCH IS "COULD NOT LOOK". An exception out of
-            // File.Exists is its own third outcome, reported as itself, and it
-            // is never counted as either answer (AGENTS.md section 3).
+            // File.Exists is its own third outcome, reported as itself.
             var rulesPath = System.IO.Path.Combine(Paths.ConfigPath, "ckf.hardmode.rules.json");
             try
             {
                 if (System.IO.File.Exists(rulesPath))
                 {
                     Log.LogError($"ModelRules: {rulesPath} IS ON DISK. The 4.0 layout does "
-                        + "not have this file -- it was deleted on 2026-09-14 and all 269 of "
-                        + "its rules live in " + ConfigDoc.DirName + " now. It will be read "
+                        + "not have this file -- its rules live in " + ConfigDoc.DirName
+                        + " now. It will be read "
                         + "FIRST, before every overlay and every lever sheet, so anything in "
                         + "it that is not a plain `set` applies ON TOP of the sheet that "
                         + "replaced it. If you restored it deliberately, the rules it "
@@ -328,10 +250,8 @@ namespace CKFHardMode
                 {
                     Log.LogInfo($"ModelRules: no {System.IO.Path.GetFileName(rulesPath)} in "
                         + $"{Paths.ConfigPath}. THIS IS THE 4.0 LAYOUT AND IS EXPECTED -- the "
-                        + "file was deleted on 2026-09-14 and its 269 rules are in "
-                        + ConfigDoc.DirName + " now (238 as overlay CSVs, 22 in the two "
-                        + "cyberweapon sheets, 9 in implants-slot08.csv). Nothing is missing "
-                        + "and no rule was lost. The rule plan below is the whole of it.");
+                        + "rule set is the files in " + ConfigDoc.DirName + ". Nothing is "
+                        + "missing. The rule plan below is the whole of it.");
                 }
             }
             catch (Exception e)
@@ -346,12 +266,9 @@ namespace CKFHardMode
             }
             try
             {
-                // Init reads the "modelrules" section itself and returns without
-                // hooking anything when it is off or unreadable, so there is no
-                // switch to test out here any more. It used to be tested here,
-                // from a bind read at the top of this method — above
-                // ConfigDoc.Init() — which is exactly the read that could not
-                // survive the move.
+                // Init checks its own slice gate and settings file and returns
+                // without hooking anything when it is off or unreadable, so
+                // there is no switch to test out here.
                 ModelRules.Init(harmonyEarly, rulesPath);
             }
             catch (Exception e)
@@ -379,7 +296,7 @@ namespace CKFHardMode
                     + "relaunch.");
             }
 
-            // Independent of the "modelrules" switch, so this subsystem's own
+            // Independent of the ModelRules switch, so this subsystem's own
             // setting is honoured on every launch. It is handed
             // ModelRules.ResolvedDbs, which is empty when ModelRules did not
             // run — and SelfCheck says so loudly rather than waiting.
@@ -443,12 +360,7 @@ namespace CKFHardMode
             // says so; nothing else in the plugin depends on it.
             if (type == null) return;
 
-            // ADDED 2026-09-13, not moved. The other eight subsystems had an
-            // "enabled" field at the root of their section and this one never
-            // did — sliderRangeMultiplier at 1.0 was the whole off switch. It
-            // gets a gate now because design.md section 3 requires one key per
-            // slice and gen_binds.py declares [Slices] Difficulty. No field is
-            // deleted from the "difficulty" section by this: there was none.
+            // Every slice has a [Slices] gate, and this is Difficulty's.
             if (!Slices.On("Difficulty"))
             {
                 Log.LogInfo(Slices.OffBecause("Difficulty",
@@ -457,7 +369,7 @@ namespace CKFHardMode
                 return;
             }
 
-            // The one key this section has. A section that could not be read
+            // The one key difficulty.json has. A file that could not be read
             // leaves SliderRange at 1.0, and WidenSliders returns immediately
             // on anything at or below 1 — so the sliders keep their stock
             // ranges, which is the same thing the key itself means at 1.
@@ -532,11 +444,10 @@ namespace CKFHardMode
 
     internal static class Patches
     {
-        // Static as well as instance. The slider bounds turned out to be STATIC
-        // properties — Run28 dumped a materialized GameDifficultyModel row and
-        // it has 66 instance properties, not one of them a bound. They are
-        // limits of the difficulty system, not per-save data, so there is one
-        // set of them for the whole game.
+        // Static as well as instance. The slider bounds are STATIC properties:
+        // a materialized GameDifficultyModel row has no bound among its
+        // instance properties. They are limits of the difficulty system, not
+        // per-save data, so there is one set of them for the whole game.
         private const BindingFlags Any = BindingFlags.Public | BindingFlags.NonPublic
                                        | BindingFlags.Instance | BindingFlags.Static;
 
@@ -564,18 +475,15 @@ namespace CKFHardMode
 
         // Every property on the type and its bases, declared level by level.
         //
-        // Two separate traps here, one per failed run.
+        // Two separate traps here.
         //
-        // Run27: a flat GetProperties returns non-public members only for the
-        // type itself, so anything declared further up is invisible. AccessTools
-        // walks the hierarchy asking each level for its DECLARED members, which
-        // is why it had been resolving PowerLevelScalar since Run19 while this
-        // scan saw nothing. This ORM inherits heavily — CoreGameDataModel keeps
-        // set_PowerLevel on CoreGameDataModelBase — so the walk is mandatory.
+        // A flat GetProperties returns non-public members only for the type
+        // itself, so anything declared further up is invisible. AccessTools
+        // walks the hierarchy asking each level for its DECLARED members, and
+        // so must this. This ORM inherits heavily (CoreGameDataModel keeps
+        // set_PowerLevel on CoreGameDataModelBase), so the walk is mandatory.
         //
-        // Run28: the flags left out Static, and the bounds ARE static. The row
-        // dump settled it — 66 instance properties on a materialized
-        // GameDifficultyModel and not one bound among them.
+        // The flags must include Static, because the bounds are static.
         private static Dictionary<string, PropertyInfo> AllProps(Type t)
         {
             var found = new Dictionary<string, PropertyInfo>(StringComparer.Ordinal);
