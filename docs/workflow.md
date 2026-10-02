@@ -2,6 +2,12 @@
 
 Use this page for the dump, edit, validate, test, build, and release sequence. Read the [architecture map](architecture.md) first if you do not yet know which component owns the change.
 
+## Save validated work to GitHub
+
+For routine development, run the checks covering the changed surface before committing. Review the diff and commit only the work that passed those checks; leave other agents' pending changes alone. Push each validated commit to `origin` so completed work is saved online. Use `main` for completed changes, or a `codex/` branch for work awaiting review. Never force-push shared history.
+
+A source push does not publish live tuning. The configuration stays in the game's `BepInEx/config`; publish its validated state as a GitHub Release asset using the release procedure below. Public version numbers change only for releases.
+
 ## Locate the live files
 
 All relative paths in this table start at the game directory:
@@ -22,7 +28,7 @@ All relative paths in this table start at the game directory:
 
 The game installation contains the only tuning copy. Hard Mode does not create missing settings files. `Defaults.Install` reports the 17 required paths declared by `Defaults.Expected` and stops there.
 
-Current settings documents and the plugin both carry version `4.1.0`; the settings-layout stamp and public plugin version remain independent and may diverge again.
+The public plugin version is `4.1.1`; the independent settings-layout stamp is `4.1.0`.
 
 Remove these legacy files when they appear:
 
@@ -192,6 +198,8 @@ The project deploys the DLL to `BepInEx\plugins` when that directory exists. A t
 
 ## Build a player release
 
+For the complete version-bump-through-GitHub checklist, use the [release playbook](release-playbook.md). This section describes what the builder requires and produces.
+
 Run the release builder from the repository root:
 
 ```bat
@@ -214,7 +222,7 @@ The builder writes:
 
 ```text
 dist\CKF-Config-Editor.exe
-dist\CKF-Hard-Mode-4.1.0.zip
+dist\CKF-Hard-Mode-4.1.1.zip
 ```
 
 `dist/` is private and ignored. Attach the finished archive to the GitHub Release manually.

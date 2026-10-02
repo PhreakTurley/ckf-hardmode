@@ -8,7 +8,8 @@ reposition tables. Enemy-stat levers are in
 
 The baseline capture is `[measured, Logs/PlayedLogB.log]`: one mission and 269
 traced unit turns in which the player was never engaged. Combat-reposition
-sections name their separate `Logs/Run71.log` sample explicitly.
+sections name their separate `Logs/Run71.log` sample explicitly. The later
+live-fight capture is `Logs/Run77.log`.
 
 ## Capture and instrumentation
 
@@ -85,9 +86,17 @@ and `SoundDetectRadius`.
 **Sleep is separate from unawareness.** `IsSleeping()`, and `RuleModel` RuleId 6
 `AI Sleepy Distance` 40 is what wakes a unit; `IsBehaviorAlwaysAwake()` exempts
 one. `IsBehaviorRunOnceAlerted()` changes movement once a unit is alerted.
-The two HeadHunter tiers sit above Aggro and are reached another way:
+The `AiAlarmLevel` enum places HeadHunterVIP and HeadHunterKnight above Aggro.
 `IsHeadHunter()`, `IsVIPHunter()`, and `RuleModel` 49-50, Base Head Hunter Chance
-15 and Head Hunter Chance Per Heat 4.
+15 and Head Hunter Chance Per Heat 4, are related metadata. The two values
+identify special enemy types, not a normal guard's next escalation step
+`[source: David]`.
+
+`[source: David]` VIP Hunters are specific story-related enemies. Head Hunters
+are elite enemies with a chance to spawn, outside the typical enemy roster.
+Apart from the target knowledge named as "cheating" in the turn log, both
+follow the normal enemy AI rules. Alerted is an elevated non-combat state that
+allows defensive talents, including the grenade action seen in Run77.
 
 ## Combat entry is gated by Aggro in the captured turns
 
@@ -108,8 +117,9 @@ and every turn that did not, did not.
 | Suspicious | 5 | SecurityOrder 2, Patrol 1 | 2, both after escalating to Aggro mid-turn |
 | Asleep | 3 | none | 0 |
 
-**An Alerted or Suspicious enemy is not fighting you. It is executing a security
-dispatch order.** Its turn is `Update 4.1) We have a valid destination with
+**In this Run71 sample, Alerted or Suspicious enemies following a security
+dispatch order did not enter the combat reposition path before reaching Aggro.**
+Their turn is `Update 4.1) We have a valid destination with
 source SecurityOrder at (x,y,z) which is N m away`, it walks there, and on
 arrival `UnitMover has stopped, Chasing State Returning to Planning from
 Chasing` and the turn ends. The distance it stops at is the order's destination,
@@ -121,8 +131,9 @@ Suspicious. An enemy that runs up, stops with action points to spare and ends
 its turn has arrived at its order, and nothing about range or the reposition
 planner is involved.
 
-`P) Alarm level spotted, will not skip` appears on exactly the 35 Aggro turns
-and nowhere else; `P) we are asleep (Asleep)` on the 3 Asleep turns.
+In Run71, `P) Alarm level spotted, will not skip` appears on exactly the 35
+Aggro-start turns and nowhere else; `P) we are asleep (Asleep)` on the 3 Asleep
+turns. Run77 also prints the spotted line for Spotted and HeadHunterVIP turns.
 
 ### Combat-reposition sequence
 
@@ -142,6 +153,64 @@ whose hint block said `Impassible Blocked? True` was `fullMove = True`; all 7
 `Inside Optimal: True`. A unit already in optimal range with a clear path is the
 case that shifts rather than advances `[fitted]` — the three printed hints do not
 determine it on their own.
+
+## Run77: a live fight and separate grenade actions
+
+`[measured, Logs/Run77.log]` The capture has 86 named unit turns across game
+turns 1–12. The starting alarm tiers were Alerted 43, Suspicious 15, Unaware 10,
+Aggro 9, Asleep 5, HeadHunterVIP 3 and Spotted 1 (`TURN LOG` blocks, lines
+8629–24030). Five turns changed tier: Qupo Spotted → Aggro (turn 2, line 9528),
+Sitha Suspicious → Aggro (turn 3, line 11829), Fifo Suspicious → Alerted (turn 5,
+line 14128), Zyn Suspicious → Alerted (turn 7, line 17296), and Drako Alerted →
+Aggro (turn 11, line 21640). These are end-of-turn observations; the log does
+not identify every event that caused a change.
+
+The buffered turn logs and the owner-tagged live traces both show 15 combat
+reposition calls: `PlannerExecuteReposition(..., fullMove)` was `True` 12 times
+and `False` 3 times (trace lines 9481–21603). The 15 turns started Aggro 9,
+HeadHunterVIP 3, Spotted 1, Suspicious 1 and Alerted 1. The last three ended
+Aggro. Sitha began with a SecurityOrder destination and Drako with a
+MonsterEvent destination; each logged another `AiCurrentState.Planning` pass
+before combat reposition (lines 11834–12023 and 21645–21668). Qupo's Spotted
+turn chose an enemy target, shifted, then logged `Attacking - Target is invalid`
+(lines 9535–9570). A reposition call therefore does not by itself establish a
+completed attack.
+
+`[measured, Logs/Run77.log]` Brain Worm was used before Qupo's turn (lines
+9034–9046), and Qupo's planning named Gux and Jeq, both enemies, as viable
+targets (lines 9535–9547). `[source: David]` Qupo was the Brain Worm target;
+the debuff made this first attacking enemy turn against its allies. The log
+does not itself name the Brain Worm target.
+
+`[measured, Logs/Run77.log]` Drako followed a SecurityOrder on turn 10 (lines
+20678–20685), then entered combat reposition and a Fighter action on turn 11
+(lines 21624–21633 and 21640–21692). `[source: David]` Drako was a normal guard
+sent by security dispatch; he turned, saw the team, and was the only other
+enemy who actually attacked during this mission.
+
+The three HeadHunterVIP turns name Dakota as the target and say `VIP Hunters
+cheat and always know about the VIP` (lines 12391–12560). Eight Aggro turns
+for Saga, War Elephant, Kabo and Pota instead print `Head Hunters cheat and
+always know about the target` while naming multiple mercs (lines 14525–16223).
+Those are the game's own planning messages; the capture does not reveal how
+the individual units were selected for these roles.
+
+`[measured, Logs/Run77.log]` Zyn (F-Duster, entity 1154) ran an
+`AIGrenadeFighter` action ending in `AttackImpact()` on turns 7, 8, 9, 11 and
+12 (live lines 17276–17290, 18055–18069, 19442–19456, 22213–22227 and
+23628–23643). Its named turn log ended Alerted on all five turns (lines
+17296–17304, 18075–18345, 19462–19475, 22233–22246 and 23649–23701).
+None of these turns logged combat reposition. Thus the standard combat
+reposition path does not cover this grenade action. The log does not name the
+grenade target.
+
+`[measured, Logs/Run77.log]` The trace setup announced patches for
+`AIController.CanMove` and `AIRepositionPlanner.AddTurnRepositionLog` (lines
+2206 and 2266), but neither emitted a live trace row. Other traced methods did,
+including 15 `PlannerExecuteReposition` rows and 52
+`PrintTurnRepositionLog` rows. The silence leaves it unresolved whether these
+two append/decision methods were not called or their patches did not observe
+the calls.
 
 ## Measured reposition-planner behavior
 

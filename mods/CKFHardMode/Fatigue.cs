@@ -1869,6 +1869,8 @@ namespace CKFHardMode
             var r = c.Resist;
             var parts = new List<string>();
             if (r.Safehouse != 0) parts.Add($"safehouse {r.Safehouse:+#;-#;0}");
+            if (r.Strength != 0) parts.Add($"strength {r.Strength:+#;-#;0} ({r.BaseStrength} base, {r.StrengthEffects:+#;-#;0} effects)");
+            if (r.StrengthUnreadable) parts.Add("strength UNREADABLE");
             if (r.Permanent != 0) parts.Add($"permanent {r.Permanent:+#;-#;0}");
             if (r.Timed != 0) parts.Add($"timed {r.Timed:+#;-#;0}");
             if (r.Gear != 0) parts.Add($"gear {r.Gear:+#;-#;0}");
@@ -2154,6 +2156,10 @@ namespace CKFHardMode
         {
             public int Total;
             public int Safehouse;
+            public int Strength;
+            public int BaseStrength;
+            public int StrengthEffects;
+            public bool StrengthUnreadable;
             public int Permanent;       // always-active, excluding the safehouse
             public int Timed;
             public int Gear;            // armour: the armor source and any ArmorEffect,
@@ -2275,6 +2281,39 @@ namespace CKFHardMode
                 AddSourceRows(got, r, seen, src, data);
             }
 
+            // [fitted, game wiki Character Attributes] Two effective Strength
+            // points grant one Wound Resist. Divide
+            // after summing effect bonuses so separate +1 effects combine.
+            try
+            {
+                var ch = Call(db, "ReadGameCharacter", new[] { typeof(long) },
+                              new object[] { charId });
+                long strength;
+                if (ch == null || !TryNum(Get(ch, "AttStrength"), out strength))
+                {
+                    r.StrengthUnreadable = true;
+                    if (resistNoted.Add("strength-unreadable"))
+                        Plugin.Log.LogWarning("Fatigue: ReadGameCharacter did not supply "
+                            + "AttStrength. Strength Wound Resist counts 0; the roll line says "
+                            + "UNREADABLE. Reported once.");
+                }
+                else
+                {
+                    r.BaseStrength = (int)strength;
+                    r.Strength = Math.Max(0, r.BaseStrength + r.StrengthEffects) / 2;
+                    r.Total += r.Strength;
+                }
+            }
+            catch (Exception e)
+            {
+                r.StrengthUnreadable = true;
+                var inner = e.InnerException ?? e;
+                if (resistNoted.Add("strength-threw"))
+                    Plugin.Log.LogWarning($"Fatigue: reading AttStrength for {charId} threw "
+                        + $"{inner.GetType().Name}: {inner.Message}. Strength Wound Resist "
+                        + "counts 0; the roll line says UNREADABLE. Reported once.");
+            }
+
             return r;
         }
 
@@ -2370,8 +2409,9 @@ namespace CKFHardMode
                                       HashSet<long> mine, ResistSource src, SourceStats st)
         {
             long points = Num(Get(eff, "WoundRes"));
-            if (points == 0) return;
-            st.Carrying++;
+            long strength = Num(Get(eff, "AttStrong"));
+            if (points == 0 && strength == 0) return;
+            if (points != 0) st.Carrying++;
 
             long cls = Num(Get(eff, "EffectClassification"));
 
@@ -2391,6 +2431,7 @@ namespace CKFHardMode
             }
             if (mine != null && effId != 0) mine.Add(effId);
 
+            r.StrengthEffects += (int)strength;
             r.Total += (int)points;
 
             // Armour, from the armor source or as an ArmorEffect through any
@@ -2510,10 +2551,9 @@ namespace CKFHardMode
 
         // The safehouse total is the same for every merc and does not change
         // mid-mission, so it is read once per MISSION — Resolve clears
-        // safehouseRead on each resolution. Three paths, because the
-        // computed property read 0 on a row dumped straight out of the reader —
-        // its Modules dictionary was not populated on that path — and a silent 0
-        // here would quietly delete the Triage Clinic from the mechanic.
+        // safehouseRead on each resolution. Read the built module rows directly:
+        // the safehouse row's Modules dictionary and ModuleSummary were both
+        // empty in run78, so neither could tell whether a clinic was built.
         private static int SafehouseResist(object db)
         {
             if (safehouseRead) return safehouseResist;
@@ -2544,16 +2584,64 @@ namespace CKFHardMode
                 int fromSummary = summary != null ? (int)Num(Get(summary, "WoundRes")) : 0;
 
                 int fromModules = 0;
-                foreach (var m in Rows(Get(house, "Modules")))
+                int moduleRows = 0;
+                int unresolved = 0;
+                bool complete = false;
+                try
                 {
-                    var data = Get(m, "ModuleData");
-                    if (data != null) fromModules += (int)Num(Get(data, "WoundRes"));
+                    var built = Call(db, "ReadGameSafehouseModules", Type.EmptyTypes,
+                                     new object[0]);
+                    if (built != null)
+                    {
+                        var modules = Rows(built, out complete);
+                        var dataDb = DataDbOf(db);
+                        long houseId;
+                        if (!TryNum(Get(house, "Id"), out houseId))
+                        {
+                            complete = false;
+                            Plugin.Log.LogWarning("Fatigue: safehouse Id was unreadable; built "
+                                + "module rows cannot be matched to it.");
+                        }
+                        else foreach (var m in modules)
+                        {
+                            long owner;
+                            if (!TryNum(Get(m, "GameSafehouseId"), out owner))
+                            {
+                                complete = false;
+                                unresolved++;
+                                continue;
+                            }
+                            if (owner != houseId) continue;
+                            moduleRows++;
+                            var moduleData = Get(m, "ModuleData");
+                            if (moduleData == null)
+                            {
+                                long typeId;
+                                if (TryNum(Get(m, "ModuleTypeId"), out typeId) && typeId != 0)
+                                    moduleData = Lookup(dataDb, "ReadSafehouseModule", typeId);
+                            }
+                            if (moduleData == null) { unresolved++; continue; }
+                            fromModules += (int)Num(Get(moduleData, "WoundRes"));
+                        }
+                    }
                 }
+                catch (Exception e)
+                {
+                    var inner = e.InnerException ?? e;
+                    if (resistNoted.Add("safehouse-modules-threw"))
+                        Plugin.Log.LogWarning($"Fatigue: ReadGameSafehouseModules threw "
+                            + $"{inner.GetType().Name}: {inner.Message}. Built module total "
+                            + "is unavailable. Reported once.");
+                }
+                if (!complete || unresolved != 0)
+                    Plugin.Log.LogWarning($"Fatigue: safehouse module read "
+                        + $"{(complete ? "complete" : "INCOMPLETE")}, {moduleRows} row(s), "
+                        + $"{unresolved} UNRESOLVED. The built module total may be partial.");
 
-                // Prefer the game's own number; fall back only when it is zero
-                // and something else disagrees, which is the unpopulated-Modules
-                // case rather than a genuine zero.
-                safehouseResist = computed != 0 ? computed
+                // A complete direct read is the authoritative built-module
+                // total. The computed paths remain fallbacks when it fails.
+                safehouseResist = complete && unresolved == 0 && moduleRows > 0 ? fromModules
+                                : computed != 0 ? computed
                                 : fromSummary != 0 ? fromSummary
                                 : fromModules;
 
@@ -2564,12 +2652,9 @@ namespace CKFHardMode
                 {
                     loggedSafehouseValue = safehouseResist;
                     Plugin.Log.LogInfo($"Fatigue: safehouse Wound Resist {safehouseResist:+#;-#;0} "
-                        + $"(GetWoundRes {computed}, ModuleSummary {fromSummary}, modules "
-                        + $"{fromModules}). A Triage Clinic is worth +10/+15/+20/+30 by level.");
-                    if (computed == 0 && (fromSummary != 0 || fromModules != 0))
-                        Plugin.Log.LogWarning("Fatigue: GetWoundRes read 0 while the modules did "
-                            + "not — the safehouse's Modules dictionary was not populated on this "
-                            + "read path. Using the modules.");
+                        + $"(GetWoundRes {computed}, ModuleSummary {fromSummary}, built modules "
+                        + $"{fromModules} from {moduleRows} row(s)). A Triage Clinic is worth "
+                        + "+10/+15/+20/+30 by level.");
                 }
                 return safehouseResist;
             }

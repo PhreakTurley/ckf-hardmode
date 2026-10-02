@@ -63,6 +63,7 @@ the live overlay for its current cells.
 
 - The Triage Clinic is `ModuleClassId 18`, module types 71–74. It grants `InjuryTime` -25/-30/-35/-40 and `WoundRes` 10/15/20/30 by upgrade level.
 - `WoundRes` is an integer column on both `EffectModel` and `SafehouseModuleModel`.
+- [fitted, game wiki] Every two effective Strength points add 1% Wound Resistance ([Character Attributes](https://cyberknightswiki.tresebrothers.com/Character_Attributes)). `Fatigue.ResistFor` combines `GameCharacterModel.AttStrength` with the deduplicated effects' `AttStrong` values before dividing by two. A live comparison with the game's character sheet would confirm the effective total.
 - `EffectClassification` values are explicit enum values, not declaration order. They were read from the metadata `Constant` table and cross-checked against effect 10507 (classification 12):
 
 | | | | | |
@@ -86,7 +87,8 @@ the live overlay for its current cells.
 - Cyberware mostly lowers the stat. 51 of the 83 implants that carry `WoundRes` are negative. [measured, reference save] Every merc on the roster sits between -10 and -39 from implants alone.
 - 0 of the 1,525 shipped job nodes carry `WoundRes`.
 - `GameArmorModel` [measured, interop property tables] carries `ArmorTypeId` and `GameEffectId`. It joins `ArmorData` (`ArmorModel`, with `ArmorEffectId`), `EffectData` and `EffectDataCrafted`.
-- `GameSafehouseModel` has three read paths for Wound Resist: `GetWoundRes`, `ModuleSummary.WoundRes`, and summing `Modules[].ModuleData.WoundRes`. [measured] A dumped row read `GetWoundRes 0` because its `Modules` dictionary was not populated on that read path.
+- [measured, `CoreRPG_v1.dll` metadata] `GameDb` declares `ReadGameSafehouseModules()`; `GameSafehouseModuleModel` declares `GameSafehouseId`, `ModuleTypeId`, and `ModuleData`; `DataDb` declares `ReadSafehouseModule(long)`. [fitted] `Fatigue.SafehouseResist` uses that reader and lookup to sum built module values once per mission. A live log with a known built clinic will confirm the path returns its row and value.
+- [measured, `Logs/run78.log:581`] The earlier safehouse-row paths all reported 0: `GetWoundRes 0`, `ModuleSummary 0`, `Modules 0`. They could not establish whether a clinic was built because the safehouse row's module cache was empty. The direct built-module reader is now used, and the log reports its row count and unresolved rows.
 
 ## Hard Mode fatigue subsystem
 
@@ -175,7 +177,8 @@ A merc's total Wound Resist is subtracted from their chance point for point, at 
 
 | Source | Reader |
 |---|---|
-| Safehouse | `ReadGameSafehouses()`, once per mission. `GetWoundRes`, then `ModuleSummary.WoundRes`, then the module sum, with a warning when they disagree |
+| Safehouse | `ReadGameSafehouseModules()` once per mission, with `DataDb.ReadSafehouseModule` for rows lacking `ModuleData`. The safehouse row's computed and summary values are fallbacks if the direct read is incomplete |
+| Strength | `ReadGameCharacter.AttStrength` plus deduplicated `EffectData.AttStrong`; one resist point per two effective Strength points |
 | Traits | `ReadGameCharacterTraitsByCharacter` |
 | Character effects | `ReadGameCharacterEffects` |
 | Implants | `ReadGameCharacterImplants` |
@@ -225,9 +228,9 @@ The first lookup per reader also logs `returned rows with no joined EffectData`.
 `tests/fatigue/` checks the built DLL by reflecting over `Fatigue`'s private
 members. It derives curve expectations from the config on disk, reads tier ids
 from `Options.TraitIds`, and covers highest-tier-held scanning, stacking, the
-shared clamp, and pairwise trait-id validation. [unverified] No clean run after
-that harness rewrite is recorded here; check `TASKS.md` before treating the
-harness as current evidence.
+shared clamp, pairwise trait-id validation, Strength deduplication, and the built-clinic fallback.
+[measured, `Logs/release-4.1.1-fatigue.txt`] The harness passes against the
+4.1.1 DLL and live fatigue configuration. Live coverage remains listed below.
 
 ## Measured runtime coverage
 

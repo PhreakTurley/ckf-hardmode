@@ -8,7 +8,7 @@ does not duplicate that reference.
 
 The plugin changes how the game plays. Reading the game (table dumps, member dumps, method traces) is done by CKF Data Dump (`mods/CKFDataDump/`, not published), a separate plugin with its own GUID and config. Neither plugin depends on the other.
 
-The public plugin version is `4.1.0` (`Plugin.PluginVersion` and
+The public plugin version is `4.1.1` (`Plugin.PluginVersion` and
 `CKFHardMode.csproj`). The independent settings-layout stamp is `4.1.0`
 (`Defaults.DocVersion` and each settings file's `_version`).
 
@@ -214,10 +214,11 @@ A Harmony postfix on `GameDifficultyModel.ReconfigureDifficulty` and `ConfigureD
 
 ### Fatigue
 
-`logGrants` logs one line per merc per mission, plus a summary. The head line ends `Tiers: 2007 -> 2009 -> 2014`, whatever the three `tier<N>.traitId` values are. Each merc line names the tier they were on, their roll against their threshold, the tier and trait they moved to, and the Wound Resist behind the threshold, for example `[<base> base - +N resist (…, gear +N); read trait N, effect N, implant N (N with WoundRes, N via DataDb), job N]`.
+`logGrants` logs one line per merc per mission, plus a summary. The head line ends `Tiers: 2007 -> 2009 -> 2014`, whatever the three `tier<N>.traitId` values are. Each merc line names the tier they were on, their roll against their threshold, the tier and trait they moved to, and the Wound Resist behind the threshold, including `safehouse` and `strength` contributions, for example `[<base> base - +N resist (strength +N, gear +N); read trait N, effect N, implant N (N with WoundRes, N via DataDb), job N]`.
 
 - The summary counts grants per tier, then `clear` and `already at the top of the track`.
 - `via DataDb`: the row came back without its joined effect, so the plugin looked the effect up. `UNRESOLVED`: that lookup failed and the row counted as 0.
+- `safehouse module read INCOMPLETE` or `UNRESOLVED`: the built-module total could not be fully read, so the plugin uses the safehouse row's computed or summary value where available.
 - `Fatigue: a save was loaded — …`: the load hook fired. If this line never appears after a load, report it; the replay guard still covers reloads.
 - A warning naming `ReadGameCharacter`: that reader failed, so no merc is recognised as the Cyber Knight.
 - `Solo missions are exempt`: missions with one merc roll nobody.

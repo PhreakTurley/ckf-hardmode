@@ -4056,7 +4056,7 @@ MIGRATION_DOC_VERSION = '4.1.0'
 # selftest block. The release path still catches a bad stamp, because
 # make_release.build runs --selftest over a snapshot whose .cfg carries the real
 # plugin version.
-MIGRATION_PLUGIN_VERSION = '4.1.0'
+MIGRATION_PLUGIN_VERSION = '4.1.1'
 
 # The BepInEx header line, as BepInEx itself writes it: the plugin name, then
 # " v" and the version. Anchored to the WHOLE first line, so a line that only

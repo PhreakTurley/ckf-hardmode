@@ -10,7 +10,7 @@ This project is not affiliated with Trese Brothers Games. Trese Brothers cannot 
 
 Download the current archive from the repository's [Releases page](https://github.com/PhreakTurley/ckf-hardmode/releases/latest). Extract it into the folder that contains `CyberKnights.exe`, then follow the included `README.txt`.
 
-The plugin identifies itself as version `4.1.0`. Version `1.0.0` was the first public release. References to versions `2.x` through `3.0.0` describe private development builds.
+The plugin identifies itself as version `4.1.1`. Version `1.0.0` was the first public release. References to versions `2.x` through `3.0.0` describe private development builds.
 
 ## Back up your save
 
