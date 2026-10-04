@@ -37,8 +37,12 @@ off to discard any already materialized base-damage edits.
 `GameWeaponModel.CommerceItemSpecialRules` for content id 13000 while the
 mechanic is active. It copies the list and preserves its existing entries,
 including crit and stun rules. Other weapon ids and the disabled slice return
-the original result. Failed text/list readback preserves the original result
-and logs `StunClub UI: complete=false`.
+the original result. `NativeValueList.Add` unboxes each native value before
+calling the list's native `Add` method. Every copied and appended entry is read
+back from the destination list; its title, description, talent and program
+references must match before the copy is published. The new text-only entry
+has null talent and program references. Failed readback preserves the original
+result and logs `StunClub UI: complete=false`.
 
 The English templates live in `mods/CKFHardMode/Locales/en-US.json`, embedded
 in the DLL by `CKFHardMode.csproj`; the placeholder uses the mechanic's
@@ -65,6 +69,33 @@ UI declarations. It also declares `I18n.translationData`,
 These declarations and a managed Harmony result replacement are checked by
 the private harness. [unverified] Rendering the new entry in the actual
 inventory/hover UI still needs the live check below.
+
+### Native list marshalling and the click crash
+
+[measured] `Logs/StunClub-ui-crash-1791091501561963000.log`, rows 637-638,
+records two `rules 2 -> 3` UI results with `complete=true`. That implementation
+checked the entry before insertion and the list count afterward; it did not
+read the inserted payload back. Windows Application event 1000 at
+2026-10-03 22:24 local time, report
+`a4904ec8-00b6-4c6b-8a63-cb17ffdd335b`, records `CyberKnights.exe` failing in
+`GameAssembly.dll` with `0xc0000005`, offset `0x762dc6`. It supplies no native
+call stack.
+
+[measured] In the installed `CoreRPG_v1.dll`, `CommerceItemSpecialRule` derives
+from `Il2CppSystem.ValueType`, but its CLR proxy is a reference type.
+The installed `Il2Cppmscorlib.dll`, `List<T>.Add` marshalling CIL, branches on
+CLR `typeof(T).IsValueType`. For this proxy it passes `Il2CppObjectBaseToPtr`
+as the value argument to `il2cpp_runtime_invoke`, without unboxing. Its
+`get_Item` wrapper instead uses `PointerToValue<T>` for the returned value.
+The runtime declares `IL2CPP.il2cpp_object_unbox`, `il2cpp_runtime_invoke`
+and `Il2CppException.RaiseExceptionIfNecessary`, used by `NativeValueList`.
+
+[fitted] The boxed value passed to native `Add` is the crash cause being tested.
+The replacement passes its unboxed payload and checks the destination entries.
+The private harness checks that argument path with a fake native invocation;
+it does not execute IL2CPP or consume the rule in the game's UI. [unverified]
+The corrected insertion removes the live click crash. Perform the live UI
+check below before treating the repair as confirmed.
 
 ## Evidence and remaining verification
 
@@ -154,4 +185,7 @@ calculation-method lookup against the installed interop assembly, including
 the nested hint type, and checks failure diagnostics. Emitted log events are
 checked after exhausting both sample budgets, including continued stat
 restoration and failure reporting. It does not execute native game methods
-or test damage semantics or talent coverage.
+or test damage semantics or talent coverage. Its UI checks include the installed
+value-proxy declarations, the unboxed argument passed to a fake native call,
+exception forwarding, destination-payload validation and managed Harmony
+result replacement. Native UI consumption still requires the live check.

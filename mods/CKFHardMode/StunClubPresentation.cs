@@ -17,7 +17,9 @@ namespace CKFHardMode
         private static ConstructorInfo listConstructor, ruleConstructor, textConstructor;
         private static PropertyInfo count, item, title, description, translationData,
             asObject, dictionary, localeItem, localeValue;
-        private static MethodInfo add, containsKey;
+        private static MethodInfo containsKey;
+        private static Action<object, object> append;
+        private static PropertyInfo talent, program;
         private static Dictionary<string, string> english;
         private static int traces;
         private static readonly HashSet<string> warnings = new HashSet<string>();
@@ -49,7 +51,11 @@ namespace CKFHardMode
             item = list.GetProperty("Item", new[] { typeof(int) });
             if (item == null || item.PropertyType != rule || !item.CanRead)
                 throw new MissingMemberException(list.FullName, "Item[int]");
-            add = list.GetMethod("Add", new[] { rule }) ?? throw new MissingMethodException(list.FullName, "Add");
+            append = new NativeValueList(list, rule).Add;
+            talent = rule.GetProperty("RuleTalent") ?? throw new MissingMemberException(rule.FullName, "RuleTalent");
+            program = rule.GetProperty("RuleProgram") ?? throw new MissingMemberException(rule.FullName, "RuleProgram");
+            if (!talent.CanRead || !talent.CanWrite || !program.CanRead || !program.CanWrite)
+                throw new InvalidOperationException("native special-rule link fields are not readable/writable");
             title = StunClub.RequireProperty(rule, "RuleTitle", typeof(string), true);
             description = StunClub.RequireProperty(rule, "RuleDescription", typeof(string), true);
             translationData = StunClub.RequireProperty(i18n, "translationData", node);
@@ -95,16 +101,28 @@ namespace CKFHardMode
                     var existing = item.GetValue(__result, new object[] { i });
                     if (existing != null && (string)title.GetValue(existing) == caption
                         && (string)description.GetValue(existing) == detail) present = true;
-                    add.Invoke(copy, new[] { existing });
+                    append(copy, existing);
+                    var retained = item.GetValue(copy, new object[] { i });
+                    if ((string)title.GetValue(retained) != (string)title.GetValue(existing)
+                        || (string)description.GetValue(retained) != (string)description.GetValue(existing)
+                        || !SameNativeLink(talent.GetValue(retained), talent.GetValue(existing))
+                        || !SameNativeLink(program.GetValue(retained), program.GetValue(existing)))
+                        throw new InvalidOperationException("copied native special-rule payload did not match its source");
                 }
                 if (!present)
                 {
                     var entry = ruleConstructor.Invoke(Array.Empty<object>());
                     title.SetValue(entry, caption);
                     description.SetValue(entry, detail);
+                    talent.SetValue(entry, null);
+                    program.SetValue(entry, null);
                     if ((string)title.GetValue(entry) != caption || (string)description.GetValue(entry) != detail)
                         throw new InvalidOperationException("special-rule text setter discarded a write");
-                    add.Invoke(copy, new[] { entry });
+                    append(copy, entry);
+                    var retained = item.GetValue(copy, new object[] { originalCount });
+                    if ((string)title.GetValue(retained) != caption || (string)description.GetValue(retained) != detail
+                        || talent.GetValue(retained) != null || program.GetValue(retained) != null)
+                        throw new InvalidOperationException("inserted native special-rule payload did not match its text/links");
                 }
                 int resultCount = (int)count.GetValue(copy);
                 if (resultCount != originalCount + (present ? 0 : 1))
@@ -121,6 +139,15 @@ namespace CKFHardMode
                 if (warnings.Add(e.Message))
                     Plugin.Log.LogError("StunClub UI: complete=false; existing rules preserved. " + e);
             }
+        }
+
+        private static bool SameNativeLink(object left, object right)
+        {
+            if (left == null || right == null) return left == null && right == null;
+            if (ReferenceEquals(left, right)) return true;
+            var p = left.GetType().GetProperty("Pointer");
+            return p != null && p.PropertyType == typeof(IntPtr)
+                && (IntPtr)p.GetValue(left) == (IntPtr)p.GetValue(right);
         }
 
         private static string LocalizedText(object root, string key)

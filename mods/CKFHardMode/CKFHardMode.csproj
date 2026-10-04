@@ -5,6 +5,7 @@
     <AssemblyName>CKFHardMode</AssemblyName>
     <Version>4.1.1</Version>
     <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!-- BepInEx loads plugins by reflection; no entry point needed -->
     <OutputType>Library</OutputType>
   </PropertyGroup>
@@ -37,8 +38,8 @@
   </ItemGroup>
 
   <!--
-    THE CONFIG FILES ARE NOT IN THIS ASSEMBLY. This project embeds no
-    resources: the DLL is the engine and nothing else.
+    THE CONFIG FILES ARE NOT IN THIS ASSEMBLY. Configuration travels as
+    loose files; only the weapon UI translation templates are embedded.
 
     The config files a player needs travel as loose files in the release zip,
     under BepInEx\config\, and extracting the zip is what puts them on disk.
