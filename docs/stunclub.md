@@ -58,10 +58,17 @@ off to discard any already materialized base-damage edits.
   `RPG.Core.Constants`. The offline harness reproduces the old lookup failure
   with the short name and resolves both calculation methods with the full
   nested name used by `StunClub.CalculationTargets`.
-- [unverified] A temporary write to `ActiveEffect.PureDamageMelee` reaches
-  the native damage calculation and stacks identically with Strength and
-  other kinetic-as-extra-pure buffs. Metadata establishes declarations,
-  not implementation or caller paths.
+- [measured] `Logs/StunClub-live-20261004.log`, rows 549-551,
+  records `WeaponModel[13000].PureDamage1` changing from 80 to zero, with
+  the other pure/ballistic fields zero. Row 652 records a club hit with
+  `PureDamageMelee 48 -> 98 -> 48`, contribution 50 and `complete=true`.
+  This establishes additive stat input and restoration for the captured hit.
+- [unverified] The native damage formula uses that input identically to
+  Strength and other kinetic-as-extra-pure buffs. The scope trace does not
+  establish the formula or how kinetic damage bonuses enter it.
+- [unverified] An attack with another weapon while the club remains equipped
+  receives no club bonus in a live game. The offline harness covers this
+  exclusion; the captured live hit identifies the club.
 - [unverified] Slashslide and Preempt both reach the patched calculations
   with the club identified as the weapon used. In particular, a chance call
   using the club while `ActiveWeapon` still names another weapon must be
