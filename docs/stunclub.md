@@ -69,11 +69,16 @@ off to discard any already materialized base-damage edits.
 - [unverified] An attack with another weapon while the club remains equipped
   receives no club bonus in a live game. The offline harness covers this
   exclusion; the captured live hit identifies the club.
-- [unverified] Slashslide and Preempt both reach the patched calculations
-  with the club identified as the weapon used. In particular, a chance call
-  using the club while `ActiveWeapon` still names another weapon must be
-  checked against the corresponding hit call; the two hooks deliberately
-  do not infer a later hit's weapon from an earlier preview.
+- [measured] `Logs/StunClub-slashslide-retest-20261004.log`, rows 592-593,
+  records two club hit calculations with `PureDamageMelee 12 -> 62 -> 12`,
+  contribution 50 and `complete=true`. David identified this session as a
+  Slashslide test; the trace itself does not record talent names. Both
+  captured club hits received additive stat input and restored it.
+- [unverified] Preempt reaches the patched hit calculation with the club
+  identified as the weapon used. Talent attacks selecting the club while
+  `ActiveWeapon` names another weapon also remain unverified: a chance call
+  using the club must be checked against the corresponding hit call. The
+  hooks do not infer a later hit's weapon from an earlier preview.
 
 ## Live acceptance checks
 
@@ -93,16 +98,21 @@ game's ordinary percentage calculation, including its rounding and critical
 behavior. A successful scope log alone does not establish that formula.
 
 Sampling is synchronous entry/exit of `CalculateAttackChance` and
-`ResolveDamageOnHit`, not a turn tick. The first 40 calculations per launch
-are logged, including exclusions and previews; later calls are still changed
-but are not logged. Restart for a fresh capture if previews exhaust the cap.
-No rows do not establish that a talent bypassed these methods. Check the
-startup hook report and the sample cap, and inspect any `complete=false`
-errors before drawing a conclusion.
+`ResolveDamageOnHit`, not a turn tick. Per launch, the first 40 chance
+calculations and the first 40 hits have separate logging budgets, including
+other weapons and enemy attacks. Preview traffic never consumes the hit
+budget. Each phase emits an explicit `trace limit reached` notice after its
+40th sample. Later calls are still changed and restored but are not sampled;
+failure diagnostics remain enabled regardless of these limits. Restart for
+a fresh capture if the relevant phase reaches its limit. No rows do not
+establish that a talent bypassed these methods. Check the startup hook report,
+limit notices and any `complete=false` errors before drawing a conclusion.
 
 The private `tests/stunclub` harness exercises the real plugin code with
 fake interop objects for identity, additive stat input, nested different
 weapons, reversal and exception restoration. It also runs the production
 calculation-method lookup against the installed interop assembly, including
-the nested hint type, and checks failure diagnostics. It does not execute
-native game methods or test damage semantics or talent coverage.
+the nested hint type, and checks failure diagnostics. Emitted log events are
+checked after exhausting both sample budgets, including continued stat
+restoration and failure reporting. It does not execute native game methods
+or test damage semantics or talent coverage.

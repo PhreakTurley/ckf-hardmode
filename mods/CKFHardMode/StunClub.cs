@@ -12,13 +12,14 @@ namespace CKFHardMode
     {
         internal const long WeaponId = 13000;
         internal const long ExtraPurePercent = 50;
+        internal const int TraceLimit = 40;
         private static bool enabled;
         private static Type gameWeaponType, weaponType, dualWeaponType;
         private static MethodInfo tryCast;
         private static PropertyInfo pointer, activeWeapon, activeEffect, weaponTypeId,
             weaponId, pureMelee;
         private static PropertyInfo[] damageColumns;
-        private static int traces, rowTraces;
+        private static int chanceTraces, hitTraces, rowTraces;
         private static readonly HashSet<string> warnings = new HashSet<string>();
 
         // Nested calls can use another weapon on the same entity. Remember the
@@ -98,8 +99,10 @@ namespace CKFHardMode
                 Plugin.Log.LogInfo("StunClub: enabled for WeaponModel[13000]. Base pure/ballistic "
                     + "damage is cleared; calculation scopes add 50 to ActiveEffect.PureDamageMelee "
                     + "and restore it afterwards. Hooks: CalculateAttackChance, ResolveDamageOnHit, "
-                    + "DataDb.GetRowWeaponModel. First 40 calculations log weapon identity, the "
-                    + "temporary stat and restoration. Talent coverage and stacking need a live check.");
+                    + "DataDb.GetRowWeaponModel. First " + TraceLimit + " chance calculations and first "
+                    + TraceLimit + " hits log weapon identity, the temporary stat and restoration; "
+                    + "each phase reports when its separate trace limit is reached. "
+                    + "Talent coverage and stacking need a live check.");
             }
             catch (Exception e)
             {
@@ -222,13 +225,24 @@ namespace CKFHardMode
             {
                 long during = (long)pureMelee.GetValue(__state.Effect);
                 Restore(__state);
-                if (traces++ < 40)
+                // Preview traffic must never consume the hit sample budget.
+                bool isHit = __state.Phase == "hit";
+                int count = isHit ? hitTraces : chanceTraces;
+                if (count < TraceLimit)
+                {
+                    if (isHit) hitTraces++;
+                    else chanceTraces++;
                     Plugin.Log.LogInfo("StunClub: " + __state.Phase + " "
                         + (__state.UsedWeaponId == -1 ? "combined dual provider"
                             : "WeaponModel[" + __state.UsedWeaponId + "]")
                         + " PureDamageMelee " + __state.Before
                         + " -> " + during + " -> " + pureMelee.GetValue(__state.Effect)
                         + "; club contribution " + __state.AppliedBonus + "; complete=true.");
+                    if (count + 1 == TraceLimit)
+                        Plugin.Log.LogInfo("StunClub: " + __state.Phase + " trace limit reached ("
+                            + TraceLimit + "); subsequent " + __state.Phase + " calculations are not logged. "
+                            + "Stat edits and restoration remain active; the other phase has a separate limit.");
+                }
             }
             catch (Exception e) { Refuse("restoration", e); }
         }
