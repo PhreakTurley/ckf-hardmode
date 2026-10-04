@@ -224,7 +224,7 @@ SECTION_GROUPS = [
         # different' should find one place rather than three. Each table keeps
         # its own file and its own toggle." (design.md)
         {'id': 'weapons', 'title': 'Player Weapons',
-         'subsystems': ['GearClasses', 'CyberweaponsLasers', 'CyberweaponsClaws']},
+         'subsystems': ['GearClasses', 'CyberweaponsLasers', 'CyberweaponsClaws', 'StunClub']},
         {'id': 'consumables', 'title': 'Consumables',
          'subsystems': ['ConsumablesChems', 'ConsumablesDevices',
                         'ConsumablesGrenades', 'ConsumablesMatrix',
@@ -10096,7 +10096,7 @@ def selftest(config_arg, frozen_exe=None):
     # schemas (cfg gates, json fields and rulemodel's `"in": "reference"`
     # field). It changes only when a schema gains or loses a documented field,
     # and then this literal moves with it.
-    t.check('there are %d field docs to check' % len(all_docs), len(all_docs) == 86, len(all_docs))
+    t.check('there are %d field docs to check' % len(all_docs), len(all_docs) == 87, len(all_docs))
     emptied, unbalanced, mangled, changed = [], [], [], []
     for sub, path, doc in all_docs:
         flat = ' '.join(doc.split())

@@ -4,8 +4,9 @@ The grammar of `schema/*.schema.json`: which keys a schema file may carry, what 
 
 Each subsystem or slice has one schema file. The schemas are the only declaration of what is configurable. `check_schema.py` reports any key on disk that no schema declares as `STALE`.
 
-Current declarations: plugin version `4.1.0`, settings-layout stamp `4.1.0`,
-and 45 cfg keys (`General.Enabled` plus 44 slice toggles). After changing a
+Current declarations: 46 cfg keys (`General.Enabled` plus 45 slice toggles).
+The [workflow](../docs/workflow.md#maintain-the-two-versions) owns the independent
+plugin version and settings-layout stamp. After changing a
 schema, regenerate the binds, cfg template and generated config reference, then
 run the checks in [Generators](#generators). Do not hand-edit those generated
 outputs.
@@ -97,7 +98,7 @@ Nothing in the schema marks which kind a file is. The schema also declares no ov
 A slice is a schema that declares `targets.cfg`. Its toggle is the schema's one
 `"in": "cfg"` field, `Slices.<subsystem>`, a `bool`. `general.schema.json`
 follows the same one-file-one-key rule with `General.Enabled`, the master
-switch. `Plugin.Binds.g.cs` declares 45 keys: `General.Enabled` plus 44
+switch. `Plugin.Binds.g.cs` declares 46 keys: `General.Enabled` plus 45
 `Slices.*`.
 
 A slice schema looks like this (`rulemodel.schema.json`, trimmed):

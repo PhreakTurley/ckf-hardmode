@@ -2,13 +2,13 @@
 //
 // SCOPE. This plugin changes how the game plays and does nothing else.
 // Settings subsystems, in the order Load() initialises them (that sequence is
-// the canonical list). Each reads its own settings file,
-// ckf.hardmode.d/<file>.json, through ConfigDoc:
+// the canonical list). JSON settings are read from each subsystem's
+// ckf.hardmode.d/<file>.json through ConfigDoc; StunClub uses its cfg switch:
 //
 //   ModelRules    the rule engine: applies every overlay and lever sheet in
 //                 ckf.hardmode.d and inserts cloned rows (modelrules.json)
-//   SelfCheck     the regression suite (a diagnostic; the one switch off by
-//                 default), initialised beside ModelRules because it reads
+//   SelfCheck     the regression suite (an opt-in diagnostic), initialised
+//                 beside ModelRules because it reads
 //                 the database types ModelRules resolved (selfcheck.json)
 //   PowerLevel    lift the mission Power Level ceiling of 10 (powerlevel.json)
 //   Progression   replace the Team Power Level a mission awards (teampl.json)
@@ -21,6 +21,8 @@
 //                 (missions.json)
 //   RewardCurve   replace the base reward-per-power-level curve
 //                 (rewardcurve.json)
+//   StunClub      optional attack-scoped club bonus (cfg switch only);
+//                 implementation and live checks in docs/stunclub.md
 //   Difficulty    widen the custom-difficulty sliders past their stock
 //                 bounds so values are set on the in-game sliders
 //                 (difficulty.json)
@@ -352,6 +354,12 @@ namespace CKFHardMode
             {
                 Log.LogError($"RewardCurve failed to initialise: {e}");
             }
+
+            try
+            {
+                StunClub.Init(new Harmony(PluginGuid + ".stunclub"));
+            }
+            catch (Exception e) { Log.LogError($"StunClub failed to initialise: {e}"); }
 
             // ---- "difficulty" ------------------------------------------------
             //

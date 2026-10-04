@@ -99,7 +99,7 @@ namespace CKFHardMode
             internal override Type ValueType { get { return typeof(T); } }
         }
 
-        /// <summary>Every key in ckf.hardmode.cfg, 45 of them.</summary>
+        /// <summary>Every key in ckf.hardmode.cfg, 46 of them.</summary>
         internal static readonly Def[] All =
         {
             new Def<bool>("General", "Enabled",               true),
@@ -137,6 +137,7 @@ namespace CKFHardMode
             new Def<bool>("Slices",  "RuleModel",             true),
             new Def<bool>("Slices",  "SelfCheck",             false),
             new Def<bool>("Slices",  "SpawnWeights",          true),
+            new Def<bool>("Slices",  "StunClub",              false),
             new Def<bool>("Slices",  "TalentsAEX",            true),
             new Def<bool>("Slices",  "TalentsCS",             true),
             new Def<bool>("Slices",  "TalentsCyberKnight",    true),

@@ -43,6 +43,7 @@ This document is the single destination for the settings prose. A fact that is n
 | [RuleModel](#rulemodel) | Game Rule Constants | — | 1 | 2 | 1 |
 | [SelfCheck](#selfcheck) | Regression Suite | `ckf.hardmode.d/selfcheck.json` | 1 | 3 | 1 + 1 per-field gate(s) |
 | [SpawnWeights](#spawnweights) | Enemy Spawn Weights | — | 1 | 1 | 1 |
+| [StunClub](#stunclub) | Stun Club | — | 1 | 1 | 1 |
 | [TalentsAEX](#talentsaex) | Agent EX Talent Balance | — | 1 | 1 | 1 |
 | [TalentsCS](#talentscs) | Cybersword Talent Balance | — | 1 | 1 | 1 |
 | [TalentsCyberKnight](#talentscyberknight) | Cyber Knight Talent Balance | — | 1 | 1 | 1 |
@@ -56,7 +57,7 @@ This document is the single destination for the settings prose. A fact that is n
 | [TalentsWraith](#talentswraith) | Wireghost Talent Balance | — | 1 | 1 | 1 |
 | [Progression](#progression) | Team Power Level Award | `ckf.hardmode.d/teampl.json` | 1 | 3 | 1 |
 
-45 subsystems, 45 cfg keys, 86 fields in total.
+46 subsystems, 46 cfg keys, 87 fields in total.
 
 ## Retroactive controls — read before changing these
 
@@ -108,6 +109,7 @@ One row per `Section.Key` in `ckf.hardmode.cfg`. `schema/check_schema.py` report
 | `Slices.RuleModel` | `bool` | `true` | [RuleModel](#rulemodel) | Enable Game Rule Constants |
 | `Slices.SelfCheck` | `bool` | `false` | [SelfCheck](#selfcheck) | Enable Regression Suite |
 | `Slices.SpawnWeights` | `bool` | `true` | [SpawnWeights](#spawnweights) | Enable Enemy Spawn Weights |
+| `Slices.StunClub` | `bool` | `false` | [StunClub](#stunclub) | Enable Stun Club Bonus |
 | `Slices.TalentsAEX` | `bool` | `true` | [TalentsAEX](#talentsaex) | Enable Agent EX Talent Balance |
 | `Slices.TalentsCS` | `bool` | `true` | [TalentsCS](#talentscs) | Enable Cybersword Talent Balance |
 | `Slices.TalentsCyberKnight` | `bool` | `true` | [TalentsCyberKnight](#talentscyberknight) | Enable Cyber Knight Talent Balance |
@@ -120,7 +122,7 @@ One row per `Section.Key` in `ckf.hardmode.cfg`. `schema/check_schema.py` report
 | `Slices.TalentsWarMachine` | `bool` | `true` | [TalentsWarMachine](#talentswarmachine) | Enable Warmachine Talent Balance |
 | `Slices.TalentsWraith` | `bool` | `true` | [TalentsWraith](#talentswraith) | Enable Wireghost Talent Balance |
 
-45 key(s).
+46 key(s).
 
 ## Every sidecar field
 
@@ -2689,6 +2691,58 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 | Field | GUI help |
 |---|---|
 | `Slices.SpawnWeights` | Turn this off and the mod skips this page's files, so nothing on this page is applied. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
+## StunClub
+
+**Stun Club** &nbsp;·&nbsp; `.cfg` section `[StunClub]` &nbsp;·&nbsp; declared in `schema/stunclub.schema.json`
+
+An optional attack-scoped change for WeaponModel 13000. StunClub.AfterWeaponRow clears this row's mode 1 and 2 base pure and ballistic damage after overlays. Kinetic damage and WeaponEffect are untouched. StunClub.Enter temporarily adds 50 percentage points to the attacker's ActiveEffect.PureDamageMelee during CalculateAttackChance and ResolveDamageOnHit, then restores it in a postfix and finalizer. The game computes the damage; the plugin does not calculate a separate damage packet. The chance hook selects its explicit weapon argument. The hit hook selects attacker.ActiveWeapon, because ResolveDamageOnHit has no weapon argument. GameWeaponModel.WeaponTypeId and WeaponModel.WeaponId identify the club; equipped loadout slots are never searched. Unsupported providers or unreadable members disable further edits and log complete=false. [unverified] Identical additive stacking with Strength and other buffs, and coverage of Slashslide and Preempt, await a live session. See docs/stunclub.md for the acceptance checks. Off installs none of these hooks. Relaunch and reload to discard the runtime edits. This subsystem does not write to the save and is independent of ModelRules.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Give the low-level Stun Club kinetic-only base damage and add 50 percentage points to its kinetic-as-extra-pure bonus during attacks. Turn this off and relaunch to reverse both changes. It does not change the other stunclubs.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] StunClub = true           ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, the master switch in `ckf.hardmode.cfg`. Its bail-out in `Plugin.Load()` sits above every subsystem init, so `Enabled = false` stops every subsystem.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.StunClub` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Stun Club Bonus | Opt-in switch for StunClub.cs. Default false. On installs the base-damage and calculation hooks; off installs none. The first 40 calculations report the weapon content id, temporary PureDamageMelee value and restoration. This logs successful exclusions too; complete=false means the calculation could not be instrumented, not that the club was absent. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.StunClub` | Apply both Stun Club changes. Turn off and relaunch to restore the ordinary behavior. |
 
 1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
 

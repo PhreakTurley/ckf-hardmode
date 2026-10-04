@@ -142,6 +142,10 @@ SelfCheck = false
 SpawnWeights = true
 
 # Setting type: Boolean
+# Default value: false
+StunClub = false
+
+# Setting type: Boolean
 # Default value: true
 TalentsAEX = true
 

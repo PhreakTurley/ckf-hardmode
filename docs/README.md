@@ -72,6 +72,7 @@ Always run pointer validation before launching a configuration that changes IDs 
 | Limit-break trait rows | [Limit-break traits](limit-break-traits.md) |
 | Talent tally values and special-code weights | [Talent values and special codes](talent-value-specialcodes.md) |
 | Armour family reconstruction | [Armour groups](armour-groups.md) |
+| Optional low-level Stun Club attack bonus | [Stun Club](stunclub.md) |
 
 Mechanic pages separate observed results from explanations. Preserve their evidence tags and citations when editing them.
 
