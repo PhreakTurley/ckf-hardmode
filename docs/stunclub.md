@@ -50,8 +50,8 @@ in the DLL by `CKFHardMode.csproj`; the placeholder uses the mechanic's
 
 | Localization key | English template |
 |---|---|
-| `CKFHardMode.Weapon.KineticAsExtraPure.Title` | `+{0}% Kinetic as Extra Pure Damage` |
-| `CKFHardMode.Weapon.KineticAsExtraPure.Description` | `Attacks with this weapon gain {0}% of Kinetic damage as extra Pure damage. Adds to other Kinetic as Extra Pure Damage bonuses.` |
+| `CKFHardMode.Weapon.KineticAsExtraPure.Title` | `Heavy Hitter {0}` |
+| `CKFHardMode.Weapon.KineticAsExtraPure.Description` | `Attacks with this weapon gain {0}% of Kinetic damage as extra Pure damage.` |
 
 For each club UI request, `LocalizedText` reads the current
 `I18n.translationData` dictionary. It adds missing owned keys with the English
@@ -93,9 +93,9 @@ and `Il2CppException.RaiseExceptionIfNecessary`, used by `NativeValueList`.
 [fitted] The boxed value passed to native `Add` is the crash cause being tested.
 The replacement passes its unboxed payload and checks the destination entries.
 The private harness checks that argument path with a fake native invocation;
-it does not execute IL2CPP or consume the rule in the game's UI. [unverified]
-The corrected insertion removes the live click crash. Perform the live UI
-check below before treating the repair as confirmed.
+it does not execute IL2CPP or consume the rule in the game's UI. David reported
+that clicking the club no longer crashes after rebuilding this repair. The
+inventory/hover rendering checks below remain outstanding.
 
 ## Evidence and remaining verification
 
@@ -150,7 +150,7 @@ check below before treating the repair as confirmed.
 
 Build using the [normal plugin build procedure](workflow.md#build-hard-mode).
 Relaunch and inspect the low-level club in the inventory detail and hover
-views. Its innate rules should include `+50% Kinetic as Extra Pure Damage`
+views. Its innate rules should include `Heavy Hitter 50`
 and the description above, alongside its existing rules. Compare another
 weapon and repeated openings; the entry should appear only on this club and
 should not accumulate duplicates. Capture `BepInEx/LogOutput.log` before the

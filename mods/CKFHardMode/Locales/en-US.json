@@ -1,4 +1,4 @@
 {
-  "CKFHardMode.Weapon.KineticAsExtraPure.Title": "+{0}% Kinetic as Extra Pure Damage",
-  "CKFHardMode.Weapon.KineticAsExtraPure.Description": "Attacks with this weapon gain {0}% of Kinetic damage as extra Pure damage. Adds to other Kinetic as Extra Pure Damage bonuses."
+  "CKFHardMode.Weapon.KineticAsExtraPure.Title": "Heavy Hitter {0}",
+  "CKFHardMode.Weapon.KineticAsExtraPure.Description": "Attacks with this weapon gain {0}% of Kinetic damage as extra Pure damage."
 }
