@@ -1,4 +1,4 @@
-// A reversible, attack-scoped experiment. See docs/stunclub.md for the
+// A reversible, attack-scoped weapon mechanic. See docs/stunclub.md for the
 // metadata declarations and the live checks still needed. No save writes.
 using System;
 using System.Collections.Generic;
@@ -14,6 +14,7 @@ namespace CKFHardMode
         internal const long ExtraPurePercent = 50;
         internal const int TraceLimit = 40;
         private static bool enabled;
+        internal static bool Active => enabled;
         private static Type gameWeaponType, weaponType, dualWeaponType;
         private static MethodInfo tryCast;
         private static PropertyInfo pointer, activeWeapon, activeEffect, weaponTypeId,
@@ -95,6 +96,7 @@ namespace CKFHardMode
                     priority = Priority.Last,
                     after = new[] { Plugin.PluginGuid + ".models" }
                 });
+                StunClubPresentation.Init(harmony);
                 enabled = true;
                 Plugin.Log.LogInfo("StunClub: enabled for WeaponModel[13000]. Base pure/ballistic "
                     + "damage is cleared; calculation scopes add 50 to ActiveEffect.PureDamageMelee "
@@ -276,10 +278,10 @@ namespace CKFHardMode
                     + "to discard any already materialized base-damage edits.");
         }
 
-        private static Type RequireType(string name) => AccessTools.TypeByName(name)
+        internal static Type RequireType(string name) => AccessTools.TypeByName(name)
             ?? throw new MissingMemberException(name);
 
-        private static PropertyInfo RequireProperty(Type type, string name, Type valueType, bool writable = false)
+        internal static PropertyInfo RequireProperty(Type type, string name, Type valueType, bool writable = false)
         {
             var p = type.GetProperty(name);
             if (p == null || p.PropertyType != valueType || !p.CanRead || (writable && !p.CanWrite))

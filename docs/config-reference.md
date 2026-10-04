@@ -2704,13 +2704,13 @@ None declared.
 
 **Stun Club** &nbsp;·&nbsp; `.cfg` section `[StunClub]` &nbsp;·&nbsp; declared in `schema/stunclub.schema.json`
 
-An optional attack-scoped change for WeaponModel 13000. StunClub.AfterWeaponRow clears this row's mode 1 and 2 base pure and ballistic damage after overlays. Kinetic damage and WeaponEffect are untouched. StunClub.Enter temporarily adds 50 percentage points to the attacker's ActiveEffect.PureDamageMelee during CalculateAttackChance and ResolveDamageOnHit, then restores it in a postfix and finalizer. The game computes the damage; the plugin does not calculate a separate damage packet. The chance hook selects its explicit weapon argument. The hit hook selects attacker.ActiveWeapon, because ResolveDamageOnHit has no weapon argument. GameWeaponModel.WeaponTypeId and WeaponModel.WeaponId identify the club; equipped loadout slots are never searched. Unsupported providers or unreadable members disable further edits and log complete=false. [unverified] Identical additive stacking with Strength and other buffs, and coverage of Slashslide and Preempt, await a live session. See docs/stunclub.md for the acceptance checks. Off installs none of these hooks. Relaunch and reload to discard the runtime edits. This subsystem does not write to the save and is independent of ModelRules.
+An optional low-level Stun Club mechanic for WeaponModel 13000, with a localized innate rule in the weapon UI. StunClub.AfterWeaponRow clears this row's mode 1 and 2 base pure and ballistic damage after overlays. Kinetic damage and WeaponEffect are untouched. StunClub.Enter temporarily adds 50 percentage points to the attacker's ActiveEffect.PureDamageMelee during CalculateAttackChance and ResolveDamageOnHit, then restores it in a postfix and finalizer. The game computes the damage; the plugin does not calculate a separate damage packet. The chance hook selects its explicit weapon argument. The hit hook selects attacker.ActiveWeapon, because ResolveDamageOnHit has no weapon argument. GameWeaponModel.WeaponTypeId and WeaponModel.WeaponId identify the club; equipped loadout slots are never searched. Unsupported providers or unreadable members disable further edits and log complete=false. StunClubPresentation.AfterRules appends a CommerceItemSpecialRule to a copy of GameWeaponModel.CommerceItemSpecialRules, preserving existing rules. Its title and description use namespaced locale keys, with English fallback templates embedded in the DLL. Existing translations are preserved. See docs/stunclub.md for measured attack coverage and the UI acceptance check. Off installs none of the damage or UI hooks. Relaunch and reload to discard the runtime edits. This subsystem does not write to the save and is independent of ModelRules.
 
 ### What the config GUI shows for this section
 
 The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
 
-Give the low-level Stun Club kinetic-only base damage and add 50 percentage points to its kinetic-as-extra-pure bonus during attacks. Turn this off and relaunch to reverse both changes. It does not change the other stunclubs.
+Give the low-level Stun Club kinetic-only base damage and 50% Kinetic as Extra Pure Damage on its attacks. Display this innate bonus in the weapon special-rule UI. Turn this off and relaunch to reverse both changes. It does not change the other stunclubs.
 
 ### Files this subsystem writes
 
@@ -2736,13 +2736,13 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.StunClub` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Stun Club Bonus | Opt-in switch for StunClub.cs. Default false. On installs the base-damage and calculation hooks; off installs none. The first 40 calculations report the weapon content id, temporary PureDamageMelee value and restoration. This logs successful exclusions too; complete=false means the calculation could not be instrumented, not that the club was absent. |
+| `Slices.StunClub` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Stun Club Bonus | Opt-in switch for the Stun Club mechanic. Default false. On installs the base-damage, calculation and localized weapon-UI hooks; off installs none. The first 40 chance calculations and 40 hits have separate logging budgets and explicit limit notices. The first 8 club UI entries report text readback. Successful exclusions are logged too; complete=false means instrumentation or presentation failed, not that the club was absent. |
 
 **What the config GUI shows for these fields.**
 
 | Field | GUI help |
 |---|---|
-| `Slices.StunClub` | Apply both Stun Club changes. Turn off and relaunch to restore the ordinary behavior. |
+| `Slices.StunClub` | Apply the Stun Club damage mechanic and its localized weapon-UI rule. Turn off and relaunch to restore the ordinary behavior. |
 
 1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
 

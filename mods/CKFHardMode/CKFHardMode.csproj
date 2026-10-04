@@ -65,6 +65,11 @@
     release; make_release.py refuses a build where the two disagree.
   -->
 
+  <!-- UI text travels in the DLL; runtime registration adds only new locale keys. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Locales\en-US.json" LogicalName="CKFHardMode.WeaponLocale.en-US.json" />
+  </ItemGroup>
+
   <!-- Copy the built plugin straight into the game on build -->
   <Target Name="DeployToGame" AfterTargets="Build"
           Condition="Exists('$(BepInExDir)\plugins')">

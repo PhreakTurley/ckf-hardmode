@@ -31,6 +31,41 @@ An unknown provider, unreadable aggregate or failed write disables further
 edits for the launch and reports `complete=false`; restart with the switch
 off to discard any already materialized base-damage edits.
 
+## Weapon UI and localization
+
+`StunClubPresentation.AfterRules` appends one `CommerceItemSpecialRule` to
+`GameWeaponModel.CommerceItemSpecialRules` for content id 13000 while the
+mechanic is active. It copies the list and preserves its existing entries,
+including crit and stun rules. Other weapon ids and the disabled slice return
+the original result. Failed text/list readback preserves the original result
+and logs `StunClub UI: complete=false`.
+
+The English templates live in `mods/CKFHardMode/Locales/en-US.json`, embedded
+in the DLL by `CKFHardMode.csproj`; the placeholder uses the mechanic's
+`ExtraPurePercent` constant. There is no extra installation file.
+
+| Localization key | English template |
+|---|---|
+| `CKFHardMode.Weapon.KineticAsExtraPure.Title` | `+{0}% Kinetic as Extra Pure Damage` |
+| `CKFHardMode.Weapon.KineticAsExtraPure.Description` | `Attacks with this weapon gain {0}% of Kinetic damage as extra Pure damage. Adds to other Kinetic as Extra Pure Damage bonuses.` |
+
+For each club UI request, `LocalizedText` reads the current
+`I18n.translationData` dictionary. It adds missing owned keys with the English
+fallback, preserves existing translations, then formats the selected templates
+with 50. Changing language uses the new active dictionary. No locale file,
+save row or existing game localization key is rewritten.
+
+[measured] The installed `CoreRPG_v1.dll` declares the getter returning
+`Il2CppSystem.Collections.Generic.List<CommerceItemSpecialRule>`, its
+`RuleTitle` and `RuleDescription` string properties, and the shared
+`STEItemRulesListView.ShowSpecialRulesList` and `STEItemSpecialRuleView.Show`
+UI declarations. It also declares `I18n.translationData`,
+`Lib.SimpleJSON.JSONNode.AsObject`, the string indexer and `Value`,
+`JSONClass.m_Dict`, and `JSONData(string)` used for runtime registration.
+These declarations and a managed Harmony result replacement are checked by
+the private harness. [unverified] Rendering the new entry in the actual
+inventory/hover UI still needs the live check below.
+
 ## Evidence and remaining verification
 
 - [measured] `sheets/raw/WeaponModel.csv`, row 289, identifies content row
@@ -80,14 +115,18 @@ off to discard any already materialized base-damage edits.
   using the club must be checked against the corresponding hit call. The
   hooks do not infer a later hit's weapon from an earlier preview.
 
-## Live acceptance checks
+## Live UI check
 
 Build using the [normal plugin build procedure](workflow.md#build-hard-mode).
-With the switch on, enter a mission and capture `BepInEx/LogOutput.log` before
-the next launch. Check normal club attacks, Slashslide and Preempt, then
-attack with another weapon while the club remains equipped. Repeat the club
-attacks with an existing kinetic-as-extra-pure buff to check additive
-stacking. Compare with the switch off from the same pre-mod save.
+Relaunch and inspect the low-level club in the inventory detail and hover
+views. Its innate rules should include `+50% Kinetic as Extra Pure Damage`
+and the description above, alongside its existing rules. Compare another
+weapon and repeated openings; the entry should appear only on this club and
+should not accumulate duplicates. Capture `BepInEx/LogOutput.log` before the
+next launch. `StunClub UI: complete=true` establishes rule/text readback, not
+rendering; confirm that the UI displays it as well.
+
+The existing attack traces can be used for future damage troubleshooting:
 
 The calculation log names the phase, content weapon id, stat before/during/
 after, and club contribution. For club calls the stat should increase by 50
