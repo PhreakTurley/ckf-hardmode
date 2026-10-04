@@ -40,7 +40,8 @@ off to discard any already materialized base-damage edits.
 - [measured] The installed `BepInEx/interop/CoreRPG_v1.dll` declares
   `RulesUtil.CalculateAttackChance(ICombatEntity attacker,
   IWeaponDataProvider activeWeapon, ICombatEntity defender, AttackVector
-  vector, Dictionary<long,RuleModel> rulesConfig, CombatRuleHints ruleHint)`
+  vector, Dictionary<long,RuleModel> rulesConfig,
+  RPG.Core.Constants+CombatRuleHints ruleHint)`
   returning `AttackChance`, and `RulesUtil.ResolveDamageOnHit(ICombatEntity
   attacker, ICombatEntity defender, AttackVector vector, AttackResult
   result)` returning `DamageResult`.
@@ -51,6 +52,12 @@ off to discard any already materialized base-damage edits.
   `DataDb.GetRowWeaponModel` returning `WeaponModel`.
 - [measured] `BepInEx/core/Il2CppInterop.Runtime.dll` declares
   `Il2CppObjectBase.Pointer` and the generic, zero-argument `TryCast<T>()`.
+- [measured] `Logs/StunClub-initialisation-refused-20261004.log`, row 577,
+  reports that initialization refused and all StunClub hooks were inert.
+  The installed assembly declares `CombatRuleHints` nested under
+  `RPG.Core.Constants`. The offline harness reproduces the old lookup failure
+  with the short name and resolves both calculation methods with the full
+  nested name used by `StunClub.CalculationTargets`.
 - [unverified] A temporary write to `ActiveEffect.PureDamageMelee` reaches
   the native damage calculation and stacks identically with Strength and
   other kinetic-as-extra-pure buffs. Metadata establishes declarations,
@@ -88,5 +95,7 @@ errors before drawing a conclusion.
 
 The private `tests/stunclub` harness exercises the real plugin code with
 fake interop objects for identity, additive stat input, nested different
-weapons, reversal and exception restoration. It does not test native damage
-or talent coverage.
+weapons, reversal and exception restoration. It also runs the production
+calculation-method lookup against the installed interop assembly, including
+the nested hint type, and checks failure diagnostics. It does not execute
+native game methods or test damage semantics or talent coverage.

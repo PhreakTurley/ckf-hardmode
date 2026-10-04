@@ -66,13 +66,9 @@ namespace CKFHardMode
                     "BallisticDamage1", "BallisticDamage2" }
                     .Select(n => RequireProperty(weaponType, n, typeof(long), true)).ToArray();
 
-                var chance = RequireMethod(rules, "CalculateAttackChance",
-                    "RPG.Combat.AttackChance", entity.FullName, provider.FullName,
-                    entity.FullName, "RPG.Combat.AttackVector",
-                    "Il2CppSystem.Collections.Generic.Dictionary`2", "CombatRuleHints");
-                var hit = RequireMethod(rules, "ResolveDamageOnHit",
-                    "RPG.Combat.DamageResult", entity.FullName, entity.FullName,
-                    "RPG.Combat.AttackVector", "RPG.Combat.AttackResult");
+                var calculations = CalculationTargets(rules, entity, provider);
+                var chance = calculations[0];
+                var hit = calculations[1];
                 var row = db.GetMethods(BindingFlags.Public | BindingFlags.NonPublic
                     | BindingFlags.Static | BindingFlags.Instance)
                     .Single(m => m.Name == "GetRowWeaponModel" && m.ReturnType == weaponType);
@@ -277,13 +273,37 @@ namespace CKFHardMode
             return p;
         }
 
+        // Reflection includes the declaring type in a nested type's FullName.
+        // These targets are also checked against the installed interop metadata
+        // by the offline harness, without executing a native method.
+        private static MethodInfo[] CalculationTargets(Type rules, Type entity, Type provider)
+        {
+            return new[]
+            {
+                RequireMethod(rules, "CalculateAttackChance", "RPG.Combat.AttackChance",
+                    entity.FullName, provider.FullName, entity.FullName, "RPG.Combat.AttackVector",
+                    "Il2CppSystem.Collections.Generic.Dictionary`2", "RPG.Core.Constants+CombatRuleHints"),
+                RequireMethod(rules, "ResolveDamageOnHit", "RPG.Combat.DamageResult",
+                    entity.FullName, entity.FullName, "RPG.Combat.AttackVector", "RPG.Combat.AttackResult")
+            };
+        }
+
+        private static string ParameterTypeName(Type type) => type.IsGenericType
+            ? type.GetGenericTypeDefinition().FullName : type.FullName;
+
         private static MethodInfo RequireMethod(Type type, string name, string result, params string[] args)
         {
-            return type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
-                .Single(m => m.Name == name && m.ReturnType.FullName == result
-                    && m.GetParameters().Select(p => p.ParameterType.IsGenericType
-                        ? p.ParameterType.GetGenericTypeDefinition().FullName : p.ParameterType.FullName)
-                        .SequenceEqual(args));
+            var candidates = type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
+                .Where(m => m.Name == name).ToArray();
+            var matches = candidates.Where(m => m.ReturnType.FullName == result
+                && m.GetParameters().Select(p => ParameterTypeName(p.ParameterType)).SequenceEqual(args)).ToArray();
+            if (matches.Length != 1)
+                throw new MissingMethodException("Expected exactly one " + type.FullName + "." + name
+                    + "(" + string.Join(", ", args) + ") -> " + result + "; found " + matches.Length
+                    + ". Available: " + string.Join("; ", candidates.Select(m => m.Name + "("
+                        + string.Join(", ", m.GetParameters().Select(p => ParameterTypeName(p.ParameterType)))
+                        + ") -> " + m.ReturnType.FullName)));
+            return matches[0];
         }
 
         private static IntPtr NativePointer(MethodInfo method)
