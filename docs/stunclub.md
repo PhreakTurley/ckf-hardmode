@@ -45,8 +45,10 @@ has null talent and program references. Failed readback preserves the original
 result and logs `StunClub UI: complete=false`.
 
 The English templates live in `mods/CKFHardMode/Locales/en-US.json`, embedded
-in the DLL by `CKFHardMode.csproj`; the placeholder uses the mechanic's
-`ExtraPurePercent` constant. There is no extra installation file.
+in the DLL by `CKFHardMode.csproj`. `LocalizedText` accepts the percentage as
+an argument; both shared templates use `{0}`, so another weapon's percentage
+requires no new localization key. The club supplies its `ExtraPurePercent`
+constant. There is no extra installation file.
 
 | Localization key | English template |
 |---|---|

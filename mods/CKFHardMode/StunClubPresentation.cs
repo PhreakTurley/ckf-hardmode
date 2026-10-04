@@ -91,8 +91,8 @@ namespace CKFHardMode
                 // native locale object, or replace an existing translation.
                 var root = translationData.GetValue(null)
                     ?? throw new InvalidOperationException("active locale dictionary is unavailable");
-                string caption = LocalizedText(root, TitleKey);
-                string detail = LocalizedText(root, DescriptionKey);
+                string caption = LocalizedText(root, TitleKey, StunClub.ExtraPurePercent);
+                string detail = LocalizedText(root, DescriptionKey, StunClub.ExtraPurePercent);
                 var copy = listConstructor.Invoke(Array.Empty<object>());
                 bool present = false;
                 int originalCount = __result == null ? 0 : (int)count.GetValue(__result);
@@ -150,7 +150,7 @@ namespace CKFHardMode
                 && (IntPtr)p.GetValue(left) == (IntPtr)p.GetValue(right);
         }
 
-        private static string LocalizedText(object root, string key)
+        private static string LocalizedText(object root, string key, long extraPurePercent)
         {
             var obj = asObject.GetValue(root)
                 ?? throw new InvalidOperationException("active locale root is not an object");
@@ -169,7 +169,7 @@ namespace CKFHardMode
             string template = value == null ? null : (string)localeValue.GetValue(value);
             if (string.IsNullOrWhiteSpace(template))
                 throw new InvalidOperationException("locale text is empty: " + key);
-            return string.Format(CultureInfo.InvariantCulture, template, StunClub.ExtraPurePercent);
+            return string.Format(CultureInfo.InvariantCulture, template, extraPurePercent);
         }
     }
 }
