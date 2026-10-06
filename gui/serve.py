@@ -1155,7 +1155,7 @@ def _read_overlay_entry(path, rel):
             for column in header:
                 if column['name'] == '_comment':
                     column['annotation'] = True
-                if column['name'] == '_shipped':
+                if column['name'] in ('_shipped', '_node_kind'):
                     column['metadata'] = True
             entry['columns'] = header
             if header and not header[0]['control']:
@@ -1219,9 +1219,44 @@ def _read_overlay_entry(path, rel):
             if title not in entry['groupOrder']:
                 entry['groupOrder'].append(title)
         entry['hiddenGroups'] = catalog_hidden_groups(entry)
+        entry['hiddenRows'] = {}
+        if entry['table'] == 'JobNodeModel' and '_node_kind' in names:
+            ki = names.index('_node_kind')
+            for ri, row in enumerate(entry['rows']):
+                kind = row['cells'][ki]
+                if kind == 'root':
+                    entry['hiddenRows'][str(ri)] = 'Class root'
+                elif kind == 'base' and catalog_plain_node(entry, ri):
+                    entry['hiddenRows'][str(ri)] = 'Plain base talent'
     for _r in entry['rows']:
         _r['key'] = overlay_row_key(entry, _r)
     return entry
+
+
+def catalog_plain_node(entry, ri):
+    """Both captured baselines and effective values must be cost 1 / rest 0."""
+    fields = [ci for ci, role in enumerate(entry['roles']) if ci and role == 'lever']
+    if not fields:
+        return False
+    row = entry['rows'][ri]
+    for ci in fields:
+        col = entry['columns'][ci]
+        baseline = entry['shipped'].get(str(ri), {}).get(col['name'])
+        if col['op'] != 'set':
+            return False
+        if col['name'] in TEXT_BASELINE_COLUMNS.get(entry['table'], ()):
+            if baseline is None or row['cells'][ci].strip() not in ('', baseline):
+                return False
+            continue
+        value = row['cells'][ci].strip() or baseline
+        try:
+            numbers = (float(baseline), float(value))
+        except (TypeError, ValueError):
+            return False
+        expected = 1 if col['name'] == 'BuyCost' else 0
+        if any(n != expected for n in numbers):
+            return False
+    return True
 
 
 def catalog_hidden_groups(entry):
@@ -1236,20 +1271,7 @@ def catalog_hidden_groups(entry):
                if entry['rowGroups'].get(str(ri)) == 'Attribute nodes']
     if not members:
         return []
-    for ri, row in members:
-        for ci, col in enumerate(entry['columns']):
-            if not entry['editable'][ci]:
-                continue
-            value = row['cells'][ci].strip()
-            if not value:
-                value = entry['shipped'].get(str(ri), {}).get(col['name'])
-            try:
-                number = float(value)
-            except (TypeError, ValueError):
-                return []
-            if col['op'] != 'set' or number != (1 if col['name'] == 'BuyCost' else 0):
-                return []
-    return ['Attribute nodes']
+    return ['Attribute nodes'] if all(catalog_plain_node(entry, ri) for ri, _ in members) else []
 
 
 def read_overlays(config_dir, schemas):
@@ -1821,12 +1843,17 @@ _SHIPPED_RE = re.compile(r'Shipped:\s*(.*?)\.\s')
 _SHIPPED_PAIR_RE = re.compile(r'^([A-Za-z][A-Za-z0-9]*)\s+(-?\d+(?:\.\d+)?)$')
 
 
+# Authored text baseline declaration, matching the JobNode parser's IconPng
+# TEXT field. Other baseline fields retain strict numeric validation.
+TEXT_BASELINE_COLUMNS = {'JobNodeModel': ('IconPng',)}
+
+
 def overlay_shipped(entry):
     """Shipped lever baselines from _shipped metadata or legacy _comment prose.
 
     -> ({row index: {column: text}}, rows_without_one)
 
-    Talent catalogs separate full numeric baselines from concise comments.
+    Talent catalogs separate typed baselines from concise comments.
     Other sheets retain their "Shipped: PowerLevel 2; Rarity 2; ..." prose.
     Missing or invalid baselines are counted, including malformed metadata;
     a bad _shipped cell never falls back to unrelated descriptive prose.
@@ -1844,7 +1871,9 @@ def overlay_shipped(entry):
                 if not isinstance(values, dict):
                     raise ValueError('shipped baselines must be a map')
                 if any(k not in names or k.startswith('_') or k == entry.get('keyColumn')
-                       or not _SHIPPED_PAIR_RE.fullmatch(k + ' ' + str(v))
+                       or not (isinstance(v, str) and '\n' not in v and '\r' not in v
+                               if k in TEXT_BASELINE_COLUMNS.get(entry['table'], ())
+                               else _SHIPPED_PAIR_RE.fullmatch(k + ' ' + str(v)))
                        for k, v in values.items()):
                     raise ValueError('invalid shipped baseline')
                 pairs = {k: str(v) for k, v in values.items()}
@@ -13340,11 +13369,13 @@ setTimeout(function () {
       drawnRows += ent.rows.length;
       // Every visible id is drawn. Redundant attribute nodes instead appear
       // by name in their Effect grid and retain their complete working rows.
+      const omitted = ent.rows.map(function (r, i) {return {row:r, i:i};})
+        .filter(function (r) {return (ent.hiddenRows || {})[String(r.i)];});
       const hidden = ent.rows.map(function (r, i) {return {row:r, i:i};})
         .filter(function (r) {return (ent.hiddenGroups || []).indexOf(
           (ent.rowGroups || {})[String(r.i)]) >= 0;});
       const missing = ent.rows.filter(function (r, i) {
-        if (hidden.some(function (h) {return h.i === i;})) return false;
+        if (hidden.concat(omitted).some(function (h) {return h.i === i;})) return false;
         return t2.indexOf(String(r.cells[0])) < 0; });
       ck(s.subsystem + '/' + rel.split('/').pop() + ': every visible id is '
          + 'drawn, so grouping loses no visible row',
@@ -13361,6 +13392,8 @@ setTimeout(function () {
           hidden.every(function (h) {return CKF.deepEqual(h.row.cells,
             W.overlays[rel].cells[h.i]);}));
       }
+      if (omitted.length) ck(s.subsystem + ': hidden class roots and plain bases stay intact in the working copy',
+        omitted.every(function (h) {return CKF.deepEqual(h.row.cells, W.overlays[rel].cells[h.i]);}));
     }
     // the columns are the FILE's, not a static row[]
     const declaredCols = (s.fields || []).reduce(function (a, f) {

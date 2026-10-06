@@ -30,6 +30,39 @@ CATALOG_COLUMNS = {'JobNodeModel': NODE_TUNING,
 REGULAR, ATTRIBUTE = 'Talents and upgrades', 'Attribute nodes'
 
 
+def natural_key(name):
+    return tuple(int(s) if s.isdigit() else s.casefold()
+                 for s in re.split(r'(\d+)', name))
+
+
+def attribute_order(name):
+    lane = name.split(' ', 1)[0].casefold()
+    lanes = ('left', 'center', 'right')
+    return (lanes.index(lane) if lane in lanes else len(lanes), natural_key(name))
+
+
+def node_order(identity, nodes):
+    row = nodes[identity]
+    base = positive(row, 'SubTree') or identity
+    return (int(base), identity != base, natural_key(row['JobNodeName']), int(identity))
+
+
+def effect_owners(table, identity, users, nodes, tables):
+    """Prefer actual node effect links over inherited talent associations."""
+    direct = []
+    for n in users:
+        row = nodes[n]
+        trigger = tables['TalentModel'].get(positive(row, 'NodeTalentTriggerId'), {})
+        trigger_table = ('MatrixEffectModel' if trigger.get('TalentIsMatrixOnly') == '1'
+                         else 'EffectModel')
+        column = 'NodeEffect1Id' if table == 'EffectModel' else 'MatrixEffect1Id'
+        if (positive(row, column) == identity or
+            (trigger_table == table and positive(row, 'NodeTalentTriggerEffect') == identity)):
+            direct.append(n)
+    return sorted(direct or [n for n in users if not positive(nodes[n], 'SubTree')]
+                  or users, key=lambda n: node_order(n, nodes))
+
+
 def positive(row, column):
     value = int(row.get(column) or 0)
     return str(value) if value > 0 else None
@@ -131,7 +164,10 @@ def render_sheet(raw, table, tag, tables, nodes, parent_ids, owners):
     for control in ('_comment', '_group', '_shipped'):
         if control not in header:
             header.append(control)
+    if table == 'JobNodeModel' and '_node_kind' not in header:
+        header.append('_node_kind')
     rows = []
+    ordering = {}
 
     def node_label(identity):
         r = tables['JobNodeModel'][identity]
@@ -141,8 +177,10 @@ def render_sheet(raw, table, tag, tables, nodes, parent_ids, owners):
         stock = tables[table].get(identity)
         if stock is None:
             raise ValueError('No stock row for (%s, %s)' % (table, identity))
-        users = sorted(owners[table].get(identity, []), key=int)
+        users = sorted(owners[table].get(identity, []), key=lambda n: node_order(n, nodes))
         attr = bool(users) and all(is_attribute(nodes[n], tables) for n in users)
+        label_users = (effect_owners(table, identity, users, nodes, tables)
+                       if table in ('EffectModel', 'MatrixEffectModel') else users)
         row = dict(original.get(identity, {}))
         row[key] = identity
         parent = list(dict.fromkeys(t for n in users for t in parent_ids[n]))
@@ -153,18 +191,22 @@ def render_sheet(raw, table, tag, tables, nodes, parent_ids, owners):
         elif table == 'JobNodeModel':
             label = node_label(identity)
         else:
-            label = ', '.join(dict.fromkeys(node_label(n) for n in users)) if attr else ', '.join(names)
+            label = ', '.join(dict.fromkeys(node_label(n) for n in label_users))
             if not label:
-                label = ', '.join(dict.fromkeys(node_label(n) for n in users)) or 'Effect'
+                label = ', '.join(names) or 'Effect'
         parts = [label]
-        if names and label != ', '.join(names):
+        labels = [node_label(n) for n in label_users]
+        def includes_parent(parent):
+            return any(name == parent or re.fullmatch(re.escape(parent) + r' \d+', name)
+                       for name in labels)
+        if names and label != ', '.join(names) and not all(includes_parent(n) for n in names):
             parts.append('Parent: ' + ', '.join(names))
         if not names and not attr and users:
             bases = list(dict.fromkeys(positive(nodes[n], 'SubTree') or n for n in users))
             bases = [n for n in bases if positive(tables['JobNodeModel'][n], 'NodeEffect1Id')]
             if bases:
                 parent_label = ', '.join(dict.fromkeys(node_label(n) for n in bases))
-                if parent_label != label:
+                if parent_label != label and not all(includes_parent(node_label(n)) for n in bases):
                     parts.append('Parent: ' + parent_label)
         row['_shipped'] = json.dumps({c: stock[c] for c in levers}, separators=(',', ':'))
         if table == 'EffectModel' and attr:
@@ -181,21 +223,21 @@ def render_sheet(raw, table, tag, tables, nodes, parent_ids, owners):
         # on one line and let the GUI lay out the compact clauses.
         row['_comment'] = ' | '.join(parts)
         row['_group'] = ATTRIBUTE if attr else REGULAR
-        rows.append(row)
-    def row_order(row):
-        identity = row[key]
         if table == 'JobNodeModel':
-            # SubTree names the attached base node in the dump. Keep each
-            # base with its upgrades even when a later upgrade has a lower id.
-            base = positive(tables[table][identity], 'SubTree') or identity
-            name = tables[table][identity]['JobNodeName']
-            natural = tuple(int(s) if s.isdigit() else s.casefold()
-                            for s in re.split(r'(\d+)', name))
-            return (row['_group'] == ATTRIBUTE, int(base), identity != base,
-                    natural, int(identity))
-        return (row['_group'] == ATTRIBUTE, int(identity))
-
-    rows.sort(key=row_order)
+            root = positive(tables['JobModel'][str(JOBS[tag])], 'DefaultNode1')
+            row['_node_kind'] = ('root' if identity == root else 'attribute' if attr
+                                 else 'upgrade' if positive(stock, 'SubTree') else 'base')
+        if table == 'TalentModel':
+            order = (int(identity),)
+        elif attr:
+            order = attribute_order(label)
+        elif label_users:
+            order = min(node_order(n, nodes) for n in label_users)
+        else:
+            order = (int(identity),)
+        ordering[identity] = (attr, order, int(identity))
+        rows.append(row)
+    rows.sort(key=lambda row: ordering[row[key]])
     output = io.StringIO(newline='')
     writer = csv.DictWriter(output, header, lineterminator='\n')
     writer.writeheader()

@@ -2268,7 +2268,7 @@ function overlayGroups(sch, ov) {
   const rows = ov.rows.map(function (r, i) {
     const key = r.cells[0];
     return { i: i, key: key, cells: r.cells, ref: byKey[String(key)] || null };
-  });
+  }).filter(function (r) {return !(ov.hiddenRows || {})[String(r.i)];});
   if ((ov.groupOrder || []).length) {
     return ov.groupOrder.map(function (title) {
       return {title: title, rows: rows.filter(function (r) {

@@ -136,12 +136,14 @@ leaves all new override cells blank, and preserves existing override cells.
 Class ownership comes from `JobNodeModel.JobId`, including every captured
 version; ids are never assigned to a class by their digit prefix.
 
-Comments show the node name and its parent when different. Attribute nodes
+Comments show the node name and its parent when the name does not already
+identify it (for example, Overwatch 1 needs no Parent: Overwatch line). Attribute nodes
 keep Left/Center/Right names in the EffectModel table, where their comments
-list connections without claiming a required path through them. Numeric tuning belongs in editable cells, with **ships N**
+list connections without claiming a required path through them. Numeric tuning
+belongs in editable cells, with **ships N**
 placeholders. Comments omit tuning numbers, old balance notes, and repeated ids.
 The `_shipped` JSON control cell carries the complete editable baselines,
-including zeros, without displaying them as prose. It comes from the supplied
+including zeros and the JobNode IconPng text field, without displaying them as prose. It comes from the supplied
 Data Dump. The pass adds declared node tuning and attribute effect columns,
 creating the Hacker effect sheet when needed. It checks dump
 coverage and refuses ambiguous or missing references, then compares the
@@ -149,12 +151,21 @@ exported assignments before writing so a catalog update cannot change tuning.
 
 The `_group` control column becomes section headings in the editor, separating
 **Talents and upgrades** from **Attribute nodes** across the class's sheets.
-Neither `_group` nor `_shipped` is editable or exported as an SQL field.
+The `_node_kind` control classifies JobNodes as class roots, base talents,
+upgrades or attribute nodes using the dump's JobModel and SubTree references.
+These controls are not editable or exported as SQL fields.
 Comments appear beside node ids; `_shipped` supplies the placeholders. The installed editor
 reads this information from the live sheets and requires no dump.
 
 TalentModel appears first. JobNodeModel groups each base node with its attached
-upgrades, ordered by name with numeric suffixes compared numerically. Attribute
+upgrades, ordered by name with numeric suffixes compared numerically. EffectModel
+and MatrixEffectModel use the same family order and names from directly linked
+JobNodes; effects shared through a talent use its base node name. Attribute
+effects are ordered Left, Center, Right, with numeric suffixes compared numerically.
+The class root is hidden. Base JobNodes are hidden only when both their measured
+baselines and effective values are BuyCost 1 and zero in the other lever cells.
+Nonzero tuning, a changed cost or icon override, or an unknown baseline keeps
+the base visible. An unchanged icon path does not make a base interesting. Attribute
 JobNode grids are omitted when their measured values and overrides are only
 BuyCost 1 and zero for the other editable fields; changed or unknown values
 keep the grid visible. All rows remain in the files and save model.
