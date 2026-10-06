@@ -128,6 +128,9 @@ SCRIPTS_DIR = os.path.join(REPO, 'scripts')
 DOCS_DIR = os.path.join(REPO, 'docs')
 APP_HTML = os.path.join(GUI_DIR, 'app.html')
 
+sys.path.insert(0, GUI_DIR)
+import modkit
+
 DEFAULT_GAME_DIR = r'C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint'
 
 # The file that identifies a game folder. release/README.txt's install step is
@@ -5172,6 +5175,11 @@ def load_settings():
         s['gameDir'] = default_game_dir()
     s.setdefault('configDirOverride', None)
     s.setdefault('stripReadme', True)
+    s.setdefault('talentProjectDir', os.path.join(REPO, 'ckf-talent-balance')
+                 if not FROZEN else '')
+    game = s.get('gameDir') or default_game_dir()
+    s.setdefault('modkitProjectDir', os.path.join(os.path.dirname(game),
+                 'Cyber Knights Mod Uploader', 'WorkshopContent', 'TalentRebalance'))
     return s
 
 
@@ -5240,6 +5248,8 @@ class App:
             'configDir': cd,
             'configDirOverride': self.settings.get('configDirOverride'),
             'stripReadme': bool(self.settings.get('stripReadme', True)),
+            'modkit': {'talentProjectDir': self.settings.get('talentProjectDir', ''),
+                       'modkitProjectDir': self.settings.get('modkitProjectDir', '')},
             'defaultGameDir': default_game_dir(),
             'probe': {'config': probe_writable(cd),
                       'overlays': probe_writable(os.path.join(cd, 'ckf.hardmode.d'))
@@ -5259,6 +5269,28 @@ class App:
             'fieldCount': sum(len(s['fields']) for s in self.schemas),
             'fingerprints': fingerprints(cd, self.schemas) if os.path.isdir(cd) else {},
         }
+
+    def api_talent_export(self, expect=None):
+        with self.lock:
+            cd = config_dir_for(self.settings)
+            try:
+                if expect:
+                    now = fingerprints(cd, self.schemas)
+                    moved = [k for k, v in expect.items() if now.get(k) != v]
+                    if moved:
+                        raise ValueError('Config changed on disk; reload before sending: %s'
+                                         % ', '.join(sorted(moved)))
+                if os.path.exists(journal_path(cd)):
+                    raise ValueError('A config save is incomplete; reload before sending.')
+                check = run_check_schema(cd)
+                blocking = [p for p in check['problems'] if p['kind'] in BLOCKING]
+                if not check['ran'] or blocking:
+                    raise ValueError('Config validation must pass before sending talents. %s'
+                                     % (check.get('error') or blocking))
+                return modkit.send(cd, self.settings.get('talentProjectDir') or '',
+                                   self.settings.get('modkitProjectDir') or '')
+            except Exception as e:
+                return {'ok': False, 'error': str(e)}
 
     def api_validate(self, edits, strip_readme=None):
         with self.lock:
@@ -5451,6 +5483,8 @@ class Handler(BaseHTTPRequestHandler):
                                                          body.get('stripReadme'),
                                                          bool(body.get('force')),
                                                          body.get('fingerprints')))
+            if path == '/api/talent-export':
+                return self._json(200, self.app.api_talent_export(body.get('fingerprints')))
             if path == '/api/settings':
                 s = self.app.settings
                 if 'gameDir' in body:
@@ -5460,6 +5494,9 @@ class Handler(BaseHTTPRequestHandler):
                     s['configDirOverride'] = str(v) if v else None
                 if 'stripReadme' in body:
                     s['stripReadme'] = bool(body['stripReadme'])
+                for key in ('talentProjectDir', 'modkitProjectDir'):
+                    if key in body:
+                        s[key] = str(body[key] or '').strip()
                 save_settings(s)
                 return self._json(200, self.app.api_model())
             if path == '/api/quit':
@@ -12253,7 +12290,8 @@ const document = {
   },
 };
 for (const id of ['banners', 'index', 'panel', 'dirty', 'save', 'gamedir', 'probe',
-                  'applydir', 'revalidate']) {
+                  'applydir', 'revalidate', 'talent-project', 'modkit-project',
+                  'modkit-paths', 'send-talents', 'modkit-status']) {
   const n = new Node(id === 'gamedir' ? 'input' : 'div');
   n.setAttribute('id', id); document._ids[id] = n;
 }

@@ -228,6 +228,25 @@ table.grid td.editable input::placeholder{color:var(--faint);font-style:italic}
 
 <div id="banners" style="padding:10px 16px 0"></div>
 
+<details class="card" style="margin:0 16px 10px" id="modkit-export">
+  <summary>Send talent changes to Modkit Uploader</summary>
+  <p class="doc">Save your edits, then send all eleven classes to your Modkit project.
+    In Modkit, use Prepare Mod Data, then Local Install Mod.</p>
+  <div class="field">
+    <label class="lab" for="talent-project">Talent source repository</label>
+    <input id="talent-project" type="text" spellcheck="false">
+  </div>
+  <div class="field">
+    <label class="lab" for="modkit-project">Modkit mod folder</label>
+    <input id="modkit-project" type="text" spellcheck="false">
+  </div>
+  <div class="ctl">
+    <button id="modkit-paths">Save folders</button>
+    <button id="send-talents" class="primary">Send talents to Modkit</button>
+    <span id="modkit-status" class="small" role="status" aria-live="polite"></span>
+  </div>
+</details>
+
 <main>
   <nav id="index"></nav>
   <section id="panel"></section>
@@ -2910,6 +2929,11 @@ function updateDirty() {
     : 'no changes';
   $('#save').disabled = !d.length
     || MODEL.probe.config.state === 'missing' || !MODEL.check.ran;
+  const foldersPending = $('#talent-project').value.trim() !== MODEL.modkit.talentProjectDir
+    || $('#modkit-project').value.trim() !== MODEL.modkit.modkitProjectDir;
+  $('#send-talents').disabled = !!d.length || foldersPending || !MODEL.check.ran
+    || !MODEL.modkit.talentProjectDir || !MODEL.modkit.modkitProjectDir;
+  $('#send-talents').title = d.length ? 'Save pending edits first.' : '';
 }
 
 function render() {
@@ -2941,6 +2965,8 @@ async function load() {
   // serve.py guards that.)
   if (!SEL || !sectionOf(SEL)) SEL = MODEL.sections[0].id;
   $('#gamedir').value = MODEL.configDirOverride || MODEL.gameDir || '';
+  $('#talent-project').value = MODEL.modkit.talentProjectDir;
+  $('#modkit-project').value = MODEL.modkit.modkitProjectDir;
   renderProbe();
   render();
 }
@@ -2969,6 +2995,38 @@ $('#revalidate').addEventListener('click', async function () {
   box.insertBefore(banner(r.ok ? 'ok' : 'err',
     r.ok ? 'Validated — nothing blocking' : 'Validation found blocking problems',
     lines.filter(Boolean)), box.firstChild);
+});
+
+$('#modkit-paths').addEventListener('click', async function () {
+  try {
+    const result = await api('/api/settings', {
+      talentProjectDir: $('#talent-project').value.trim(),
+      modkitProjectDir: $('#modkit-project').value.trim()
+    });
+    MODEL.modkit = result.modkit;
+    updateDirty();
+    $('#modkit-status').textContent = 'Folders saved.';
+  } catch (e) {
+    $('#modkit-status').textContent = String(e);
+  }
+});
+
+for (const id of ['talent-project', 'modkit-project'])
+  $('#' + id).addEventListener('input', updateDirty);
+
+$('#send-talents').addEventListener('click', async function () {
+  $('#send-talents').disabled = true;
+  $('#modkit-status').textContent = 'Sending saved talent changes…';
+  try {
+    const result = await api('/api/talent-export', { fingerprints: MODEL.fingerprints });
+    $('#modkit-status').textContent = result.ok
+      ? result.records + ' talent updates sent. ' + result.next
+      : 'Export failed: ' + result.error;
+  } catch (e) {
+    $('#modkit-status').textContent = 'Export failed: ' + String(e);
+  } finally {
+    updateDirty();
+  }
 });
 
 $('#save').addEventListener('click', async function () {

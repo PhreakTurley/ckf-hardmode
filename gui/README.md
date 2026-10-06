@@ -15,7 +15,8 @@ values happen to agree. The editor writes the live files and keeps no backup.
 |---|---|
 | `serve.py` | Stdlib-only server. Does all file I/O and all validation. |
 | `app.html` | The page. No CDN, no build step. Names no file, field, column or cfg key. |
-| `settings.json` | Per-machine: `gameDir`, `configDirOverride`, `stripReadme`. Not committed. |
+| `settings.json` | Per-machine game/config paths, `stripReadme`, and optional Modkit paths. Not committed. |
+| `modkit.py` | Guarded handoff to the separate talent repository's exporter. |
 | `ckf-config-editor.spec` | PyInstaller spec used by `scripts/make_release.py`. |
 
 ## Run the editor from source
@@ -54,6 +55,34 @@ keeps no persistent staging copy and no backup. To reset, re-extract
 `BepInEx\config` from the release zip.
 
 Procedure: [`../docs/workflow.md`](../docs/workflow.md). Traps: [`../docs/gotchas.md`](../docs/gotchas.md).
+
+## Send talents to Modkit Uploader
+
+Open **Send talent changes to Modkit Uploader** above the editor. Set **Talent
+source repository** to a checkout of `ckf-talent-balance` containing
+`scripts/export_talent_balance.py` with `build_export()`. Set **Modkit mod
+folder** to the initialized `WorkshopContent/<ModName>` folder beside its
+`<ModName>.workshop.json`, then click **Save folders**. The paths persist as
+`talentProjectDir` and `modkitProjectDir` in the editor's settings file.
+
+1. Edit talent values and click **Save** in the editor.
+2. Click **Send talents to Modkit**. It regenerates the standalone repository's
+   `source_content/talent-balance.json` and `provenance/SOURCE.json`, then copies
+   the manifest and parser JSON into the Modkit project's `source_data`.
+3. In Modkit Uploader, click **Prepare Mod Data**, then **Local Install Mod**.
+   Test the changes in game before submitting the prepared version to Workshop.
+
+The export includes all eleven classes even when their BepInEx slice switches
+are off. Keep those talent slices off when testing the Workshop package to
+avoid applying both implementations. The handoff uses the standalone exporter
+for every table/field mapping; it exports only talent overlays. Other Hard Mode
+settings remain in the BepInEx workflow.
+
+The button requires saved edits and saved folder paths. The server validates
+the config, checks source and destination fingerprints before replacement,
+verifies the written bytes, and rolls back its own completed replacements if
+the handoff fails. A conflicting Modkit manifest is refused for review.
+Preparing SQL, installing locally, and submitting remain uploader actions.
 
 ## What it edits
 
