@@ -1212,6 +1212,8 @@ def _read_overlay_entry(path, rel):
     if '_group' in names:
         entry['catalogOrder'] = {'TalentModel': 0, 'JobNodeModel': 1,
                                  'EffectModel': 2, 'MatrixEffectModel': 3}.get(entry['table'], 100)
+        if entry['table'] == 'EffectModel':
+            entry['columnScope'] = 'sheet'
         gi = names.index('_group')
         header[gi]['sectionHeading'] = True
         for ri, row in enumerate(entry['rows']):
@@ -1594,7 +1596,10 @@ def overlay_roles(entry):
     filled identity cells reading as 32 overrides on a sheet whose whole point
     is that it overrides nothing.
     """
-    ident = set(SHEET_IDENTITY)
+    # Direct overlays address only their first-column id (Overlays.BuildRule).
+    # Expander identity names must not turn a direct EffectClassification
+    # override into part of its row key.
+    ident = set(SHEET_IDENTITY) if overlay_kind(entry) == 'expanded' else set()
     out = []
     for i, c in enumerate(entry.get('columns') or []):
         if c['control']:
@@ -12172,6 +12177,17 @@ ck('a nonzero baseline elsewhere keeps its own grid column',
 ck('unknown baseline, operators, controls and key stay visible',
    JSON.stringify(CKF.overlayZeroColumns(zeroFixture, zeroRows.slice(0,1)))
      === JSON.stringify([false,true,false,false,false]));
+const classFixture = {kind:'direct', columnScope:'sheet', columns:zeroFixture.columns,
+  rows:[{cells:['1','','','0','0']},{cells:['2','','','0','0']}],
+  shipped:{'0':{value:'0'},'1':{value:'5'}}};
+const attributeRows = [{i:0,cells:classFixture.rows[0].cells}];
+ck('a nonzero shipped value elsewhere in the class keeps the attribute column visible',
+   CKF.overlayZeroColumns(classFixture,attributeRows)[1] === false);
+classFixture.shipped['1'].value = '0';
+ck('a class-wide untouched zero column can still be hidden',
+   CKF.overlayZeroColumns(classFixture,attributeRows)[1] === true);
+ck('an override outside the attribute section keeps its column visible',
+   CKF.overlayZeroColumns(classFixture,attributeRows,[classFixture.rows[0].cells,['2','0','','0','0']])[1] === false);
 const zeroWorking = []; zeroWorking[4] = ['4','2','','0','0'];
 ck('a pending nonzero edit keeps a zero baseline column visible',
    CKF.overlayZeroColumns(zeroFixture, zeroRows.slice(0,1), zeroWorking)[1] === false);

@@ -126,7 +126,7 @@ Slice dependencies (`requires` invariants, `serve.py:requires_pass`): turning a 
 
 ### Lever sheets
 
-The server grades each column (`serve.py:overlay_roles`, `overlay_editable`) and the page reads the result as data (`entry.roles`, `entry.editable`).
+The server grades each column (`serve.py:overlay_roles`, `overlay_editable`) and the page reads the result as data (`entry.roles`, `entry.editable`). Direct overlays use their first-column id as the row key; expanded sheets use their expander's identity columns.
 
 ### Complete talent catalogs
 
@@ -143,7 +143,8 @@ belongs in editable cells, with **ships N**
 placeholders. Comments omit tuning numbers, old balance notes, and repeated ids.
 The `_shipped` JSON control cell carries the complete editable baselines,
 including zeros and the JobNode IconPng text field, without displaying them as prose. It comes from the supplied
-Data Dump. The pass adds declared node tuning and attribute effect columns,
+Data Dump. The pass adds declared node tuning and all numeric Effect fields
+from the Modkit parser contract, excluding keys and text asset fields,
 creating the Hacker effect and Wireghost talent sheets when needed. It checks dump
 coverage and refuses ambiguous or missing references, then compares the
 exported assignments before writing so a catalog update cannot change tuning.
@@ -215,7 +216,7 @@ Columns can leave the default grid view for three independent reasons. All keep 
 
 - **Hidden by name.** `serve.py:HIDDEN_COLUMNS` covers `ImplantLevel`, `Deactivated`, `Rarity`, `PowerLevel` and `ImplantConflictId` ("item metadata, not a combat lever"). Never index 0. There is no row-count exemption.
 - **Never changes.** `app.html:overlaySuppressed` hides a column whose value is the same on every row, except for key columns, sheets with fewer than two rows, editable columns that are blank everywhere, and talent-catalog lever columns. Catalog tuning stays visible even when all its overrides are equal.
-- **Untouched zero defaults.** `app.html:overlayZeroColumns` collapses plain-set numeric columns only when every displayed cell is blank and its measured shipped baseline is zero. Any explicit override, including zero, keeps the column visible, as do missing baselines, text and other operators. Pending edits are included. Attribute and talent sections are checked separately.
+- **Untouched zero defaults.** `app.html:overlayZeroColumns` collapses plain-set numeric columns only when every cell in its visibility scope is blank and its measured shipped baseline is zero. EffectModel talent catalogs use the whole class's sheet for both their attribute and talent grids; other tables use their displayed rows. Any explicit override, including zero, keeps the column visible, as do missing baselines, text and other operators. Pending edits are included.
 
 The named and constant rules reach the page as separate keys (`entry['hidden']`, `entry['constant']`, from `overlay_hidden` and `overlay_constant`); keep them separate. Zero detection uses the values and baselines already in the model. `app.html` names no column.
 

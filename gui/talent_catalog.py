@@ -23,10 +23,30 @@ NODE_TUNING = ('BuyCost', 'MaxCharges', 'RechargeTurns', 'TurnMaxUses',
                'TalentRange', 'TalentRangeAoE', 'TalentDuration', 'TalentHealing',
                'TalentDamage', 'TalentCount', 'TalentAp', 'TalentLimit')
 ATTRIBUTES = ('AttStrong', 'AttFast', 'AttWill', 'AttTech')
+# Numeric Effect fields declared by the installed Modkit parser's
+# WorkshopContent/config.json, excluding its key and text asset fields.
+# Keep attributes first; the captured dump checks these authored declarations.
+EFFECT_TUNING = ATTRIBUTES + (
+    'MaxHitPoints', 'MinLoyalty', 'WoundRes', 'StressRes', 'DeathSave', 'DumpShockRes',
+    'FiringArc', 'MeleeAttack', 'RangedAttack', 'AccuracyRifle', 'AccuracyPistol',
+    'AccuracyAssault', 'AccuracyCloseCombat', 'AccuracyDrone', 'StealthAccuracy',
+    'OptimalRange', 'CritRate', 'CritRateStealth', 'CritRateStreak', 'CritMultiStealth',
+    'CritMultiBase', 'CritVulnerable', 'PureDamageBallistic', 'PureDamageMelee',
+    'PhysicalDamage', 'BallisticDamage', 'FullAutoDamage', 'DroneDamage',
+    'PhysicalArmor', 'BallisticArmor', 'PureArmor', 'ArmorCrit', 'DmgReduction',
+    'Evasion', 'CoverBonus', 'SightRange', 'AttackDetectRangeReduction',
+    'DetectRangeReduction', 'RecoilBonus', 'RecoilRate', 'MoveSpeed',
+    'MoveSpeedDebuff', 'MoveSpeedMitigate', 'InitBonus', 'ActionPoints',
+    'ActionPointsPet', 'MovePoints', 'XpBonus', 'LevePoints', 'TalentLimit', 'Legwork',
+    'SpecialCode', 'SpecialValue', 'SpecialMerge', 'PathRevealed', 'CommsOut',
+    'DroneJammed', 'HitStreak', 'Invulnerable', 'Invisible', 'Silent', 'SafeArmor',
+    'OverwatchBreak', 'Stunned', 'Immobilized', 'EffectClassification',
+    'EffectClearType', 'EffectPurgeType', 'EffectGroupId', 'EffectOwner',
+    'EffectHealType', 'Heals', 'Duration', 'Instant')
 # Authored editing columns, checked against the installed parser declaration;
 # never derived from whichever nonzero fields happen to occur in the dump.
 CATALOG_COLUMNS = {'JobNodeModel': NODE_TUNING,
-                   'EffectModel': ATTRIBUTES + ('MaxHitPoints',)}
+                   'EffectModel': EFFECT_TUNING}
 REGULAR, ATTRIBUTE = 'Talents and upgrades', 'Attribute nodes'
 
 

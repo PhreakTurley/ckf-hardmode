@@ -617,6 +617,9 @@ const CKF = (function () {
   // unknown baseline, text or non-set operator keeps the column visible.
   // rows carry their original file indices even in a single section's grid.
   function overlayZeroColumns(entry, rows, working) {
+    if (entry.columnScope === 'sheet') rows = (entry.rows || []).map(function (r, i) {
+      return {i:i, cells:r.cells};
+    });
     return (entry.columns || []).map(function (c, ci) {
       if (!ci || c.control || c.op !== 'set' || entry.kind !== 'direct'
           || !rows.length) return false;
@@ -2476,7 +2479,7 @@ function overlayBlock(sch, rel, sectionTitle) {
   const canWrite = !!ov.writable;
   const editableAt = function (i) { return canWrite && !!(ov.editable || [])[i]; };
   // Collapse without removing cells from the working copy or save payload.
-  // Zero detection uses this grid's rows, not another section of the sheet.
+  // The server chooses whether zero detection covers this grid or its sheet.
   const sup = CKF.overlaySuppressed(ov);
   const hid = CKF.overlayHidden(ov);
   const zero = CKF.overlayZeroColumns(ov, groups.reduce(function (rows, g) {
