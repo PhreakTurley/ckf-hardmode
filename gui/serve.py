@@ -1104,7 +1104,7 @@ def _read_overlay_entry(path, rel):
              # ROW_LABEL_SHEETS. {} on every sheet that has no name map and on
              # every entry that never reaches the labelling below, so the key
              # is always present and an absent map is an empty one.
-             'rowLabels': {},
+             'rowLabels': {}, 'rowGroups': {}, 'groupOrder': [], 'catalogOrder': 100,
              'expanderMarks': [], 'sharedBlind': None, 'shipped': {},
              'shippedMissing': 0, 'notes': [], 'excluded': [],
              # THE WRITE SIDE. `editable` is the server's grading
@@ -1152,6 +1152,9 @@ def _read_overlay_entry(path, rel):
             continue
         if header is None:
             header = [parse_overlay_header(c) for c in cells]
+            for column in header:
+                if column['name'] == '_comment':
+                    column['annotation'] = True
             entry['columns'] = header
             if header and not header[0]['control']:
                 entry['keyColumn'] = header[0]['name']
@@ -1202,6 +1205,17 @@ def _read_overlay_entry(path, rel):
     entry['constant'] = overlay_constant(entry)
     entry['hidden'] = overlay_hidden(entry)
     entry['identityColumns'] = overlay_identity_columns(entry)
+    names = [c['name'] for c in header]
+    if '_group' in names:
+        entry['catalogOrder'] = {'JobNodeModel': 0, 'TalentModel': 1,
+                                 'EffectModel': 2, 'MatrixEffectModel': 3}.get(entry['table'], 100)
+        gi = names.index('_group')
+        header[gi]['sectionHeading'] = True
+        for ri, row in enumerate(entry['rows']):
+            title = row['cells'][gi] if gi < len(row['cells']) else ''
+            entry['rowGroups'][str(ri)] = title
+            if title not in entry['groupOrder']:
+                entry['groupOrder'].append(title)
     for _r in entry['rows']:
         _r['key'] = overlay_row_key(entry, _r)
     return entry
@@ -12302,6 +12316,29 @@ const window = {};
 def dom_driver(model_json, asserts=None):
     """The node program: DOM stub, both of app.html's script blocks, a fetch
     that answers with `model_json`, then the assertions."""
+    # Complete catalogs can make every live sheet editable. Exercise the
+    # readonly renderer explicitly instead of relying on mutable tuning to
+    # leave an entire sheet constant. Keep all original sheets in the fixture.
+    fixture = json.loads(model_json)
+    for schema in fixture['schemas']:
+        if any(f.get('in') == 'reference' for f in schema.get('fields', [])):
+            continue
+        paths = (schema.get('targets') or {}).get('overlays') or []
+        candidates = [fixture['values']['overlays'][p] for p in paths
+                      if fixture['values']['overlays'].get(p, {}).get('writable')
+                      and len(fixture['values']['overlays'][p]['rows']) >= 2]
+        if not candidates:
+            continue
+        ent = json.loads(json.dumps(candidates[0]))
+        rel = 'ckf.hardmode.d/readonly-render-fixture.csv'
+        ent['path'], ent['rows'] = rel, ent['rows'][:2]
+        ent['writable'], ent['writableWhy'] = False, 'Explicit readonly render fixture'
+        ent['editable'] = [False] * len(ent['columns'])
+        ent['rowGroups'], ent['groupOrder'] = {}, []
+        fixture['values']['overlays'][rel] = ent
+        schema['targets']['overlays'] = list(paths) + [rel]
+        break
+    model_json = json.dumps(fixture)
     with open(APP_HTML, encoding='utf-8') as f:
         src = f.read()
     blocks = re.findall(r'<script>(.*?)</script>', src, re.S)

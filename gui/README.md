@@ -128,6 +128,34 @@ Slice dependencies (`requires` invariants, `serve.py:requires_pass`): turning a 
 
 The server grades each column (`serve.py:overlay_roles`, `overlay_editable`) and the page reads the result as data (`entry.roles`, `entry.editable`).
 
+### Complete talent catalogs
+
+`talent_catalog.py` is an explicit maintainer annotation pass. It adds missing
+class JobNode rows and related records to the already declared talent sheets,
+leaves all new override cells blank, and preserves existing override cells.
+Class ownership comes from `JobNodeModel.JobId`, including every captured
+version; ids are never assigned to a class by their digit prefix.
+
+Comments state the stock values from the supplied Data Dump, parent talents,
+and the source table/key. Attribute nodes keep their stock Left/Center/Right
+names, with prerequisites, connected nodes, and their referenced effects.
+The pass removes the class prefix from retained tuning notes. It checks dump
+coverage and refuses ambiguous or missing references, then compares the
+exported assignments before writing so a catalog update cannot change tuning.
+
+The `_group` control column becomes section headings in the editor, separating
+**Talents and upgrades** from **Attribute nodes** across the class's sheets.
+It is neither an editable column nor an exported SQL field. Comments appear
+beside node ids and supply shipped-value placeholders. The installed editor
+reads this information from the live sheets and requires no dump.
+
+To refresh the annotations from an independently captured stock dump:
+
+```bat
+cd /d "D:\ckf-data-modding"
+python "D:\ckf-data-modding\gui\talent_catalog.py" --config "C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint\BepInEx\config" --dump "D:\ckf-data-modding\sheets\raw" --project "D:\ckf-data-modding\ckf-talent-balance"
+```
+
 | Role | Editable | Why |
 |---|---|---|
 | `lever` (not index 0) | yes | An override value. |

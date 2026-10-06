@@ -196,6 +196,7 @@ table.grid td.dirty input{background:#1d3350;box-shadow:inset 3px 0 0 var(--acce
 table.grid td.refused input{background:#3a1d1a;color:#ffb4aa;
   box-shadow:inset 3px 0 0 var(--danger)}
 table.grid td.editable input::placeholder{color:var(--faint);font-style:italic}
+table.grid td.annotation{white-space:normal;width:36rem;min-width:32rem;max-width:36rem;line-height:1.5}
 .colbtn{font-size:12.25px;padding:2px 8px;margin:2px 0}
 .chart{background:var(--panel2);border:1px solid var(--line);border-radius:6px;
   margin:10px 0}
@@ -2246,6 +2247,13 @@ function overlayGroups(sch, ov) {
     const key = r.cells[0];
     return { i: i, key: key, cells: r.cells, ref: byKey[String(key)] || null };
   });
+  if ((ov.groupOrder || []).length) {
+    return ov.groupOrder.map(function (title) {
+      return {title: title, rows: rows.filter(function (r) {
+        return ov.rowGroups[String(r.i)] === title;
+      })};
+    });
+  }
   // variant pairing, by name prefix
   const nameOf = function (r) {
     return (r.ref && namecol) ? String(r.ref[namecol]) : null; };
@@ -2376,7 +2384,7 @@ function overlayInput(ov, rel, ri, ci, opts) {
   return inp;
 }
 
-function overlayBlock(sch, rel) {
+function overlayBlock(sch, rel, sectionTitle) {
   const ov = overlayEntry(rel);
   const block = el('div', { class: 'field', style: 'grid-template-columns:1fr' });
   const base = rel.split('/').pop();
@@ -2404,7 +2412,10 @@ function overlayBlock(sch, rel) {
   }
   const ref = referenceAnnotating(sch, ov);
   const gcol = ref ? ref.groupBy : null;
-  const groups = overlayGroups(sch, ov);
+  const groups = overlayGroups(sch, ov).filter(function (g) {
+    return sectionTitle === undefined || g.title === sectionTitle;
+  });
+  const rowCount = groups.reduce(function (n, g) {return n + g.rows.length;}, 0);
   const refCols = ref ? (ref.row || []).filter(function (c) {
     return c.name !== ov.keyColumn && c.name !== gcol; }) : [];
   // THREE ROLES, not two. The server grades each column identity, lever or
@@ -2441,6 +2452,7 @@ function overlayBlock(sch, rel) {
   const idCols = [], valCols = [], ctlCols = [], collapsed = [];
   ov.columns.forEach(function (c, i) {
     if (i === 0) return;                       // drawn as the key, at the left
+    if (c.sectionHeading) return;
     const role = roles[i] || (c.control ? 'control' : 'lever');
     const off = sup[i] || !!hid[i];
     const rec = { c: c, i: i, role: role, flat: sup[i], hidden: hid[i] || null };
@@ -2475,7 +2487,7 @@ function overlayBlock(sch, rel) {
   block.appendChild(el('div', { class: 'meta' }, [
     document.createTextNode(
       (ov.kind === 'direct' ? ov.table + ' · ' : 'expanded at load · ')
-      + ov.rows.length + ' row(s)  '),
+      + rowCount + ' row(s)  '),
     canWrite
       ? el('span', { class: 'pill on', text: nEdit + ' editable column(s)',
                      title: 'Lever and override columns take an edit; identity '
@@ -2500,6 +2512,11 @@ function overlayBlock(sch, rel) {
   const wrap = el('div', { class: 'grid-wrap' });
   const tbl = el('table', { class: 'grid' });
   const head = [el('th', { text: ov.keyColumn + ' (key)' })];
+  const leadComments = (ov.groupOrder || []).length
+    ? ctlCols.filter(function (v) {return v.c.annotation;}) : [];
+  const tailControls = ctlCols.filter(function (v) {return leadComments.indexOf(v) < 0;});
+  for (const v of leadComments)
+    head.push(el('th', {text: 'Node, parent and shipped tuning'}));
   for (const c of refCols)
     head.push(el('th', { text: CKF.softWrap(c.name),
                          title: c.name + ' — from the schema, not from the file' }));
@@ -2527,13 +2544,13 @@ function overlayBlock(sch, rel) {
                                 + (v.flat ? '; it holds one value on every row '
                                             + 'and is normally collapsed' : '') }));
   }
-  for (const v of ctlCols)
+  for (const v of tailControls)
     head.push(el('th', { class: v.flat ? 'constant' : '',
                          text: CKF.softWrap(v.c.name) }));
   tbl.appendChild(el('thead', {}, [el('tr', {}, head)]));
   const tb = el('tbody', {});
   for (const g of groups) {
-    if (g.title !== null) {
+    if (g.title !== null && sectionTitle === undefined) {
       tb.appendChild(el('tr', { class: 'grouphead' }, [
         el('td', { colspan: String(head.length) }, [
           el('b', { text: g.title }),
@@ -2551,6 +2568,8 @@ function overlayBlock(sch, rel) {
         document.createTextNode(String(r.key)),
         rowLab ? el('span', { class: 'small', text: '  ' + rowLab }) : null,
         r.suffix ? el('span', { class: 'pill na', text: r.suffix }) : null]));
+      for (const v of leadComments)
+        tr.appendChild(el('td', {class: 'ro annotation', text: r.cells[v.i] || ''}));
       for (const c of refCols)
         tr.appendChild(el('td', { class: 'ro',
           text: r.ref ? String(r.ref[c.name]) : '—' }));
@@ -2617,7 +2636,7 @@ function overlayBlock(sch, rel) {
         }
         tr.appendChild(el('td', { class: 'ro' + (mark ? ' shared' : '') }, kids));
       }
-      for (const v of ctlCols)
+      for (const v of tailControls)
         tr.appendChild(el('td', { class: 'ro' + (v.flat ? ' constant' : ''),
                                   text: r.cells[v.i] || '' }));
       tb.appendChild(tr);
@@ -2874,8 +2893,28 @@ function renderSubsystem(p, sch, fields) {
   // Flipping the gate off skips all of them: Overlays.Load asks
   // Slices.VerdictForOverlay per file BEFORE it opens it, so a file whose
   // slice is off is never read.
-  const ovs = overlaysOf(sch);
-  for (const rel of ovs) { any = true; body.appendChild(overlayBlock(sch, rel)); }
+  const ovs = overlaysOf(sch).slice().sort(function (a, b) {
+    return ((overlayEntry(a) || {}).catalogOrder || 0)
+      - ((overlayEntry(b) || {}).catalogOrder || 0);
+  });
+  const sectionTitles = [];
+  for (const rel of ovs) for (const title of ((overlayEntry(rel) || {}).groupOrder || []))
+    if (sectionTitles.indexOf(title) < 0) sectionTitles.push(title);
+  for (const rel of ovs) {
+    const ov = overlayEntry(rel);
+    if (!(ov && ov.groupOrder && ov.groupOrder.length)) {
+      any = true; body.appendChild(overlayBlock(sch, rel));
+    }
+  }
+  for (const title of sectionTitles) {
+    any = true;
+    body.appendChild(el('h3', {text: title}));
+    for (const rel of ovs) {
+      const ov = overlayEntry(rel);
+      if (ov && (ov.groupOrder || []).indexOf(title) >= 0)
+        body.appendChild(overlayBlock(sch, rel, title));
+    }
+  }
   if (any) p.appendChild(body);
 }
 
