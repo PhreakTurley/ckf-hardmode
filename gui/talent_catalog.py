@@ -9,7 +9,6 @@ import csv
 import io
 import json
 from pathlib import Path
-import re
 import tempfile
 
 import modkit
@@ -19,21 +18,14 @@ JOBS = {'ck': 1, 'wm': 2, 'cs': 3, 'aex': 5, 'sol': 7, 'sn': 11,
 KEYS = {'JobModel': 'JobId', 'JobNodeModel': 'JobNodeId', 'TalentModel': 'TalentId',
         'EffectModel': 'EffectId', 'MatrixEffectModel': 'MatrixEffectId'}
 TALENT_LINKS = ('NodeTalent1Id', 'NodeTalentAdjustmentId', 'NodeTalentTriggerId')
-NODE_TUNING = ('BuyCost', 'TurnMaxUses', 'MaxCharges', 'RechargeTurns',
+NODE_TUNING = ('BuyCost', 'MaxCharges', 'RechargeTurns', 'TurnMaxUses',
                'TalentRange', 'TalentRangeAoE', 'TalentDuration', 'TalentHealing',
-               'TalentDamage', 'TalentCount', 'TalentAp', 'TalentLimit',
-               'CarryItemClass', 'ImplantClass', 'ImplantLevel', 'Locked')
+               'TalentDamage', 'TalentCount', 'TalentAp', 'TalentLimit')
 ATTRIBUTES = ('AttStrong', 'AttFast', 'AttWill', 'AttTech')
-EFFECT_CONTEXT = ATTRIBUTES + ('MaxHitPoints', 'WoundRes', 'StressRes', 'DeathSave',
-    'DumpShockRes', 'FiringArc', 'MeleeAttack', 'RangedAttack', 'AccuracyRifle',
-    'AccuracyPistol', 'AccuracyAssault', 'AccuracyCloseCombat', 'AccuracyDrone',
-    'StealthAccuracy', 'OptimalRange', 'CritRate', 'CritRateStealth',
-    'CritRateStreak', 'CritMultiStealth', 'CritMultiBase', 'CritVulnerable',
-    'PureDamageBallistic', 'PureDamageMelee', 'PhysicalDamage', 'BallisticDamage',
-    'FullAutoDamage', 'DroneDamage', 'PhysicalArmor', 'BallisticArmor', 'PureArmor',
-    'ArmorCrit', 'DmgReduction', 'Evasion', 'CoverBonus', 'SightRange',
-    'RecoilBonus', 'RecoilRate', 'MoveSpeed', 'MoveSpeedDebuff', 'MoveSpeedMitigate',
-    'InitBonus', 'ActionPoints', 'ActionPointsPet', 'MovePoints', 'XpBonus')
+# Authored editing columns, checked against the installed parser declaration;
+# never derived from whichever nonzero fields happen to occur in the dump.
+CATALOG_COLUMNS = {'JobNodeModel': NODE_TUNING,
+                   'EffectModel': ATTRIBUTES + ('MaxHitPoints',)}
 REGULAR, ATTRIBUTE = 'Talents and upgrades', 'Attribute nodes'
 
 
@@ -115,10 +107,6 @@ def catalog(tables, job):
     return nodes, parent_ids, owners
 
 
-def stock_text(row, columns):
-    return '; '.join('%s %s' % (c, row[c]) for c in columns)
-
-
 def render_sheet(raw, table, tag, tables, nodes, parent_ids, owners):
     reader = csv.DictReader(io.StringIO(raw.decode('utf-8-sig'), newline=''))
     header = list(reader.fieldnames or [])
@@ -135,15 +123,18 @@ def render_sheet(raw, table, tag, tables, nodes, parent_ids, owners):
             raise ValueError('Duplicate live row in %s.%s' % (table, tag))
         original[row[key]] = row
     identities = set(original) | set(owners[table])
-    for control in ('_comment', '_group'):
+    controls = [c for c in header if c.startswith('_')]
+    levers = list(dict.fromkeys(CATALOG_COLUMNS.get(table, ()) + tuple(
+        c for c in header[1:] if not c.startswith('_'))))
+    header = [key] + levers + controls
+    for control in ('_comment', '_group', '_shipped'):
         if control not in header:
             header.append(control)
-    levers = [c for c in header[1:] if not c.startswith('_')]
     rows = []
 
     def node_label(identity):
         r = tables['JobNodeModel'][identity]
-        return '%s (node %s)' % (r['JobNodeName'], identity)
+        return r['JobNodeName']
 
     for identity in sorted(identities, key=int):
         stock = tables[table].get(identity)
@@ -154,64 +145,38 @@ def render_sheet(raw, table, tag, tables, nodes, parent_ids, owners):
         row = dict(original.get(identity, {}))
         row[key] = identity
         parent = list(dict.fromkeys(t for n in users for t in parent_ids[n]))
-        names = ['%s (Talent %s)' % (tables['TalentModel'][t]['TalentName'], t)
-                 for t in parent]
+        names = list(dict.fromkeys(tables['TalentModel'][t]['TalentName'] for t in parent))
         if table == 'TalentModel':
             label = stock['TalentName']
-            names = ['%s (Talent %s)' % (label, identity)]
+            names = [label]
         elif table == 'JobNodeModel':
             label = node_label(identity)
         else:
-            label = (', '.join(node_label(n) for n in users) if attr
-                     else ('Matrix effect ' if table == 'MatrixEffectModel' else 'Effect ') + identity)
-        parts = [label + '.', 'Parent talent: ' + (', '.join(names) or
-                 ('none (attribute branch)' if attr else 'none (class node)')) + '.']
+            label = ', '.join(dict.fromkeys(node_label(n) for n in users)) if attr else ', '.join(names)
+            if not label:
+                label = ', '.join(dict.fromkeys(node_label(n) for n in users)) or 'Effect'
+        parts = [label]
+        if names and label != ', '.join(names):
+            parts.append('Parent: ' + ', '.join(names))
         if not names and not attr and users:
             bases = list(dict.fromkeys(positive(nodes[n], 'SubTree') or n for n in users))
             bases = [n for n in bases if positive(tables['JobNodeModel'][n], 'NodeEffect1Id')]
             if bases:
-                parts[1] = 'Parent talent: ' + ', '.join(node_label(n) for n in bases) + '.'
-        columns = list(levers)
-        if table == 'JobNodeModel':
-            columns += [c for c in NODE_TUNING if c not in columns]
-        parts.append('Shipped: ' + stock_text(stock, columns) + '.')
-        if table == 'JobNodeModel':
-            connected = []
-            for c in ('NodeReq1', 'NodeReq2', 'NodeReq3'):
-                n = positive(stock, c)
-                if n:
-                    connected.append(node_label(n))
+                parent_label = ', '.join(dict.fromkeys(node_label(n) for n in bases))
+                if parent_label != label:
+                    parts.append('Parent: ' + parent_label)
+        row['_shipped'] = json.dumps({c: stock[c] for c in levers}, separators=(',', ':'))
+        if table == 'JobNodeModel' and attr:
+            connected = [node_label(n) for c in ('NodeReq1', 'NodeReq2', 'NodeReq3')
+                         if (n := positive(stock, c))]
             dependents = [n for n, r in nodes.items() if identity in
                           [positive(r, c) for c in ('NodeReq1', 'NodeReq2', 'NodeReq3')]]
-            parts.append('Prerequisites: ' + (', '.join(connected) or 'none') + '.')
-            parts.append('Connects to: ' + (', '.join(node_label(n) for n in sorted(
-                dependents, key=int)) or 'none') + '.')
-            e = positive(stock, 'NodeEffect1Id')
-            if e:
-                effect = tables['EffectModel'][e]
-                vals = [c for c in EFFECT_CONTEXT if effect[c] != '0']
-                parts.append('Touches Effect %s%s.' % (e, ('; shipped ' +
-                             stock_text(effect, vals)) if vals else ''))
-        else:
-            parts.append('Touches nodes: ' + (', '.join(node_label(n) for n in users)
-                                              or 'no class reference in dump') + '.')
-            if table == 'EffectModel' and attr:
-                vals = [c for c in ATTRIBUTES if stock[c] != '0']
-                if vals:
-                    parts.append('Shipped attributes: ' + stock_text(stock, vals) + '.')
-        note = row.get('_comment', '') or ''
-        if row.get('_group') and ' Stock source: ' in note:
-            note = note.rsplit(' Stock source: ', 1)[0]
-        # Re-running replaces our annotation, retaining only the tuning note.
-        if ' Tuning note: ' in note:
-            note = note.split(' Tuning note: ', 1)[1]
-        elif row.get('_group'):
-            note = ''
-        note = re.sub(r'^' + re.escape(tag.upper()) + r'\s*/\s*', '', note)
-        if note:
-            parts.append('Tuning note: ' + note)
-        parts.append('Stock source: %s.csv, %s %s.' % (table, key, identity))
-        row['_comment'] = ' '.join(parts)
+            connected += [node_label(n) for n in sorted(dependents, key=int)]
+            if connected:
+                parts.append('Connections: ' + ', '.join(dict.fromkeys(connected)))
+        # The overlay reader addresses physical CSV lines; keep each record
+        # on one line and let the GUI lay out the compact clauses.
+        row['_comment'] = ' | '.join(parts)
         row['_group'] = ATTRIBUTE if attr else REGULAR
         rows.append(row)
     rows.sort(key=lambda r: (r['_group'] == ATTRIBUTE, int(r[key])))
@@ -244,19 +209,29 @@ def complete(config, dump, project):
     inputs[cfg] = modkit.state(cfg)
     files = [config / 'ckf.hardmode.d' / name for name, _, _ in exporter.expected_files()]
     expected = {p: modkit.state(p) for p in files}
-    original_export = exporter.build_export(config / 'ckf.hardmode.d', None)[0]
+    originals = {}
+    for p in files:
+        if p.exists():
+            originals[p] = p.read_bytes()
+        elif p.name == 'EffectModel.hkr.csv':
+            originals[p] = b'EffectId,_comment\n'
+        else:
+            raise ValueError('Missing live sheet: ' + str(p))
     outputs, counts = {}, {}
     for tag, job in JOBS.items():
         nodes, parents, owners = catalog(tables, job)
         for p in files:
             if p.name.split('.')[1] != tag:
                 continue
-            outputs[p], counts[p.name] = render_sheet(p.read_bytes(), p.name.split('.')[0],
+            outputs[p], counts[p.name] = render_sheet(originals[p], p.name.split('.')[0],
                 tag, tables, nodes, parents, owners)
     with tempfile.TemporaryDirectory(prefix='ckf-catalog-check-') as td:
         staged = Path(td) / 'ckf.hardmode.d'
         staged.mkdir()
         (staged.parent / cfg.name).write_bytes(cfg.read_bytes())
+        for p, data in originals.items():
+            (staged / p.name).write_bytes(data)
+        original_export = exporter.build_export(staged, None)[0]
         for p, data in outputs.items():
             (staged / p.name).write_bytes(data)
         proposed = exporter.build_export(staged, None)[0]

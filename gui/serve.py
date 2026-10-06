@@ -970,9 +970,9 @@ def parse_overlay_header(cell):
 # per-line endings, the blank lines, the trailing newline -- is carried through
 # untouched because it is never re-rendered.
 #
-# The `Shipped:` prose is the last FIELD of a data row, in the `_comment`
-# control column, and is quoted when it carries a comma. The span writer
-# preserves both cases without knowing which it is looking at. Blank lines,
+# Baselines can live in `_shipped` JSON or legacy `_comment` prose. Both are
+# control fields; quoting and their position are preserved by the span writer
+# without interpreting their contents. Blank lines,
 # `#` lines, CRLF and a BOM are all handled, whether or not a sheet has them.
 
 def csv_field_spans(line, sep=','):
@@ -1155,6 +1155,8 @@ def _read_overlay_entry(path, rel):
             for column in header:
                 if column['name'] == '_comment':
                     column['annotation'] = True
+                if column['name'] == '_shipped':
+                    column['metadata'] = True
             entry['columns'] = header
             if header and not header[0]['control']:
                 entry['keyColumn'] = header[0]['name']
@@ -1791,22 +1793,42 @@ _SHIPPED_PAIR_RE = re.compile(r'^([A-Za-z][A-Za-z0-9]*)\s+(-?\d+(?:\.\d+)?)$')
 
 
 def overlay_shipped(entry):
-    """What the game ships for each lever cell, out of the row's own _comment.
+    """Shipped lever baselines from _shipped metadata or legacy _comment prose.
 
     -> ({row index: {column: text}}, rows_without_one)
 
-    The sheets state it themselves -- "Shipped: PowerLevel 2; Rarity 2; ..." --
-    so the page can put the shipped value beside a blank override without a
-    dump and without a second copy anywhere. Rows whose comment does not carry
-    one are COUNTED and reported: a page that silently showed nothing for them
-    would look exactly like a page whose parser had stopped working.
+    Talent catalogs separate full numeric baselines from concise comments.
+    Other sheets retain their "Shipped: PowerLevel 2; Rarity 2; ..." prose.
+    Missing or invalid baselines are counted, including malformed metadata;
+    a bad _shipped cell never falls back to unrelated descriptive prose.
     """
     names = [c['name'] for c in (entry.get('columns') or [])]
     ci = names.index('_comment') if '_comment' in names else None
+    si = names.index('_shipped') if '_shipped' in names else None
     out, missing = {}, 0
-    if ci is None:
+    if ci is None and si is None:
         return out, len(entry.get('rows') or [])
     for ri, r in enumerate(entry.get('rows') or []):
+        if si is not None:
+            try:
+                values = json.loads(r['cells'][si])
+                if not isinstance(values, dict):
+                    raise ValueError('shipped baselines must be a map')
+                if any(k not in names or k.startswith('_') or k == entry.get('keyColumn')
+                       or not _SHIPPED_PAIR_RE.fullmatch(k + ' ' + str(v))
+                       for k, v in values.items()):
+                    raise ValueError('invalid shipped baseline')
+                pairs = {k: str(v) for k, v in values.items()}
+                if pairs:
+                    out[ri] = pairs
+                else:
+                    missing += 1
+            except (ValueError, TypeError, IndexError):
+                missing += 1
+            continue
+        if ci is None:
+            missing += 1
+            continue
         m = _SHIPPED_RE.search((r['cells'][ci] or '') + ' ')
         if not m:
             missing += 1
@@ -8340,13 +8362,24 @@ def selftest(config_arg, frozen_exe=None):
         print('        pack file counts: %s'
               % ', '.join('%s %d' % (k, len(v))
                           for k, v in sorted(_pack_files.items())))
-        t.check('every pack owns two or three files, never one and never none',
-                all(2 <= len(v) <= 3 for v in _pack_files.values()),
-                {k: len(v) for k, v in _pack_files.items()
+        # Hacker now exposes physical attribute effects alongside its matrix
+        # effects. Require the exact four-table contract; keep the original
+        # two/three-file checks on every unchanged pack.
+        t.check('Hacker owns its node, talent, physical effect and matrix effect sheets',
+                set(_pack_files.get('TalentsHacker', [])) == {
+                    'ckf.hardmode.d/JobNodeModel.hkr.csv',
+                    'ckf.hardmode.d/TalentModel.hkr.csv',
+                    'ckf.hardmode.d/EffectModel.hkr.csv',
+                    'ckf.hardmode.d/MatrixEffectModel.hkr.csv'},
+                _pack_files.get('TalentsHacker'))
+        _unchanged_pack_files = {k: v for k, v in _pack_files.items() if k != 'TalentsHacker'}
+        t.check('every other pack owns two or three files, never one and never none',
+                all(2 <= len(v) <= 3 for v in _unchanged_pack_files.values()),
+                {k: len(v) for k, v in _unchanged_pack_files.items()
                  if not 2 <= len(v) <= 3})
-        t.check('and both shapes are present, so neither branch is untested',
-                len(set(len(v) for v in _pack_files.values())) == 2,
-                sorted(set(len(v) for v in _pack_files.values())))
+        t.check('and both original shapes are present, so neither branch is untested',
+                set(len(v) for v in _unchanged_pack_files.values()) == {2, 3},
+                sorted(set(len(v) for v in _unchanged_pack_files.values())))
         # The two packs whose file set is not the usual three. Found from the
         # data, not named: one pack's tables differ from every other's.
         _tables = dict((sid, sorted(overlay_table_name(r) for r in v))

@@ -196,7 +196,9 @@ table.grid td.dirty input{background:#1d3350;box-shadow:inset 3px 0 0 var(--acce
 table.grid td.refused input{background:#3a1d1a;color:#ffb4aa;
   box-shadow:inset 3px 0 0 var(--danger)}
 table.grid td.editable input::placeholder{color:var(--faint);font-style:italic}
-table.grid td.annotation{white-space:normal;width:36rem;min-width:32rem;max-width:36rem;line-height:1.5}
+table.grid td.annotation{white-space:normal;width:24rem;min-width:22rem;max-width:28rem;line-height:1.4}
+table.grid td.annotation .node-name{display:block;font-weight:600}
+table.grid td.annotation .node-detail{display:block;color:var(--muted)}
 .colbtn{font-size:12.25px;padding:2px 8px;margin:2px 0}
 .chart{background:var(--panel2);border:1px solid var(--line);border-radius:6px;
   margin:10px 0}
@@ -2452,7 +2454,7 @@ function overlayBlock(sch, rel, sectionTitle) {
   const idCols = [], valCols = [], ctlCols = [], collapsed = [];
   ov.columns.forEach(function (c, i) {
     if (i === 0) return;                       // drawn as the key, at the left
-    if (c.sectionHeading) return;
+    if (c.sectionHeading || c.metadata) return;
     const role = roles[i] || (c.control ? 'control' : 'lever');
     const off = sup[i] || !!hid[i];
     const rec = { c: c, i: i, role: role, flat: sup[i], hidden: hid[i] || null };
@@ -2516,7 +2518,7 @@ function overlayBlock(sch, rel, sectionTitle) {
     ? ctlCols.filter(function (v) {return v.c.annotation;}) : [];
   const tailControls = ctlCols.filter(function (v) {return leadComments.indexOf(v) < 0;});
   for (const v of leadComments)
-    head.push(el('th', {text: 'Node, parent and shipped tuning'}));
+    head.push(el('th', {text: 'Node & details'}));
   for (const c of refCols)
     head.push(el('th', { text: CKF.softWrap(c.name),
                          title: c.name + ' — from the schema, not from the file' }));
@@ -2568,8 +2570,12 @@ function overlayBlock(sch, rel, sectionTitle) {
         document.createTextNode(String(r.key)),
         rowLab ? el('span', { class: 'small', text: '  ' + rowLab }) : null,
         r.suffix ? el('span', { class: 'pill na', text: r.suffix }) : null]));
-      for (const v of leadComments)
-        tr.appendChild(el('td', {class: 'ro annotation', text: r.cells[v.i] || ''}));
+      for (const v of leadComments) {
+        const lines = String(r.cells[v.i] || '').split(/\n| \| /);
+        tr.appendChild(el('td', {class: 'ro annotation'}, lines.map(function (text, i) {
+          return el('span', {class: i ? 'node-detail' : 'node-name', text: text});
+        })));
+      }
       for (const c of refCols)
         tr.appendChild(el('td', { class: 'ro',
           text: r.ref ? String(r.ref[c.name]) : '—' }));

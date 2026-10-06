@@ -3025,6 +3025,7 @@ Slice toggle. Off: Slices.VerdictForOverlay skips every file below before it is 
 Files this toggle gates:
 
 ```text
+  EffectModel.hkr.csv
   JobNodeModel.hkr.csv
   MatrixEffectModel.hkr.csv
   TalentModel.hkr.csv
@@ -3034,7 +3035,7 @@ Talent balance pack for Hacker: JobId 13, JobName "Hacker" in JobModel. The pair
 
 Each file is a direct overlay: the part of the filename before the first dot names the game table, and "hkr" is the pack's filename tag.
 
-This pack carries MatrixEffectModel.hkr.csv and has no EffectModel file.
+EffectModel.hkr.csv exposes physical and attribute effects; MatrixEffectModel.hkr.csv exposes matrix effects.
 
 Do not read the class off an id's leading digits: JobNodeId 31166 ("Downed Shields 6") belongs to JobId 13, Hacker, not JobId 31. Only the join settles it [measured].
 
@@ -3049,7 +3050,7 @@ Turn this off and the mod skips this page's files, so nothing on this page is ap
 | Role | File |
 |---|---|
 | `cfg` | `ckf.hardmode.cfg` |
-| `overlays` | `['ckf.hardmode.d/JobNodeModel.hkr.csv', 'ckf.hardmode.d/MatrixEffectModel.hkr.csv', 'ckf.hardmode.d/TalentModel.hkr.csv']` |
+| `overlays` | `['ckf.hardmode.d/EffectModel.hkr.csv', 'ckf.hardmode.d/JobNodeModel.hkr.csv', 'ckf.hardmode.d/MatrixEffectModel.hkr.csv', 'ckf.hardmode.d/TalentModel.hkr.csv']` |
 
 ### Enable chain
 

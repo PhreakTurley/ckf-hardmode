@@ -104,6 +104,7 @@ namespace CKFHardMode
             { "EffectModel.ck.csv",         "TalentsCyberKnight" },
             { "EffectModel.cs.csv",         "TalentsCS" },
             { "EffectModel.gs.csv",         "TalentsGunslinger" },
+            { "EffectModel.hkr.csv",        "TalentsHacker" },
             { "EffectModel.sc.csv",         "TalentsSawbones" },
             { "EffectModel.sn.csv",         "TalentsSniper" },
             { "EffectModel.sol.csv",        "TalentsSoldier" },

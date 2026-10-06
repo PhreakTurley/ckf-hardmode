@@ -4,6 +4,7 @@
   "targets":   {
     "cfg": "ckf.hardmode.cfg",
     "overlays": [
+      "ckf.hardmode.d/EffectModel.hkr.csv",
       "ckf.hardmode.d/JobNodeModel.hkr.csv",
       "ckf.hardmode.d/MatrixEffectModel.hkr.csv",
       "ckf.hardmode.d/TalentModel.hkr.csv"
@@ -18,6 +19,7 @@
     "ModelRules is off (ModelRules.Init returns before Overlays.Load).",
     "",
     "Files this toggle gates:",
+    "  EffectModel.hkr.csv",
     "  JobNodeModel.hkr.csv",
     "  MatrixEffectModel.hkr.csv",
     "  TalentModel.hkr.csv",
@@ -30,7 +32,8 @@
     "Each file is a direct overlay: the part of the filename before the first",
     "dot names the game table, and \"hkr\" is the pack's filename tag.",
     "",
-    "This pack carries MatrixEffectModel.hkr.csv and has no EffectModel file.",
+    "EffectModel.hkr.csv exposes physical and attribute effects;",
+    "MatrixEffectModel.hkr.csv exposes matrix effects.",
     "",
     "Do not read the class off an id's leading digits: JobNodeId 31166",
     "(\"Downed Shields 6\") belongs to JobId 13, Hacker, not JobId 31. Only",

@@ -136,17 +136,21 @@ leaves all new override cells blank, and preserves existing override cells.
 Class ownership comes from `JobNodeModel.JobId`, including every captured
 version; ids are never assigned to a class by their digit prefix.
 
-Comments state the stock values from the supplied Data Dump, parent talents,
-and the source table/key. Attribute nodes keep their stock Left/Center/Right
-names, with prerequisites, connected nodes, and their referenced effects.
-The pass removes the class prefix from retained tuning notes. It checks dump
+Comments show the node name and its parent when different. Attribute nodes
+keep Left/Center/Right names and list connections without claiming a required
+path through them. Numeric tuning belongs in editable cells, with **ships N**
+placeholders. Comments omit tuning numbers, old balance notes, and repeated ids.
+The `_shipped` JSON control cell carries the complete editable baselines,
+including zeros, without displaying them as prose. It comes from the supplied
+Data Dump. The pass adds declared node tuning and attribute effect columns,
+creating the Hacker effect sheet when needed. It checks dump
 coverage and refuses ambiguous or missing references, then compares the
 exported assignments before writing so a catalog update cannot change tuning.
 
 The `_group` control column becomes section headings in the editor, separating
 **Talents and upgrades** from **Attribute nodes** across the class's sheets.
-It is neither an editable column nor an exported SQL field. Comments appear
-beside node ids and supply shipped-value placeholders. The installed editor
+Neither `_group` nor `_shipped` is editable or exported as an SQL field.
+Comments appear beside node ids; `_shipped` supplies the placeholders. The installed editor
 reads this information from the live sheets and requires no dump.
 
 To refresh the annotations from an independently captured stock dump:
