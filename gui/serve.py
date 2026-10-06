@@ -12176,8 +12176,15 @@ const zeroWorking = []; zeroWorking[4] = ['4','2','','0','0'];
 ck('a pending nonzero edit keeps a zero baseline column visible',
    CKF.overlayZeroColumns(zeroFixture, zeroRows.slice(0,1), zeroWorking)[1] === false);
 zeroWorking[7] = ['7','0','','0','0'];
-ck('an explicit zero overrides a nonzero baseline for display',
-   CKF.overlayZeroColumns(zeroFixture, zeroRows.slice(1), zeroWorking)[1] === true);
+ck('an explicit zero override keeps its column visible',
+   CKF.overlayZeroColumns(zeroFixture, zeroRows.slice(1), zeroWorking)[1] === false);
+zeroWorking[4][1] = '0';
+ck('an explicit zero remains visible even when its baseline is zero',
+   CKF.overlayZeroColumns(zeroFixture, zeroRows.slice(0,1), zeroWorking)[1] === false);
+ck('uniform catalog overrides are not collapsed as constants',
+   CKF.overlaySuppressed({catalogOrder:2,columns:zeroFixture.columns,
+     rows:zeroRows,roles:['identity','lever','lever','lever','control'],
+     constant:[null,{value:'0'},null,null,null],editable:[false,true,true,true,false]})[1] === false);
 zeroWorking[7][1] = 'nonsense';
 ck('invalid input is visible rather than mistaken for zero',
    CKF.overlayZeroColumns(zeroFixture, zeroRows.slice(1), zeroWorking)[1] === false);

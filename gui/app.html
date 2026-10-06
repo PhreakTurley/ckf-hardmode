@@ -572,6 +572,8 @@ const CKF = (function () {
     for (let i = 1; i < cols.length; i++) {                       // exception 1
       const k = con[i];
       if (!k || typeof k.value !== 'string') continue;   // varies, or not sent
+      // Catalog lever cells carry tuning, even when every override is equal.
+      if (entry.catalogOrder < 100 && (entry.roles || [])[i] === 'lever') continue;
       if (ed[i] && k.value === '') continue;                      // exception 3
       out[i] = true;
     }
@@ -611,8 +613,8 @@ const CKF = (function () {
     });
   }
 
-  // Only measured numeric zeroes count. Blanks inherit the baseline; an
-  // unknown baseline, text or a non-set operator keeps the column visible.
+  // Only untouched numeric zero baselines count. Any explicit override,
+  // unknown baseline, text or non-set operator keeps the column visible.
   // rows carry their original file indices even in a single section's grid.
   function overlayZeroColumns(entry, rows, working) {
     return (entry.columns || []).map(function (c, ci) {
@@ -620,9 +622,9 @@ const CKF = (function () {
           || !rows.length) return false;
       return rows.every(function (r) {
         const cells = working && working[r.i] ? working[r.i] : r.cells;
-        let value = cells[ci];
-        if (value === undefined || value === null || String(value).trim() === '')
-          value = ((entry.shipped || {})[String(r.i)] || {})[c.name];
+        if (cells[ci] !== undefined && cells[ci] !== null && String(cells[ci]).trim() !== '')
+          return false;
+        const value = ((entry.shipped || {})[String(r.i)] || {})[c.name];
         if (value === undefined || value === null) return false;
         const text = String(value).trim();
         return NUM.test(text) && Number(text) === 0;
