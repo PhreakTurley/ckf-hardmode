@@ -189,13 +189,18 @@ table.grid th.constant,table.grid td.constant{opacity:.62}
    variant-pairing case asserts that a row outside the variant family carries no
    pill, so anything added inside a <tr> risks reading as one. A class on the td
    is neither. */
-table.grid td.dirty input{background:#1d3350;box-shadow:inset 3px 0 0 var(--accent)}
+table.grid td.dirty input{box-shadow:inset 3px 0 0 var(--accent)}
 /* The cell a refusal named. Distinct from `bad` (which this page decided) so
    that "the server said no to THIS cell" and "this does not parse" do not wear
    the same colour. */
 table.grid td.refused input{background:#3a1d1a;color:#ffb4aa;
   box-shadow:inset 3px 0 0 var(--danger)}
 table.grid td.editable input::placeholder{color:var(--faint);font-style:italic}
+table.grid td.shipped-interesting,table.grid td.shipped-interesting input{background:#403817;color:#ffe28a;opacity:1}
+table.grid td.shipped-interesting input::placeholder{color:#ffe28a;opacity:1}
+table.grid td.overlay-overwrite,table.grid td.overlay-overwrite input{background:#482326;color:#ffb5b9;opacity:1}
+table.grid td.overlay-overwrite input::placeholder{color:#ffb5b9;opacity:1}
+table.grid td.shipped-interesting .small,table.grid td.overlay-overwrite .small{color:inherit}
 table.grid td.annotation{white-space:normal;width:24rem;min-width:22rem;max-width:28rem;line-height:1.4}
 table.grid td.annotation .node-name{display:block;font-weight:600}
 table.grid td.annotation .node-detail{display:block;color:var(--muted)}
@@ -625,6 +630,17 @@ const CKF = (function () {
     });
   }
 
+  // Explicit values take priority over the server's baseline exceptions.
+  // Working cells include saved overrides as well as unsaved edits.
+  function overlayHighlight(entry, ri, ci, value) {
+    const col = (entry.columns || [])[ci] || {};
+    if (!ci || col.control || (entry.roles && entry.roles[ci] !== 'lever')) return '';
+    if (value !== undefined && value !== null && String(value).trim() !== '')
+      return 'overlay-overwrite';
+    const interesting = (entry.shippedHighlights || {})[String(ri)] || [];
+    return interesting.indexOf(ci) >= 0 ? 'shipped-interesting' : '';
+  }
+
   // WHETHER ONE PROPOSED LEVER CELL WILL SURVIVE THE SAVE.
   //
   // A transcription of serve.py's overlay_check_cell, so that a cell the server
@@ -665,6 +681,7 @@ const CKF = (function () {
   return {
     overlaySuppressed: overlaySuppressed, overlayHidden: overlayHidden,
     overlayZeroColumns: overlayZeroColumns,
+    overlayHighlight: overlayHighlight,
     overlayCellProblem: overlayCellProblem,
     parseAdjust: parseAdjust, describeAdjust: describeAdjust,
     renderCfgValue: renderCfgValue, coerceCell: coerceCell, inRange: inRange,
@@ -2375,12 +2392,15 @@ function overlayInput(ov, rel, ri, ci, opts) {
 
   const paint = function () {
     const v = String(inp.value);
-    const cls = [base];
+    const highlight = CKF.overlayHighlight(ov, ri, ci, v);
+    const cls = [base, highlight];
     inp.placeholder = v === '' ? (ship === undefined ? '—' : 'ships ' + ship) : '';
     const why = [col.name + ' — ' + col.op + (lab ? '; here it is ' + lab.why : '')];
     why.push(ship === undefined
       ? 'an empty box leaves the game\'s own column alone'
       : 'the game ships ' + ship + '; an empty box leaves that alone');
+    if (highlight) why.push(highlight === 'overlay-overwrite'
+      ? 'red: an override is set' : 'yellow: an atypical shipped value');
     const p = CKF.overlayCellProblem(ov, ci, v);
     if (p && p.bad) { cls.push('bad'); why.push('THE SAVE WILL REFUSE THIS: ' + p.bad); }
     else if (p && p.warn) why.push('NOT CHECKED AGAINST A SCHEMA: ' + p.warn);
@@ -2653,7 +2673,8 @@ function overlayBlock(sch, rel, sectionTitle) {
                    + ' — it does not change what ' + mark.target + ' does, and '
                    + 'no sheet can. ' + mark.note }));
         }
-        tr.appendChild(el('td', { class: 'ro' + (mark ? ' shared' : '') }, kids));
+        tr.appendChild(el('td', { class: 'ro' + (mark ? ' shared' : '')
+          + ' ' + CKF.overlayHighlight(ov, r.i, v.i, cell) }, kids));
       }
       for (const v of tailControls)
         tr.appendChild(el('td', { class: 'ro' + (v.flat ? ' constant' : ''),

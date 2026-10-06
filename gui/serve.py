@@ -1202,6 +1202,7 @@ def _read_overlay_entry(path, rel):
     shipped, missing = overlay_shipped(entry)
     entry['shipped'] = dict((str(k), v) for k, v in shipped.items())
     entry['shippedMissing'] = missing
+    entry['shippedHighlights'] = overlay_shipped_highlights(entry)
     entry['notes'] = overlay_notes(entry)
     entry['editable'] = overlay_editable(entry)
     entry['constant'] = overlay_constant(entry)
@@ -1901,6 +1902,34 @@ def overlay_shipped(entry):
         else:
             missing += 1
     return out, missing
+
+
+def overlay_shipped_highlights(entry):
+    """Numeric baseline exceptions by original row/column index.
+
+    This is presentation policy, not a game-mechanic claim: zero is neutral,
+    except for the usual node purchase cost of one. Talent defaults stay plain.
+    Unknown baselines and declared text fields never receive a numeric grade.
+    """
+    if entry.get('table') == 'TalentModel':
+        return {}
+    typical = {'JobNodeModel': {'BuyCost': 1}}
+    roles = entry.get('roles') or overlay_roles(entry)
+    out = {}
+    for ri, values in entry.get('shipped', {}).items():
+        columns = []
+        for ci, col in enumerate(entry.get('columns') or []):
+            name = col['name']
+            value = values.get(name)
+            if (roles[ci] != 'lever' or value is None
+                    or name in TEXT_BASELINE_COLUMNS.get(entry.get('table'), ())
+                    or not _SHIPPED_PAIR_RE.fullmatch(name + ' ' + value)):
+                continue
+            if float(value) != typical.get(entry.get('table'), {}).get(name, 0):
+                columns.append(ci)
+        if columns:
+            out[ri] = columns
+    return out
 
 
 def overlay_exclusive_pairs(entry):
@@ -8421,8 +8450,8 @@ def selftest(config_arg, frozen_exe=None):
               % ', '.join('%s %d' % (k, len(v))
                           for k, v in sorted(_pack_files.items())))
         # Hacker now exposes physical attribute effects alongside its matrix
-        # effects. Require the exact four-table contract; keep the original
-        # two/three-file checks on every unchanged pack.
+        # effects. Wireghost also exposes its talent sheet. Require the
+        # declared table contracts rather than the former two-file shape.
         t.check('Hacker owns its node, talent, physical effect and matrix effect sheets',
                 set(_pack_files.get('TalentsHacker', [])) == {
                     'ckf.hardmode.d/JobNodeModel.hkr.csv',
@@ -8431,15 +8460,17 @@ def selftest(config_arg, frozen_exe=None):
                     'ckf.hardmode.d/MatrixEffectModel.hkr.csv'},
                 _pack_files.get('TalentsHacker'))
         _unchanged_pack_files = {k: v for k, v in _pack_files.items() if k != 'TalentsHacker'}
-        t.check('every other pack owns two or three files, never one and never none',
-                all(2 <= len(v) <= 3 for v in _unchanged_pack_files.values()),
+        t.check('every other pack owns exactly three files',
+                all(len(v) == 3 for v in _unchanged_pack_files.values()),
                 {k: len(v) for k, v in _unchanged_pack_files.items()
-                 if not 2 <= len(v) <= 3})
-        t.check('and both original shapes are present, so neither branch is untested',
-                set(len(v) for v in _unchanged_pack_files.values()) == {2, 3},
-                sorted(set(len(v) for v in _unchanged_pack_files.values())))
-        # The two packs whose file set is not the usual three. Found from the
-        # data, not named: one pack's tables differ from every other's.
+                 if len(v) != 3})
+        t.check('Wireghost owns its node, talent and effect sheets',
+                set(_pack_files.get('TalentsWraith', [])) == {
+                    'ckf.hardmode.d/JobNodeModel.wg.csv',
+                    'ckf.hardmode.d/TalentModel.wg.csv',
+                    'ckf.hardmode.d/EffectModel.wg.csv'},
+                _pack_files.get('TalentsWraith'))
+        # Detect unexpected differences in any pack's declared table set.
         _tables = dict((sid, sorted(overlay_table_name(r) for r in v))
                        for sid, v in _pack_files.items())
         _common = [t2 for t2 in set(x for v in _tables.values() for x in v)
@@ -8448,9 +8479,9 @@ def selftest(config_arg, frozen_exe=None):
                       if sorted(v) != sorted(_common))
         print('        tables most packs carry: %s; packs that differ: %s'
               % (', '.join(sorted(_common)), ', '.join(_odd) or 'none'))
-        t.check('exactly two packs carry a different set of tables from the '
+        t.check('only Hacker carries a different set of tables from the '
                 'rest, and the page renders whatever each declares rather than '
-                'a shape it assumed', len(_odd) == 2, _odd)
+                'a shape it assumed', _odd == ['TalentsHacker'], _odd)
 
         # ---- the reference field, its grouping and its pairs
         for (sub, path), (_sch2, fref2) in sorted(reference_fields(app.schemas).items()):
@@ -12150,6 +12181,16 @@ ck('an explicit zero overrides a nonzero baseline for display',
 zeroWorking[7][1] = 'nonsense';
 ck('invalid input is visible rather than mistaken for zero',
    CKF.overlayZeroColumns(zeroFixture, zeroRows.slice(1), zeroWorking)[1] === false);
+const highlightFixture = {columns: [{name:'id'}, {name:'value'}, {name:'_comment',control:true}],
+  roles:['identity','lever','control'], shippedHighlights:{'7':[1]}};
+ck('an explicit zero override is red', CKF.overlayHighlight(highlightFixture,7,1,'0') === 'overlay-overwrite');
+ck('an override takes priority over a shipped exception', CKF.overlayHighlight(highlightFixture,7,1,'5') === 'overlay-overwrite');
+ck('clearing an override restores yellow on the same original row', CKF.overlayHighlight(highlightFixture,7,1,'') === 'shipped-interesting');
+ck('a usual default stays plain', CKF.overlayHighlight(highlightFixture,4,1,'') === '');
+ck('keys and annotation controls never get override colors',
+   CKF.overlayHighlight(highlightFixture,7,0,'7') === '' && CKF.overlayHighlight(highlightFixture,7,2,'name') === '');
+ck('a table with no baseline grading keeps defaults plain',
+   CKF.overlayHighlight({columns:highlightFixture.columns},7,1,'') === '');
 ck('cfg int renders bare', CKF.renderCfgValue('int', 40) === '40');
 ck('cfg float 3.0 renders as 3', CKF.renderCfgValue('float', 3) === '3');
 ck('cfg float 1.5 renders as 1.5', CKF.renderCfgValue('float', 1.5) === '1.5');

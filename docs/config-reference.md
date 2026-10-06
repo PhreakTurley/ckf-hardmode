@@ -3428,6 +3428,7 @@ Files this toggle gates:
 ```text
   EffectModel.wg.csv
   JobNodeModel.wg.csv
+  TalentModel.wg.csv
 ```
 
 Talent balance pack for Wireghost: JobId 19, JobName "Wireghost" in JobModel. The pairing was measured by joining the pack's JobNodeIds (and TalentIds, through JobNodeModel.NodeTalent1Id) to sheets/raw/JobNodeModel.csv and JobModel.csv [measured].
@@ -3435,8 +3436,6 @@ Talent balance pack for Wireghost: JobId 19, JobName "Wireghost" in JobModel. Th
 Each file is a direct overlay: the part of the filename before the first dot names the game table, and "wg" is the pack's filename tag.
 
 The title uses the game's JobName. The subsystem name, cfg key (TalentsWraith) and filenames keep the older name "Wraith" / tag "wg"; renaming them would change the cfg key and the overlay filenames.
-
-This pack has no TalentModel file, so it is two files, not three. The JobNodeModel join alone settles the class.
 
 ### What the config GUI shows for this section
 
@@ -3449,7 +3448,7 @@ Turn this off and the mod skips this page's files, so nothing on this page is ap
 | Role | File |
 |---|---|
 | `cfg` | `ckf.hardmode.cfg` |
-| `overlays` | `['ckf.hardmode.d/EffectModel.wg.csv', 'ckf.hardmode.d/JobNodeModel.wg.csv']` |
+| `overlays` | `['ckf.hardmode.d/EffectModel.wg.csv', 'ckf.hardmode.d/JobNodeModel.wg.csv', 'ckf.hardmode.d/TalentModel.wg.csv']` |
 
 ### Enable chain
 

@@ -195,19 +195,6 @@ def render_sheet(raw, table, tag, tables, nodes, parent_ids, owners):
             if not label:
                 label = ', '.join(names) or 'Effect'
         parts = [label]
-        labels = [node_label(n) for n in label_users]
-        def includes_parent(parent):
-            return any(name == parent or re.fullmatch(re.escape(parent) + r' \d+', name)
-                       for name in labels)
-        if names and label != ', '.join(names) and not all(includes_parent(n) for n in names):
-            parts.append('Parent: ' + ', '.join(names))
-        if not names and not attr and users:
-            bases = list(dict.fromkeys(positive(nodes[n], 'SubTree') or n for n in users))
-            bases = [n for n in bases if positive(tables['JobNodeModel'][n], 'NodeEffect1Id')]
-            if bases:
-                parent_label = ', '.join(dict.fromkeys(node_label(n) for n in bases))
-                if parent_label != label and not all(includes_parent(node_label(n)) for n in bases):
-                    parts.append('Parent: ' + parent_label)
         row['_shipped'] = json.dumps({c: stock[c] for c in levers}, separators=(',', ':'))
         if table == 'EffectModel' and attr:
             connected = []
@@ -273,6 +260,10 @@ def complete(config, dump, project):
             originals[p] = p.read_bytes()
         elif p.name == 'EffectModel.hkr.csv':
             originals[p] = b'EffectId,_comment\n'
+        elif p.name == 'TalentModel.wg.csv':
+            # Authored editing columns; the dump only supplies their baselines.
+            originals[p] = (b'TalentId,ApCost,Range,RangeAoE,MaxCharges,RechargeTurns,'
+                            b'TargetEffectDuration,SelfDuration,TokenDuration,MatrixDuration,_comment\n')
         else:
             raise ValueError('Missing live sheet: ' + str(p))
     outputs, counts = {}, {}

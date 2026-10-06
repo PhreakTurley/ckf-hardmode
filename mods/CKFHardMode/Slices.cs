@@ -145,6 +145,7 @@ namespace CKFHardMode
             { "TalentModel.sn.csv",         "TalentsSniper" },
             { "TalentModel.sol.csv",        "TalentsSoldier" },
             { "TalentModel.vg.csv",         "TalentsVanguard" },
+            { "TalentModel.wg.csv",         "TalentsWraith" },
             { "TalentModel.wm.csv",         "TalentsWarMachine" },
             { "consumables-chems.csv",      "ConsumablesChems" },
             // The nine subsystem settings files (implants-global.json is below).

@@ -136,8 +136,7 @@ leaves all new override cells blank, and preserves existing override cells.
 Class ownership comes from `JobNodeModel.JobId`, including every captured
 version; ids are never assigned to a class by their digit prefix.
 
-Comments show the node name and its parent when the name does not already
-identify it (for example, Overwatch 1 needs no Parent: Overwatch line). Attribute nodes
+Comments show the node name. Attribute nodes
 keep Left/Center/Right names in the EffectModel table, where their comments
 list connections without claiming a required path through them. Numeric tuning
 belongs in editable cells, with **ships N**
@@ -145,7 +144,7 @@ placeholders. Comments omit tuning numbers, old balance notes, and repeated ids.
 The `_shipped` JSON control cell carries the complete editable baselines,
 including zeros and the JobNode IconPng text field, without displaying them as prose. It comes from the supplied
 Data Dump. The pass adds declared node tuning and attribute effect columns,
-creating the Hacker effect sheet when needed. It checks dump
+creating the Hacker effect and Wireghost talent sheets when needed. It checks dump
 coverage and refuses ambiguous or missing references, then compares the
 exported assignments before writing so a catalog update cannot change tuning.
 
@@ -156,6 +155,12 @@ upgrades or attribute nodes using the dump's JobModel and SubTree references.
 These controls are not editable or exported as SQL fields.
 Comments appear beside node ids; `_shipped` supplies the placeholders. The installed editor
 reads this information from the live sheets and requires no dump.
+
+An explicit override is red, including zero and a value equal to its baseline.
+Blank cells use the **ships N** placeholder. Numeric shipped values other than
+zero are yellow, except that JobNode BuyCost 1 is plain. TalentModel defaults
+stay plain, and text baselines receive no numeric coloring. Clearing an override
+restores its baseline styling; color does not change whether the cell is editable.
 
 TalentModel appears first. JobNodeModel groups each base node with its attached
 upgrades, ordered by name with numeric suffixes compared numerically. EffectModel
