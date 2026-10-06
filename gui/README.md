@@ -137,8 +137,8 @@ Class ownership comes from `JobNodeModel.JobId`, including every captured
 version; ids are never assigned to a class by their digit prefix.
 
 Comments show the node name and its parent when different. Attribute nodes
-keep Left/Center/Right names and list connections without claiming a required
-path through them. Numeric tuning belongs in editable cells, with **ships N**
+keep Left/Center/Right names in the EffectModel table, where their comments
+list connections without claiming a required path through them. Numeric tuning belongs in editable cells, with **ships N**
 placeholders. Comments omit tuning numbers, old balance notes, and repeated ids.
 The `_shipped` JSON control cell carries the complete editable baselines,
 including zeros, without displaying them as prose. It comes from the supplied
@@ -152,6 +152,12 @@ The `_group` control column becomes section headings in the editor, separating
 Neither `_group` nor `_shipped` is editable or exported as an SQL field.
 Comments appear beside node ids; `_shipped` supplies the placeholders. The installed editor
 reads this information from the live sheets and requires no dump.
+
+TalentModel appears first. JobNodeModel groups each base node with its attached
+upgrades, ordered by name with numeric suffixes compared numerically. Attribute
+JobNode grids are omitted when their measured values and overrides are only
+BuyCost 1 and zero for the other editable fields; changed or unknown values
+keep the grid visible. All rows remain in the files and save model.
 
 To refresh the annotations from an independently captured stock dump:
 
@@ -189,12 +195,13 @@ python "D:\ckf-data-modding\gui\talent_catalog.py" --config "C:\Program Files (x
 
 ### Hidden and collapsed columns
 
-Columns can leave the default grid view for two independent reasons. Both keep the column in the model, the working copy and the save. The sheet's notes name each one with its reason, and a `Show N column(s) …` button brings them back.
+Columns can leave the default grid view for three independent reasons. All keep the column in the model, the working copy and the save. The sheet's notes name each one with its reason, and a `Show N column(s)` button brings them back for that table.
 
 - **Hidden by name.** `serve.py:HIDDEN_COLUMNS` covers `ImplantLevel`, `Deactivated`, `Rarity`, `PowerLevel` and `ImplantConflictId` ("item metadata, not a combat lever"). Never index 0. There is no row-count exemption.
 - **Never changes.** `app.html:overlaySuppressed` hides a column whose value is the same on every row, with three exceptions: never the key column, never on a sheet with fewer than two rows, and never an editable column that is blank everywhere (blank means no override is set, so there is still something to edit).
+- **Always zero.** `app.html:overlayZeroColumns` collapses plain-set numeric columns whose effective values are zero on every row of the displayed table. Blank cells use their measured shipped baselines; missing baselines, invalid cells and other operators keep the column visible. Pending edits are included. Attribute and talent sections are checked separately.
 
-The two rules reach the page as separate keys (`entry['hidden']`, `entry['constant']`, from `overlay_hidden` and `overlay_constant`); keep them separate. `app.html` names no column and shows the reason string the server sends.
+The named and constant rules reach the page as separate keys (`entry['hidden']`, `entry['constant']`, from `overlay_hidden` and `overlay_constant`); keep them separate. Zero detection uses the values and baselines already in the model. `app.html` names no column.
 
 Rows can be withheld too. `serve.py:GUI_EXCLUDED_ROWS` withholds `consumables-matrix.csv` `ItemTypeId 5403`. The row stays in the file, and the plugin still expands it.
 

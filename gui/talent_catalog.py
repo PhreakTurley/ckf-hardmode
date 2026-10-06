@@ -9,6 +9,7 @@ import csv
 import io
 import json
 from pathlib import Path
+import re
 import tempfile
 
 import modkit
@@ -166,12 +167,14 @@ def render_sheet(raw, table, tag, tables, nodes, parent_ids, owners):
                 if parent_label != label:
                     parts.append('Parent: ' + parent_label)
         row['_shipped'] = json.dumps({c: stock[c] for c in levers}, separators=(',', ':'))
-        if table == 'JobNodeModel' and attr:
-            connected = [node_label(n) for c in ('NodeReq1', 'NodeReq2', 'NodeReq3')
-                         if (n := positive(stock, c))]
-            dependents = [n for n, r in nodes.items() if identity in
-                          [positive(r, c) for c in ('NodeReq1', 'NodeReq2', 'NodeReq3')]]
-            connected += [node_label(n) for n in sorted(dependents, key=int)]
+        if table == 'EffectModel' and attr:
+            connected = []
+            for owner in users:
+                connected += [node_label(n) for c in ('NodeReq1', 'NodeReq2', 'NodeReq3')
+                              if (n := positive(nodes[owner], c))]
+                dependents = [n for n, r in nodes.items() if owner in
+                              [positive(r, c) for c in ('NodeReq1', 'NodeReq2', 'NodeReq3')]]
+                connected += [node_label(n) for n in sorted(dependents, key=int)]
             if connected:
                 parts.append('Connections: ' + ', '.join(dict.fromkeys(connected)))
         # The overlay reader addresses physical CSV lines; keep each record
@@ -179,7 +182,20 @@ def render_sheet(raw, table, tag, tables, nodes, parent_ids, owners):
         row['_comment'] = ' | '.join(parts)
         row['_group'] = ATTRIBUTE if attr else REGULAR
         rows.append(row)
-    rows.sort(key=lambda r: (r['_group'] == ATTRIBUTE, int(r[key])))
+    def row_order(row):
+        identity = row[key]
+        if table == 'JobNodeModel':
+            # SubTree names the attached base node in the dump. Keep each
+            # base with its upgrades even when a later upgrade has a lower id.
+            base = positive(tables[table][identity], 'SubTree') or identity
+            name = tables[table][identity]['JobNodeName']
+            natural = tuple(int(s) if s.isdigit() else s.casefold()
+                            for s in re.split(r'(\d+)', name))
+            return (row['_group'] == ATTRIBUTE, int(base), identity != base,
+                    natural, int(identity))
+        return (row['_group'] == ATTRIBUTE, int(identity))
+
+    rows.sort(key=row_order)
     output = io.StringIO(newline='')
     writer = csv.DictWriter(output, header, lineterminator='\n')
     writer.writeheader()

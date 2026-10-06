@@ -606,6 +606,25 @@ const CKF = (function () {
     });
   }
 
+  // Only measured numeric zeroes count. Blanks inherit the baseline; an
+  // unknown baseline, text or a non-set operator keeps the column visible.
+  // rows carry their original file indices even in a single section's grid.
+  function overlayZeroColumns(entry, rows, working) {
+    return (entry.columns || []).map(function (c, ci) {
+      if (!ci || c.control || c.op !== 'set' || entry.kind !== 'direct'
+          || !rows.length) return false;
+      return rows.every(function (r) {
+        const cells = working && working[r.i] ? working[r.i] : r.cells;
+        let value = cells[ci];
+        if (value === undefined || value === null || String(value).trim() === '')
+          value = ((entry.shipped || {})[String(r.i)] || {})[c.name];
+        if (value === undefined || value === null) return false;
+        const text = String(value).trim();
+        return NUM.test(text) && Number(text) === 0;
+      });
+    });
+  }
+
   // WHETHER ONE PROPOSED LEVER CELL WILL SURVIVE THE SAVE.
   //
   // A transcription of serve.py's overlay_check_cell, so that a cell the server
@@ -645,6 +664,7 @@ const CKF = (function () {
 
   return {
     overlaySuppressed: overlaySuppressed, overlayHidden: overlayHidden,
+    overlayZeroColumns: overlayZeroColumns,
     overlayCellProblem: overlayCellProblem,
     parseAdjust: parseAdjust, describeAdjust: describeAdjust,
     renderCfgValue: renderCfgValue, coerceCell: coerceCell, inRange: inRange,
@@ -2433,31 +2453,23 @@ function overlayBlock(sch, rel, sectionTitle) {
   // refuses writes offers no box at all, and says why.
   const canWrite = !!ov.writable;
   const editableAt = function (i) { return canWrite && !!(ov.editable || [])[i]; };
-  // Collapsed columns. `shown` is the reader's override, per sheet, and it
-  // makes every collapsed column reappear at once — there are at most a
-  // handful on any one sheet, so a per-column toggle would be more clicks than
-  // columns.
-  //
-  // TWO REASONS, ONE BUTTON, TWO SENTENCES. A column is off the screen because
-  // it never changes within this table (`sup`, the constancy rule, exempt
-  // below two rows) or because it is hidden by name (`hid`, declared by the
-  // server with its reason, at every row count). They share the button —
-  // putting one class of column back and not the other would be two controls
-  // for one question — and they do NOT share their wording: each collapsed
-  // column is named in the fold with the reason that actually applies to it.
-  // `flat` stays the constancy flag alone, because that is what the header's
-  // `constant` styling and its "holds one value on every row" tooltip claim,
-  // and a hidden-by-name column has not earned that claim.
+  // Collapse without removing cells from the working copy or save payload.
+  // Zero detection uses this grid's rows, not another section of the sheet.
   const sup = CKF.overlaySuppressed(ov);
   const hid = CKF.overlayHidden(ov);
-  const shown = !!OV_SHOWN[rel];
+  const zero = CKF.overlayZeroColumns(ov, groups.reduce(function (rows, g) {
+    return rows.concat(g.rows);
+  }, []), W.overlays[rel].cells);
+  const showKey = rel + (sectionTitle === undefined ? '' : '|' + sectionTitle);
+  const shown = !!OV_SHOWN[showKey];
   const idCols = [], valCols = [], ctlCols = [], collapsed = [];
   ov.columns.forEach(function (c, i) {
     if (i === 0) return;                       // drawn as the key, at the left
     if (c.sectionHeading || c.metadata) return;
     const role = roles[i] || (c.control ? 'control' : 'lever');
-    const off = sup[i] || !!hid[i];
-    const rec = { c: c, i: i, role: role, flat: sup[i], hidden: hid[i] || null };
+    const off = sup[i] || !!hid[i] || zero[i];
+    const rec = { c: c, i: i, role: role, flat: sup[i], hidden: hid[i] || null,
+                  zero: zero[i] };
     if (off) collapsed.push(rec);
     if (off && !shown) return;                 // named in the fold, not drawn
     (role === 'control' ? ctlCols : role === 'identity' ? idCols : valCols)
@@ -2491,7 +2503,8 @@ function overlayBlock(sch, rel, sectionTitle) {
       (ov.kind === 'direct' ? ov.table + ' · ' : 'expanded at load · ')
       + rowCount + ' row(s)  '),
     canWrite
-      ? el('span', { class: 'pill on', text: nEdit + ' editable column(s)',
+      ? el('span', { class: 'pill on', text: valCols.filter(function (v) {
+                       return editableAt(v.i); }).length + ' editable column(s)',
                      title: 'Lever and override columns take an edit; identity '
                             + 'columns, control columns and the key do not. An '
                             + 'empty box is not zero — it leaves the game\'s '
@@ -2693,14 +2706,7 @@ function overlayBlock(sch, rel, sectionTitle) {
   // taken off the screen, and the button puts it back. Same standard as
   // AXIS_WINDOWS in serve.py, which draws a windowed-out column anyway when a
   // row occupies it and says why.
-  // EACH COLLAPSED COLUMN GETS THE REASON THAT APPLIES TO IT. There are two
-  // unrelated reasons -- the column never changes, or it is hidden by name as
-  // item metadata -- and saying "never changes" about a column hidden by name
-  // would tell the reader something false about a column that may well
-  // change. So the sentence branches on the
-  // reason, the button counts both and claims neither, and a column hidden for
-  // both reasons is named once, under the declared one, because that is the
-  // one that would still hide it if every cell differed.
+  // Each collapsed column retains its own reason and can be restored.
   if (collapsed.length) {
     for (const v of collapsed) {
       if (v.hidden) {
@@ -2712,6 +2718,13 @@ function overlayBlock(sch, rel, sectionTitle) {
           + 'is off the screen.' }));
         continue;
       }
+      if (v.zero) {
+        notes.push(el('div', { class: 'legend', text:
+          'Collapsed: ' + v.c.name + ' — zero on every row in this table. '
+          + 'Blank cells inherit their measured baseline. The cells remain '
+          + 'in the file and the save.' }));
+        continue;
+      }
       const k = (ov.constant || [])[v.i] || {};
       notes.push(el('div', { class: 'legend', text:
         'Collapsed: ' + v.c.name + ' — ' + v.role + ', '
@@ -2721,16 +2734,10 @@ function overlayBlock(sch, rel, sectionTitle) {
         + ' row(s). It is still in the file and still in the save; only the '
         + 'column is off the screen.' }));
     }
-    const nHid = collapsed.filter(function (v) { return !!v.hidden; }).length;
-    const nFlat = collapsed.length - nHid;
     notes.push(el('button', {
       class: 'colbtn',
-      // Says which kinds are in the count, so the button and the sentences
-      // above it cannot disagree about why anything is off the screen.
-      text: (shown ? 'Collapse ' : 'Show ') + collapsed.length + ' column(s) '
-            + (nHid && nFlat ? 'hidden by name or unchanging'
-               : nHid ? 'hidden by name' : 'that never change'),
-      onclick: function () { OV_SHOWN[rel] = !shown; render(); },
+      text: (shown ? 'Collapse ' : 'Show ') + collapsed.length + ' column(s)',
+      onclick: function () { OV_SHOWN[showKey] = !shown; render(); },
     }));
   }
   if (ref) {
@@ -2905,7 +2912,8 @@ function renderSubsystem(p, sch, fields) {
   });
   const sectionTitles = [];
   for (const rel of ovs) for (const title of ((overlayEntry(rel) || {}).groupOrder || []))
-    if (sectionTitles.indexOf(title) < 0) sectionTitles.push(title);
+    if (((overlayEntry(rel) || {}).hiddenGroups || []).indexOf(title) < 0
+        && sectionTitles.indexOf(title) < 0) sectionTitles.push(title);
   for (const rel of ovs) {
     const ov = overlayEntry(rel);
     if (!(ov && ov.groupOrder && ov.groupOrder.length)) {
@@ -2917,7 +2925,8 @@ function renderSubsystem(p, sch, fields) {
     body.appendChild(el('h3', {text: title}));
     for (const rel of ovs) {
       const ov = overlayEntry(rel);
-      if (ov && (ov.groupOrder || []).indexOf(title) >= 0)
+      if (ov && (ov.groupOrder || []).indexOf(title) >= 0
+          && (ov.hiddenGroups || []).indexOf(title) < 0)
         body.appendChild(overlayBlock(sch, rel, title));
     }
   }

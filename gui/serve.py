@@ -1209,7 +1209,7 @@ def _read_overlay_entry(path, rel):
     entry['identityColumns'] = overlay_identity_columns(entry)
     names = [c['name'] for c in header]
     if '_group' in names:
-        entry['catalogOrder'] = {'JobNodeModel': 0, 'TalentModel': 1,
+        entry['catalogOrder'] = {'TalentModel': 0, 'JobNodeModel': 1,
                                  'EffectModel': 2, 'MatrixEffectModel': 3}.get(entry['table'], 100)
         gi = names.index('_group')
         header[gi]['sectionHeading'] = True
@@ -1218,9 +1218,38 @@ def _read_overlay_entry(path, rel):
             entry['rowGroups'][str(ri)] = title
             if title not in entry['groupOrder']:
                 entry['groupOrder'].append(title)
+        entry['hiddenGroups'] = catalog_hidden_groups(entry)
     for _r in entry['rows']:
         _r['key'] = overlay_row_key(entry, _r)
     return entry
+
+
+def catalog_hidden_groups(entry):
+    """Omit redundant attribute JobNode grids, without dropping any file rows.
+
+    A changed cost or nonzero node lever keeps the grid available. Unknown
+    baselines also keep it visible; a missing measurement is not a zero.
+    """
+    if entry['table'] != 'JobNodeModel':
+        return []
+    members = [(ri, r) for ri, r in enumerate(entry['rows'])
+               if entry['rowGroups'].get(str(ri)) == 'Attribute nodes']
+    if not members:
+        return []
+    for ri, row in members:
+        for ci, col in enumerate(entry['columns']):
+            if not entry['editable'][ci]:
+                continue
+            value = row['cells'][ci].strip()
+            if not value:
+                value = entry['shipped'].get(str(ri), {}).get(col['name'])
+            try:
+                number = float(value)
+            except (TypeError, ValueError):
+                return []
+            if col['op'] != 'set' or number != (1 if col['name'] == 'BuyCost' else 0):
+                return []
+    return ['Attribute nodes']
 
 
 def read_overlays(config_dir, schemas):
@@ -12069,6 +12098,29 @@ for (const s of ['NaN','=NaN','Infinity','-Infinity','inf'])
   ck('refuses ' + JSON.stringify(s) + ' (stricter than C#, deliberately)', !A(s).ok, A(s));
 
 ck('cfg bool renders lowercase', CKF.renderCfgValue('bool', true) === 'true');
+const zeroFixture = {kind: 'direct', columns: [
+  {name:'id', op:'set'}, {name:'value', op:'set'},
+  {name:'missing', op:'set'}, {name:'multiply', op:'multiply'},
+  {name:'_comment', op:'set', control:true}], shipped: {
+    '4': {value:'0', multiply:'0'}, '7': {value:'5', multiply:'0'}}};
+const zeroRows = [{i:4, cells:['4','','','0','0']},
+                  {i:7, cells:['7','','','0','0']}];
+ck('zero collapse uses this section and original row indices',
+   CKF.overlayZeroColumns(zeroFixture, zeroRows.slice(0,1))[1] === true);
+ck('a nonzero baseline elsewhere keeps its own grid column',
+   CKF.overlayZeroColumns(zeroFixture, zeroRows)[1] === false);
+ck('unknown baseline, operators, controls and key stay visible',
+   JSON.stringify(CKF.overlayZeroColumns(zeroFixture, zeroRows.slice(0,1)))
+     === JSON.stringify([false,true,false,false,false]));
+const zeroWorking = []; zeroWorking[4] = ['4','2','','0','0'];
+ck('a pending nonzero edit keeps a zero baseline column visible',
+   CKF.overlayZeroColumns(zeroFixture, zeroRows.slice(0,1), zeroWorking)[1] === false);
+zeroWorking[7] = ['7','0','','0','0'];
+ck('an explicit zero overrides a nonzero baseline for display',
+   CKF.overlayZeroColumns(zeroFixture, zeroRows.slice(1), zeroWorking)[1] === true);
+zeroWorking[7][1] = 'nonsense';
+ck('invalid input is visible rather than mistaken for zero',
+   CKF.overlayZeroColumns(zeroFixture, zeroRows.slice(1), zeroWorking)[1] === false);
 ck('cfg int renders bare', CKF.renderCfgValue('int', 40) === '40');
 ck('cfg float 3.0 renders as 3', CKF.renderCfgValue('float', 3) === '3');
 ck('cfg float 1.5 renders as 1.5', CKF.renderCfgValue('float', 1.5) === '1.5');
@@ -13286,12 +13338,29 @@ setTimeout(function () {
          ent && ent.rows.length);
       if (!ent) continue;
       drawnRows += ent.rows.length;
-      // every id in the file is on the page
-      const missing = ent.rows.filter(function (r) {
+      // Every visible id is drawn. Redundant attribute nodes instead appear
+      // by name in their Effect grid and retain their complete working rows.
+      const hidden = ent.rows.map(function (r, i) {return {row:r, i:i};})
+        .filter(function (r) {return (ent.hiddenGroups || []).indexOf(
+          (ent.rowGroups || {})[String(r.i)]) >= 0;});
+      const missing = ent.rows.filter(function (r, i) {
+        if (hidden.some(function (h) {return h.i === i;})) return false;
         return t2.indexOf(String(r.cells[0])) < 0; });
-      ck(s.subsystem + '/' + rel.split('/').pop() + ': every id in the file is '
-         + 'drawn, so no row is dropped by the grouping',
+      ck(s.subsystem + '/' + rel.split('/').pop() + ': every visible id is '
+         + 'drawn, so grouping loses no visible row',
          missing.length === 0, missing.slice(0, 3).map(function (r) { return r.cells[0]; }));
+      if (hidden.length) {
+        const ac = ent.columns.findIndex(function (c) {return c.annotation;});
+        const labels = panel.find(function (n) {return n._cls().includes('node-name');})
+          .map(txt).reduce(function (all, name) {return all.concat(name.split(', '));}, []);
+        ck(s.subsystem + ': every omitted attribute node is named in its effect grid',
+          ac >= 0 && hidden.every(function (h) {
+            return labels.indexOf(h.row.cells[ac].split(' | ')[0]) >= 0;
+          }), hidden.map(function (h) {return h.row.cells[0];}));
+        ck(s.subsystem + ': omitted attribute rows remain intact in the working copy',
+          hidden.every(function (h) {return CKF.deepEqual(h.row.cells,
+            W.overlays[rel].cells[h.i]);}));
+      }
     }
     // the columns are the FILE's, not a static row[]
     const declaredCols = (s.fields || []).reduce(function (a, f) {
@@ -13459,7 +13528,12 @@ setTimeout(function () {
       for (let i = 0; i < ent.columns.length; i++) {
         if (ent.editable[i]) {
           maxCells += ent.rows.length;
-          if (ent.constant[i] === null) minCells += ent.rows.length;
+          if (ent.constant[i] === null) {
+            const groups = overlayGroups(s, ent).filter(function (g) {
+              return (ent.hiddenGroups || []).indexOf(g.title) < 0;});
+            for (const g of groups) if (!CKF.overlayZeroColumns(ent, g.rows)[i])
+              minCells += g.rows.length;
+          }
         } else if (ent.roles[i] === 'identity' || i === 0) {
           ident += ent.rows.length;
         } else if (ent.roles[i] === 'control') {
@@ -13475,7 +13549,7 @@ setTimeout(function () {
        + 'of every column that VARIES — at least ' + minCells + ', got '
        + inputs.length + '. The server sends `editable` and `constant`; '
        + 'app.html must render an input where editable is true and may '
-       + 'suppress only a column whose `constant` is not null.',
+       + 'collapse constants or measured zeroes, and omit only declared hidden groups.',
        !!mycard && inputs.length >= minCells, [inputs.length, minCells, !!mycard]);
     ck(s.subsystem + ': and no input anywhere else — at most ' + maxCells
        + ' (one per editable cell), got ' + inputs.length + '. An input beyond '
