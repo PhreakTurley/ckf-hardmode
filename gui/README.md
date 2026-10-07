@@ -214,7 +214,11 @@ python "D:\ckf-data-modding\gui\talent_catalog.py" --config "C:\Program Files (x
 
 Columns can leave the default grid view for three independent reasons. All keep the column in the model, the working copy and the save. The sheet's notes name each one with its reason, and a `Show N column(s)` button brings them back for that table.
 
-The attribute EffectModel grid first limits its tuning fields to
+The attribute EffectModel grid keeps any column with an explicit override
+(including zero or the same override on every row), differing shipped values,
+or an unknown baseline in its attribute rows. Pending edits count as overrides.
+These protected columns bypass every hide and collapse rule. Remaining fields
+are filtered using
 `serve.py:ATTRIBUTE_EFFECT_COLUMNS`: permanent fields represented on captured
 attribute nodes, plus `MoveSpeedMitigate`. It excludes downside fields, temporary
 effects and effect metadata, including `EffectClassification`. This section

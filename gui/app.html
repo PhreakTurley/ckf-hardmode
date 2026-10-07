@@ -613,16 +613,40 @@ const CKF = (function () {
     });
   }
 
-  // Only untouched numeric zero baselines count. Any explicit override,
-  // unknown baseline, text or non-set operator keeps the column visible.
-  // rows carry their original file indices even in a single section's grid.
-  function overlaySectionColumns(entry, title) {
+  // Attribute sections must expose edits and differences before applying
+  // their presentation policy. Original file indices address shipped values
+  // and pending edits even when this grid shows only a subset of the rows.
+  function overlayProtectedColumns(entry, title, rows, working) {
     const policy = (entry.sectionColumns || {})[title];
-    return (entry.columns || []).map(function (c, i) {
-      return !policy || !i || c.control || policy.include.indexOf(c.name) >= 0;
+    return (entry.columns || []).map(function (c, ci) {
+      if (!policy || !ci || c.control || !rows || !rows.length) return false;
+      let first, seen = false;
+      return rows.some(function (r) {
+        const cells = working && working[r.i] ? working[r.i] : r.cells;
+        if (cells[ci] !== undefined && cells[ci] !== null && String(cells[ci]).trim() !== '')
+          return true;                       // even zero or a uniform override
+        const value = ((entry.shipped || {})[String(r.i)] || {})[c.name];
+        if (value === undefined || value === null) return true;
+        const text = String(value).trim();
+        const normalized = NUM.test(text) ? Number(text) : text;
+        if (seen && normalized !== first) return true;
+        first = normalized; seen = true;
+        return false;
+      });
     });
   }
 
+  function overlaySectionColumns(entry, title, rows, working) {
+    const policy = (entry.sectionColumns || {})[title];
+    const protectedCols = overlayProtectedColumns(entry, title, rows, working);
+    return (entry.columns || []).map(function (c, i) {
+      return !policy || !i || c.control || protectedCols[i]
+        || policy.include.indexOf(c.name) >= 0;
+    });
+  }
+
+  // Only untouched numeric zero baselines count. Any explicit override,
+  // unknown baseline, text or non-set operator keeps the column visible.
   function overlayZeroColumns(entry, rows, working, title) {
     const policy = (entry.sectionColumns || {})[title];
     if (entry.columnScope === 'sheet') rows = (entry.rows || []).map(function (r, i) {
@@ -696,6 +720,7 @@ const CKF = (function () {
     overlaySuppressed: overlaySuppressed, overlayHidden: overlayHidden,
     overlayZeroColumns: overlayZeroColumns,
     overlaySectionColumns: overlaySectionColumns,
+    overlayProtectedColumns: overlayProtectedColumns,
     overlayHighlight: overlayHighlight,
     overlayCellProblem: overlayCellProblem,
     parseAdjust: parseAdjust, describeAdjust: describeAdjust,
@@ -2492,10 +2517,12 @@ function overlayBlock(sch, rel, sectionTitle) {
   // The server chooses whether zero detection covers this grid or its sheet.
   const sup = CKF.overlaySuppressed(ov);
   const hid = CKF.overlayHidden(ov);
-  const zero = CKF.overlayZeroColumns(ov, groups.reduce(function (rows, g) {
+  const gridRows = groups.reduce(function (rows, g) {
     return rows.concat(g.rows);
-  }, []), W.overlays[rel].cells, sectionTitle);
-  const eligible = CKF.overlaySectionColumns(ov, sectionTitle);
+  }, []);
+  const zero = CKF.overlayZeroColumns(ov, gridRows, W.overlays[rel].cells, sectionTitle);
+  const eligible = CKF.overlaySectionColumns(ov, sectionTitle, gridRows, W.overlays[rel].cells);
+  const protectedCols = CKF.overlayProtectedColumns(ov, sectionTitle, gridRows, W.overlays[rel].cells);
   const showKey = rel + (sectionTitle === undefined ? '' : '|' + sectionTitle);
   const shown = !!OV_SHOWN[showKey];
   const idCols = [], valCols = [], ctlCols = [], collapsed = [];
@@ -2504,7 +2531,7 @@ function overlayBlock(sch, rel, sectionTitle) {
     if (c.sectionHeading || c.metadata) return;
     if (!eligible[i]) return;                 // excluded from this section only
     const role = roles[i] || (c.control ? 'control' : 'lever');
-    const off = sup[i] || !!hid[i] || zero[i];
+    const off = !protectedCols[i] && (sup[i] || !!hid[i] || zero[i]);
     const rec = { c: c, i: i, role: role, flat: sup[i], hidden: hid[i] || null,
                   zero: zero[i] };
     if (off) collapsed.push(rec);

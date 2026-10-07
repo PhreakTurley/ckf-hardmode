@@ -12217,6 +12217,37 @@ ck('the always-visible attribute exception survives a class-wide zero baseline',
    CKF.overlayZeroColumns(classFixture,attributeRows,undefined,'attributes')[1] === false);
 ck('the same zero field may still collapse in the regular talent grid',
    CKF.overlayZeroColumns(classFixture,attributeRows,undefined,'talents')[1] === true);
+const protectedFixture = {kind:'direct', columns:[
+  {name:'id',op:'set'}, {name:'excluded',op:'set'}, {name:'uniform',op:'set'}],
+  sectionColumns:{attributes:{include:[],always:[]}},
+  rows:[{cells:['1','','']},{cells:['2','','2']},{cells:['3','','']}],
+  shipped:{'0':{excluded:'0',uniform:'6'},'1':{excluded:'0',uniform:'2'},
+           '2':{excluded:'5',uniform:'6'}}};
+const protectedRows = [0,2].map(function(i){return {i:i,cells:protectedFixture.rows[i].cells};});
+ck('variation between attribute baselines overrides the section exclusion',
+   CKF.overlaySectionColumns(protectedFixture,'attributes',protectedRows)[1] === true);
+ck('uniform untouched metadata remains excluded despite differences outside the attribute table',
+   CKF.overlaySectionColumns(protectedFixture,'attributes',protectedRows)[2] === false);
+protectedFixture.shipped['2'].excluded = '0';
+const protectedWorking = protectedFixture.rows.map(function(r){return r.cells.slice();});
+protectedWorking[0][1] = '0'; protectedWorking[2][1] = '0';
+ck('uniform explicit zero overrides cannot be excluded',
+   CKF.overlaySectionColumns(protectedFixture,'attributes',protectedRows,protectedWorking)[1] === true);
+ck('an overridden attribute column is marked protected from all collapse rules',
+   CKF.overlayProtectedColumns(protectedFixture,'attributes',protectedRows,protectedWorking)[1] === true);
+protectedWorking[0][1] = ''; protectedWorking[2][1] = '';
+ck('clearing the last overrides permits the untouched uniform column to hide again',
+   CKF.overlaySectionColumns(protectedFixture,'attributes',protectedRows,protectedWorking)[1] === false);
+protectedWorking[2][2] = '6';
+ck('an override equal to a uniform shipped value is still protected',
+   CKF.overlayProtectedColumns(protectedFixture,'attributes',protectedRows,protectedWorking)[2] === true);
+protectedWorking[2][2] = '';
+protectedFixture.shipped['2'].excluded = '0.0';
+ck('equivalent numeric spellings do not invent a difference between cells',
+   CKF.overlayProtectedColumns(protectedFixture,'attributes',protectedRows)[1] === false);
+delete protectedFixture.shipped['2'].excluded;
+ck('an unknown baseline cannot justify excluding an attribute column',
+   CKF.overlaySectionColumns(protectedFixture,'attributes',protectedRows)[1] === true);
 const zeroWorking = []; zeroWorking[4] = ['4','2','','0','0'];
 ck('a pending nonzero edit keeps a zero baseline column visible',
    CKF.overlayZeroColumns(zeroFixture, zeroRows.slice(0,1), zeroWorking)[1] === false);
@@ -13657,7 +13688,7 @@ setTimeout(function () {
           if (ent.constant[i] === null) {
             const groups = overlayGroups(s, ent).filter(function (g) {
               return (ent.hiddenGroups || []).indexOf(g.title) < 0;});
-            for (const g of groups) if (CKF.overlaySectionColumns(ent, g.title)[i]
+            for (const g of groups) if (CKF.overlaySectionColumns(ent, g.title, g.rows)[i]
                 && !CKF.overlayZeroColumns(ent, g.rows, undefined, g.title)[i])
               minCells += g.rows.length;
           }
