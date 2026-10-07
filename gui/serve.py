@@ -1173,7 +1173,7 @@ def _read_overlay_entry(path, rel):
             for column in header:
                 if column['name'] == '_comment':
                     column['annotation'] = True
-                if column['name'] in ('_shipped', '_node_kind'):
+                if column['name'] in ('_shipped', '_node_kind', '_attribute_nodes'):
                     column['metadata'] = True
             entry['columns'] = header
             if header and not header[0]['control']:

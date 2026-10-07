@@ -148,6 +148,9 @@ from the Modkit parser contract, excluding keys and text asset fields,
 creating the Hacker effect and Wireghost talent sheets when needed. It checks dump
 coverage and refuses ambiguous or missing references, then compares the
 exported assignments before writing so a catalog update cannot change tuning.
+Attribute EffectModel rows also carry `_attribute_nodes`, a hidden list of
+directly linked JobNode ids. The Modkit exporter uses those captured links for
+automatic attribute icons; it does not join records by their display names.
 
 The `_group` control column becomes section headings in the editor, separating
 **Talents and upgrades** from **Attribute nodes** across the class's sheets.

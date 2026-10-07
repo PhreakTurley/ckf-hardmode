@@ -186,6 +186,8 @@ def render_sheet(raw, table, tag, tables, nodes, parent_ids, owners):
             header.append(control)
     if table == 'JobNodeModel' and '_node_kind' not in header:
         header.append('_node_kind')
+    if table == 'EffectModel' and '_attribute_nodes' not in header:
+        header.append('_attribute_nodes')
     rows = []
     ordering = {}
 
@@ -217,6 +219,8 @@ def render_sheet(raw, table, tag, tables, nodes, parent_ids, owners):
         parts = [label]
         row['_shipped'] = json.dumps({c: stock[c] for c in levers}, separators=(',', ':'))
         if table == 'EffectModel' and attr:
+            row['_attribute_nodes'] = json.dumps([
+                int(n) for n in users if positive(nodes[n], 'NodeEffect1Id') == identity])
             connected = []
             for owner in users:
                 connected += [node_label(n) for c in ('NodeReq1', 'NodeReq2', 'NodeReq3')
@@ -286,9 +290,13 @@ def complete(config, dump, project):
                             b'TargetEffectDuration,SelfDuration,TokenDuration,MatrixDuration,_comment\n')
         else:
             raise ValueError('Missing live sheet: ' + str(p))
-    outputs, counts = {}, {}
+    outputs, counts, legacy_attribute_nodes = {}, {}, {}
     for tag, job in JOBS.items():
         nodes, parents, owners = catalog(tables, job)
+        legacy_attribute_nodes['EffectModel.%s.csv' % tag] = {
+            int(effect): [int(n) for n in users if positive(nodes[n], 'NodeEffect1Id') == effect]
+            for effect, users in owners['EffectModel'].items()
+            if users and all(is_attribute(nodes[n], tables) for n in users)}
         for p in files:
             if p.name.split('.')[1] != tag:
                 continue
@@ -300,7 +308,7 @@ def complete(config, dump, project):
         (staged.parent / cfg.name).write_bytes(cfg.read_bytes())
         for p, data in originals.items():
             (staged / p.name).write_bytes(data)
-        original_export = exporter.build_export(staged, None)[0]
+        original_export = exporter.build_export(staged, None, legacy_attribute_nodes)[0]
         for p, data in outputs.items():
             (staged / p.name).write_bytes(data)
         proposed = exporter.build_export(staged, None)[0]
