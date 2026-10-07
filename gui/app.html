@@ -619,7 +619,7 @@ const CKF = (function () {
   function overlayProtectedColumns(entry, title, rows, working) {
     const policy = (entry.sectionColumns || {})[title];
     return (entry.columns || []).map(function (c, ci) {
-      if (!policy || !ci || c.control || !rows || !rows.length) return false;
+      if (!policy || !policy.include || !ci || c.control || !rows || !rows.length) return false;
       let first, seen = false;
       return rows.some(function (r) {
         const cells = working && working[r.i] ? working[r.i] : r.cells;
@@ -640,8 +640,9 @@ const CKF = (function () {
     const policy = (entry.sectionColumns || {})[title];
     const protectedCols = overlayProtectedColumns(entry, title, rows, working);
     return (entry.columns || []).map(function (c, i) {
+      if (policy && (policy.exclude || []).indexOf(c.name) >= 0) return false;
       return !policy || !i || c.control || protectedCols[i]
-        || policy.include.indexOf(c.name) >= 0;
+        || !policy.include || policy.include.indexOf(c.name) >= 0;
     });
   }
 

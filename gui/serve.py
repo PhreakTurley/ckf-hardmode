@@ -365,6 +365,8 @@ ATTRIBUTE_EFFECT_COLUMNS = (
     'MoveSpeedMitigate', 'InitBonus', 'ActionPoints')
 ATTRIBUTE_EFFECT_ALWAYS = ('AttStrong', 'AttFast', 'AttWill', 'AttTech',
                            'MoveSpeedMitigate')
+TALENT_EFFECT_EXCLUDED = ('AttStrong', 'AttFast', 'AttWill', 'AttTech',
+                          'MaxHitPoints')
 
 for _p in (SCHEMA_DIR, SCRIPTS_DIR):
     if _p not in sys.path:
@@ -1232,7 +1234,8 @@ def _read_overlay_entry(path, rel):
             entry['columnScope'] = 'sheet'
             entry['sectionColumns'] = {'Attribute nodes': {
                 'include': list(ATTRIBUTE_EFFECT_COLUMNS),
-                'always': list(ATTRIBUTE_EFFECT_ALWAYS)}}
+                'always': list(ATTRIBUTE_EFFECT_ALWAYS)},
+                'Talents and upgrades': {'exclude': list(TALENT_EFFECT_EXCLUDED)}}
         gi = names.index('_group')
         header[gi]['sectionHeading'] = True
         for ri, row in enumerate(entry['rows']):

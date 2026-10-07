@@ -227,6 +227,11 @@ collapsed columns still respects it. All four attributes and Move Speed
 Mitigation always appear in the attribute grid, including on classes with only
 zero baselines for those fields.
 
+The regular EffectModel talent grid omits `AttStrong`, `AttFast`, `AttWill`,
+`AttTech` and `MaxHitPoints`, including when collapsed columns are shown.
+This presentation rule leaves their stored values and save payload untouched;
+the attribute grid retains its override and variation protections.
+
 - **Hidden by name.** `serve.py:HIDDEN_COLUMNS` covers `ImplantLevel`, `Deactivated`, `Rarity`, `PowerLevel` and `ImplantConflictId` ("item metadata, not a combat lever"). Never index 0. There is no row-count exemption.
 - **Never changes.** `app.html:overlaySuppressed` hides a column whose value is the same on every row, except for key columns, sheets with fewer than two rows, editable columns that are blank everywhere, and talent-catalog lever columns. Catalog tuning stays visible even when all its overrides are equal.
 - **Untouched zero defaults.** `app.html:overlayZeroColumns` collapses plain-set numeric columns only when every cell in its visibility scope is blank and its measured shipped baseline is zero. EffectModel talent catalogs use the whole class's sheet for both their attribute and talent grids; other tables use their displayed rows. Any explicit override, including zero, keeps the column visible, as do missing baselines, text and other operators. Pending edits are included.
