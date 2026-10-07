@@ -350,6 +350,22 @@ HIDDEN_COLUMNS = {
     'ImplantConflictId': 'item metadata, not a combat lever',
 }
 
+# Attribute-grid presentation policy, authored separately from the complete
+# parser column declaration. These permanent tuning fields occur on captured
+# attribute nodes; the four attributes and MoveSpeedMitigate always appear.
+# Downsides, transient effects and effect metadata stay outside this grid.
+ATTRIBUTE_EFFECT_COLUMNS = (
+    'AttStrong', 'AttFast', 'AttWill', 'AttTech', 'MaxHitPoints', 'StressRes',
+    'MeleeAttack', 'RangedAttack', 'AccuracyRifle', 'AccuracyPistol',
+    'AccuracyCloseCombat', 'AccuracyDrone', 'CritRate', 'CritRateStealth',
+    'CritRateStreak', 'CritMultiStealth', 'CritMultiBase', 'PureDamageBallistic',
+    'PureDamageMelee', 'PhysicalDamage', 'BallisticDamage', 'FullAutoDamage',
+    'DroneDamage', 'PhysicalArmor', 'BallisticArmor', 'PureArmor', 'ArmorCrit',
+    'Evasion', 'DetectRangeReduction', 'RecoilBonus', 'MoveSpeed',
+    'MoveSpeedMitigate', 'InitBonus', 'ActionPoints')
+ATTRIBUTE_EFFECT_ALWAYS = ('AttStrong', 'AttFast', 'AttWill', 'AttTech',
+                           'MoveSpeedMitigate')
+
 for _p in (SCHEMA_DIR, SCRIPTS_DIR):
     if _p not in sys.path:
         sys.path.insert(0, _p)
@@ -1214,6 +1230,9 @@ def _read_overlay_entry(path, rel):
                                  'EffectModel': 2, 'MatrixEffectModel': 3}.get(entry['table'], 100)
         if entry['table'] == 'EffectModel':
             entry['columnScope'] = 'sheet'
+            entry['sectionColumns'] = {'Attribute nodes': {
+                'include': list(ATTRIBUTE_EFFECT_COLUMNS),
+                'always': list(ATTRIBUTE_EFFECT_ALWAYS)}}
         gi = names.index('_group')
         header[gi]['sectionHeading'] = True
         for ri, row in enumerate(entry['rows']):
@@ -12188,6 +12207,16 @@ ck('a class-wide untouched zero column can still be hidden',
    CKF.overlayZeroColumns(classFixture,attributeRows)[1] === true);
 ck('an override outside the attribute section keeps its column visible',
    CKF.overlayZeroColumns(classFixture,attributeRows,[classFixture.rows[0].cells,['2','0','','0','0']])[1] === false);
+classFixture.sectionColumns = {'attributes':{include:['value'],always:['value']}};
+ck('section policy excludes tuning outside its declared attribute fields',
+   JSON.stringify(CKF.overlaySectionColumns(classFixture,'attributes'))
+     === JSON.stringify([true,true,false,false,true]));
+ck('section policy leaves the regular talent grid complete',
+   CKF.overlaySectionColumns(classFixture,'talents').every(Boolean));
+ck('the always-visible attribute exception survives a class-wide zero baseline',
+   CKF.overlayZeroColumns(classFixture,attributeRows,undefined,'attributes')[1] === false);
+ck('the same zero field may still collapse in the regular talent grid',
+   CKF.overlayZeroColumns(classFixture,attributeRows,undefined,'talents')[1] === true);
 const zeroWorking = []; zeroWorking[4] = ['4','2','','0','0'];
 ck('a pending nonzero edit keeps a zero baseline column visible',
    CKF.overlayZeroColumns(zeroFixture, zeroRows.slice(0,1), zeroWorking)[1] === false);
@@ -13628,7 +13657,8 @@ setTimeout(function () {
           if (ent.constant[i] === null) {
             const groups = overlayGroups(s, ent).filter(function (g) {
               return (ent.hiddenGroups || []).indexOf(g.title) < 0;});
-            for (const g of groups) if (!CKF.overlayZeroColumns(ent, g.rows)[i])
+            for (const g of groups) if (CKF.overlaySectionColumns(ent, g.title)[i]
+                && !CKF.overlayZeroColumns(ent, g.rows, undefined, g.title)[i])
               minCells += g.rows.length;
           }
         } else if (ent.roles[i] === 'identity' || i === 0) {
@@ -13646,7 +13676,7 @@ setTimeout(function () {
        + 'of every column that VARIES — at least ' + minCells + ', got '
        + inputs.length + '. The server sends `editable` and `constant`; '
        + 'app.html must render an input where editable is true and may '
-       + 'collapse constants or measured zeroes, and omit only declared hidden groups.',
+       + 'collapse constants or measured zeroes, and omit declared hidden groups or section fields.',
        !!mycard && inputs.length >= minCells, [inputs.length, minCells, !!mycard]);
     ck(s.subsystem + ': and no input anywhere else — at most ' + maxCells
        + ' (one per editable cell), got ' + inputs.length + '. An input beyond '
