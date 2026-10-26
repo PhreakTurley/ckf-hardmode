@@ -2,6 +2,10 @@
 # -*- coding: utf-8 -*-
 """consumables.py -- the six consumable lever sheets: generate, check, selftest.
 
+Static inputs default to Official/data.db through static_data.py.
+Historical dump measurements below describe their original captures;
+explicit --data CSV_DIR remains available for reproduction.
+
 WHAT THESE FILES ARE
 
 `ckf.hardmode.d/consumables-medical.csv` and its five siblings are LEVER
@@ -167,6 +171,7 @@ COULD NOT LOOK, not agreement.
 """
 
 import argparse
+import static_data
 import collections
 import csv
 import io
@@ -575,19 +580,12 @@ def nz(v):
 
 
 def read_csv_rows(path, what):
-    """A read that fails RAISES. It is never reported as an empty table."""
-    if not os.path.isfile(path):
-        raise Problem('%s is not on disk at %s. This is a refusal, not an empty '
-                      'answer: nothing read it, so how many rows it holds is '
-                      'not known.' % (what, path))
     try:
-        with io.open(path, 'r', encoding='utf-8-sig', newline='') as fh:
-            rows = list(csv.DictReader(fh))
-    except Exception as e:
-        raise Problem('could not read %s at %s: %s. This is a refusal, not an '
-                      'empty table.' % (what, path, e))
+        rows = static_data.read_csv(path)
+    except (OSError, ValueError) as exc:
+        raise Problem('%s at %s could not be read: %s' % (what, path, exc)) from exc
     if not rows:
-        raise Problem('%s at %s has a header and no data rows.' % (what, path))
+        raise Problem('%s at %s has no data rows; this is not a complete input.' % (what, path))
     return rows
 
 
@@ -610,10 +608,11 @@ class Dump(object):
     def __init__(self, dump_dir):
         self.dir = dump_dir
         self.rows = {}
-        for model in MODELS:
-            self.rows[model] = read_csv_rows(
-                os.path.join(dump_dir, DUMP_FILE[model]),
-                'the dumped %s table' % model)
+        with static_data.StaticData(dump_dir) as source:
+            for model in MODELS:
+                self.rows[model] = source.read(model, (KEY_OF[model],))[1]
+                if not self.rows[model]:
+                    raise static_data.DataError('%s: %s has no rows' % (dump_dir, model))
         self.cols = dict((m, list(self.rows[m][0].keys())) for m in MODELS)
         self.items = self.rows[ITEM_MODEL]
         self.by_id = {}
@@ -622,6 +621,10 @@ class Dump(object):
             self.by_id[model] = collections.OrderedDict(
                 (int(r[key]), r) for r in self.rows[model])
 
+        self.model_only = static_data.MODEL_ONLY_COLUMNS if static_data.is_database(dump_dir) else {}
+        self.dropped = collections.defaultdict(list)
+        if static_data.is_database(dump_dir):
+            return  # SQL exposes its full schema; no dumper trims occurred.
         p = os.path.join(dump_dir, '_dropped_columns.csv')
         if not os.path.isfile(p):
             raise Problem(
@@ -1834,6 +1837,8 @@ def check_partition(dump, out):
         if k[1] in dump.cols.get(k[0], ()):
             continue
         absent_excl.append(k)
+        if k[1] in getattr(dump, 'model_only', {}).get(k[0], ()):
+            continue  # Explicit model-only property; SQL cannot observe it.
         if k[1] not in set(c for c, _w, _v in dump.dropped.get(k[0], [])):
             typo.append(k)
     for k in sorted(typo):
@@ -1843,6 +1848,10 @@ def check_partition(dump, out):
             'is not a column the dumper saw and omitted -- it is a name nothing '
             'accounts for.' % (k[0], k[1], excl[k], k[0], k[0]))
 
+    unavailable = [k for k in absent_excl if k[1] in getattr(dump, 'model_only', {}).get(k[0], ())]
+    if unavailable:
+        out('    NOT RUN A-PART model-only values (use runtime probes): ' +
+            ', '.join('%s.%s' % k for k in sorted(unavailable)))
     excl_live = [k for k in excl if k in live]
     out('    A-PART: THE PARTITION. %d (model, column) pair(s) live across the '
         'six sheets in this dump = %d declared lever pair(s) (%d SHEET_COLUMNS '
@@ -1862,14 +1871,11 @@ def check_partition(dump, out):
         'rows -- so these four numbers are not facts about the game and '
         'nothing here is derived from them.'
         % ', '.join('%s %d' % (m, len(dump.cols[m])) for m in MODELS))
-    out('      declared levers this dump cannot confirm: %d absent from their '
-        'table, %d present but blank/zero on their sheet\'s rows. Declared '
-        'exclusions absent from this dump: %d, of which %d are recorded in '
-        '_dropped_columns.csv (the dumper saw them and omitted them -- a narrow '
-        'dump, reported not complained about) and %d are accounted for by '
-        'nothing.'
-        % (len(absent), len(dead_here), len(absent_excl),
-           len(absent_excl) - len(typo), len(typo)))
+    out('      declared levers this source cannot confirm: %d absent, %d blank/zero. '
+        'Excluded properties absent: %d; %d require runtime probes, %d recorded '
+        'in the CSV drop report, %d unaccounted for.'
+        % (len(absent), len(dead_here), len(absent_excl), len(unavailable),
+           len(absent_excl) - len(typo) - len(unavailable), len(typo)))
     return problems
 
 
@@ -1916,6 +1922,9 @@ def check_dumper_dropped(dump, live, out):
     cannot see it and the union is incomplete -- so it is named."""
     problems = []
     n = 0
+    if getattr(dump, 'model_only', {}):
+        out('    NOT RUN A-DUMP: SQL has no dumper-trimmed columns; explicit CSV captures retain this check.')
+        return problems
     pairs = dump.pairs()
     by_model = collections.defaultdict(list)
     for m, i in pairs:
@@ -3570,8 +3579,9 @@ def selftest(dump, live, tree, out):
     check_partition(nd, lines.append)
     ck('H5g and the census SAYS how many, so "the dump is narrow" is on the '
        'record rather than invisible',
-       any('Declared exclusions absent from this dump:' in l
-           and 'absent from this dump: 0,' not in l for l in lines),
+       any(('Excluded properties absent: %d;' %
+            len([k for k in EXCLUDED_PAIRS if k[1] not in nd.cols[k[0]]])) in l
+           for l in lines),
        lines[-1:])
 
     # H6 a typo in EXCLUDED_COLUMNS -- a name no dumped table has AND no drop
@@ -3618,11 +3628,15 @@ def selftest(dump, live, tree, out):
        'declared lever pair(s) %s' % (len(would_die), would_die),
        len(would_die) > 0)
 
-    # H8 the dump's own shape is reported and never assumed.
-    ck('H8 this run is on the post-session dump (13/79/89/37)',
+    # H8 belongs to historical post-session captures, not SQL content.
+    shape_ck = ck
+    if getattr(dump, 'model_only', {}) and not _RUN_CAPTURE_SHAPE:
+        def shape_ck(name, cond, detail=''):
+            out('    NOT RUN ' + name + ': SQL has no runtime model shape; use --capture-shape with an explicit post-session CSV source.')
+    shape_ck('H8 this run is on the post-session dump (13/79/89/37)',
        [len(dump.cols[m]) for m in MODELS] == [13, 79, 89, 37],
        [len(dump.cols[m]) for m in MODELS])
-    ck('H8b and the Adjusted family is THIRTEEN here, not the ten an earlier '
+    shape_ck('H8b and the Adjusted family is THIRTEEN here, not the ten an earlier '
        'report quoted from the narrow dump',
        len(EXCLUDED_COLUMNS['adjusted']) == 13
        and len([c for c in dump.cols[TALENT_MODEL]
@@ -3660,16 +3674,23 @@ cyberweapons.py, implants.py) refuse here; this one says the same thing.
 """
 
 
+_RUN_CAPTURE_SHAPE = False
+
+
 def main(argv=None):
+    global _RUN_CAPTURE_SHAPE
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--game', help='the game root (holds BepInEx/config)')
-    ap.add_argument('--dump', help='the dumped CSV directory (default sheets/raw)')
+    static_data.add_argument(ap)
+    ap.add_argument('--capture-shape', action='store_true',
+                    help='also run the historical post-session CSV shape assertions H8/H8b')
     ap.add_argument('--write', action='store_true', help='write the six CSVs')
     ap.add_argument('--check', action='store_true',
                     help='compare the six live files against the dump')
     ap.add_argument('--selftest', action='store_true', help='inject faults')
     a = ap.parse_args(argv)
+    _RUN_CAPTURE_SHAPE = a.capture_shape
 
     if not (a.write or a.check or a.selftest):
         ap.error('one of --write, --check or --selftest is required')
@@ -3677,7 +3698,7 @@ def main(argv=None):
         sys.stderr.write(REFUSAL)
         return 2
 
-    dump_dir = a.dump or os.path.join(repo_root(), 'sheets', 'raw')
+    dump_dir = a.dump or str(static_data.DEFAULT_DB)
     config_dir = os.path.join(a.game, 'BepInEx', 'config')
     overlay_dir = os.path.join(config_dir, 'ckf.hardmode.d')
 

@@ -2,6 +2,9 @@
 # -*- coding: utf-8 -*-
 """implants.py -- the eleven implant slot tables: generate, check, selftest.
 
+Static inputs default to Official/data.db through static_data.py.
+Historical dump measurements below describe their original captures.
+
 WHY THIS SCRIPT EXISTS
 
 split-config-into-toggleable-slices turns ImplantModel into eleven per-slot
@@ -32,6 +35,7 @@ THE THREE THINGS IT IS CAREFUL ABOUT
 """
 
 import argparse, csv, io, json, os, re, sys
+import static_data
 from collections import OrderedDict, defaultdict
 
 SLOTS = list(range(1, 12))
@@ -185,8 +189,7 @@ REFUSED_CONTROL = {
 
 
 def read_csv(path):
-    with io.open(path, "r", encoding="utf-8-sig", newline="") as fh:
-        return list(csv.DictReader(fh))
+    return static_data.read_csv(path)
 
 
 def strip_jsonc(text):
@@ -201,8 +204,11 @@ def nz(v):
 class Dump(object):
     def __init__(self, dump_dir):
         self.dir = dump_dir
-        self.implants = read_csv(os.path.join(dump_dir, "ImplantModel.csv"))
-        self.effects  = read_csv(os.path.join(dump_dir, "EffectModel.csv"))
+        with static_data.StaticData(dump_dir) as source:
+            self.implants = source.read("ImplantModel", (IMPLANT_KEY,))[1]
+            self.effects = source.read("EffectModel", (EFFECT_ID_COL,))[1]
+        if not self.implants or not self.effects:
+            raise static_data.DataError("ImplantModel and EffectModel must both contain rows")
         self.imp_cols = list(self.implants[0].keys())
         self.eff_cols = list(self.effects[0].keys())
         self.eff_by_id = OrderedDict((int(r[EFFECT_ID_COL]), r) for r in self.effects)
@@ -556,7 +562,7 @@ def build_sheet(dump, live, slot):
                 ship = erow[col] if erow is not None else None
                 cells.append(SHIPPED_OVERRIDES.get((slot, eid, col), "") if erow is not None else "")
             shipped.append("%s %s" % (col, "-" if ship is None else ship))
-        who = "%s (class %s %s)" % (r["ImplantName"], r["ImplantClass"], r["ImplantClassName"])
+        who = "%s (class %s %s)" % (r["ImplantName"], r["ImplantClass"], r.get("ImplantClassName", ""))
         if eid:
             note = "effect %d %s" % (eid, dump.eff_by_id[eid]["EffectName"])
         else:
@@ -1596,8 +1602,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--game", help="game root (holds BepInEx\\config)")
-    ap.add_argument("--dump", default=os.path.join("sheets", "raw"),
-                    help="dumped CSV directory (default sheets\\raw)")
+    static_data.add_argument(ap)
     ap.add_argument("--plugin", default=os.path.join("mods", "CKFHardMode", "Implants.cs"))
     ap.add_argument("--emit", action="store_true", help="write the eleven CSVs")
     ap.add_argument("--check", action="store_true", help="prove double application is a no-op")
@@ -1718,7 +1723,10 @@ def _collect_marks(dump, sheets):
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except static_data.DataError as exc:
+        sys.exit("REFUSED: %s" % exc)
 
 
 # ---------------------------------------------------------------------------

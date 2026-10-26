@@ -130,6 +130,8 @@ APP_HTML = os.path.join(GUI_DIR, 'app.html')
 
 sys.path.insert(0, GUI_DIR)
 import modkit
+sys.path.insert(0, SCRIPTS_DIR)
+import static_data
 
 DEFAULT_GAME_DIR = r'C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint'
 
@@ -1090,7 +1092,7 @@ def overlay_excluded(rel, names, rows):
     return kept, gone
 
 
-def read_overlay(path, rel):
+def read_overlay(path, rel, static_source=None):
     """One overlay file -> the entry the page renders from.
 
     Never raises: an unreadable or headerless file comes back with `error` set
@@ -1106,12 +1108,12 @@ def read_overlay(path, rel):
     means every entry the page or the save path ever sees has been graded,
     whichever way it came out.
     """
-    entry = _read_overlay_entry(path, rel)
+    entry = _read_overlay_entry(path, rel, static_source)
     entry['writable'], entry['writableWhy'] = overlay_writable(entry)
     return entry
 
 
-def _read_overlay_entry(path, rel):
+def _read_overlay_entry(path, rel, static_source=None):
     """read_overlay's body. Call read_overlay, not this."""
     entry = {'path': rel, 'table': overlay_table_name(rel), 'present': False,
              'error': None, 'columns': [], 'keyColumn': None, 'rows': [],
@@ -1217,6 +1219,15 @@ def _read_overlay_entry(path, rel):
     entry['labels'] = overlay_labels(entry)
     entry['rowLabels'] = ROW_LABEL_SHEETS.get(os.path.basename(rel), {})
     entry['expanderMarks'], entry['sharedBlind'] = expander_shared_marks(entry)
+    if static_source is not None:
+        entry['staticSource'] = str(getattr(static_source, 'path', 'official database'))
+        try:
+            if isinstance(static_source, str):
+                raise static_data.DataError(static_source)
+            entry['officialShipped'], entry['officialShippedMissing'] = official_overlay_baselines(entry, static_source)
+        except static_data.DataError as exc:
+            entry['staticDataError'] = str(exc)
+            entry['officialShipped'], entry['officialShippedMissing'] = {}, len(entry['rows'])
     shipped, missing = overlay_shipped(entry)
     entry['shipped'] = dict((str(k), v) for k, v in shipped.items())
     entry['shippedMissing'] = missing
@@ -1299,12 +1310,17 @@ def catalog_hidden_groups(entry):
     return ['Attribute nodes'] if all(catalog_plain_node(entry, ri) for ri, _ in members) else []
 
 
-def read_overlays(config_dir, schemas):
-    """-> {rel: entry} for every declared overlay, in schema order."""
-    out = {}
-    for rel in overlay_paths_all(schemas):
-        out[rel] = read_overlay(os.path.join(config_dir, rel), rel)
-    return out
+def read_overlays(config_dir, schemas, static_source=None):
+    """Read tuning separately from optional, current official baselines."""
+    paths = overlay_paths_all(schemas)
+    if static_source is None:
+        return {rel: read_overlay(os.path.join(config_dir, rel), rel) for rel in paths}
+    try:
+        with static_data.StaticData(static_source) as source:
+            return {rel: read_overlay(os.path.join(config_dir, rel), rel, source) for rel in paths}
+    except static_data.DataError as exc:
+        # A broken selected DB never falls back to older metadata numbers.
+        return {rel: read_overlay(os.path.join(config_dir, rel), rel, str(exc)) for rel in paths}
 
 
 # ---------------------------------------------------------------------------
@@ -1876,6 +1892,63 @@ _SHIPPED_PAIR_RE = re.compile(r'^([A-Za-z][A-Za-z0-9]*)\s+(-?\d+(?:\.\d+)?)$')
 TEXT_BASELINE_COLUMNS = {'JobNodeModel': ('IconPng',)}
 
 
+def official_overlay_baselines(entry, source):
+    """Read display baselines without rewriting a sheet or its stored metadata."""
+    names = [c['name'] for c in entry['columns']]
+    table = entry['table']
+    filename = os.path.basename(entry['path'])
+    mapping = {}  # displayed column -> (model, identity column in this sheet, game column)
+    if table.endswith('Model') and entry.get('kind') != 'expanded':
+        key = entry.get('keyColumn')
+        if key:
+            mapping = {c: (table, key, c) for c in names if c != key and not c.startswith('_')}
+    elif filename in getattr(_cyberweapons, 'SHEET_NAMES', ()):
+        sheet = next(s for s in _cyberweapons.SHEETS if s.name == filename)
+        mapping = {c: (model, 'WeaponId' if model == 'WeaponModel' else 'TalentId', col)
+                   for c, (model, col) in sheet.map.items()}
+    elif filename in getattr(_implants, 'SHEET_NAMES', ()):
+        mapping = {c: ('ImplantModel', 'ImplantTypeId', c) if c in _implants.IMPLANT_LEVERS
+                   else ('EffectModel', 'ImplantEffectId', c)
+                   for c in names if c not in _implants.IMPLANT_IDENTITY and not c.startswith('_')}
+    elif filename in getattr(_consumables, 'SHEET_NAMES', ()):
+        sheet = _consumables.SHEET_BY_NAME[filename]
+        mapping = {c: (model, _consumables.KEY_OF[model], col)
+                   for c, model, col in _consumables.SHEET_COLUMNS[sheet.key]}
+    # Class-wide levers have no single row baseline. Never pick a representative
+    # weapon or use a stale comment to manufacture one.
+    tables = {}
+    for model, identity, col in mapping.values():
+        if model in tables:
+            continue
+        sql = static_data.sql_name(model)
+        declaration = source.schema.get(sql, [])
+        aliases = static_data.COLUMN_NAMES.get(sql, {})
+        keys = [aliases.get(c[1], c[1]) for c in declaration if c[5]]
+        if len(keys) != 1:
+            raise static_data.DataError('%s has no single primary key in the official database' % model)
+        columns, rows = source.read(model, keys)
+        tables[model] = {r[keys[0]]: r for r in rows}
+    out = {}
+    for ri, row in enumerate(entry['rows']):
+        cells = dict(zip(names, row['cells']))
+        values = {}
+        for column, (model, identity, game_column) in mapping.items():
+            if column not in names:
+                continue
+            original = tables[model].get((cells.get(identity) or '').strip())
+            if original is None or game_column not in original:
+                continue
+            text = original[game_column]
+            if game_column in TEXT_BASELINE_COLUMNS.get(model, ()):
+                if '\n' not in text and '\r' not in text:
+                    values[column] = text
+            elif _SHIPPED_PAIR_RE.fullmatch(column + ' ' + text):
+                values[column] = text
+        if values:
+            out[ri] = values
+    return out, len(entry['rows']) - len(out)
+
+
 def overlay_shipped(entry):
     """Shipped lever baselines from _shipped metadata or legacy _comment prose.
 
@@ -1886,6 +1959,8 @@ def overlay_shipped(entry):
     Missing or invalid baselines are counted, including malformed metadata;
     a bad _shipped cell never falls back to unrelated descriptive prose.
     """
+    if 'officialShipped' in entry:
+        return entry['officialShipped'], entry['officialShippedMissing']
     names = [c['name'] for c in (entry.get('columns') or [])]
     ci = names.index('_comment') if '_comment' in names else None
     si = names.index('_shipped') if '_shipped' in names else None
@@ -2103,7 +2178,11 @@ def overlay_notes(entry):
             'unknown: %s. The game ships nothing there, so there is nothing '
             'for this sheet to leave alone.'
             % ', '.join('%s on %d row(s)' % kv for kv in sorted(zero.items())))
-    if shipped:
+    if entry.get('staticDataError'):
+        notes.append('Official baseline unavailable: ' + entry['staticDataError'])
+    elif 'officialShipped' in entry:
+        notes.append('Baseline values come from the selected official database. Missing rows or columns show a dash.')
+    elif shipped:
         notes.append(
             'The shipped value beside each cell is read from that row\'s own '
             'comment, on %d of %d row(s)%s.'
@@ -2584,7 +2663,7 @@ class Document:
         self.overlay_raw = {}
 
 
-def read_document(config_dir, schemas):
+def read_document(config_dir, schemas, static_source=None):
     doc = Document(config_dir, schemas)
     cfg_path = os.path.join(config_dir, 'ckf.hardmode.cfg')
     try:
@@ -2620,7 +2699,7 @@ def read_document(config_dir, schemas):
                 doc.sidecar_errors[u] = 'no "%s" section in %s' % (sec, fname)
                 continue
             doc.sidecar_raw[u] = raw
-    doc.overlays = read_overlays(config_dir, schemas)
+    doc.overlays = read_overlays(config_dir, schemas, static_source)
     for rel in doc.overlays:
         p = os.path.join(config_dir, rel)
         try:
@@ -4679,23 +4758,11 @@ class Migration(object):
 
 
 def migration_dump_dir():
-    """sheets/raw -- the dumped game tables the lever sheets are built over.
-
-    REFUSED rather than defaulted if it is not there: the eleven implant slot
-    tables, the two cyberweapon sheets, the six consumable sheets and
-    RuleModel.csv's untouched-row comments are all built over it, and a
-    migration that could not read it would write a layout missing most of its
-    rows and say nothing.
-    """
-    d = os.path.join(REPO, 'sheets', 'raw')
-    if not os.path.isdir(d):
-        raise MigrationRefused(
-            'the dumped game tables are not on disk at %s.\n'
-            'This is a refusal, not an empty conversion: the implant, '
-            'cyberweapon, consumable and RuleModel files are built over that '
-            'dump, and writing them without it would produce a layout whose '
-            'rows are missing rather than blank.' % d)
-    return d
+    """Static baseline for an explicitly requested maintainer migration."""
+    path = default_static_source() or str(static_data.DEFAULT_DB)
+    if not os.path.isfile(path):
+        raise MigrationRefused('static content database is missing at %s' % path)
+    return path
 
 
 def _migration_expanders():
@@ -4794,11 +4861,7 @@ def migration_gear_classes(config_dir, dump_dir, gc, measured):
     shipped dump is read instead of the post-overlay file.
     """
     enemy, mrows, ppath = migration_pointer_set(config_dir, dump_dir)
-    wpath = os.path.join(dump_dir, 'WeaponModel.csv')
-    if not os.path.isfile(wpath):
-        raise MigrationRefused('the dumped WeaponModel table is not at %s.' % wpath)
-    with open(wpath, newline='', encoding='utf-8-sig') as fh:
-        weapons = list(csv.DictReader(fh))
+    weapons = static_data.read_rows(dump_dir, 'WeaponModel', ('WeaponId', 'WeaponClass'))
     measured['pointer_file'] = ppath
     measured['pointer_rows'] = mrows
     measured['pointer_ids'] = len(enemy)
@@ -5000,16 +5063,10 @@ def build_migration(config_dir, dump_dir=None):
         by_file.setdefault(dest[i], []).append(i)
 
     shipped_rule, rule_name = {}, {}
-    rpath = os.path.join(dump_dir, 'RuleModel.csv')
-    if not os.path.isfile(rpath):
-        raise MigrationRefused('the dumped RuleModel table is not at %s, so '
-                               'RuleModel.csv\'s untouched rows cannot be '
-                               'named.' % rpath)
-    with open(rpath, newline='', encoding='utf-8-sig') as fh:
-        for row in csv.DictReader(fh):
-            rid = int(row['RuleId'])
-            shipped_rule[rid] = row['Value']
-            rule_name[rid] = row.get('ConfigName') or ''
+    for row in static_data.read_rows(dump_dir, 'RuleModel', ('RuleId', 'Value')):
+        rid = int(row['RuleId'])
+        shipped_rule[rid] = row['Value']
+        rule_name[rid] = row.get('ConfigName') or ''
 
     converted = 0
     for fn in sorted(by_file, key=lambda s: s.encode('utf-8')):
@@ -5372,10 +5429,29 @@ def read_mission_reference():
 # ---------------------------------------------------------------------------
 # the application object the HTTP layer talks to
 
+def default_static_source():
+    """Find external maintainer data without bundling or copying it."""
+    if not FROZEN:
+        path = str(static_data.DEFAULT_DB)
+        return path if os.path.isfile(path) else None
+    if EXE_DIR:
+        path = os.path.join(EXE_DIR, 'Official', 'data.db')
+        if os.path.isfile(path):
+            return path
+        # A source-checkout build normally lives under dist/. Keep using the
+        # checkout's one Official directory rather than requiring another copy.
+        checkout = os.path.dirname(EXE_DIR)
+        path = os.path.join(checkout, 'Official', 'data.db')
+        if os.path.isfile(os.path.join(checkout, 'gui', 'serve.py')) and os.path.isfile(path):
+            return path
+    return None
+
+
 class App:
-    def __init__(self, settings, token):
+    def __init__(self, settings, token, static_source=None):
         self.settings = settings
         self.token = token
+        self.static_source = static_source
         self.schemas = load_schemas()
         self.lock = threading.Lock()
 
@@ -5383,7 +5459,8 @@ class App:
         cd = config_dir_for(self.settings)
         recovery = recover_journal(cd) if os.path.isdir(cd) else {
             'found': False, 'completed': [], 'missing': [], 'error': None}
-        doc = read_document(cd, self.schemas)
+        source = None if self.static_source is False else (self.static_source or default_static_source())
+        doc = read_document(cd, self.schemas, source)
         model, extras = build_model(doc)
         return doc, model, extras, cd, recovery
 
@@ -6639,7 +6716,7 @@ def selftest(config_arg, frozen_exe=None):
     with tempfile.TemporaryDirectory() as td:
         cd = _sandbox(src, os.path.join(td, 'config'))
         settings = {'gameDir': '', 'configDirOverride': cd, 'stripReadme': False}
-        app = App(settings, 'test-token')
+        app = App(settings, 'test-token', static_source=False)
 
         m = app.api_model()
         declared = sum(len(sc['fields']) for sc in app.schemas)
@@ -6763,7 +6840,7 @@ def selftest(config_arg, frozen_exe=None):
             gone = unit_file(drop[0])
             os.remove(os.path.join(cdmiss, gone))
             appmiss = App({'gameDir': '', 'configDirOverride': cdmiss,
-                           'stripReadme': False}, 'x')
+                           'stripReadme': False}, 'x', static_source=False)
             mmiss = appmiss.api_model()
             t.check('a target naming a file that is not there is reported by '
                     'name, as an error against that unit',
@@ -7900,7 +7977,7 @@ def selftest(config_arg, frozen_exe=None):
         # does not report one false MISSING per sheet).
         cdov = _sandbox(src, os.path.join(td, 'overlays-write'))
         appov = App({'gameDir': '', 'configDirOverride': cdov,
-                     'stripReadme': False}, 'x')
+                     'stripReadme': False}, 'x', static_source=False)
         mov = appov.api_model()
         hov = _hashes_of(cdov, ov_decl)
         hcons = _hashes_of(cdov, _cons_rel)
@@ -8071,7 +8148,7 @@ def selftest(config_arg, frozen_exe=None):
         _gone_rel = _w_rel
         os.remove(os.path.join(cdgone, _gone_rel))
         appgone = App({'gameDir': '', 'configDirOverride': cdgone,
-                       'stripReadme': False}, 'x')
+                       'stripReadme': False}, 'x', static_source=False)
         mgone = appgone.api_model()
         t.check('a declared sheet that is not on disk reads as an error, not '
                 'as an empty grid',
@@ -8103,7 +8180,7 @@ def selftest(config_arg, frozen_exe=None):
         # removes the journal.
         cdjo = _sandbox(src, os.path.join(td, 'overlay-journal'))
         appjo = App({'gameDir': '', 'configDirOverride': cdjo,
-                     'stripReadme': False}, 'x')
+                     'stripReadme': False}, 'x', static_source=False)
         mjo = appjo.api_model()
         _jo_ent = mjo['values']['overlays'][_w_rel]
         _jo_cfg = sorted(k for k, v in mjo['values']['cfg'].items()
@@ -8141,7 +8218,7 @@ def selftest(config_arg, frozen_exe=None):
         # (6) A CRASH BETWEEN THE TWO RENAMES IS FINISHED BY recover_journal.
         cdjr = _sandbox(src, os.path.join(td, 'overlay-journal-recover'))
         appjr = App({'gameDir': '', 'configDirOverride': cdjr,
-                     'stripReadme': False}, 'x')
+                     'stripReadme': False}, 'x', static_source=False)
         mjr = appjr.api_model()
         _jr_ent = mjr['values']['overlays'][_w_rel]
         _jr_edits = {'cfg': {}, 'json': {}, 'overlays': {_w_rel: {'cells': [
@@ -8181,7 +8258,7 @@ def selftest(config_arg, frozen_exe=None):
                 sorted(set(ov_decl) - set(mov['fingerprints'])))
         cdst = _sandbox(src, os.path.join(td, 'overlay-stale'))
         appst = App({'gameDir': '', 'configDirOverride': cdst,
-                     'stripReadme': False}, 'x')
+                     'stripReadme': False}, 'x', static_source=False)
         mst = appst.api_model()
         _st_ent = mst['values']['overlays'][_w_rel]
         _st_edit = {'cfg': {}, 'json': {}, 'overlays': {_w_rel: {'cells': [
@@ -8636,7 +8713,7 @@ def selftest(config_arg, frozen_exe=None):
             _f.write((_sk_txt[:_at] + '"%s": 7,\n  ' % MISSPELT
                       + _sk_txt[_at:]).encode('utf-8'))
         appsk = App({'gameDir': '', 'configDirOverride': cdsk,
-                     'stripReadme': False}, 'x')
+                     'stripReadme': False}, 'x', static_source=False)
         msk = appsk.api_model()
         docsk = read_document(cdsk, appsk.schemas)
         t.check('a key no schema declares is found, and named, in the file '
@@ -8674,7 +8751,7 @@ def selftest(config_arg, frozen_exe=None):
                 (sorted(m['fingerprints']), owned_now))
         cdfp = _sandbox(src, os.path.join(td, 'fingerprints'))
         appfp = App({'gameDir': '', 'configDirOverride': cdfp,
-                     'stripReadme': False}, 'x')
+                     'stripReadme': False}, 'x', static_source=False)
         mfp = appfp.api_model()
         # Two different files: one edited through the editor, one moved on disk
         # underneath it. With ten files instead of one there are ten times as
@@ -8743,7 +8820,7 @@ def selftest(config_arg, frozen_exe=None):
                 with open(cpath, 'wb') as _f:
                     _f.write(data)
                 ap = App({'gameDir': '', 'configDirOverride': cdc2,
-                          'stripReadme': False}, 'x')
+                          'stripReadme': False}, 'x', static_source=False)
                 mm = ap.api_model()
                 if unit_file(canon_unit) in mm['sidecarErrors']:
                     return False, mm['sidecarErrors'][unit_file(canon_unit)]
@@ -8790,7 +8867,7 @@ def selftest(config_arg, frozen_exe=None):
                 with open(cpath, 'wb') as _f:
                     _f.write(data)
                 ap = App({'gameDir': '', 'configDirOverride': cdc2,
-                          'stripReadme': False}, 'x')
+                          'stripReadme': False}, 'x', static_source=False)
                 doc_c = read_document(cdc2, ap.schemas)
                 nc = noncanonical_files(doc_c)
                 t.check('%s is reported as not the form this editor writes, '
@@ -8866,7 +8943,7 @@ def selftest(config_arg, frozen_exe=None):
                     and _ends(p_lf)[0] == 0 and _ends(p_lf)[1] > 0,
                     (_ends(p_crlf), _ends(p_lf)))
             appnl = App({'gameDir': '', 'configDirOverride': cdnl,
-                         'stripReadme': False}, 'x')
+                         'stripReadme': False}, 'x', static_source=False)
             mnl = appnl.api_model()
             enl = _edits_for(appnl.schemas, mnl)
             moved_any = False
@@ -9186,7 +9263,7 @@ def selftest(config_arg, frozen_exe=None):
                   'fixture (%d): %s'
                   % (len(missing_keys), ', '.join(missing_keys) or 'none'))
             appl = App({'gameDir': '', 'configDirOverride': cdl,
-                        'stripReadme': False}, 'x')
+                        'stripReadme': False}, 'x', static_source=False)
             t.check('every key of the group is readable in the fixture before '
                     'anything is written to it',
                     all(_live_value(cdl, k) is not None for k in lg['keys']),
@@ -9244,7 +9321,7 @@ def selftest(config_arg, frozen_exe=None):
             t.check('the requires fixture carries both keys of the group',
                     okq, whyq)
             appq = App({'gameDir': '', 'configDirOverride': cdq,
-                        'stripReadme': False}, 'x')
+                        'stripReadme': False}, 'x', static_source=False)
 
             def _rv(k):
                 raw = CfgFile.load(cfgq).raw_value(k)
@@ -9328,7 +9405,7 @@ def selftest(config_arg, frozen_exe=None):
                                          [RDEP, RNEED])
             t.check('the hand-edit fixture builds', okh2, whyh2)
             apph2 = App({'gameDir': '', 'configDirOverride': cdh,
-                         'stripReadme': False}, 'x')
+                         'stripReadme': False}, 'x', static_source=False)
             rseed = apph2.api_save({'cfg': {RDEP: {'value': False},
                                             RNEED: {'value': False}}})
             t.check('the hand-edit fixture reaches both-off first', rseed['ok'],
@@ -9341,7 +9418,7 @@ def selftest(config_arg, frozen_exe=None):
             with open(os.path.join(cdh, 'ckf.hardmode.cfg'), 'wb') as _f:
                 _f.write(hcfg.to_bytes())
             apph3 = App({'gameDir': '', 'configDirOverride': cdh,
-                         'stripReadme': False}, 'x')
+                         'stripReadme': False}, 'x', static_source=False)
             mh = apph3.api_model()
             t.check('check_schema grades the hand-edited state INVARIANT',
                     any(p['kind'] == 'INVARIANT' and RNEED in p['message']
@@ -9378,7 +9455,7 @@ def selftest(config_arg, frozen_exe=None):
                                            [KA, KB, KC])
                 t.check('the chain fixture builds', okc, whyc)
                 appc = App({'gameDir': '', 'configDirOverride': cdc,
-                            'stripReadme': False}, 'x')
+                            'stripReadme': False}, 'x', static_source=False)
                 rc0 = appc.api_save({'cfg': {KA: {'value': False},
                                              KB: {'value': False},
                                              KC: {'value': False}}})
@@ -9873,7 +9950,7 @@ def selftest(config_arg, frozen_exe=None):
         # its validator had rejected. The reproduction is the test.
         print('\n[9] a concurrent request cannot empty the validator')
         cdc = _sandbox(src, os.path.join(td, 'concurrent'))
-        appc = App({'gameDir': '', 'configDirOverride': cdc, 'stripReadme': False}, 'x')
+        appc = App({'gameDir': '', 'configDirOverride': cdc, 'stripReadme': False}, 'x', static_source=False)
         mc = appc.api_model()
         rowsc = json.loads(json.dumps(mc['values']['tables'][tk]['rows']))
         rowsc[0]['cells']['PowerLevelFraction'] = 99.0        # declared range [0, 5]
@@ -9944,7 +10021,7 @@ def selftest(config_arg, frozen_exe=None):
 
         # a save written against a stale read is refused
         cds = _sandbox(src, os.path.join(td, 'stale'))
-        apps = App({'gameDir': '', 'configDirOverride': cds, 'stripReadme': False}, 'x')
+        apps = App({'gameDir': '', 'configDirOverride': cds, 'stripReadme': False}, 'x', static_source=False)
         ms = apps.api_model()
         rs = json.loads(json.dumps(ms['values']['tables'][tk]['rows']))
         rs[0]['cells']['PowerLevelFraction'] = 0.11
@@ -9959,7 +10036,7 @@ def selftest(config_arg, frozen_exe=None):
 
         # a write that fails partway leaves a journal the next start finishes
         cd3 = _sandbox(src, os.path.join(td, 'midrename'))
-        app3 = App({'gameDir': '', 'configDirOverride': cd3, 'stripReadme': False}, 'x')
+        app3 = App({'gameDir': '', 'configDirOverride': cd3, 'stripReadme': False}, 'x', static_source=False)
         m3 = app3.api_model()
         rows3 = json.loads(json.dumps(m3['values']['tables'][tk]['rows']))
         rows3[0]['cells']['PowerLevelFraction'] = 0.42
@@ -9999,7 +10076,7 @@ def selftest(config_arg, frozen_exe=None):
         # Its own App, with the token the requests below send. It used to be a
         # handle left over from the cfg-append case in section 7, which went
         # with that case.
-        appsrv = App({'gameDir': '', 'configDirOverride': cd, 'stripReadme': False}, 'x')
+        appsrv = App({'gameDir': '', 'configDirOverride': cd, 'stripReadme': False}, 'x', static_source=False)
         httpd = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
         port = httpd.server_address[1]
         Handler.app = appsrv
@@ -10362,7 +10439,7 @@ def selftest(config_arg, frozen_exe=None):
                             if os.path.exists(p) else None)
             return out
 
-        appn = App({'gameDir': '', 'configDirOverride': cdn, 'stripReadme': False}, 'x')
+        appn = App({'gameDir': '', 'configDirOverride': cdn, 'stripReadme': False}, 'x', static_source=False)
         mn = appn.api_model()
         # `owned` includes the lever sheets, and the no-op edit set reaches
         # them too -- every lever cell sent back at the value it already holds.
@@ -10425,7 +10502,7 @@ def selftest(config_arg, frozen_exe=None):
         # AND THEN, FROM A SETTLED DIRECTORY, ZERO BYTES. This is the assertion
         # the checkbox asks for, and it is made over every owned file at once.
         appn2 = App({'gameDir': '', 'configDirOverride': cdn,
-                     'stripReadme': False}, 'x')
+                     'stripReadme': False}, 'x', static_source=False)
         mn2 = appn2.api_model()
         h2 = _hashes(cdn, owned)
         rn2 = appn2.api_save(_edits_for(appn2.schemas, mn2))
@@ -10475,14 +10552,14 @@ def selftest(config_arg, frozen_exe=None):
         # generated mirror is stale writes that mirror on ANY save, and this
         # case is about which files a save touches, not about that.
         app_settle = App({'gameDir': '', 'configDirOverride': cdj,
-                          'stripReadme': False}, 'x')
+                          'stripReadme': False}, 'x', static_source=False)
         m_settle = app_settle.api_model()
         r_settle = app_settle.api_save(_edits_for(app_settle.schemas, m_settle))
         t.check('the one-file fixture settles first, writing nothing but a '
                 'stale mirror',
                 r_settle['ok'] and not (set(r_settle['written']) - set(mirrors)),
                 r_settle.get('written') or r_settle.get('refused'))
-        appj = App({'gameDir': '', 'configDirOverride': cdj, 'stripReadme': False}, 'x')
+        appj = App({'gameDir': '', 'configDirOverride': cdj, 'stripReadme': False}, 'x', static_source=False)
         mj = appj.api_model()
         # A numeric scalar in a file that is NOT the mirror's source, so this
         # measures one file and not the pair.
@@ -10536,7 +10613,7 @@ def selftest(config_arg, frozen_exe=None):
                 return real_replace(a, b)
 
             appj2 = App({'gameDir': '', 'configDirOverride': cdj,
-                         'stripReadme': False}, 'x')
+                         'stripReadme': False}, 'x', static_source=False)
             mj2 = appj2.api_model()
             ej2 = _edits_for(appj2.schemas, mj2)
             ej2['json'][junit]['scalars'][jpath] = {'present': True,
@@ -10559,7 +10636,7 @@ def selftest(config_arg, frozen_exe=None):
         # the window is [1, 10] and this sits at MissionPowerLevel 0, which the
         # game's own table prices at 0.04 for ActionClass 2.
         cdh = _sandbox(src, os.path.join(td, 'hidden'))
-        apph = App({'gameDir': '', 'configDirOverride': cdh, 'stripReadme': False}, 'x')
+        apph = App({'gameDir': '', 'configDirOverride': cdh, 'stripReadme': False}, 'x', static_source=False)
         mh = apph.api_model()
         tkey = None
         for k, v in mh['values']['tables'].items():
@@ -10654,7 +10731,7 @@ def selftest(config_arg, frozen_exe=None):
         for sch in gates_to_exercise:
             sub = sch['subsystem']
             cdp = _sandbox(src, os.path.join(td, 'gate-' + sub))
-            appp = App({'gameDir': '', 'configDirOverride': cdp, 'stripReadme': False}, 'x')
+            appp = App({'gameDir': '', 'configDirOverride': cdp, 'stripReadme': False}, 'x', static_source=False)
             en = sch['enable']
             if en.get('json'):
                 gate, unit = en['json'], sidecar_unit(sch)
@@ -10760,7 +10837,7 @@ def selftest(config_arg, frozen_exe=None):
                             'before=%r written=%r skipped=%r notes=%r'
                             % (was_raw, rp.get('written'), rp.get('skipped'),
                                rp.get('notes')))
-            appp2 = App({'gameDir': '', 'configDirOverride': cdp, 'stripReadme': False}, 'x')
+            appp2 = App({'gameDir': '', 'configDirOverride': cdp, 'stripReadme': False}, 'x', static_source=False)
             ent = [e for e in appp2.api_model()['enableIndex']
                    if e['subsystem'] == sub][0]
             moved_alone.append(sub)
@@ -10816,7 +10893,7 @@ def selftest(config_arg, frozen_exe=None):
                                        slice_keys)
             t.check('the with-keys fixture builds, whatever state the source '
                     'was in', okk, whyk)
-            appk = App({'gameDir': '', 'configDirOverride': cdk, 'stripReadme': False}, 'x')
+            appk = App({'gameDir': '', 'configDirOverride': cdk, 'stripReadme': False}, 'x', static_source=False)
             mk = appk.api_model()
             t.check('the fixture carries every slice gate key: %d'
                     % len(slice_keys),
@@ -10840,7 +10917,7 @@ def selftest(config_arg, frozen_exe=None):
             t.check('the without-keys fixture builds, whatever state the '
                     'source was in', okn, whyn)
             appn2 = App({'gameDir': '', 'configDirOverride': cdn,
-                         'stripReadme': False}, 'x')
+                         'stripReadme': False}, 'x', static_source=False)
             mn2 = appn2.api_model()
             t.check('the without-keys fixture carries none of the %d slice '
                     'gate keys' % len(slice_keys),
@@ -10877,7 +10954,7 @@ def selftest(config_arg, frozen_exe=None):
                     before_g = read_bytes(os.path.join(cdg, 'ckf.hardmode.cfg'))
                     had = gate in CfgFile(before_g).keys
                     appg = App({'gameDir': '', 'configDirOverride': cdg,
-                                'stripReadme': False}, 'x')
+                                'stripReadme': False}, 'x', static_source=False)
                     rg = appg.api_save({'cfg': {gate: {'value': False}}})
                     if not rg['ok']:
                         refused += 1
@@ -10929,7 +11006,7 @@ def selftest(config_arg, frozen_exe=None):
                             'had=%s written=%r notes=%r'
                             % (had, rg.get('written'), rg.get('notes')))
                     appg2 = App({'gameDir': '', 'configDirOverride': cdg,
-                                 'stripReadme': False}, 'x')
+                                 'stripReadme': False}, 'x', static_source=False)
                     entg = [e for e in appg2.api_model()['enableIndex']
                             if e['subsystem'] == sub][0]
                     t.check('%s [%s]: and the enable index reads the written '
@@ -10971,7 +11048,7 @@ def selftest(config_arg, frozen_exe=None):
         # written, no second line for the key, and the rest of the file byte
         # for byte.
         cdm = _sandbox(src, os.path.join(td, 'master'))
-        appm = App({'gameDir': '', 'configDirOverride': cdm, 'stripReadme': False}, 'x')
+        appm = App({'gameDir': '', 'configDirOverride': cdm, 'stripReadme': False}, 'x', static_source=False)
         cfg_before_m = read_bytes(os.path.join(cdm, 'ckf.hardmode.cfg'))
         rm = appm.api_save({'cfg': {MASTER_KEY: {'value': False}}})
         t.check('the master switch saves', rm['ok'], rm.get('refused'))
@@ -10985,7 +11062,7 @@ def selftest(config_arg, frozen_exe=None):
         t.check('no comment was written',
                 _cfg_line_shape(os.path.join(src, 'ckf.hardmode.cfg'),
                                 os.path.join(cdm, 'ckf.hardmode.cfg')))
-        appm2 = App({'gameDir': '', 'configDirOverride': cdm, 'stripReadme': False}, 'x')
+        appm2 = App({'gameDir': '', 'configDirOverride': cdm, 'stripReadme': False}, 'x', static_source=False)
         mm = appm2.api_model()
         t.check('the master switch reads back false',
                 mm['values']['cfg'][MASTER_KEY]['value'] is False,
@@ -11013,7 +11090,7 @@ def selftest(config_arg, frozen_exe=None):
                 'appended — a fixture that still carries it would test the '
                 'replace path under the append path\'s name',
                 MASTER_KEY not in CfgFile(before_x).keys, sorted(CfgFile(before_x).keys))
-        appx = App({'gameDir': '', 'configDirOverride': cdx, 'stripReadme': False}, 'x')
+        appx = App({'gameDir': '', 'configDirOverride': cdx, 'stripReadme': False}, 'x', static_source=False)
         rx = appx.api_save({'cfg': {MASTER_KEY: {'value': False}}})
         t.check('a cfg key the file does not carry is appended by a save, '
                 'not refused', rx['ok'], rx.get('refused'))
@@ -11034,7 +11111,7 @@ def selftest(config_arg, frozen_exe=None):
                                    read_bytes(os.path.join(cdx, 'ckf.hardmode.cfg'))),
                 _first_line_diff(before_x,
                                  read_bytes(os.path.join(cdx, 'ckf.hardmode.cfg'))))
-        appx2 = App({'gameDir': '', 'configDirOverride': cdx, 'stripReadme': False}, 'x')
+        appx2 = App({'gameDir': '', 'configDirOverride': cdx, 'stripReadme': False}, 'x', static_source=False)
         t.check('and the editor reads the appended key back as present',
                 appx2.api_model()['values']['cfg'][MASTER_KEY]['present'] is True,
                 appx2.api_model()['values']['cfg'][MASTER_KEY])
@@ -11091,7 +11168,7 @@ def selftest(config_arg, frozen_exe=None):
                     'wrong about — a directory of one file cannot fail this',
                     len(before_t) > 1, sorted(before_t))
             appt = App({'gameDir': '', 'configDirOverride': cdt,
-                        'stripReadme': False}, 'x')
+                        'stripReadme': False}, 'x', static_source=False)
             rt = appt.api_save({'cfg': {tgate: {'value': False}}})
             t.check('flipping one slice toggle saves', rt['ok'], rt.get('refused'))
             t.check('and the only file it reports writing is ckf.hardmode.cfg',
@@ -11117,7 +11194,7 @@ def selftest(config_arg, frozen_exe=None):
                                      after_t['ckf.hardmode.cfg']))
             t.check('and the toggle reads back off',
                     App({'gameDir': '', 'configDirOverride': cdt,
-                         'stripReadme': False}, 'x')
+                         'stripReadme': False}, 'x', static_source=False)
                     .api_model()['values']['cfg'][tgate]['value'] is False)
             t.check('and the transaction left no journal and no temporaries',
                     not os.path.exists(journal_path(cdt))
@@ -11127,7 +11204,7 @@ def selftest(config_arg, frozen_exe=None):
         # (e) an emptied mission slot round-trips as a present empty string, and
         #     the unset-vs-absent contract is untouched everywhere else
         cde = _sandbox(src, os.path.join(td, 'slots'))
-        appe = App({'gameDir': '', 'configDirOverride': cde, 'stripReadme': False}, 'x')
+        appe = App({'gameDir': '', 'configDirOverride': cde, 'stripReadme': False}, 'x', static_source=False)
         me = appe.api_model()
         akey = [k for k, v in me['values']['tables'].items()
                 if any(fmt == 'adjust' for fmt in v['formats'].values())][0]
@@ -11149,7 +11226,7 @@ def selftest(config_arg, frozen_exe=None):
 
         # (f) unset is still not zero where it means something
         cdu = _sandbox(src, os.path.join(td, 'unset'))
-        appu = App({'gameDir': '', 'configDirOverride': cdu, 'stripReadme': False}, 'x')
+        appu = App({'gameDir': '', 'configDirOverride': cdu, 'stripReadme': False}, 'x', static_source=False)
         mu = appu.api_model()
         ckey = [k for k, v in mu['values']['tables'].items()
                 if (json_fields(appu.schemas).get((v['sidecar'], v['path'])) or
@@ -11232,7 +11309,7 @@ def selftest(config_arg, frozen_exe=None):
                 'that is not — a render where every gate reads the same way '
                 'proves only one of the two branches',
                 bool(_write) and bool(_held), (_write, _held))
-        appr = App({'gameDir': '', 'configDirOverride': cdr, 'stripReadme': False}, 'render')
+        appr = App({'gameDir': '', 'configDirOverride': cdr, 'stripReadme': False}, 'render', static_source=False)
         rc2 = selftest_dom(appr.api_model())
         if rc2 == 0:
             t.passed += 1
@@ -11247,7 +11324,7 @@ def selftest(config_arg, frozen_exe=None):
         # window hides. The row is data, so the column comes back -- and says
         # why it is there.
         cdo = _sandbox(src, os.path.join(td, 'render-outside'))
-        appo = App({'gameDir': '', 'configDirOverride': cdo, 'stripReadme': False}, 'render')
+        appo = App({'gameDir': '', 'configDirOverride': cdo, 'stripReadme': False}, 'render', static_source=False)
         mo = appo.api_model()
         okey = [k for k, v in mo['values']['tables'].items()
                 if (json_fields(appo.schemas).get((v['sidecar'], v['path'])) or
@@ -11277,7 +11354,7 @@ def selftest(config_arg, frozen_exe=None):
     print('\n[16] the frozen exe — the check_schema re-entry')
     with tempfile.TemporaryDirectory() as td:
         cdz = _sandbox(src, os.path.join(td, 'frozen'))
-        appz = App({'gameDir': '', 'configDirOverride': cdz, 'stripReadme': False}, 'z')
+        appz = App({'gameDir': '', 'configDirOverride': cdz, 'stripReadme': False}, 'z', static_source=False)
         mz = appz.api_model()
         tabz = mz['values']['tables'][tk]
         axz = json_fields(appz.schemas)[(tabz['sidecar'], tabz['path'])][1]['axes']
@@ -11402,7 +11479,7 @@ def selftest(config_arg, frozen_exe=None):
         with open(stub, 'w', encoding='utf-8') as f:
             f.write(_CHILD_STUB)
         cdc = _sandbox(src, os.path.join(td, 'control'))
-        appc2 = App({'gameDir': '', 'configDirOverride': cdc, 'stripReadme': False}, 'z')
+        appc2 = App({'gameDir': '', 'configDirOverride': cdc, 'stripReadme': False}, 'z', static_source=False)
         appc2.api_model()
         with _child_cmd(lambda cd: [sys.executable, stub, 'clean']):
             ctl = appc2.api_save(_edit(LEGAL))
@@ -11463,7 +11540,7 @@ def selftest(config_arg, frozen_exe=None):
                         vx['problems'])
                 cdx = _sandbox(src, os.path.join(td, 'exe'))
                 appx = App({'gameDir': '', 'configDirOverride': cdx,
-                            'stripReadme': False}, 'z')
+                            'stripReadme': False}, 'z', static_source=False)
                 appx.api_model()
                 rbad = appx.api_save(_edit(OUT_OF_RANGE))
                 t.check('with the exe as the validator an out-of-range save is '
@@ -13990,6 +14067,7 @@ def main(argv=None):
     ap.add_argument('--port', type=int, default=0,
                     help='bind this port instead of a free one')
     ap.add_argument('--selftest', action='store_true', help='run the verification suite')
+    ap.add_argument('--data', help='static content database for baselines or an explicit maintainer migration')
     ap.add_argument('--migrate', action='store_true',
                     help='convert the 3.x layout in --config to 4.0 and rename '
                          'the originals to %s. Refuses, writing nothing, if an '
@@ -14013,7 +14091,7 @@ def main(argv=None):
         cd = os.path.abspath(a.config) if a.config \
             else config_dir_for(load_settings())
         try:
-            mig = run_migration(cd)
+            mig = run_migration(cd, a.data)
         except MigrationRefused as e:
             sys.stderr.write('REFUSED  the 3.x -> 4.0 migration wrote nothing.\n\n'
                              '%s\n' % e)
@@ -14034,7 +14112,7 @@ def main(argv=None):
     if not os.path.exists(SETTINGS_PATH):
         save_settings(settings)
 
-    app = App(settings, secrets.token_urlsafe(24))
+    app = App(settings, secrets.token_urlsafe(24), a.data)
     serve(app, open_browser=not a.no_browser, port=a.port)
     return 0
 

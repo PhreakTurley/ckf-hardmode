@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """gear_classes.py -- the gear-class lever sheet, and the partition it rests on.
 
+Static inputs default to Official/data.db through static_data.py.
+Historical dump measurements below describe their original captures;
+explicit --data CSV_DIR remains available for reproduction.
+
 WHAT THIS FILE IS FOR
 
 `ckf.hardmode.d/gear-classes.csv` is a LEVER SHEET, not a direct overlay: one
@@ -81,6 +85,7 @@ if it lands in none, P1 names the row and the reason.
 """
 
 import argparse
+import static_data
 import csv
 import io
 import json
@@ -339,20 +344,17 @@ class Problem(Exception):
 
 
 def read_csv_rows(path, what):
-    if not os.path.isfile(path):
-        # "could not look" is not "nothing there". AGENTS.md.
-        raise Problem(f'{what} is not on disk at {path}. This is a refusal, not '
-                      f'an empty answer: nothing read it, so how many rows it '
-                      f'holds is not known.')
-    with io.open(path, newline='', encoding='utf-8') as fh:
-        rows = list(csv.DictReader(fh))
+    try:
+        rows = static_data.read_csv(path)
+    except (OSError, ValueError) as exc:
+        raise Problem('%s at %s could not be read: %s' % (what, path, exc)) from exc
     if not rows:
-        raise Problem(f'{what} at {path} has a header and no data rows.')
+        raise Problem('%s at %s has no data rows; this is not a complete input.' % (what, path))
     return rows
 
 
 def load_weapons(dump_dir):
-    rows = read_csv_rows(os.path.join(dump_dir, 'WeaponModel.csv'),
+    rows = read_csv_rows(os.path.join(str(static_data.database_path(dump_dir)), 'WeaponModel.csv'),
                          'the dumped WeaponModel table')
     out = []
     for r in rows:
@@ -1111,7 +1113,7 @@ def resolve_dirs(a):
     else:
         raise Problem('one of --game or --config is required')
     overlay = os.path.join(cfg, 'ckf.hardmode.d')
-    dump = a.dump or os.path.join(repo_root(), 'sheets', 'raw')
+    dump = a.dump or str(static_data.DEFAULT_DB)
     return cfg, overlay, dump
 
 
@@ -1124,7 +1126,7 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--game', help='the game root (…/Cyber Knights Flashpoint)')
     ap.add_argument('--config', help='a BepInEx/config directory')
-    ap.add_argument('--dump', help='the dumped CSV directory (default sheets/raw)')
+    static_data.add_argument(ap)
     ap.add_argument('--write', action='store_true', help='regenerate the sheet')
     ap.add_argument('--check', action='store_true',
                     help='compare the old rules and the new sheet element by element')

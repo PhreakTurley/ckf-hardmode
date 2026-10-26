@@ -183,7 +183,7 @@ To refresh the annotations from an independently captured stock dump:
 
 ```bat
 cd /d "D:\ckf-data-modding"
-python "D:\ckf-data-modding\gui\talent_catalog.py" --config "C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint\BepInEx\config" --dump "D:\ckf-data-modding\sheets\raw" --project "D:\ckf-data-modding\ckf-talent-balance"
+python "D:\ckf-data-modding\gui\talent_catalog.py" --config "C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint\BepInEx\config" --data "D:\ckf-data-modding\Official\data.db" --project "D:\ckf-data-modding\ckf-talent-balance"
 ```
 
 | Role | Editable | Why |

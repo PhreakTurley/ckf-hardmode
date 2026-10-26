@@ -47,42 +47,23 @@ Remove these legacy files when they appear:
 
 Close the game before editing a `.cfg`. BepInEx rewrites the file when the process exits, and Hard Mode reads it once at startup.
 
-## Capture shipped table data
+## Read static content and capture runtime information
 
-Keep Data Dump at `[General] Enabled = false` between sweeps. Before a stock-data sweep, also set Hard Mode's `[General] Enabled = false` so Hard Mode does not rewrite rows before Data Dump records them.
+Use `Official/data.db` for static tables through `scripts/static_data.py`.
+After a manual database replacement, run its `--check` and the existing
+validators. Name mappings, numeric conversion, commands, and update behavior
+are documented in [static-data.md](static-data.md).
 
-For a normal content sweep:
+Keep Data Dump for runtime evidence: Game/Core state, campaign history,
+generated missions, reward-function returns, AI traces, and enum/constant
+names. Follow its [instrument and sampling reference](../mods/CKFDataDump/README.md).
+`[General] Enabled` is not its master switch; specialized write probes require
+review before they run. An empty capture establishes nothing until its reader,
+sampling moment, cap and completeness status cover the question.
 
-1. Set Data Dump `[General] Enabled = true`
-2. Launch to the main menu
-3. Quit the game
-4. Restore `[General] Enabled = false`
-5. Inspect the configured output directory
-
-`[General] Enabled` gates the table sweep and mission probes only. Diagnostics, ID collection, and specialized probes use their own settings. `TraitProbe` and `WriteProbe` can write to a save even while the general switch is false. Read `mods/CKFDataDump/README.md` before enabling a probe.
-
-The main coverage files are:
-
-| File | What it establishes |
-|---|---|
-| `_coverage.csv` | Declared, captured, capped, row, and column counts |
-| `_readers.csv` | Bulk readers attempted by the sweep |
-| `_skipped_tables.csv` | Tables excluded and the reason |
-| `_dropped_columns.csv` | Columns omitted from table CSVs and their recorded values |
-| `_id_constants.csv` | Runtime constant and enum names mapped to numeric IDs |
-
-An empty file or absent row is not evidence until the hook, reader, sampling moment, and cap are known to cover it. A passive run records only rows the game happens to materialize.
-
-Use these capture modes for specific questions:
-
-| Need | Capture method |
-|---|---|
-| Save and per-mission tables | Add `GameDb, CoreDb` and sweep from inside a mission |
-| Generated mission samples | Enable mission probes and play through mission generation; `_mission_*` files append |
-| Stock reward curve | Enable the `curve` mission probe with Hard Mode off |
-| Patched reward curve | Use Hard Mode `rewardcurve.json` logging |
-| Mission keys and goal chains | Read `BlockModel.csv` |
-| Cloned Hard Mode rows | Use `RowClone: built` and `RowClone: served` log lines; clones do not appear in a dump |
+Historical content dumps remain explicitly selectable with `--data DIR`
+(or the legacy `--dump DIR`) when reproducing an old observation. They do not
+supply a fallback when the official database is absent or unreadable.
 
 ## Edit the live configuration
 

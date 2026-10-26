@@ -1,8 +1,9 @@
 # Table reference
 
 Game data reference: which table controls what, which column is the key, and
-what the shipped data holds. Column names come from the dump's `<Table>.csv`
-([`workflow.md`](workflow.md)); rule syntax is in
+what the content tables hold. Static inputs come from the official database
+through the [shared reader](static-data.md); runtime observations come from
+Data Dump ([`workflow.md`](workflow.md)). Rule syntax is in
 [`rule-engine.md`](rule-engine.md).
 
 Start with **What controls what**, then jump to the table's section for its key

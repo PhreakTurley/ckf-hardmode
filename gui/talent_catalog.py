@@ -1,4 +1,4 @@
-"""Maintainer pass: complete talent sheets from a stock Data Dump.
+"""Maintainer pass: complete talent sheets from the official content database.
 
 Leaves every existing override unchanged. Missing rows receive blank levers;
 comments and _group carry the catalog so the installed editor needs no dump.
@@ -11,6 +11,9 @@ import json
 from pathlib import Path
 import re
 import tempfile
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+import static_data
 
 import modkit
 
@@ -94,6 +97,14 @@ def is_attribute(node, tables):
 
 
 def load_stock(dump):
+    if static_data.is_database(dump):
+        with static_data.StaticData(dump) as data:
+            inputs = {p: modkit.state(p) for p in data.stamps}
+            tables = {}
+            for name, key in KEYS.items():
+                _columns, rows = data.read(name, (key,))
+                tables[name] = {r[key]: r for r in rows}
+            return tables, inputs
     inputs = {}
     coverage_path = dump / '_coverage.csv'
     inputs[coverage_path] = modkit.state(coverage_path)
@@ -321,7 +332,8 @@ def complete(config, dump, project):
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--config', type=Path, required=True)
-    ap.add_argument('--dump', type=Path, required=True)
+    ap.add_argument('--data', '--dump', dest='dump', type=Path, default=static_data.DEFAULT_DB,
+                    help='static content DB; explicit CSV captures remain supported')
     ap.add_argument('--project', type=Path, required=True)
     args = ap.parse_args()
     print(json.dumps(complete(args.config, args.dump, args.project), indent=2))

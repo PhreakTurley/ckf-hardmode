@@ -71,7 +71,7 @@ a = Analysis(                             # noqa: F821
         (os.path.join(SCRIPTS, 'gen_teampl_labels.py'), 'scripts'),
         (os.path.join(DOCS, 'mission-reference.json'), 'docs'),
     ],
-    hiddenimports=['check_schema', 'gen_teampl_labels', 'modkit', 'pathlib'],
+    hiddenimports=['check_schema', 'gen_teampl_labels', 'modkit', 'pathlib', 'static_data', 'sqlite3'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

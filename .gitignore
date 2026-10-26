@@ -42,6 +42,7 @@
 !/scripts/cyberweapons.py
 !/scripts/gear_classes.py
 !/scripts/implants.py
+!/scripts/static_data.py
 
 # the pinned BepInEx is unpacked here locally; only the how-to is published
 !/vendor/

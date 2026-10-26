@@ -9,6 +9,7 @@ Use this index to choose the authoritative page for a task. Start with the archi
 | Understand the four project areas and their boundaries | [Project architecture](architecture.md) |
 | Install, dump, edit, test, build, or release | [Workflow](workflow.md) |
 | Prepare and publish a public release | [Release playbook](release-playbook.md) |
+| Replace official content data and keep runtime probes separate | [Static data](static-data.md) |
 | Plan a move to first-party data modding | [First-party modding atlas](first-party-modding-atlas.md) |
 | Check open work and decisions | `TASKS.md` |
 | Avoid a known failure mode | [Gotchas](gotchas.md) |

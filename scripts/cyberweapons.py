@@ -2,6 +2,10 @@
 """cyberweapons.py -- the two cyberweapon lever sheets, and the split that
 rests on them.
 
+Static inputs default to Official/data.db through static_data.py.
+Historical dump measurements below describe their original captures;
+explicit --data CSV_DIR remains available for reproduction.
+
 WHAT THESE FILES ARE
 
 `ckf.hardmode.d/cyberweapons-lasers.csv` and `cyberweapons-claws.csv` are
@@ -55,6 +59,7 @@ section 10 forbids runtime behaviour that depends on one.
 """
 
 import argparse
+import static_data
 import csv
 import io
 import json
@@ -684,7 +689,7 @@ def load_rules_json(path):
 
 
 def load_table(dump_dir, filename, key, what):
-    rows = read_csv_rows(os.path.join(dump_dir, filename), what)
+    rows = read_csv_rows(os.path.join(str(static_data.database_path(dump_dir)), filename), what)
     out = {}
     for r in rows:
         try:
@@ -1105,7 +1110,7 @@ def check_enemy_carry(overlay_dir, dump_dir, pairs, out=print):
     counts = {}
     for label, d in (('post-overlay', overlay_dir), ('shipped', dump_dir)):
         path = os.path.join(d, POINTER_FILE)
-        if not os.path.isfile(path):
+        if not os.path.isfile(path) and not static_data.is_database(d):
             problems.append(f'P4: {path} is not on disk, so the {label} pointer '
                             f'set could not be read. This is "could not look", '
                             f'not "no enemy carries one".')
@@ -2154,7 +2159,7 @@ def resolve_dirs(a):
     else:
         raise Problem('one of --game or --config is required')
     overlay = os.path.join(cfg, 'ckf.hardmode.d')
-    dump = a.dump or os.path.join(repo_root(), 'sheets', 'raw')
+    dump = a.dump or str(static_data.DEFAULT_DB)
     return cfg, overlay, dump
 
 
@@ -2167,7 +2172,7 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--game', help='the game root (…/Cyber Knights Flashpoint)')
     ap.add_argument('--config', help='a BepInEx/config directory')
-    ap.add_argument('--dump', help='the dumped CSV directory (default sheets/raw)')
+    static_data.add_argument(ap)
     ap.add_argument('--out', help='write the sheets here instead of the config dir')
     ap.add_argument('--src', help='the repo root holding mods/CKFHardMode '
                                   '(default: this script\'s repo)')
