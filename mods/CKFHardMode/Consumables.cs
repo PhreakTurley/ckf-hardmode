@@ -12,40 +12,19 @@
 //   EffectModel        keyed on that row's EffectId        the payload
 //   MatrixEffectModel  keyed on that row's MatrixEffectId  the matrix payload
 //
-// Stock ItemModel is 73 rows of ten columns -- ItemName, ItemDesc, ItemTypeId,
-// ItemClass, ServiceOptionId, LeverageClass, Rarity, PowerLevel, Cost, TalentId
-// [measured, sheets/raw/ItemModel.csv] -- so every lever past price and rarity
-// lives behind TalentId and every payload past that lives behind the talent's
-// effect columns. A row that sets nothing on one side emits only the others.
+// Static membership and sheet generation come from Official/data.db through
+// scripts/consumables.py. The runtime expands the declared files by their
+// identity columns. Blank lever cells emit no operation.
 //
-// SIX SHEETS, BECAUSE THE LIVE COLUMNS BARELY OVERLAP
-//
-// Split by ItemClass (stock row counts): 1 medical (18 rows), 2 grenades (11),
-// 3 devices (12), 4 chems (18), 6 sploitkits (3), 7 matrix (11). There is no
-// ItemClass 5.
-// 18+11+12+18+3+11 = 73. A grenade and a Juice share only MaxCharges, so a flat
-// 73-row table would be about 70% empty and the lever-sheets spec forbids a
-// column dead for its own rows. ItemClass itself is the SUB-TABLE KEY and is
-// carried by no file, the same role ImplantSlot plays in Implants.cs.
-//
-// consumables-sploitkits.csv IS ItemModel ONLY, AND THAT IS NOT AN OVERSIGHT.
-// The stock sploitkits are ItemTypeId 1000, 1002 and 1003, all TalentId 0, and
-// no TalentModel row with id 0 exists [measured, scripts/consumables.py's
-// check_join()]. So the sheet has no TalentId column, no EffectId column and
-// five ItemModel levers, and SploitkitLevers below declares exactly that. A
-// sheet that showed talent columns there would give the player rows that do
-// nothing. The load line names the three tables this sheet cannot reach rather
-// than leaving their absence to be inferred from a zero.
+// The six files route ItemClass 1/2/3/4/6/7 to medical/grenades/devices/chems/
+// sploitkits/matrix. The source validator checks current membership and pointers.
+// SploitkitLevers declares only ItemModel columns.
 //
 // THE Matrix PREFIX IS AN ALIAS ON THE PAYLOAD COLUMNS AND ONLY THERE
 //
-// EffectClassification and ActionPoints are live in BOTH effect tables
-// [measured], so a bare header name on consumables-matrix.csv would map to two
-// different (model, column) targets. Every MatrixEffectModel payload column is
-// therefore aliased with a "Matrix" prefix in the header -- ALL of them, not
-// only the two that collide, because a rule that applies to some of a table's
-// columns is a rule nobody can check. cyberweapons.py's PureDamage ->
-// PureDamage1 is the same device.
+// Every MatrixEffectModel payload column carries a "Matrix" prefix so a
+// header always identifies its table, even when both effect tables use the
+// same game column name. Targets are declared explicitly below.
 //
 // THREE COLUMNS BEGINNING "Matrix" ARE NOT ALIASES AND MUST NOT BE STRIPPED:
 //
@@ -340,6 +319,10 @@ namespace CKFHardMode
             new Lever("InitBonus",            EffectModel, "InitBonus"),
             new Lever("ActionPoints",         EffectModel, "ActionPoints"),
             new Lever("MovePoints",           EffectModel, "MovePoints"),
+            new Lever("ArmorCrit", EffectModel, "ArmorCrit"),
+            new Lever("DmgReduction", EffectModel, "DmgReduction"),
+            new Lever("FiringArc", EffectModel, "FiringArc"),
+            new Lever("MoveSpeedMitigate", EffectModel, "MoveSpeedMitigate"),
         };
 
         // FIVE ItemModel LEVERS AND NOTHING ELSE. See the file header: all three
@@ -365,10 +348,6 @@ namespace CKFHardMode
         //       <Name>. Eleven of them, every payload column of the table this
         //       sheet reaches, aliased whether or not the bare name collides.
         //
-        // EffectClassification (unprefixed, EffectModel) and
-        // MatrixEffectClassification (prefixed, MatrixEffectModel) are both
-        // present below and are the collision the alias exists for; ActionPoints
-        // and MatrixActionPoints are the other one.
         internal static readonly Lever[] MatrixLevers =
         {
             new Lever("ServiceOptionId",            ItemModel,         "ServiceOptionId"),
@@ -380,25 +359,10 @@ namespace CKFHardMode
             new Lever("TalentIsMatrixOnly",         TalentModel,       "TalentIsMatrixOnly"),
             new Lever("TalentIsActive",             TalentModel,       "TalentIsActive"),
             new Lever("ApCost",                     TalentModel,       "ApCost"),
-            new Lever("SelfEffect",                 TalentModel,       "SelfEffect"),
-            new Lever("SelfDuration",               TalentModel,       "SelfDuration"),
             new Lever("MatrixEffect",               TalentModel,       "MatrixEffect"),
             new Lever("MatrixDuration",             TalentModel,       "MatrixDuration"),
             new Lever("MaxCharges",                 TalentModel,       "MaxCharges"),
             new Lever("TargetType",                 TalentModel,       "TargetType"),
-            new Lever("EffectClassification",       EffectModel,       "EffectClassification"),
-            new Lever("WoundRes",                   EffectModel,       "WoundRes"),
-            new Lever("StressRes",                  EffectModel,       "StressRes"),
-            new Lever("FiringArc",                  EffectModel,       "FiringArc"),
-            new Lever("CritRate",                   EffectModel,       "CritRate"),
-            new Lever("PureDamageBallistic",        EffectModel,       "PureDamageBallistic"),
-            new Lever("PureDamageMelee",            EffectModel,       "PureDamageMelee"),
-            new Lever("ArmorCrit",                  EffectModel,       "ArmorCrit"),
-            new Lever("DmgReduction",               EffectModel,       "DmgReduction"),
-            new Lever("RecoilBonus",                EffectModel,       "RecoilBonus"),
-            new Lever("RecoilRate",                 EffectModel,       "RecoilRate"),
-            new Lever("MoveSpeedMitigate",          EffectModel,       "MoveSpeedMitigate"),
-            new Lever("ActionPoints",               EffectModel,       "ActionPoints"),
             new Lever("MatrixEffectClassification", MatrixEffectModel, "EffectClassification"),
             new Lever("MatrixInstant",              MatrixEffectModel, "Instant"),
             new Lever("MatrixActionPoints",         MatrixEffectModel, "ActionPoints"),

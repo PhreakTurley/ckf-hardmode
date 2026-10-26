@@ -38,11 +38,23 @@ python "D:\ckf-data-modding\scripts\implants.py" --check --game "C:\Program File
 python "D:\ckf-data-modding\scripts\consumables.py" --check --game "C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint"
 ```
 
-A healthy database does not establish that old tuning covers its new content.
-An incomplete enemy overlay, changed consumable class, dangling pointer, or
-unclassified lever still fails its existing check. Review that finding before
-changing the tuning. Downloading a database never regenerates or rewrites
-the live sheets. Generators retain explicit write commands.
+The validators use current database identities and columns, without comparing
+against a previous static dump or a frozen row count. Sparse enemy overlays are
+valid; when class levers are active, the validator checks whether those rules
+actually reach weapons in the current effective enemy pointers.
+
+After item additions or class/pointer changes, refresh consumable sheets:
+
+```bat
+python "D:\ckf-data-modding\scripts\consumables.py" --write --check --game "C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint"
+```
+
+This adds blank rows, moves items to their current class, and refreshes generated
+shipped comments. Existing adjustments are preserved at the same table/id/column;
+refresh refuses if an adjustment would lose its target or declared lever. Reading
+or replacing the database never writes tuning. Generators require explicit write
+commands. Missing required columns, invalid pointers and malformed sheets remain
+real errors requiring review.
 
 ## Names and numbers
 
@@ -60,20 +72,14 @@ under integer affinity remains text (for example, a door-type identifier).
 Primary-key values must already be integral when numeric. The Python API's
 `raw=True` view retains the original database values for inspection.
 
-[measured] On the October 25, 2026 comparison, all 2,602 fractional cells
-checked across `Weapon`, `Armor`, `MonsterType`, `Blueprint` and `WeaponMod`
-matched the integer values captured in `sheets/raw` using ties-to-even
-rounding. Examples: `(Weapon, 7006).BallisticDamage1` was `195.5` in SQL and
-`196` in the capture; `(Weapon, 1002).Accuracy1` was `66.5` and `66`.
-This is evidence for the conversion, not a claim that all content is unchanged
-between versions. The reader's tests use independent synthetic databases.
-
-Static-data commands accept `--data PATH`; `--dump PATH` remains an alias for
-explicit historical CSV fixtures. The mission-roster tool keeps `--dump` for
+The reader's tests use independent synthetic databases. Static-data commands
+accept `--data PATH`; `--dump PATH` remains a database-path alias for older command
+lines. Static CSV directories are rejected. The mission-roster tool keeps `--dump` for
 its runtime probes and uses a separate `--data` for static content. Maintainer
 talent-catalog completion and the editor also accept `--data`. The editor
-uses current official baselines when the database is available, refreshing
-them on reload without rewriting `_shipped` metadata or lever cells. A
+uses current official baselines and RuleModel reference rows, including newly
+added rules, refreshing them on reload without rewriting `_shipped` metadata
+or lever cells. A
 selected but unreadable database shows unknown baselines and its error.
 Installed editors without an official database retain the metadata mode.
 Catalog completion and migration never run automatically when the database

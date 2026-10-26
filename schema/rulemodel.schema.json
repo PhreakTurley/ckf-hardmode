@@ -46,7 +46,7 @@
         {"name": "ConfigName", "type": "string"},
         {"name": "Shipped", "type": "int", "range": [-50, 400]}
       ],
-      "doc": "Reference rows for the editor: the id, the GroupId the editor groups by, the ConfigName that labels the control, and the game's value. GroupId is not a column of RuleModel.csv, because a header naming a real game column is a set over every row; it is not parsed out of _comment either, because a free-text column must not be load-bearing. The rows are a snapshot of sheets/raw/RuleModel.csv: 76 rows, ids 1-76, GroupId distributed STORY 31, COMBAT 17, CHARACTER 15, HEAT 6, MAP 2, CONTACT 2, MATRIX 1, ECONOMY 1, SAFEHOUSE 1 [measured]. No runtime behaviour may depend on a dump being present, which is why the snapshot lives here. Nothing detects a game update that renumbers or regroups these rows: re-dump RuleModel and re-derive them.",
+      "doc": "Read-only rule identities, groups, names and shipped values. When an official database is selected, the editor reads current rows from Official/data.db in the same transaction as overlay baselines, including newly added rules. Schema rows provide offline metadata for installed editors without the database. Reference values never enter a save or a game rule. See docs/static-data.md.",
       "uiDoc": "What the game ships for each rule, and which group it belongs to. Shown beside the override so you can see what you are changing it from.",
       "rows": [
         {"RuleId": 1, "GroupId": "CHARACTER", "ConfigName": "Max Character Level", "Shipped": 42},

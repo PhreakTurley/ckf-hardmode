@@ -1,8 +1,8 @@
 """Read the developer's content database without changing it or live tuning.
 
 Model names are the mod's names; SQL names and numeric storage are translated
-here. Explicit CSV directories remain usable for historical captures/fixtures.
-They are never an automatic fallback for a missing or unreadable database.
+here. Static reads require the official database. CSV readers are for runtime
+probes and mod-owned overlay files, never a static content fallback.
 """
 from __future__ import annotations
 
@@ -87,8 +87,7 @@ class DataError(ValueError):
 
 def add_argument(parser):
     parser.add_argument('--data', '--dump', dest='dump', default=str(DEFAULT_DB),
-        help='static data.db (default Official/data.db); --dump is a legacy alias; '
-             'an explicit historical CSV directory is also accepted')
+        help='official static data.db (default Official/data.db); --dump is a legacy alias')
 
 
 def database_path(source=None):
@@ -158,10 +157,8 @@ class StaticData:
         if not self.path.exists():
             raise DataError('Static source is missing: %s. Replace/download Official/data.db; '
                             'no CSV fallback was used.' % self.path)
-        if not self.database:
-            if not self.path.is_dir():
-                raise DataError('Expected a content .db or an explicit CSV directory: %s' % self.path)
-            return self
+        if not self.database or not self.path.is_file():
+            raise DataError('Expected the official content data.db: %s' % self.path)
         self.stamps[self.path] = _stamp(self.path)
         try:
             # mode=ro refuses a missing file instead of creating an empty DB.
@@ -202,10 +199,7 @@ class StaticData:
             self._tables.clear()
 
     def tables(self):
-        if self.database:
-            return [model_name(t) for t in self.schema]
-        return [p.stem for p in sorted(self.path.glob('*.csv'))
-                if not p.name.startswith('_') and not p.stem.startswith(('Game', 'Core'))]
+        return [model_name(t) for t in self.schema]
 
     def read(self, model, required=(), raw=False, labels=True):
         if model.startswith(('Game', 'Core', '_')):
@@ -220,15 +214,7 @@ class StaticData:
                 raise DataError('%s: %s is missing required column(s): %s' %
                                 (self.path, model, ', '.join(missing)))
             return list(cols), [dict(r) for r in rows]
-        if not self.database:
-            path = self.path / (model + '.csv')
-            try:
-                with path.open(encoding='utf-8-sig', newline='') as f:
-                    reader = csv.DictReader(f)
-                    cols, rows = reader.fieldnames or [], list(reader)
-            except OSError as exc:
-                raise DataError('Cannot read %s: %s' % (path, exc)) from exc
-        else:
+        if self.database:
             table = sql_name(model)
             if table not in self.schema:
                 raise DataError('%s: missing table %s (requested as %s)' % (self.path, table, model))
@@ -296,17 +282,9 @@ def read_rows(source, model, required=(), **kwargs):
 
 
 def read_csv(path):
-    """Read an actual CSV, or the legacy source/Model.csv call convention."""
-    path = Path(path)
-    if path.parent.suffix.lower() == '.db':
-        return read_rows(path.parent, path.stem)
-    try:
-        with path.open(encoding='utf-8-sig', newline='') as f:
-            return list(csv.DictReader(f))
-    except FileNotFoundError:
-        if is_database(path.parent):
-            return read_rows(path.parent, path.stem)
-        raise
+    """Read a mod-owned overlay or an explicit runtime probe CSV."""
+    with Path(path).open(encoding='utf-8-sig', newline='') as f:
+        return list(csv.DictReader(f))
 
 
 def check(source=None):
@@ -319,7 +297,7 @@ def check(source=None):
         'MonsterGroupMemberModel': {'MonsterGroupMemberId', 'MonsterGroupId', 'MonsterType', 'Slot',
                                   'MinPowerLevel', 'MaxPowerLevel', 'WeightedRoll'},
         'FactionModel': {'FactionId', 'ProcGenSelect'},
-        'RuleModel': {'RuleId', 'Value', 'ConfigName', 'ConfigDesc'},
+        'RuleModel': {'RuleId', 'Value', 'GroupId', 'ConfigName', 'ConfigDesc'},
         'JobModel': {'JobId'}, 'JobNodeModel': {'JobNodeId', 'JobId', 'SubTree', 'NodeTalent1Id', 'NodeEffect1Id'},
         'WeaponModel': {'WeaponId', 'WeaponClass'}, 'ImplantModel': {'ImplantTypeId', 'ImplantSlot', 'ImplantEffectId'},
         'EffectModel': {'EffectId'}, 'TalentModel': {'TalentId', 'Weapon'},
@@ -348,7 +326,7 @@ def check(source=None):
             cols, rows = data.read(model)
             total += len(rows)
             print('%s: %d rows, %d columns' % (model, len(rows), len(cols)))
-        digest = hashlib.sha256(data.path.read_bytes()).hexdigest() if data.database else 'CSV capture'
+        digest = hashlib.sha256(data.path.read_bytes()).hexdigest()
         print('Static source: %s\nSHA256: %s\n%d tables, %d rows; %d consumer contracts checked.' %
               (data.path, digest, len(data.tables()), total, len(required)))
         print('Runtime information: NOT RUN here; use probe/campaign captures.')

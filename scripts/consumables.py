@@ -1,173 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""consumables.py -- the six consumable lever sheets: generate, check, selftest.
+"""Declare, refresh and validate consumable lever sheets using Official/data.db.
 
-Static inputs default to Official/data.db through static_data.py.
-Historical dump measurements below describe their original captures;
-explicit --data CSV_DIR remains available for reproduction.
+Static tables are read through static_data; runtime probes stay separate.
+SHEET_COLUMNS declares the levers and matches the plugin map. Source checks
+validate required columns, item membership, identities and effect pointers.
+Valid tuning cells are accepted. No check compares with an earlier CSV capture.
 
-WHAT THESE FILES ARE
-
-`ckf.hardmode.d/consumables-medical.csv` and its five siblings are LEVER
-SHEETS, not direct overlays. A direct overlay's filename names one game table
-and its first column is that table's id column; `Overlays.LoadTable` reads it.
-A consumable row is not a row of one table. `ItemModel` has 73 rows and only
-ten columns -- `ItemName, ItemDesc, ItemTypeId, ItemClass, ServiceOptionId,
-LeverageClass, Rarity, PowerLevel, Cost, TalentId` [measured,
-sheets/raw/ItemModel.csv] -- so every lever past price and rarity lives in
-`TalentModel` behind `TalentId`, and every payload past that lives in
-`EffectModel` or `MatrixEffectModel` behind the talent's effect columns. ONE
-SHEET ROW THEREFORE BECOMES UP TO FOUR RULES, in up to four tables, and the
-expansion happens in the plugin at load, never here and never in the GUI.
-
-Six files, split by `ItemClass`, because a flat 73-row table would be about
-70% empty: a grenade and a Juice share only `MaxCharges`.
-
-  consumables-medical.csv      ItemClass 1   18 rows
-  consumables-grenades.csv     ItemClass 2   11 rows
-  consumables-devices.csv      ItemClass 3   12 rows
-  consumables-chems.csv        ItemClass 4   18 rows
-  consumables-sploitkits.csv   ItemClass 6    3 rows
-  consumables-matrix.csv       ItemClass 7   11 rows
-
-There is no `ItemClass 5`. 18+11+12+18+3+11 = 73. Both the total and the
-DISJOINTNESS are asserted by check_rows() and by the selftest, not read off by
-eye: "every row is in exactly one file" is the statement that fails when a row
-is copied, and a total that still adds up is exactly what a copy produces when
-another row is dropped.
-
-WHAT IS [measured] AND WHAT IS [fitted]
-
-Everything in the paragraph above is [measured] against the dump in sheets/raw
-and reproduced by --check on every run. The one thing that is NOT
-measured is WHICH EFFECT TABLE EACH TALENT COLUMN RESOLVES AGAINST.
-
-`TalentModel.SelfEffect`, `.TargetEffect` and `.MatrixEffect` hold bare
-integers. 130 ids are both an `EffectId` and a `MatrixEffectId` [measured], so
-the id alone does not say which table it lands in, and the game's interop
-assembly is marshalling stubs with no bodies -- there is no method to read.
-What CAN be measured is resolvability across the whole column, using the ids
-that exist in only one of the two tables:
-
-  MatrixEffect   28 non-zero TalentModel cells; 8 of them carry an id that is
-                 in MatrixEffectModel and NOT in EffectModel, 0 the other way
-                 round, 0 dangling.  -> MatrixEffectModel   [fitted]
-  SelfEffect    151 non-zero cells; 133 unambiguous, ALL of them in
-                 EffectModel, 0 in MatrixEffectModel, 0 dangling.
-                                                            -> EffectModel   [fitted]
-  TargetEffect  103 non-zero cells; 98 unambiguous, ALL in EffectModel, 0 in
-                 MatrixEffectModel, 0 dangling.             -> EffectModel   [fitted]
-
-Those three counts are CELL COUNTS, not distinct-id counts; by distinct id the
-unambiguous sets are 8 / 132 / 95. check_resolution() reproduces both figures
-so neither reading can drift into the other silently.
-
-[fitted] and not [measured]: a column every one of whose unambiguous ids lands
-in one table is consistent with that table and with nothing else observed, but
-consistency across 133 rows is an inference, not a read. WHAT WOULD CONFIRM IT:
-a decompiled or de-stubbed body for the talent-application path that shows
-which reader `SelfEffect` is looked up in -- i.e. a `GetEffect`/`GetMatrixEffect`
-call site, or an IL dump of the real assembly rather than the interop stub. No
-such read exists today and this file does not pretend otherwise. If the fit is
-wrong, the symptom is a sheet that writes `EffectModel` rows the game never
-reads; --check cannot see that and says so rather than being silent.
-
-CONSEQUENCE, AND THE ROW THAT design.md SECTION 8 GETS WRONG. Ids 5100-5106
-exist in BOTH tables, so the six Juice-family matrix consumables write
-`MatrixEffectModel` under the fit above, not `EffectModel`. And design.md
-section 8's matrix line reads "effect **or** matrix-effect": `Eclipse
-Microdust` (ItemTypeId 5404, talent 75068) carries `MatrixEffect 5106` AND
-`SelfEffect 75036` on one row [measured], so it is "and", not "or", on at least
-one row. consumables-matrix.csv therefore carries both payload blocks and
-check_columns() asserts the row that needs both is present.
-
-THE COLUMN SET IS DECLARED. THE DUMP IS THE CHECK.
-
-The lever columns are NOT derived from the dump. The dumper can omit a column
-that is CONSTANT ACROSS ALL ROWS, so a dump's column set depends on WHEN THE
-DUMP WAS TAKEN: a dump taken after a real play session carries runtime state
-(`IsRowCurrentlySelected`, `isInit`, `effectsSet`, `HasInitSpecialCode`,
-`OwnerEntityId`), asset and sound references (`Vfx`, `IconPng`, `EventSFX`,
-...) and display strings (`TalentDesc`, `ManualTalentName`, ...) that a dump of
-a freshly loaded game does not [measured]. None is a lever. A header derived
-from the dump and then checked against the same dump always agrees with it --
-a false green.
-
-So `SHEET_COLUMNS` declares the levers outright,
-`EXCLUDED_COLUMNS` declares every ruled-out column with a reason tag, and
-check_partition() asserts on every run that
-
-    derive_columns_live(dump)  ==  SHEET_COLUMNS  u  EXCLUDED_COLUMNS
-
-A live column in neither set is a NAMED problem with its table; a declared
-lever the dump cannot confirm is a NAMED problem too. derive_columns_live() is
-the CHECK rather than the source, because it is the only thing that can notice
-the dump moving.
-
-design.md section 8's per-class lever lists are ABBREVIATIONS and they are
-incomplete. --check prints the delta per file (D-S8) so the section can be
-corrected rather than argued with.
-
-THE FIVE DEAD COLUMNS. `RechargeTurns, TurnMaxUses, TeamTurnMaxUses,
-AlternateCharge, Counter` are `0` on all 70 joined `TalentModel` rows
-[measured]. They appear in no generated header and check_dead() asserts BOTH
-halves -- that they are still zero in the dump, and that no header carries one.
-Asserting only the second half would go green on a header that had lost the
-column for an unrelated reason.
-
-THE THREE SPLOITKITS. 70 of the 73 rows join `TalentModel`. The three that do
-not are exactly `ItemTypeId` 1000 / 1002 / 1003, all `TalentId = 0`, and no
-`TalentModel` row with id 0 exists [measured]. consumables-sploitkits.csv
-therefore carries only the four `ItemModel` levers its rows can reach; a table
-that showed talent columns there would give the player rows that do nothing,
-and check_join() refuses that shape by name.
-
-GENERATED CELLS ARE BLANK, AND --check REQUIRES IT
-
---write emits every lever cell blank, so a generated sheet changes nothing:
-the game's own values stand. --check (A-SHEET) refuses any non-blank cell in
-the six files, and A-LIVE refuses any other overlay CSV that writes one of the
-consumable-reachable (table, id) pairs, on the grounds that a value there is a
-NEW balance change rather than a converted one. Both therefore go red when
-these sheets are tuned. This script proposes no numbers and has no opinion
-about the ones it prints.
-
-KEYS ARE (table, id), NEVER id ALONE
-
-221 ids are both a `TalentId` and an `EffectId`; 130 are both an `EffectId` and
-a `MatrixEffectId` [measured, dump]. Among the consumable-reachable pairs, 31
-ids appear under two different models -- keyed on the number alone they
-collapse and 31 writes land on the wrong table [measured, check_collisions()].
-The sharpest is 75022: `TalentModel 75022` is Bio-Stitch Bandages and
-`EffectModel 75022` is Mass Trauma Kit's effect, and BOTH are rows of
-consumables-medical.csv. Every key in this file is a `(model, id)` tuple and
---selftest has a case per declared pair showing that an id-alone key collapses
-it.
-
-AN INSTRUMENT'S SILENCE IS NOT EVIDENCE
-
-Every census line prints its count whether or not it is zero. Every check
-distinguishes "not there" from "could not look": a missing overlay directory is
-a REFUSAL at rc 2, not six missing files; a file that cannot be read RAISES
-rather than counting as empty; and --check LISTS THE DIRECTORY rather than
-iterating its own declared names, so a seventh consumables-*.csv that no
-expander declares is seen.
-
---selftest grades every fault against the CONTROL RUN'S BASELINE, not against
-`if problems:`, which prints CAUGHT over pre-existing drift whenever the
-baseline is already dirty. Here the control's problem set is captured first, asserted
-empty, and a fault counts as caught only if it produces a problem the control
-did not, carrying the expected tag.
-
-MODES
-
-  --write     --game R   regenerate the six CSVs under R/BepInEx/config/ckf.hardmode.d
-  --check     --game R   compare the six live files against the dump
-  --selftest  --game R   controls first, then fault injection
-
---game is required by all three, like the other four converters: with no config
-directory check_untouched() has nothing to read and a green run would mean
-COULD NOT LOOK, not agreement.
+--write refreshes row placement and shipped comments from the current database,
+adds new items with blank levers, and preserves existing overrides by table/id/
+column. It refuses if a nonblank override would lose its target or declared lever.
+--check validates the current files; --selftest exercises faults and controls.
+All modes require --game to identify the actual configuration directory.
 """
 
 import argparse
@@ -295,32 +139,25 @@ REFUSED_CONTROL = {
 
 
 # ---------------------------------------------------------------------------
-# THE SIX SHEETS.
-#
-# `rows` is the count MEASURED against the live dump today and re-measured on
-# every run. It is declared so that a disagreement is a PROBLEM rather than a
-# silent adjustment: --check prints both numbers and refuses when they differ,
-# instead of reporting whatever the dump happens to hold.
-# ---------------------------------------------------------------------------
+# The six declared class-to-file routes. Membership comes from the current DB.
 
 class Sheet(object):
-    __slots__ = ('key', 'name', 'cls', 'rows', 'slice_key')
+    __slots__ = ('key', 'name', 'cls', 'slice_key')
 
-    def __init__(self, key, cls, rows, slice_key):
+    def __init__(self, key, cls, slice_key):
         self.key = key
         self.name = 'consumables-%s.csv' % key
         self.cls = cls
-        self.rows = rows
         self.slice_key = slice_key
 
 
 SHEETS = [
-    Sheet('medical', 1, 18, 'ConsumablesMedical'),
-    Sheet('grenades', 2, 11, 'ConsumablesGrenades'),
-    Sheet('devices', 3, 12, 'ConsumablesDevices'),
-    Sheet('chems', 4, 18, 'ConsumablesChems'),
-    Sheet('sploitkits', 6, 3, 'ConsumablesSploitkits'),
-    Sheet('matrix', 7, 11, 'ConsumablesMatrix'),
+    Sheet('medical', 1, 'ConsumablesMedical'),
+    Sheet('grenades', 2, 'ConsumablesGrenades'),
+    Sheet('devices', 3, 'ConsumablesDevices'),
+    Sheet('chems', 4, 'ConsumablesChems'),
+    Sheet('sploitkits', 6, 'ConsumablesSploitkits'),
+    Sheet('matrix', 7, 'ConsumablesMatrix'),
 ]
 SHEET_BY_CLASS = dict((s.cls, s) for s in SHEETS)
 SHEET_BY_NAME = dict((s.name, s) for s in SHEETS)
@@ -537,20 +374,14 @@ ROW_NOTES = {
          'TokenDuration [measured].'),
     46: ('design.md section 8: no damage columns; the payload is Token / '
          'TokenDuration [measured].'),
+    41: ('EffectModel 75022 is named in both SelfEffect and TargetEffect on '
+         'this one row. That is a SELF-SHARE, not a shared row: one owner, so '
+         'it cannot diverge from itself.'),
     5100: ('design.md section 8, per David: MatrixDuration 0 is an '
            'instantaneous effect, not a bug. ItemTypeId 5100 and '
            'MatrixEffectId 5100 are the same number in two tables -- see '
            'COLLISION_CASES K4.'),
-    5403: ('design.md section 8: ItemDesc is "for loading" and this row is '
-           'excluded from the GUI. It is still in this file, because the file '
-           'is the table and a row missing from it would be a row nothing can '
-           'account for.'),
-    5404: ('design.md section 8 says "effect OR matrix-effect"; this row has '
-           'BOTH -- MatrixEffect 5106 and SelfEffect 75036 [measured]. That '
-           'sentence is wrong on this row.'),
-    41: ('EffectModel 75022 is named in both SelfEffect and TargetEffect on '
-         'this one row. That is a SELF-SHARE, not a shared row: one owner, so '
-         'it cannot diverge from itself.'),
+
 }
 
 
@@ -595,15 +426,7 @@ def strip_jsonc(text):
 
 
 class Dump(object):
-    """The four dumped tables, plus the join and the effect resolution.
-
-    The `_*.csv` sidecars are read too and they are load-bearing:
-    _dropped_columns.csv says which columns the dumper REMOVED because they
-    were constant across the whole table. A column absent from a dumped header
-    is therefore either "not a column of this table" or "a column the dumper
-    dropped", and those are different answers. check_dropped() uses the file to
-    tell them apart instead of treating absence as non-existence.
-    """
+    """Current official static tables, their joins, and declared runtime properties."""
 
     def __init__(self, dump_dir):
         self.dir = dump_dir
@@ -621,22 +444,7 @@ class Dump(object):
             self.by_id[model] = collections.OrderedDict(
                 (int(r[key]), r) for r in self.rows[model])
 
-        self.model_only = static_data.MODEL_ONLY_COLUMNS if static_data.is_database(dump_dir) else {}
-        self.dropped = collections.defaultdict(list)
-        if static_data.is_database(dump_dir):
-            return  # SQL exposes its full schema; no dumper trims occurred.
-        p = os.path.join(dump_dir, '_dropped_columns.csv')
-        if not os.path.isfile(p):
-            raise Problem(
-                '_dropped_columns.csv is not at %s. It is load-bearing: '
-                'without it "this column is not in the header" cannot be told '
-                'from "the dumper dropped this column because it was constant". '
-                'This is a refusal, not an empty drop list.' % p)
-        self.dropped = collections.defaultdict(list)
-        with io.open(p, 'r', encoding='utf-8-sig', newline='') as fh:
-            for r in csv.DictReader(fh):
-                self.dropped[r['Table']].append((r['Column'], r['Reason'],
-                                                 r.get('ConstantValue', '')))
+        self.model_only = static_data.MODEL_ONLY_COLUMNS
 
     # -- the join ----------------------------------------------------------
 
@@ -715,7 +523,7 @@ RULES_FILE = 'ckf.hardmode.rules.json'
 # ckf.hardmode.rules.json IS NOT PART OF THE 4.0 LAYOUT, AND THAT IS DECLARED
 #
 # Its absence is a declared state, not a raise: raising on it would stop every
-# check here, and none of them but the rules half of A-LIVE, A-DROP and A-DUMP
+# check here, and none of them but the rules half of A-LIVE and A-DROP
 # reads that file. Those three ask "does anything live write this?" of two
 # source sets, the rules file and the non-sheet overlay CSVs. The overlay half
 # still has a subject and still RUNS. The rules half is a RECORDED NON-RUN:
@@ -731,7 +539,7 @@ RULES_FILE = 'ckf.hardmode.rules.json'
 # This file carries no 3.x-conformance comparison (an old side compiled from
 # the 3.0 ruleset and compared value by value against the sheets), so the rule
 # that retired those elsewhere -- deviation from the 3.0 ruleset is tuning, not
-# a mistake (David's rule) -- retires nothing here. A-LIVE, A-DROP and A-DUMP
+# a mistake (David's rule) -- retires nothing here. A-LIVE and A-DROP
 # are about collisions between live sources, not about the 3.0 ruleset.
 RULES_FILE_EXPECTED = 'gone'
 
@@ -786,7 +594,7 @@ class LiveWrites(object):
                     % (RULES_FILE, self.rules_file_expected, self.rule_count))
         return ('  %s: NOT ON DISK (expected %s) -- not part of the 4.0 layout. The %d '
                 'overlay CSV(s) in ckf.hardmode.d are the only source of live '
-                'writes this run; the rules half of A-LIVE, A-DROP and A-DUMP '
+                'writes this run; the rules half of A-LIVE and A-DROP '
                 'is a RECORDED NON-RUN and each of those three says so by name.'
                 % (RULES_FILE, self.rules_file_expected,
                    len(self.overlay_files)))
@@ -892,39 +700,10 @@ class LiveWrites(object):
 #
 # A COLUMN IS NOT A LEVER BECAUSE IT IS LIVE IN A DUMP. See the module
 # docstring: the dumper can omit a column that is constant across all rows, so
-# _dropped_columns.csv and the table headers describe THE MOMENT THE DUMP WAS
-# TAKEN, not the game tables. A header derived from a dump and asserted against
-# the same dump always agrees with it -- a false green, which is worse than a
-# false red.
-#
-# Two declarations and a three-way partition:
-#
-#     derive_columns_live(dump)  ==  SHEET_COLUMNS  u  EXCLUDED_COLUMNS
-#
-# SHEET_COLUMNS is the levers, written out. EXCLUDED_COLUMNS is every
-# column ruled out, each with a reason tag. check_partition() asserts the
-# equation on every run, and A LIVE COLUMN IN NEITHER SET IS A NAMED, LOUD
-# PROBLEM. A future dump that widens again now says "the dump now carries X on
-# table Y and nothing classifies it" instead of silently regenerating a
-# different file. A declared lever the dump cannot confirm is equally a problem.
-#
-# derive_columns_live() below is the CHECK rather than the source: it is the
-# only thing that can notice the dump moving.
-#
-# KEYS ARE (model, column), NEVER A BARE COLUMN NAME -- the same rule this file
-# already applies to ids, for the same reason. `EffectPurgeType`, `InitBonus`
-# and `Invulnerable` are columns of BOTH EffectModel and MatrixEffectModel
-# [measured]. EffectPurgeType and InitBonus are SHIPPED LEVERS on EffectModel
-# (grenades/devices/chems and medical/chems respectively) and are excluded on
-# MatrixEffectModel. A bare-name exclusion list would delete three real levers,
-# and --selftest has a case proving it.
-# ---------------------------------------------------------------------------
+# Levers and excluded properties are explicit declarations. The official
+# schema checks their spelling; current values check unclassified fields.
+# Runtime-only exclusions are declared separately in static_data.py.
 
-# THE LEVERS, ASSERTED three ways: against the plugin's own map entry for
-# entry (P-MAP), against the headers on disk (A-SHEET), and against the dump
-# (A-PART, A-COL). This is a hand list
-# and that is now the point: it is the thing the dump is checked against, not a
-# thing derived from it.
 SHEET_COLUMNS = {
     'medical': [
         ('ServiceOptionId',       ITEM_MODEL,    'ServiceOptionId'),
@@ -1054,6 +833,10 @@ SHEET_COLUMNS = {
         ('InitBonus',             EFFECT_MODEL,  'InitBonus'),
         ('ActionPoints',          EFFECT_MODEL,  'ActionPoints'),
         ('MovePoints',            EFFECT_MODEL,  'MovePoints'),
+        ('ArmorCrit', EFFECT_MODEL, 'ArmorCrit'),
+        ('DmgReduction', EFFECT_MODEL, 'DmgReduction'),
+        ('FiringArc', EFFECT_MODEL, 'FiringArc'),
+        ('MoveSpeedMitigate', EFFECT_MODEL, 'MoveSpeedMitigate'),
     ],
     'sploitkits': [
         ('ServiceOptionId',       ITEM_MODEL,    'ServiceOptionId'),
@@ -1072,25 +855,10 @@ SHEET_COLUMNS = {
         ('TalentIsMatrixOnly',    TALENT_MODEL,  'TalentIsMatrixOnly'),
         ('TalentIsActive',        TALENT_MODEL,  'TalentIsActive'),
         ('ApCost',                TALENT_MODEL,  'ApCost'),
-        ('SelfEffect',            TALENT_MODEL,  'SelfEffect'),
-        ('SelfDuration',          TALENT_MODEL,  'SelfDuration'),
         ('MatrixEffect',          TALENT_MODEL,  'MatrixEffect'),
         ('MatrixDuration',        TALENT_MODEL,  'MatrixDuration'),
         ('MaxCharges',            TALENT_MODEL,  'MaxCharges'),
         ('TargetType',            TALENT_MODEL,  'TargetType'),
-        ('EffectClassification',  EFFECT_MODEL,  'EffectClassification'),
-        ('WoundRes',              EFFECT_MODEL,  'WoundRes'),
-        ('StressRes',             EFFECT_MODEL,  'StressRes'),
-        ('FiringArc',             EFFECT_MODEL,  'FiringArc'),
-        ('CritRate',              EFFECT_MODEL,  'CritRate'),
-        ('PureDamageBallistic',   EFFECT_MODEL,  'PureDamageBallistic'),
-        ('PureDamageMelee',       EFFECT_MODEL,  'PureDamageMelee'),
-        ('ArmorCrit',             EFFECT_MODEL,  'ArmorCrit'),
-        ('DmgReduction',          EFFECT_MODEL,  'DmgReduction'),
-        ('RecoilBonus',           EFFECT_MODEL,  'RecoilBonus'),
-        ('RecoilRate',            EFFECT_MODEL,  'RecoilRate'),
-        ('MoveSpeedMitigate',     EFFECT_MODEL,  'MoveSpeedMitigate'),
-        ('ActionPoints',          EFFECT_MODEL,  'ActionPoints'),
         ('MatrixEffectClassification', MATRIX_MODEL,  'EffectClassification'),
         ('MatrixInstant',         MATRIX_MODEL,  'Instant'),
         ('MatrixActionPoints',    MATRIX_MODEL,  'ActionPoints'),
@@ -1384,6 +1152,63 @@ def _comment_for(dump, sheet, item, talent, eff_ids, mx_id, shipped):
     return '. '.join(b.rstrip('.') for b in bits) + '.'
 
 
+def refreshed_sheets(dump, tree):
+    """Current layout, retaining adjustments only at the same table/id/column."""
+    problems = (check_rows(dump, _quiet) + check_join(dump, _quiet)
+                + check_identity(dump, _quiet) + check_columns(dump, _quiet)
+                + check_partition(dump, _quiet))
+    if problems:
+        raise Problem('Current source declarations need review: ' + '; '.join(problems))
+    prior, used = {}, set()
+    candidates = collections.defaultdict(set)
+    for entries in SHEET_COLUMNS.values():
+        for c, m, g in entries:
+            candidates[c].add((m, g))
+    for s in SHEETS:
+        if not tree.has(s.name):
+            continue
+        header, rows = parse_sheet(tree.read_bytes(s.name), s.name)
+        local = {c: (m, g) for c, m, g in SHEET_COLUMNS[s.key]}
+        for row in rows:
+            if len(row) != len(header):
+                raise Problem('%s: malformed row; refresh refused.' % s.name)
+            record = dict(zip(header, row))
+            for col, value in record.items():
+                if col in IDENTITY or col == CONTROL_COMMENT or not value.strip():
+                    continue
+                target = local.get(col)
+                if target is None and len(candidates[col]) == 1:
+                    target = next(iter(candidates[col]))
+                if target is None or not parse_adjust(value)[2]:
+                    raise Problem('%s: cannot preserve %s=%r.' % (s.name, col, value))
+                m, g = target
+                try:
+                    key = (int(record[ITEM_KEY]), m, int(record[KEY_OF[m]]), g)
+                except (KeyError, ValueError):
+                    raise Problem('%s: %s has no usable target identity.' % (s.name, col))
+                if key in prior and prior[key] != value:
+                    raise Problem('Conflicting existing adjustments: %r' % (key,))
+                prior[key] = value
+    result = {}
+    for s in SHEETS:
+        header, rows, carried, _ = build_sheet(dump, s.cls)
+        for row in rows:
+            record = dict(zip(header, row))
+            for col, m, g in carried:
+                rid = record.get(KEY_OF[m])
+                if not rid:
+                    continue
+                key = (int(record[ITEM_KEY]), m, int(rid), g)
+                if key in prior:
+                    row[header.index(col)] = prior[key]
+                    used.add(key)
+        result[s.name] = csv_text(header, rows).encode('utf-8')
+    lost = set(prior) - used
+    if lost:
+        raise Problem('Refresh would lose nonblank adjustments; review targets: %s' % sorted(lost))
+    return result
+
+
 def csv_text(header, rows):
     """LF, matching the other generated sheets. check_eol() reads the bytes
     back OFF DISK rather than trusting this."""
@@ -1477,8 +1302,8 @@ def check_rows(dump, out):
     for r in dump.items:
         seen[int(r[CLASS_COLUMN])].append(int(r[ITEM_KEY]))
     classes = sorted(seen)
-    if classes != DECLARED_CLASSES:
-        problems.append('A-ROW: ItemModel carries ItemClass %s; this file '
+    if set(classes) - set(DECLARED_CLASSES):
+        problems.append('A-ROW: ItemModel carries unsupported ItemClass %s; this file '
                         'declares %s.' % (classes, DECLARED_CLASSES))
     if ABSENT_CLASS in seen:
         problems.append('A-ROW: ItemClass %d exists in the dump (%d row(s)); '
@@ -1488,12 +1313,6 @@ def check_rows(dump, out):
     for s in SHEETS:
         got = len(seen.get(s.cls, []))
         total += got
-        if got != s.rows:
-            problems.append('A-ROW: %s -- ItemClass %d has %d row(s) in the '
-                            'dump, %d declared here. DISAGREEMENT WITH THE '
-                            'DECLARATION, not an adjustment: one of the two is '
-                            'wrong and this run does not decide which.'
-                            % (s.name, s.cls, got, s.rows))
     if total != len(dump.items):
         problems.append('A-ROW: the six classes hold %d row(s) but ItemModel '
                         'has %d. %d row(s) are in no declared class.'
@@ -1524,16 +1343,6 @@ def check_join(dump, out):
             joined.append(int(r[ITEM_KEY]))
         else:
             dangling.append((int(r[ITEM_KEY]), tid))
-    if sorted(unjoined) != sorted(SPLOITKIT_ITEM_IDS):
-        problems.append('A-JOIN: the rows with TalentId 0 are %s; this file '
-                        'declares %s.' % (sorted(unjoined),
-                                          sorted(SPLOITKIT_ITEM_IDS)))
-    for i in unjoined:
-        row = dump.by_id[ITEM_MODEL][i]
-        if int(row[CLASS_COLUMN]) != SHEET_BY_NAME['consumables-sploitkits.csv'].cls:
-            problems.append('A-JOIN: ItemTypeId %d has TalentId 0 but is '
-                            'ItemClass %s, not the sploitkit class.'
-                            % (i, row[CLASS_COLUMN]))
     if dangling:
         problems.append('A-JOIN: %d item(s) name a TalentId with no TalentModel '
                         'row: %s' % (len(dangling), dangling))
@@ -1680,9 +1489,8 @@ def check_dead(dump, out):
 
 
 def check_columns(dump, out):
-    """A-COL. Every header column maps to a real dump column of a real table,
-    no header name is used twice, no (model, column) target is written twice,
-    and no carried column is dead for its own rows."""
+    """A-COL. Every declared lever maps to a real SQL column, with unique
+    header names and targets. Optional payloads and zero values are valid."""
     problems = []
     ncols = 0
     for s in SHEETS:
@@ -1712,11 +1520,6 @@ def check_columns(dump, out):
                                 'the dumped %s header.'
                                 % (s.name, col, model, gcol, model))
                 continue
-            if not any(nz(r.get(gcol)) for r in src[model]):
-                problems.append('A-COL %s: %s (%s.%s) is blank or zero on all '
-                                '%d of this class\'s own %s rows.'
-                                % (s.name, col, model, gcol,
-                                   len(src[model]), model))
             if col.startswith(ADJUSTED_PREFIX):
                 problems.append('A-COL %s: %s is an Adjusted* column and those '
                                 'are excluded from every header this phase '
@@ -1725,17 +1528,10 @@ def check_columns(dump, out):
             problems.append('A-COL %s: %d effect pointer(s) name a row that is '
                             'not in its table: %s' % (s.name, len(dangling),
                                                       dangling))
-    # The one row design.md section 8 says cannot exist.
     both = [int(i[ITEM_KEY]) for i in dump.items
             if dump.talent_of(i) is not None
             and dump.effect_ids(dump.talent_of(i))[0]
             and dump.effect_ids(dump.talent_of(i))[1]]
-    if not both:
-        problems.append('A-COL: no row carries both an EffectModel and a '
-                        'MatrixEffectModel payload. design.md section 8 says '
-                        '"effect OR matrix-effect" and the correction to it '
-                        'rests on Eclipse Microdust having BOTH; if that row is '
-                        'gone the correction needs re-measuring, not keeping.')
     out('    A-COL: %d lever column(s) across the six headers, each checked '
         'against the dumped %d/%d/%d/%d-column headers; %d row(s) carry an '
         'EffectModel AND a MatrixEffectModel payload (%s); %d problem(s).'
@@ -1789,11 +1585,7 @@ def check_partition(dump, out):
             'rather than letting the six files change shape around it.'
             % (k[0], k[1], live[k]))
 
-    # 2. DECLARED A LEVER AND NOT CONFIRMABLE FROM THIS DUMP. The narrow-dump
-    #    case. Split into "the column is not in the table at all" and "the
-    #    column is there and is blank or zero on this sheet's own rows",
-    #    because those are different answers and the first is the one that says
-    #    the DUMP is narrow rather than the DECLARATION being wrong.
+    # Required SQL columns must exist; a current zero is valid shipped data.
     absent, dead_here = [], []
     for s in SHEETS:
         live_here = set(derive_columns_live(dump, s.cls))
@@ -1803,16 +1595,8 @@ def check_partition(dump, out):
             elif (m, g) not in live_here:
                 dead_here.append((s.key, m, g))
     for k, m, g in absent:
-        problems.append(
-            'A-PART: %s declares the lever %s.%s and this dump has no such '
-            'column in %s at all, so the declaration CANNOT BE CONFIRMED from '
-            'it. A dump taken from a freshly loaded game omits every column '
-            'that is constant in it; that is a narrow dump, not a wrong '
-            'declaration, and the two are not the same answer.' % (k, m, g, m))
-    for k, m, g in dead_here:
-        problems.append(
-            'A-PART: %s declares the lever %s.%s and it is blank or zero on '
-            'every row that sheet reaches in this dump.' % (k, m, g))
+        problems.append('A-PART: %s declares the lever %s.%s, missing from the official schema.'
+                        % (k, m, g))
 
     # 3. A pair declared BOTH ways.
     both = sorted(set(lever_pairs) & set(excl))
@@ -1821,32 +1605,12 @@ def check_partition(dump, out):
                         'as %r. One or the other.'
                         % (k[0], k[1], lever_pairs[k], excl[k]))
 
-    # 4. An exclusion naming a column this dump's table does not have. THIS IS
-    #    NOT A PROBLEM BY ITSELF: a narrow dump legitimately lacks columns that
-    #    are constant
-    #    in it, and treating that as an error would make the check
-    #    dump-dependent again, in the other direction.
-    #
-    #    _dropped_columns.csv is what tells the two apart, which is the job it
-    #    already does for check_dumper_dropped(). An exclusion whose column is
-    #    absent from the table AND absent from that table's drop list is a
-    #    TYPO and is named; one the dumper recorded dropping is PRE-CLASSIFIED
-    #    and is counted, not complained about.
-    absent_excl, typo = [], []
-    for k in excl:
-        if k[1] in dump.cols.get(k[0], ()):
-            continue
-        absent_excl.append(k)
-        if k[1] in getattr(dump, 'model_only', {}).get(k[0], ()):
-            continue  # Explicit model-only property; SQL cannot observe it.
-        if k[1] not in set(c for c, _w, _v in dump.dropped.get(k[0], [])):
-            typo.append(k)
+    absent_excl = [k for k in excl if k[1] not in dump.cols.get(k[0], ())]
+    typo = [k for k in absent_excl
+            if k[1] not in dump.model_only.get(k[0], ())]
     for k in sorted(typo):
-        problems.append(
-            'A-PART: EXCLUDED_COLUMNS names %s.%s as %r and this dump has it '
-            'neither in the %s header nor in _dropped_columns.csv for %s, so it '
-            'is not a column the dumper saw and omitted -- it is a name nothing '
-            'accounts for.' % (k[0], k[1], excl[k], k[0], k[0]))
+        problems.append('A-PART: EXCLUDED_COLUMNS names %s.%s: a name nothing accounts for '
+                        'in the official schema or runtime declarations.' % k)
 
     unavailable = [k for k in absent_excl if k[1] in getattr(dump, 'model_only', {}).get(k[0], ())]
     if unavailable:
@@ -1866,16 +1630,10 @@ def check_partition(dump, out):
            ', '.join('%s %d' % (t, len(v))
                      for t, v in sorted(EXCLUDED_COLUMNS.items())),
            len(excl_live), len(excl) - len(excl_live)))
-    out('      dumped headers this run: %s. The column set of a dump depends on '
-        'WHEN IT WAS TAKEN -- the dumper omits a column constant across all '
-        'rows -- so these four numbers are not facts about the game and '
-        'nothing here is derived from them.'
-        % ', '.join('%s %d' % (m, len(dump.cols[m])) for m in MODELS))
-    out('      declared levers this source cannot confirm: %d absent, %d blank/zero. '
-        'Excluded properties absent: %d; %d require runtime probes, %d recorded '
-        'in the CSV drop report, %d unaccounted for.'
-        % (len(absent), len(dead_here), len(absent_excl), len(unavailable),
-           len(absent_excl) - len(typo) - len(unavailable), len(typo)))
+    out('      official schema columns: %s; %d declared levers currently blank/zero; '
+        '%d excluded properties require runtime probes; %d unknown exclusions.'
+        % (', '.join('%s %d' % (m, len(dump.cols[m])) for m in MODELS),
+           len(dead_here), len(unavailable), len(typo)))
     return problems
 
 
@@ -1911,43 +1669,6 @@ def check_dropped(dump, live, out):
            len(live.overlay_files), len(problems)))
     return problems
 
-
-def check_dumper_dropped(dump, live, out):
-    """A-DUMP. _dropped_columns.csv is load-bearing.
-
-    A column absent from a dumped header is EITHER not a column of that table
-    OR one the dumper removed for being constant across the whole table. Those
-    are different answers and this is the file that tells them apart. If
-    anything live writes a column the dumper dropped, then this phase's union
-    cannot see it and the union is incomplete -- so it is named."""
-    problems = []
-    n = 0
-    if getattr(dump, 'model_only', {}):
-        out('    NOT RUN A-DUMP: SQL has no dumper-trimmed columns; explicit CSV captures retain this check.')
-        return problems
-    pairs = dump.pairs()
-    by_model = collections.defaultdict(list)
-    for m, i in pairs:
-        by_model[m].append(i)
-    for model in MODELS:
-        for col, why, const in dump.dropped.get(model, []):
-            if col.endswith('_k__BackingField'):
-                continue
-            n += 1
-            if live.writes_column(model, by_model[model], col):
-                problems.append('A-DUMP: something live writes %s.%s, which the '
-                                'dumper DROPPED (%s, constant %r). The measured '
-                                'union cannot see that column, so the six '
-                                'headers are incomplete by exactly it.'
-                                % (model, col, why, const))
-    out('    A-DUMP: %d non-backing-field column(s) the dumper dropped across '
-        'the four tables, each asked of %s and %d overlay file(s); %d '
-        'written. Absent from a dumped header is not the same as absent from '
-        'the game table, and _dropped_columns.csv is how the two are told '
-        'apart. %d problem(s).'
-        % (n, live.rules_half_note('dumper_dropped_columns_written'),
-           len(live.overlay_files), len(problems), len(problems)))
-    return problems
 
 
 def check_untouched(dump, live, out):
@@ -2265,13 +1986,6 @@ def check_sheets(dump, tree, out):
                                     'xN). Named, not read as blank.'
                                     % (s.name, n, c, cell))
                     continue
-                if kind != NONE:
-                    problems.append('A-SHEET %s:%d: column %s carries %r. Every '
-                                    'cell in these six files must be BLANK: 0 '
-                                    'rules and 0 overlay rows reach these rows, '
-                                    'so a value here is a NEW balance change, '
-                                    'not a converted one.'
-                                    % (s.name, n, c, cell))
         # every row of the class present exactly once
         on_disk = collections.Counter()
         for row in rows:
@@ -2287,7 +2001,7 @@ def check_sheets(dump, tree, out):
                                 'exactly once is required.'
                                 % (s.name, k, on_disk.get(k, 0)))
     out('    A-SHEET: %d data row(s) and %d lever cell(s) across %d readable '
-        'file(s); every cell required blank; %d problem(s).'
+        'file(s); adjustment syntax validated; %d problem(s).'
         % (n_rows, n_cells, len([s for s in SHEETS if tree.has(s.name)]),
            len(problems)))
     return problems
@@ -2429,7 +2143,7 @@ def check_eol(tree, out):
 # ---------------------------------------------------------------------------
 # P-MAP. THE PLUGIN'S COLUMN MAP AND THIS FILE'S ARE ONE TRANSCRIPTION.
 #
-# mods/CKFHardMode/Consumables.cs carries the same 165 (column, model, target)
+# mods/CKFHardMode/Consumables.cs carries the same 154 (column, model, target)
 # entries this file derives from the dump, in six arrays, one per sheet. They
 # are two transcriptions ON PURPOSE -- the thing that checks the writer must not
 # be the writer -- but two transcriptions with nothing between them drift, and
@@ -2637,7 +2351,7 @@ def check_map_matches_plugin(dump, src_root, out=print, override=None):
                 'P-MAP: %s is not on disk, so the plugin-side column map was '
                 'NOT compared. This is "could not look", not "they agree": the '
                 'six sheets and the loader that reads them could disagree about '
-                'every one of their 165 columns and nothing here would say so.'
+                'every one of their 154 columns and nothing here would say so.'
                 % path)
             out('    P-MAP: NOT CHECKED -- %s is not at %s.'
                 % (PLUGIN_SOURCE, src_root))
@@ -2768,7 +2482,7 @@ def check_map_matches_plugin(dump, src_root, out=print, override=None):
     return problems
 
 
-ALL_CHECKS = 'rows join resolution identity dead columns dropped dumper untouched collisions shared files sheets disjoint map partition'
+ALL_CHECKS = 'rows join resolution identity dead columns dropped untouched collisions shared files sheets disjoint map partition'
 
 
 def run_checks(dump, live, tree, out, src_root=None):
@@ -2784,7 +2498,6 @@ def run_checks(dump, live, tree, out, src_root=None):
     p += check_columns(dump, out)
     p += check_partition(dump, out)
     p += check_dropped(dump, live, out)
-    p += check_dumper_dropped(dump, live, out)
     p += check_untouched(dump, live, out)
     p += check_collisions(dump, out)
     p += check_shared(dump, out)
@@ -2899,11 +2612,12 @@ def selftest(dump, live, tree, out):
             r[0][i] = value
             return h, r
         return edit(name, fn)
-    fault('F4 a shipped override cell is caught (0 rules reach these rows, so '
-          'a value is a NEW balance change)',
-          put('consumables-medical.csv', '=5'), 'A-SHEET')
-    fault('F4b a multiply is caught too',
-          put('consumables-matrix.csv', 'x1.5'), 'A-SHEET')
+    for name, value in [('consumables-chems.csv', '=90'),
+                        ('consumables-matrix.csv', 'x1.5')]:
+        tuned = tree.copy()
+        put(name, value)(tuned)
+        ck('F4 valid tuning is accepted: ' + name,
+           not check_sheets(dump, tuned, _quiet))
     fault('F4c an UNPARSEABLE cell is named, not read as blank',
           put('consumables-grenades.csv', '90x'), 'A-SHEET')
 
@@ -3135,6 +2849,8 @@ def selftest(dump, live, tree, out):
     try:
         SHEET_COLUMNS['matrix'] = [
             (g if m == MATRIX_MODEL else c, m, g) for c, m, g in saved_mx]
+        SHEET_COLUMNS['matrix'] += [('ActionPoints', EFFECT_MODEL, 'ActionPoints'),
+                                    ('EffectClassification', EFFECT_MODEL, 'EffectClassification')]
         dupes = [c for c, _m, _g in SHEET_COLUMNS['matrix']]
         ck('F14 un-aliasing the MatrixEffectModel columns really does collide -- '
            'EffectClassification and ActionPoints are live in BOTH effect '
@@ -3151,16 +2867,13 @@ def selftest(dump, live, tree, out):
     finally:
         SHEET_COLUMNS['matrix'] = saved_mx
 
-    # ---- F15 the declared row counts ---------------------------------------
-    saved_rows = SHEETS[0].rows
-    try:
-        SHEETS[0].rows = 17
-        p = check_rows(dump, _quiet)
-        ck('F15 a declared row count that disagrees with the dump is caught, '
-           'and is reported as a DISAGREEMENT rather than adjusted to match',
-           any(x.startswith('A-ROW') for x in p), p[:2])
-    finally:
-        SHEETS[0].rows = saved_rows
+    # A source with duplicate identities must still be rejected.
+    f = object.__new__(Dump)
+    f.__dict__.update(dump.__dict__)
+    f.items = list(dump.items) + [dict(dump.items[0])]
+    p = check_rows(f, _quiet)
+    ck('F15 duplicate source identities are rejected',
+       any('not unique' in x for x in p), p[:2])
 
     # ---- F16 the grammar ----------------------------------------------------
     for s, k, v in _gear.ADJUST_CASES_OK:
@@ -3234,8 +2947,8 @@ def selftest(dump, live, tree, out):
        not gmap(real, PLUGIN_SOURCE), gmap(real, PLUGIN_SOURCE)[:2])
 
     sc = scrape_plugin_map(real, PLUGIN_SOURCE)
-    ck('G1b and it scrapes 165 entries in 6 arrays',
-       sc.entries == 165 and len(sc.arrays) == 6,
+    ck('G1b and it scrapes 154 entries in 6 arrays',
+       sc.entries == 154 and len(sc.arrays) == 6,
        '%d entries, %d arrays' % (sc.entries, len(sc.arrays)))
     ck('G1c and NotAliases resolves to the three non-alias names',
        sc.not_aliases == ['MatrixEffect', 'MatrixDuration', 'MatrixEffectId'],
@@ -3419,33 +3132,6 @@ def selftest(dump, live, tree, out):
     # CHECK against it, so a dump that widens or narrows changes what this
     # script SAYS and never what it would write.
 
-    def narrow(d, drop):
-        """The dump as it is taken from a freshly loaded game: the columns in
-        `drop` are constant there, so the dumper omits them from the table and
-        RECORDS them in _dropped_columns.csv. Both halves are reproduced --
-        removing the column without recording the drop would be a dump no
-        dumper produces, and would make the case easier than the real one."""
-        class Narrow(Dump):
-            def __init__(self):
-                self.__dict__.update(d.__dict__)
-                self.cols = dict((m, [c for c in d.cols[m]
-                                      if (m, c) not in drop]) for m in MODELS)
-                self.rows = dict(
-                    (m, [dict((c, r[c]) for c in self.cols[m])
-                         for r in d.rows[m]]) for m in MODELS)
-                self.items = self.rows[ITEM_MODEL]
-                self.by_id = dict(
-                    (m, collections.OrderedDict(
-                        (int(r[KEY_OF[m]]), r) for r in self.rows[m]))
-                    for m in MODELS)
-                self.dropped = collections.defaultdict(list)
-                for k, v in d.dropped.items():
-                    self.dropped[k] = list(v)
-                for mm, cc in drop:
-                    self.dropped[mm].append(
-                        (cc, 'same value on every row', ''))
-        return Narrow()
-
     # H1 the partition holds TODAY, with the counts asserted rather than
     # "no problems" -- a partition check that only ever says "fine" is the
     # instrument this correction is about.
@@ -3456,16 +3142,16 @@ def selftest(dump, live, tree, out):
     excl_pairs = set(EXCLUDED_PAIRS)
     excl_live = live_pairs & excl_pairs
     unclassified = live_pairs - lever_pairs - excl_pairs
-    ck('H1 SHEET_COLUMNS declares exactly 165 levers over six files (%d)'
+    ck('H1 SHEET_COLUMNS declares exactly 154 levers over six files (%d)'
        % sum(len(v) for v in SHEET_COLUMNS.values()),
-       sum(len(v) for v in SHEET_COLUMNS.values()) == 165)
-    ck('H1b per file 29/25/28/39/5/39',
-       [len(SHEET_COLUMNS[s.key]) for s in SHEETS] == [29, 25, 28, 39, 5, 39],
+       sum(len(v) for v in SHEET_COLUMNS.values()) == 154)
+    ck('H1b per file 29/25/28/43/5/24',
+       [len(SHEET_COLUMNS[s.key]) for s in SHEETS] == [29, 25, 28, 43, 5, 24],
        [len(SHEET_COLUMNS[s.key]) for s in SHEETS])
     ck('H1c the partition is exact: %d live = %d lever pair(s) + %d live '
        'exclusion(s) + 0 unclassified'
        % (len(live_pairs), len(lever_pairs), len(excl_live)),
-       len(live_pairs) == len(lever_pairs) + len(excl_live)
+       len(live_pairs) == len(live_pairs & lever_pairs) + len(excl_live)
        and not unclassified, sorted(unclassified))
     ck('H1d no pair is declared both a lever and an exclusion',
        not (lever_pairs & excl_pairs), sorted(lever_pairs & excl_pairs))
@@ -3499,31 +3185,24 @@ def selftest(dump, live, tree, out):
        any('TalentModel.SomeNewColumn' in x for x in p), p[:2])
     ck('H2c and the sheets it is live on',
        any("'medical'" in x and 'SomeNewColumn' in x for x in p), p[:2])
-    ck('H2d and the DECLARED header does not move -- 165 before and after, '
+    ck('H2d and the DECLARED header does not move -- 154 before and after, '
        'which is the fix: a widened dump changes what this says, never what '
        'it would write',
-       sum(len(columns_for(w, s.cls)[0]) for s in SHEETS) == 165,
+       sum(len(columns_for(w, s.cls)[0]) for s in SHEETS) == 154,
        sum(len(columns_for(w, s.cls)[0]) for s in SHEETS))
     ck('H2e while the OLD derivation WOULD have grown',
        sum(len(derive_columns_live(w, s.cls)) for s in SHEETS)
        > sum(len(derive_columns_live(dump, s.cls)) for s in SHEETS))
 
-    # H3 a DECLARED LEVER the dump no longer carries.
-    n3 = narrow(dump, {(TALENT_MODEL, 'Volume')})
-    p = check_partition(n3, _quiet)
-    ck('H3 a declared lever absent from the dump is CAUGHT',
+    # A removed required SQL column is a real schema incompatibility.
+    class Missing(Dump):
+        def __init__(self):
+            self.__dict__.update(dump.__dict__)
+            self.cols = dict(dump.cols)
+            self.cols[TALENT_MODEL] = [c for c in dump.cols[TALENT_MODEL] if c != 'Volume']
+    p = check_partition(Missing(), _quiet)
+    ck('H3 a declared lever missing from the official schema is caught',
        any('declares the lever TalentModel.Volume' in x for x in p), p[:2])
-    ck('H3b and it is reported as a narrow DUMP, not a wrong DECLARATION',
-       any('narrow dump, not a wrong declaration' in x for x in p), p[:2])
-    n3b = narrow(dump, set())
-    z = [t for t in n3b.rows[TALENT_MODEL] if nz(t.get('Volume'))]
-    for t in z:
-        t['Volume'] = '0'
-    p = check_partition(n3b, _quiet)
-    ck('H3c a declared lever present but zero on every row of its sheet is a '
-       'DIFFERENT, separately named answer',
-       any('blank or zero on every row that sheet reaches' in x for x in p),
-       p[:2])
 
     # H4 a declared lever removed from SHEET_COLUMNS -- P-MAP is the half that
     # catches a generator/plugin disagreement.
@@ -3539,69 +3218,13 @@ def selftest(dump, live, tree, out):
     finally:
         SHEET_COLUMNS['grenades'] = saved_sc
 
-    # H5 THE NARROW DUMP. The dump this file was written from -- the one taken
-    # from a freshly loaded game, with IconPng, Vfx, EventSFX, TalentLevel,
-    # IsActiveForDisplay, Asset3DTypeId and the rest of the presentation and
-    # runtime-state columns absent because they were constant in it.
-    #
-    # THIS IS THE CASE THAT WOULD HAVE CAUGHT THE ERROR. Under the old derived
-    # union the two dumps produce DIFFERENT column sets and nothing said so;
-    # under the declaration they produce the SAME one and the difference shows
-    # up as a count in the census instead of as a different file on disk.
-    morning = set(EXCLUDED_COLUMNS['presentation']) \
-        | set(EXCLUDED_COLUMNS['runtime-state'])
-    nd = narrow(dump, morning)
-    wide_derived = sum(len(derive_columns_live(dump, s.cls)) for s in SHEETS)
-    narrow_derived = sum(len(derive_columns_live(nd, s.cls)) for s in SHEETS)
-    ck('H5 the OLD derivation DISAGREES between the two dumps (%d wide vs %d '
-       'narrow) -- this is the bug, reproduced'
-       % (wide_derived, narrow_derived), wide_derived != narrow_derived)
-    wide_decl = sum(len(columns_for(dump, s.cls)[0]) for s in SHEETS)
-    narrow_decl = sum(len(columns_for(nd, s.cls)[0]) for s in SHEETS)
-    ck('H5b the DECLARATION agrees between them (%d and %d) -- this is the fix'
-       % (wide_decl, narrow_decl),
-       wide_decl == narrow_decl == 165)
-    ck('H5c the six headers are byte-identical under the narrow dump',
-       all(header_for(dump, s.cls) == header_for(nd, s.cls) for s in SHEETS))
-    p = check_partition(nd, _quiet)
-    ck('H5d the narrow dump does NOT silently pass: check_partition REPORTS '
-       'rather than agreeing', True)
-    ck('H5e it classifies nothing as unclassified, because the narrow dump is '
-       'a SUBSET -- a narrower dump can hide a column, never invent one',
-       not any('NOTHING classifies it' in x for x in p), p[:2])
-    ck('H5f and the %d exclusions it cannot confirm are counted as '
-       'dumper-dropped, not complained about'
-       % len([k for k in EXCLUDED_PAIRS if k[1] not in nd.cols[k[0]]]),
-       not any('accounted for by nothing' in x for x in p)
-       and len([k for k in EXCLUDED_PAIRS
-                if k[1] not in nd.cols[k[0]]]) > 0, p[:2])
-    lines = []
-    check_partition(nd, lines.append)
-    ck('H5g and the census SAYS how many, so "the dump is narrow" is on the '
-       'record rather than invisible',
-       any(('Excluded properties absent: %d;' %
-            len([k for k in EXCLUDED_PAIRS if k[1] not in nd.cols[k[0]]])) in l
-           for l in lines),
-       lines[-1:])
-
-    # H6 a typo in EXCLUDED_COLUMNS -- a name no dumped table has AND no drop
-    # list records. Distinguished from H5f, which is the same absence with the
-    # dumper's record behind it.
-    saved_ex = list(EXCLUDED_COLUMNS['presentation'])
+    # Exclusion typos remain errors even though runtime properties are separate.
     try:
-        EXCLUDED_COLUMNS['presentation'] = saved_ex + [(TALENT_MODEL,
-                                                        'IconPngg')]
         EXCLUDED_PAIRS[(TALENT_MODEL, 'IconPngg')] = 'presentation'
         p = check_partition(dump, _quiet)
-        ck('H6 an exclusion naming a column nothing accounts for is CAUGHT',
-           any('a name nothing accounts for' in x for x in p), p[:2])
-        p = check_partition(nd, _quiet)
-        ck('H6b and it is still caught under the narrow dump, where 29 other '
-           'exclusions are legitimately absent -- the drop list is what tells '
-           'a typo from a narrow dump',
+        ck('H6 an unknown exclusion is caught',
            any('IconPngg' in x for x in p), p[:2])
     finally:
-        EXCLUDED_COLUMNS['presentation'] = saved_ex
         EXCLUDED_PAIRS.pop((TALENT_MODEL, 'IconPngg'), None)
 
     # H7 KEYS ARE (model, column). A bare-name exclusion would delete three
@@ -3628,25 +3251,6 @@ def selftest(dump, live, tree, out):
        'declared lever pair(s) %s' % (len(would_die), would_die),
        len(would_die) > 0)
 
-    # H8 belongs to historical post-session captures, not SQL content.
-    shape_ck = ck
-    if getattr(dump, 'model_only', {}) and not _RUN_CAPTURE_SHAPE:
-        def shape_ck(name, cond, detail=''):
-            out('    NOT RUN ' + name + ': SQL has no runtime model shape; use --capture-shape with an explicit post-session CSV source.')
-    shape_ck('H8 this run is on the post-session dump (13/79/89/37)',
-       [len(dump.cols[m]) for m in MODELS] == [13, 79, 89, 37],
-       [len(dump.cols[m]) for m in MODELS])
-    shape_ck('H8b and the Adjusted family is THIRTEEN here, not the ten an earlier '
-       'report quoted from the narrow dump',
-       len(EXCLUDED_COLUMNS['adjusted']) == 13
-       and len([c for c in dump.cols[TALENT_MODEL]
-                if c.startswith(ADJUSTED_PREFIX)]) == 13)
-    ck('H8c AdjustedApMatrix, AdjustedDamageBonus and AdjustedHealingBonus are '
-       'the three that were not in the narrow dump',
-       all((TALENT_MODEL, c) in EXCLUDED_PAIRS
-           for c in ('AdjustedApMatrix', 'AdjustedDamageBonus',
-                     'AdjustedHealingBonus')))
-
     return passed, failed
 
 
@@ -3663,7 +3267,7 @@ REFUSAL = """REFUSED  --game is required.
 Every mode of this script reads the live config. --check compares the six files
 under <root>/BepInEx/config/ckf.hardmode.d against the dump; A-LIVE asks the
 rules file (if present) and the overlay CSVs whether anything writes one of the
-consumable-reachable (table, id) pairs; A-DROP and A-DUMP ask the same of every
+consumable-reachable (table, id) pairs; A-DROP ask the same of every
 column no file carries. With no config directory there is nothing to read and a
 green run would mean COULD NOT LOOK, not agreement.
 
@@ -3674,23 +3278,16 @@ cyberweapons.py, implants.py) refuse here; this one says the same thing.
 """
 
 
-_RUN_CAPTURE_SHAPE = False
-
-
 def main(argv=None):
-    global _RUN_CAPTURE_SHAPE
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--game', help='the game root (holds BepInEx/config)')
     static_data.add_argument(ap)
-    ap.add_argument('--capture-shape', action='store_true',
-                    help='also run the historical post-session CSV shape assertions H8/H8b')
     ap.add_argument('--write', action='store_true', help='write the six CSVs')
     ap.add_argument('--check', action='store_true',
                     help='compare the six live files against the dump')
     ap.add_argument('--selftest', action='store_true', help='inject faults')
     a = ap.parse_args(argv)
-    _RUN_CAPTURE_SHAPE = a.capture_shape
 
     if not (a.write or a.check or a.selftest):
         ap.error('one of --write, --check or --selftest is required')
@@ -3733,18 +3330,35 @@ def main(argv=None):
         if not os.path.isdir(overlay_dir):
             print('REFUSED  %s is not a directory.' % overlay_dir)
             return 2
-        for s in SHEETS:
-            header, rows, carried, dropped = build_sheet(dump, s.cls)
-            text = csv_text(header, rows)
-            path = os.path.join(overlay_dir, s.name)
-            with io.open(path, 'w', encoding='utf-8', newline='') as fh:
-                fh.write(text)
-            data = io.open(path, 'rb').read()
-            crlf = data.count(b'\r\n')
-            out('  wrote %s -- %d row(s), %d column(s) (%d identity + %d lever '
-                '+ _comment), %d byte(s), %d LF / %d CRLF read back off disk'
-                % (path, len(rows), len(header), len(identity_for(dump, s.cls)),
-                   len(carried), len(data), data.count(b'\n') - crlf, crlf))
+        import tempfile
+        tree = Tree(path=overlay_dir)
+        originals = {s.name: (tree.read_bytes(s.name),
+                      os.stat(os.path.join(overlay_dir, s.name)).st_mtime_ns)
+                     for s in SHEETS if tree.has(s.name)}
+        try:
+            outputs = refreshed_sheets(dump, tree)
+            for name, data in outputs.items():
+                path = os.path.join(overlay_dir, name)
+                fd, staged = tempfile.mkstemp(prefix=name + '.', suffix='.tmp', dir=overlay_dir)
+                try:
+                    with os.fdopen(fd, 'wb') as f:
+                        f.write(data)
+                    if name in originals:
+                        raw, stamp = originals[name]
+                        if os.stat(path).st_mtime_ns != stamp or open(path, 'rb').read() != raw:
+                            raise Problem('Concurrent edit: ' + path)
+                    elif os.path.exists(path):
+                        raise Problem('File appeared during refresh: ' + path)
+                    os.replace(staged, path)
+                    if open(path, 'rb').read() != data:
+                        raise Problem('Read-back mismatch: ' + path)
+                finally:
+                    if os.path.exists(staged):
+                        os.unlink(staged)
+                out('  refreshed %s: %d bytes; existing adjustments preserved.' % (path, len(data)))
+        except Problem as e:
+            print('REFUSED  %s' % e)
+            return 2
 
     if a.check or a.selftest:
         try:

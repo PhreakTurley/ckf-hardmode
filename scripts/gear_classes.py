@@ -1,87 +1,17 @@
 #!/usr/bin/env python3
-"""gear_classes.py -- the gear-class lever sheet, and the partition it rests on.
+"""Generate and validate the gear-class lever sheet using Official/data.db.
 
-Static inputs default to Official/data.db through static_data.py.
-Historical dump measurements below describe their original captures;
-explicit --data CSV_DIR remains available for reproduction.
+New sheets contain blank lever cells. Current on-disk adjustments determine
+which rules expand. Enemy exclusions come from the mod's MonsterTypeModel
+pointer overlay, as in the runtime plugin. validate_rules.py additionally
+checks those rules against current official enemy pointers after enabled
+overrides, so a sparse overlay is not itself a compatibility failure.
 
-WHAT THIS FILE IS FOR
-
-`ckf.hardmode.d/gear-classes.csv` is a LEVER SHEET, not a direct overlay: one
-row is a player weapon class, the columns are tuning levers rather than game
-columns, and one row expands into writes across many `WeaponModel` rows. The
-expansion happens in the plugin at load (`mods/CKFHardMode/GearClasses.cs`),
-never here and never in the GUI -- design.md section 1, "Why the mod expands,
-not the GUI", which is settled. Hand-editing the sheet with the game and the
-editor closed has to work, so nothing on disk may be a compiled mirror of it.
-
-This script therefore does three things, none of which is "be the loader":
-
-  --write     regenerate the sheet from the declarations below. Hand-writing
-              it is how the 16 id ranges this change deletes drifted.
-  --check     compile the OLD rules (the 16 `RecoilRate2` ranges still in
-              ckf.hardmode.rules.json) and the NEW sheet, apply both to the
-              dumped `WeaponModel`, and compare every lever column on all 535
-              rows. Every difference must match a DECLARED, sanctioned
-              deviation; an undeclared one is a problem and a non-zero exit.
-  --census    the partition assertion, printed whether or not it finds a fault.
-  --selftest  fault injection, with a control case first.
-
-THE PARTITION, AND WHY IT IS DERIVED RATHER THAN LISTED
-
-`WeaponModel` has no column marking a row player or enemy. The canonical
-definition is `overlays/_reference/player-vs-enemy-gear.md`: a row is enemy
-gear when `MonsterTypeModel` points at it, and the player set is everything
-else.
-
-WHICH `MonsterTypeModel`, THOUGH -- this is the whole of it, and reading it
-wrong costs eight player assault rifles.
-
-  The SHIPPED table (sheets/raw/MonsterTypeModel.csv) has 208 distinct
-  `WeaponTypeId` values and puts class 3 at 25 player / 51 enemy. [measured]
-
-  The table AFTER this mod's own enemy overlay (ckf.hardmode.d/
-  MonsterTypeModel.csv) has 405 and puts class 3 at 33 / 43. [measured]
-
-design.md section 5 states 33/43 for class 3 and 33/40 for class 10. Only the
-second reading reproduces BOTH. The difference is the enemy-ladder split-out:
-the overlay repoints every full-ladder archetype off the 46 shared sub-20000
-weapons onto the cloned 900000-900199 block, which is what turned those 46 into
-player gear. So the pointer set that matters is the post-overlay one, and it is
-the one the plugin can actually read at load -- from a config file it already
-owns, with no game-table enumeration.
-
-That last point is not a convenience. `mods/CKFHardMode/RowClone.cs` records
-why the plugin does not call bulk readers ("Do not serve into a whole-table
-read ... Nothing during play enumerates a whole table", after a mission that
-died on a null armour), and at plugin init there is no database instance to
-call one on in any case.
-
-A HAND LIST CANNOT DO WHAT THE ASSERTION DOES
-
-The thing being replaced is a hand-maintained list of 16 whereMin/whereMax
-pairs, copied out of player-vs-enemy-gear.md. It drifted in both directions: it
-caught 30 drone weapons that did not exist when it was written, and it missed
-10 player assault rifles that became player gear when the ladders were split.
-Regenerating the list by hand on every game update is the same mechanism with a
-shorter fuse.
-
-So the sheet carries no ids at all, and this script asserts a PARTITION instead
--- a property that stays true as rows are added, rather than a list that has to
-be rewritten when they are:
-
-  P1  every WeaponModel row lands in exactly one bucket: a lever class's player
-      set, that class's enemy set, or an excluded class. None in two, none in
-      none.
-  P2  the ten lever classes' player sets are pairwise disjoint.
-  P3  their union is exactly the set of rows the ten generated rules touch.
-  P4  no id the expander resolves is in the MonsterTypeModel pointer set.
-  P5  every class is named with its counts, INCLUDING a class whose player set
-      is empty -- a class that contributed nothing in silence cannot be told
-      from a class the instrument failed to look at (AGENTS.md).
-
-A weapon the game ships tomorrow lands in a named bucket on the next run, and
-if it lands in none, P1 names the row and the reason.
+--check and --census validate declarations, class partition and clone inheritance.
+--selftest uses synthetic active levers to exercise guards even when live
+adjustments are blank. The optional --ruleset-3x comparison remains a historical
+conversion diagnostic; it is not a current-source compatibility requirement.
+--write explicitly writes a new blank sheet; it is not a refresh command.
 """
 
 import argparse
@@ -160,38 +90,10 @@ EXCLUDED_COLUMNS = {
     'Cost':              'not a class-wide lever',
 }
 
-# THE CELLS.
-#
-# The generated sheet sets exactly one lever, the one the 16 deleted 3.x ranges
-# expressed: x1.8 mode-2 recoil on player weapons. Everything else is
-# generated blank, and a blank cell leaves the column alone.
-#
-# WHY ONLY FOUR ROWS CARRY IT. RecoilRate2 is zero on every player row of the
-# other six lever classes in the dump, so x1.8 there is a no-op whichever way
-# it is written. [measured] Classes 3, 5, 10 and 12 are the four dual-mode player
-# classes. The lever-sheets spec requires that no table show a column dead for
-# its own rows, so a row whose mode-2 column does not exist gets a blank and a
-# _comment saying so, rather than a multiplier that would silently begin to
-# bite if the game ever gave that class a second firing mode.
-CELLS = {
-    3:  {'RecoilRate2': '*1.8'},
-    5:  {'RecoilRate2': '*1.8'},
-    10: {'RecoilRate2': '*1.8'},
-    12: {'RecoilRate2': '*1.8'},
-}
-
-ROW_COMMENTS = {
-    1:  'Melee. No mode 2: RecoilRate2 is 0 on all 61 player rows.',
-    2:  'Pistol. No mode 2: RecoilRate2 is 0 on all 26 player rows.',
-    3:  'AR. Dual-mode. x1.8 mode-2 recoil, the rule the 16 deleted id ranges expressed.',
-    4:  'Shotgun. No mode 2: RecoilRate2 is 0 on all 25 player rows.',
-    5:  'E-Rifle. Dual-mode. x1.8 mode-2 recoil.',
-    6:  'Sniper Rifle. No mode 2: RecoilRate2 is 0 on all 25 player rows.',
-    10: 'SMG. Dual-mode. x1.8 mode-2 recoil.',
-    11: 'Revolver. No mode 2: RecoilRate2 is 0 on all 26 player rows.',
-    12: 'UAR. Dual-mode. x1.8 mode-2 recoil.',
-    14: 'Railgun. No mode 2: RecoilRate2 is 0 on all 22 player rows.',
-}
+# New sheets start with every lever blank. A blank leaves the shipped value.
+CELLS = {}
+ROW_COMMENTS = {cls: name + '. Blank cells leave the shipped value unchanged.'
+                for cls, name in LEVER_CLASSES}
 
 SHEET_NAME = 'gear-classes.csv'
 ID_COLUMN = 'WeaponId'
@@ -354,8 +256,7 @@ def read_csv_rows(path, what):
 
 
 def load_weapons(dump_dir):
-    rows = read_csv_rows(os.path.join(str(static_data.database_path(dump_dir)), 'WeaponModel.csv'),
-                         'the dumped WeaponModel table')
+    rows = static_data.read_rows(dump_dir, 'WeaponModel', (ID_COLUMN, CLASS_COLUMN))
     out = []
     for r in rows:
         try:
@@ -952,6 +853,9 @@ def selftest(weapons, enemy_ids, out=print, run_3x=False):
     # CONTROL FIRST. If the clean case does not pass, "everything is caught"
     # cannot be told from "everything fails". Phase 4's shape.
     sheet = list(csv.DictReader(io.StringIO(render_sheet())))
+    for row in sheet:
+        if int(row[CLASS_COLUMN]) in (3, 5, 10, 12):
+            row['RecoilRate2'] = '*1.8'  # Synthetic fixture, never a default.
     rules = expand(sheet, enemy_ids)
     probs = partition(weapons, enemy_ids, rules, out=lambda *a: None)
     probs += check_columns(weapons, out=lambda *a: None)

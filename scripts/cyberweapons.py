@@ -689,7 +689,12 @@ def load_rules_json(path):
 
 
 def load_table(dump_dir, filename, key, what):
-    rows = read_csv_rows(os.path.join(str(static_data.database_path(dump_dir)), filename), what)
+    try:
+        rows = static_data.read_rows(dump_dir, filename.removesuffix('.csv'), (key,))
+    except (OSError, ValueError) as exc:
+        raise Problem('%s: %s' % (what, exc)) from exc
+    if not rows:
+        raise Problem('%s: official table is empty.' % what)
     out = {}
     for r in rows:
         try:
@@ -1115,7 +1120,9 @@ def check_enemy_carry(overlay_dir, dump_dir, pairs, out=print):
                             f'set could not be read. This is "could not look", '
                             f'not "no enemy carries one".')
             continue
-        rows = read_csv_rows(path, f'the {label} MonsterTypeModel')
+        rows = (static_data.read_rows(d, 'MonsterTypeModel', (POINTER_COLUMN,))
+                if label == 'shipped' else
+                read_csv_rows(path, f'the {label} MonsterTypeModel'))
         if POINTER_COLUMN not in rows[0]:
             problems.append(f'P4: {path} has no {POINTER_COLUMN} column.')
             continue

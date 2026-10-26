@@ -950,19 +950,8 @@ def parse_overlay_header(cell):
     return {'name': s, 'op': 'set', 'control': False}
 
 
-# ROWS THAT ARE ON DISK AND ARE NOT DRAWN, AND WHICH PRODUCT THAT IS.
-#
-# A row hidden in the editor but still writable on disk, and a row that is in
-# neither, are DIFFERENT PRODUCTS. This is the first: the row stays in the CSV,
-# scripts/consumables.py keeps writing it, the plugin keeps expanding it, and
-# only this editor declines to draw an override line for it. The exclusion is
-# implemented HERE and nowhere else -- consumables.py's own ROW_NOTES[5403]
-# says the row "is excluded from the GUI. It is still in this file, because the
-# file is the table and a row missing from it would be a row nothing can
-# account for", which is prose, not a switch. So the switch is this map, and
-# `entry['excluded']` carries what was withheld rather than dropping it in
-# silence: a grid that is quietly one row short looks exactly like a grid whose
-# reader broke.
+# Optional editor-only exclusions are declared by file and identity below.
+# Current consumable rows are all editable.
 #
 # KEYED BY (file, id column, id value), never by row number: row numbers move
 # when the dump moves, and an exclusion that silently slid onto the next row
@@ -1057,14 +1046,7 @@ def csv_render_cell(value, sep=','):
     return s
 
 
-GUI_EXCLUDED_ROWS = {
-    ('consumables-matrix.csv', 'ItemTypeId', '5403'): (
-        'Striatum Catalyst NMF',
-        'design.md section 8: this row\'s ItemDesc is "for loading", so the '
-        'editor draws no override line for it. It is STILL IN THE FILE on '
-        'disk, and still expanded by the plugin — hidden here, not removed '
-        'there.'),
-}
+GUI_EXCLUDED_ROWS = {}
 
 
 def overlay_excluded(rel, names, rows):
@@ -2203,13 +2185,10 @@ def overlay_notes(entry):
 def reference_fields(schemas):
     """-> {(subsystem, path): (schema, field)} for fields with `in: reference`.
 
-    A reference field's rows live IN THE SCHEMA, not on disk: rulemodel's
-    `ruleReference` carries all 76 rows with the GroupId each rule belongs to
-    and the value the game ships. Nothing at runtime may depend on a dump being
-    present, and GroupId could not go in the overlay header because it is a
-    real game column -- a header naming it would be a `set` over all 76 rows.
-    So it is neither a cfg field nor a json field, it is never sent in an edit
-    set, and no save can write it.
+    Reference fields are read-only presentation data. Schema rows provide the
+    installed editor's offline metadata. read_document refreshes RuleModel
+    references from the same official transaction as its overlay baselines when
+    a database is selected. Saves never write reference tables.
     """
     out = {}
     for sch in schemas:
@@ -2661,6 +2640,8 @@ class Document:
         # on-disk digest against the one the browser was shown before anything
         # is written.
         self.overlay_raw = {}
+        self.references = {}
+        self.reference_errors = {}
 
 
 def read_document(config_dir, schemas, static_source=None):
@@ -2699,7 +2680,23 @@ def read_document(config_dir, schemas, static_source=None):
                 doc.sidecar_errors[u] = 'no "%s" section in %s' % (sec, fname)
                 continue
             doc.sidecar_raw[u] = raw
-    doc.overlays = read_overlays(config_dir, schemas, static_source)
+    refkey = ('RuleModel', 'ruleReference')
+    if static_source is None:
+        doc.overlays = read_overlays(config_dir, schemas)
+    else:
+        try:
+            with static_data.StaticData(static_source) as source:
+                doc.overlays = {rel: read_overlay(os.path.join(config_dir, rel), rel, source)
+                                for rel in overlay_paths_all(schemas)}
+                if refkey in reference_fields(schemas):
+                    rows = source.read('RuleModel', ('RuleId', 'Value', 'GroupId', 'ConfigName'))[1]
+                    doc.references[refkey] = [dict(RuleId=int(r['RuleId']), GroupId=r['GroupId'],
+                        ConfigName=r['ConfigName'], Shipped=float(r['Value'])) for r in rows]
+        except (static_data.DataError, ValueError) as exc:
+            doc.overlays = {rel: read_overlay(os.path.join(config_dir, rel), rel, str(exc))
+                            for rel in overlay_paths_all(schemas)}
+            doc.references[refkey] = []
+            doc.reference_errors[refkey] = str(exc)
     for rel in doc.overlays:
         p = os.path.join(config_dir, rel)
         try:
@@ -2776,7 +2773,8 @@ def build_model(doc):
     # subsystem rather than by unit; every unit is a path carrying a dot, so
     # the two key spaces cannot collide.
     for (sub, path), (_sch, f) in reference_fields(schemas).items():
-        rows = rows_from(f.get('rows') or [], f, 'array')
+        reference = doc.references.get((sub, path), f.get('rows') or [])
+        rows = rows_from(reference, f, 'array')
         key = '%s|%s' % (sub, path)
         extras_store[key] = {}
         out_rows = []
@@ -2785,7 +2783,8 @@ def build_model(doc):
             out_rows.append({'id': i, 'cells': cells,
                              'extraKeys': sorted(extras.keys())})
         tables[key] = {'sidecar': None, 'subsystem': sub, 'path': path,
-                       'shape': 'array', 'present': bool(f.get('rows')),
+                       'shape': 'array', 'present': bool(reference),
+                       'error': doc.reference_errors.get((sub, path)),
                        'keyColumn': f.get('keyedBy'), 'readonly': True,
                        'formats': infer_column_formats(f, rows),
                        'rows': out_rows}
@@ -4336,8 +4335,8 @@ MIGRATION_RULEMODEL_ROWS = 76
 #   model             what happens to its rules             why
 MIGRATION_DISPOSITION = {
     'RuleModel': ('convert', 'RuleModel.csv'),
-    'WeaponModel': ('declared', 'the 16 RecoilRate2 ranges become gear-classes.csv '
-                                '(D2+D4); the 16 exact laser rules and the one '
+    'WeaponModel': ('declared', 'the retired bulk RecoilRate2 ranges are dropped; '
+                                'gear-classes.csv starts blank; the 16 exact laser rules and the one '
                                 '25000-25015 SpecialRule range are already the two '
                                 'cyberweapons-*.csv sheets\' rows'),
     'TalentModel': ('declared', 'the 5 CW / talent rules are already the two '
@@ -4360,12 +4359,6 @@ MIGRATION_DEVIATIONS = ('D1', 'D2', 'D3', 'D4')
 D3_OPERAND = ('clampMin', 'ImplantStress')
 # D1's rule, likewise.
 D1_MODEL = 'MonsterTypeModel'
-
-# gear-classes.csv's row comment for a class with no live mode-2 column states
-# the class's PLAYER ROW COUNT. That number comes out of the partition, so it
-# is the byte-level witness that the post-overlay pointer file was the one
-# read: reading sheets/raw instead moves four of the six counts [measured].
-MIGRATION_ROWCOUNT_RE = re.compile(r'on all (\d+) player rows')
 
 # A CLOSED DIVERGENCE, AND THE TRIPWIRE THAT REPLACED IT.
 #
@@ -4847,75 +4840,20 @@ def migration_pointer_set(config_dir, dump_dir):
 
 
 def migration_gear_classes(config_dir, dump_dir, gc, measured):
-    """D2 + D4: the 16 RecoilRate2 id ranges become the ten gear-classes.csv
-    rows, DERIVED -- never transcribed.
-
-    The cells are derived: a class carries `RecoilRate2 *1.8` iff at least one
-    of ITS OWN PLAYER ROWS has a non-zero RecoilRate2. The row comment's player
-    count is derived from the same partition, which is what makes the choice of
-    pointer file visible in the bytes rather than only in the expansion.
-
-    scripts/gear_classes.py's ROW_COMMENTS is the declared prose; the count
-    inside it is re-derived here and the two are CROSS-CHECKED. A disagreement
-    is a refusal naming both numbers -- that is the check that fires when the
-    shipped dump is read instead of the post-overlay file.
-    """
+    """Generate the declared class layout without reinstating retired bulk tuning."""
     enemy, mrows, ppath = migration_pointer_set(config_dir, dump_dir)
     weapons = static_data.read_rows(dump_dir, 'WeaponModel', ('WeaponId', 'WeaponClass'))
-    measured['pointer_file'] = ppath
-    measured['pointer_rows'] = mrows
-    measured['pointer_ids'] = len(enemy)
-    measured['weapon_rows'] = len(weapons)
-
+    measured.update(pointer_file=ppath, pointer_rows=mrows,
+                    pointer_ids=len(enemy), weapon_rows=len(weapons))
     header = [gc.CLASS_COLUMN] + list(gc.LEVERS) + ['_comment']
-    rows, stats = [], {}
-    for cls, _name in gc.LEVER_CLASSES:
-        players = [w for w in weapons
-                   if int(w[gc.CLASS_COLUMN]) == cls
-                   and int(w[gc.ID_COLUMN]) not in enemy]
-        live2 = sum(1 for w in players
-                    if (w.get('RecoilRate2') or '').strip()
-                    and float(w['RecoilRate2']) != 0)
-        stats[cls] = (len(players), live2)
-        declared = gc.ROW_COMMENTS.get(cls)
-        if declared is None:
-            raise MigrationRefused(
-                'scripts/gear_classes.py declares no row comment for '
-                'WeaponClass %d, so the sheet cannot be rendered.' % cls)
-        if live2:
-            cells = dict(gc.CELLS.get(cls) or {})
-            if not cells:
-                raise MigrationRefused(
-                    'WeaponClass %d has %d player row(s) with a live '
-                    'RecoilRate2 and scripts/gear_classes.py declares no cell '
-                    'for it. D2/D4 cannot be applied to a class the expander '
-                    'does not carry.' % (cls, live2))
-            comment = declared
-        else:
-            cells = {}
-            m = MIGRATION_ROWCOUNT_RE.search(declared)
-            if not m:
-                raise MigrationRefused(
-                    'WeaponClass %d has no live RecoilRate2 on any of its %d '
-                    'player rows, but its declared comment %r states no player '
-                    'row count, so the derived partition has nothing to be '
-                    'checked against.' % (cls, len(players), declared))
-            if int(m.group(1)) != len(players):
-                raise MigrationRefused(
-                    'WeaponClass %d: the partition resolved from %s gives %d '
-                    'player row(s); scripts/gear_classes.py\'s declared row '
-                    'comment states %s. These must agree.\n'
-                    'THE USUAL CAUSE IS THE WRONG MonsterTypeModel: the '
-                    'shipped sheets/raw dump gives 208 distinct %s and class 3 '
-                    '= 25/51, the post-overlay ckf.hardmode.d file gives 405 '
-                    'and 33/43. This run read %d distinct %s out of %s.'
-                    % (cls, ppath, len(players), m.group(1),
-                       MIGRATION_POINTER_COLUMN, len(enemy),
-                       MIGRATION_POINTER_COLUMN, ppath))
-            comment = MIGRATION_ROWCOUNT_RE.sub(
-                'on all %d player rows' % len(players), declared)
-        rows.append([str(cls)] + [cells.get(c, '') for c in gc.LEVERS] + [comment])
-    measured['gear_partition'] = stats
+    rows = [[str(cls)] + [gc.CELLS.get(cls, {}).get(c, '') for c in gc.LEVERS]
+            + [gc.ROW_COMMENTS[cls]] for cls, _name in gc.LEVER_CLASSES]
+    measured['gear_partition'] = {
+        cls: (sum(int(w[gc.CLASS_COLUMN]) == cls and int(w[gc.ID_COLUMN]) not in enemy
+                  for w in weapons),
+              sum(int(w[gc.CLASS_COLUMN]) == cls and int(w[gc.ID_COLUMN]) not in enemy
+                  and float(w.get('RecoilRate2') or 0) != 0 for w in weapons))
+        for cls, _name in gc.LEVER_CLASSES}
     return _mig_csv(header, rows).encode('utf-8')
 
 
@@ -7511,20 +7449,22 @@ def selftest(config_arg, frozen_exe=None):
             # or empty rows read as rows somebody forgot. What the case is for
             # is that every row the file carries reaches the page, so that is
             # what it counts, one-row sheets included.
-            t.check('%s: all %d of its row(s) reach the page even though it '
-                    'overrides nothing'
-                    % (rel.split('/')[-1], len(e['rows'])),
-                    len(e['rows']) >= 1
-                    and len(e['shipped']) == len(e['rows']), len(e['rows']))
-            t.check('%s: and the page says the blanks are deliberate rather '
-                    'than leaving %d empty rows to speak for themselves'
-                    % (rel.split('/')[-1], len(e['rows'])),
+            raw_rows = list(csv.reader(read_bytes(os.path.join(cd, rel))
+                                       .decode('utf-8-sig').splitlines()))[1:]
+            raw_count = sum(any(c.strip() for c in row) for row in raw_rows)
+            t.check('%s: blank rows remain visible and editable' % rel.split('/')[-1],
+                    len(e['rows']) + len(e['excluded']) == raw_count
+                    and bool(lev) and all(e['editable'][i] for i in lev),
+                    (len(e['rows']), raw_count))
+            t.check('%s: the page explains deliberately blank adjustments' % rel.split('/')[-1],
                     any('not an omission' in n for n in e['notes']), e['notes'])
-            t.check('%s: and every row still states what it ships, so a blank '
-                    'cell shows a number rather than nothing'
-                    % rel.split('/')[-1],
-                    len(e['shipped']) == len(e['rows']),
-                    (len(e['shipped']), len(e['rows'])))
+            if os.path.basename(rel) == 'gear-classes.csv':
+                t.check('class-wide levers have no invented representative shipped value',
+                        not e['shipped'] and not e.get('error'), e['shipped'])
+            else:
+                t.check('%s: each blank row retains its shipped baseline' % rel.split('/')[-1],
+                        len(e['shipped']) == len(e['rows']),
+                        (len(e['shipped']), len(e['rows'])))
 
         # ---- the shared row: consumed, not re-derived
         # OVER THE MERGED MAP. SHARED_ROWS includes consumables.py's rows, and
@@ -7592,7 +7532,9 @@ def selftest(config_arg, frozen_exe=None):
                                  .decode('utf-8-sig').splitlines()))
             _cons_on_disk[rel] = len([r for r in _b[1:]
                                       if any((c or '').strip() for c in r)])
-        _cons_declared = dict(('ckf.hardmode.d/' + s.name, s.rows)
+        _cons_source = _consumables.Dump(str(static_data.DEFAULT_DB))
+        _cons_declared = dict(('ckf.hardmode.d/' + s.name,
+                               len(_cons_source.items_of(s.cls)))
                               for s in _cons_sheets)
         print('        consumable rows per sheet (bytes on disk / model drawn '
               '+ withheld / declared by consumables.py): %s'
@@ -7613,18 +7555,10 @@ def selftest(config_arg, frozen_exe=None):
                 len(_cons_read) == 6
                 and sorted(_cons_declared) == sorted(_cons_rel),
                 (len(_cons_read), sorted(set(_cons_rel) ^ set(_cons_declared))))
-        t.check('73 data rows across exactly those six files, AND each sheet '
-                'holds the count consumables.py measured — a total that came '
-                'out right while two sheets had swapped rows does not pass '
-                'this. WHAT IT CANNOT LOOK AT: the dump is not in a config '
-                'directory and is not read here, so the 73 is consumables.py\'s '
-                'declared per-sheet count, which its own --check re-measures '
-                'against the dump on every run',
-                sum(_cons_on_disk.values()) == 73
-                and _cons_on_disk == _cons_declared,
-                (sum(_cons_on_disk.values()),
-                 [(r, _cons_on_disk[r], _cons_declared.get(r))
-                  for r in _cons_rel if _cons_on_disk[r] != _cons_declared.get(r)]))
+        t.check('each sheet covers its current official class membership',
+                _cons_on_disk == _cons_declared,
+                [(r, _cons_on_disk[r], _cons_declared.get(r))
+                 for r in _cons_rel if _cons_on_disk[r] != _cons_declared.get(r)])
 
         # ---- the six ItemTypeId sets: disjoint, and 73 between them
         _cons_ids = {}
@@ -7652,10 +7586,10 @@ def selftest(config_arg, frozen_exe=None):
                     and len(set(_cons_ids[r])) == len(_cons_ids[r])
                     for r in _cons_rel) and not _overlap,
                 (_overlap, dict((r, len(_cons_ids[r])) for r in _cons_rel)))
-        t.check('and their union is 73 ids, the same 73 as the row count — so '
+        t.check('their union covers every current official item — so '
                 'the six sets PARTITION the rows rather than merely summing to '
                 'the right number',
-                len(_seen) == 73 and len(_seen) == sum(_cons_on_disk.values()),
+                len(_seen) == len(_cons_source.items) and len(_seen) == sum(_cons_on_disk.values()),
                 (len(_seen), sum(_cons_on_disk.values())))
 
         # ---- the columns that must not be there
@@ -7776,46 +7710,14 @@ def selftest(config_arg, frozen_exe=None):
                 and _ss_ship.get('SelfEffect') == _ss_ship.get('TargetEffect')
                 == '75022', (_ss.get('sheet'), _ss_ship))
 
-        # ---- the row that is on disk and is not on the page
-        _ex = [(rel, x) for rel in _cons_rel
-               for x in _cons_read[rel]['excluded']]
-        print('        consumable rows on disk the editor does not draw: %d %s'
-              % (len(_ex), [(r.split('/')[-1], x['name'], x['id'])
-                            for r, x in _ex]))
-        t.check('exactly one consumable row is withheld from the editor, and '
-                'it is Striatum Catalyst NMF, ItemTypeId 5403, on the matrix '
-                'sheet',
-                len(_ex) == 1
-                and _ex[0][0] == 'ckf.hardmode.d/consumables-matrix.csv'
-                and _ex[0][1]['name'] == 'Striatum Catalyst NMF'
-                and _ex[0][1]['id'] == '5403', _ex)
-        _mx = _cons_read['ckf.hardmode.d/consumables-matrix.csv']
-        _mx_i = [c['name'] for c in _mx['columns']].index('ItemTypeId')
-        t.check('it is in none of the rows the page draws — the matrix sheet '
-                'draws %d of the %d rows the file holds'
-                % (len(_mx['rows']), len(_mx['rows']) + len(_mx['excluded'])),
-                not any((r['cells'][_mx_i] or '').strip() == '5403'
-                        for r in _mx['rows']),
-                (len(_mx['rows']), len(_mx['excluded'])))
-        # WHICH OF THE TWO PRODUCTS THIS IS. Read back from the BYTES, because
-        # the entry is the thing under test and cannot be its own witness.
-        _raw = list(csv.reader(read_bytes(os.path.join(
-            cd, 'ckf.hardmode.d/consumables-matrix.csv'))
-            .decode('utf-8-sig').splitlines()))
-        _raw_i = _raw[0].index('ItemTypeId')
-        _raw_hit = [r for r in _raw[1:]
-                    if len(r) > _raw_i and r[_raw_i].strip() == '5403']
-        t.check('and it IS still in consumables-matrix.csv on disk, read back '
-                'from the file\'s own bytes: HIDDEN IN THE EDITOR AND STILL '
-                'WRITABLE ON DISK is a different product from ABSENT FROM '
-                'BOTH, and this is the first of the two',
-                len(_raw_hit) == 1
-                and _raw_hit[0][0] == 'Striatum Catalyst NMF', len(_raw_hit))
-        t.check('and the page SAYS it withheld a row rather than being quietly '
-                'one row short — a grid one row short and a grid whose reader '
-                'broke look identical',
-                any('Striatum Catalyst NMF' in n and 'on disk' in n
-                    for n in _mx['notes']), _mx['notes'][-1:])
+        # Official content no longer has a loading-only consumable exclusion.
+        _ex = [(rel, x) for rel in _cons_rel for x in _cons_read[rel]['excluded']]
+        t.check('all consumable rows are available in the editor', not _ex, _ex)
+        _chem = _cons_read['ckf.hardmode.d/consumables-chems.csv']
+        _chem_i = [c['name'] for c in _chem['columns']].index('ItemTypeId')
+        t.check('Striatum Catalyst NMF is editable on its current Chems sheet',
+                any((r['cells'][_chem_i] or '').strip() == '5403'
+                    for r in _chem['rows']))
 
         # ---- the shipped oddities: help text, not a silent fix
         _cmt_of, _ship_of, _rel_of = {}, {}, {}
@@ -7845,7 +7747,7 @@ def selftest(config_arg, frozen_exe=None):
                 'about any of these rows [measured — none of their doc or '
                 'uiDoc mentions one], so the row comment is the only help '
                 'text there is and schema/ was out of scope for this change',
-                not _note_missing and _note_undrawn == ['5403'] and _decl_notes,
+                not _note_missing and not _note_undrawn and _decl_notes,
                 (_note_missing, _note_undrawn, len(_decl_notes)))
         t.check('ODDITY 1 — Winternight Black is drawn, ships StressRes -15, '
                 'and its help text says that is the whole of what it applies. '
@@ -8498,9 +8400,11 @@ def selftest(config_arg, frozen_exe=None):
                 'blank, so nothing about it is missing',
                 all(mov['values']['overlays'][r]['shipped']
                     for r in _dead_sheets
-                    if mov['values']['overlays'][r]['kind'] == 'expanded'),
+                    if mov['values']['overlays'][r]['kind'] == 'expanded'
+                    and os.path.basename(r) != 'gear-classes.csv'),
                 [r for r in _dead_sheets
                  if mov['values']['overlays'][r]['kind'] == 'expanded'
+                 and os.path.basename(r) != 'gear-classes.csv'
                  and not mov['values']['overlays'][r]['shipped']])
         t.check('and the probe already reports whether ckf.hardmode.d can be '
                 'written, which is now a question about the save path and not '
