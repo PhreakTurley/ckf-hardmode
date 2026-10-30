@@ -104,6 +104,20 @@ class PlayerBalanceTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     pb.sql(doc, source)
 
+    def test_uniform_weapon_and_attack_fields_are_collapsed(self):
+        with tempfile.TemporaryDirectory() as config:
+            model = pb.catalog(config, static_data.DEFAULT_DB)
+        self.assertIsNone(model['error'])
+        for page in model['pages']:
+            if not page['id'].startswith('weapon-'):
+                continue
+            for grid in page['grids']:
+                if len(grid['rows']) < 2:
+                    continue
+                for column in grid['columns']:
+                    values = {row['baseline'][column['name']] for row in grid['rows']}
+                    self.assertGreater(len(values), 1, (page['id'], grid['table'], column['name']))
+
     def test_api_save_clear_noop_and_stale_database(self):
         import serve
         live = r'C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint\BepInEx\config'

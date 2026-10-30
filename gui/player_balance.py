@@ -233,7 +233,7 @@ def catalog(config_dir, database):
                          if r.get('WeaponClassName') and not r['WeaponClassName'].startswith('Gear.')}
                 title = next(iter(names)) if len(names) == 1 else CLASS_NAMES.get(cls, 'Weapon class %s' % cls)
                 page('weapon-%s' % cls, title, 'Drone weapons' if cls in (9, 18, 19) else 'Weapons', [grid('Weapon', rows, 'Weapon stats'),
-                     grid('Talent', talents, 'Attacks', 'nonzero') if talents else None])
+                     grid('Talent', talents, 'Attacks', 'varying') if talents else None])
 
             page('implant-global', 'All cyberware', 'Cyberware', [], multipliers=MULTIPLIERS)
             for slot in sorted({int(r['ImplantSlot']) for r in allrows['Implant'].values()}):
