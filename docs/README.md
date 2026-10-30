@@ -51,6 +51,7 @@ Hard Mode and Data Dump are independent plugins. Both inspect game types through
 | Insert and serve a cloned row | [Cloning rows](cloning-rows.md) |
 | Identify the table and domain key for a value | [Table reference](tables.md) |
 | Change enemy stats, gear, or roster data | [Tune enemies](tuning-enemies.md) |
+| Prepare the enemy changes as a Workshop data mod | [Enemy Difficulty preparation](enemy-difficulty-workshop.md) |
 | Compare faction roster slots | [Enemy faction parity](enemy-faction-parity.md) |
 | Add a Harmony patch | [Patching rules](patching-rules.md) |
 

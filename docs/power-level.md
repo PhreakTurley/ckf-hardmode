@@ -1,8 +1,8 @@
 # Power level
 
 Use this page to distinguish Team PL, contact PL, unscaled mission PL, and scaled
-mission PL, then locate the three Hard Mode entry points that affect them:
-`Difficulty`, `PowerLevel`, and `Progression`. Rewards are covered in
+mission PL, then locate the native enemy ceiling and Hard Mode's separate
+`Difficulty`, legacy `PowerLevel`, and `Progression` entry points. Rewards are covered in
 [`mission-rewards.md`](mission-rewards.md); settings and defaults belong to
 [`config-reference.md`](config-reference.md); closed routes belong to
 [`gotchas.md`](gotchas.md).
@@ -90,6 +90,26 @@ SUM over that contact's GameContactScoreModel rows of
 In this shipped-table aggregate, PL 11–20 primarily extends hit points; weapon
 damage, Action Points, and talent-count medians do not rise with it. See
 [`tuning-enemies.md`](tuning-enemies.md) for the separate enemy-stat surfaces.
+
+### Native enemy ceiling (Rule82)
+
+[measured] `Official/data.db`, Rule rows 81 and 82, declare separate maxima:
+81 is the expected mission PL for matrix, loot and security-deck systems;
+82 allows difficulty-scaled enemy creation above that mission maximum. Their
+declared values are 10 and 12 respectively.
+
+[measured] `Logs/Run79.log`, RuleModel trace, records Rule82 changing 12 → 20
+with exactly one rule loaded and Hard Mode's `PowerLevel` slice off.
+`Logs/LogOct29a.txt` records generation, initial spawn commands, level
+finalization and the opening sequence. David observed scaled PL19 and accepted
+this isolated test as successful on 2026-10-29. Exact enemy stat lines were not
+captured. This establishes the accepted Rule82 route for the enemy-difficulty
+port; that port does not need the legacy calculation replacement below.
+
+[measured] The official SQL schema and installed Data Parser declaration expose
+no difficulty table or the `PowerLevelScalar` / `BasePowerLevelOffset` slider
+bounds. Hard Mode's `Difficulty` slice changes static bound properties through
+`Plugin.Patches.WidenSliders`; the Workshop port leaves that task with BepInEx.
 
 ### Custom difficulty
 

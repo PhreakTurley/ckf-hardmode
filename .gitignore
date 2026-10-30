@@ -43,6 +43,11 @@
 !/scripts/gear_classes.py
 !/scripts/implants.py
 !/scripts/static_data.py
+!/scripts/export_enemy_difficulty.py
+!/scripts/verify_enemy_difficulty.py
+!/scripts/prepare_enemy_difficulty.ps1
+!/scripts/install_enemy_difficulty.py
+!/scripts/test_enemy_difficulty.py
 
 # the pinned BepInEx is unpacked here locally; only the how-to is published
 !/vendor/

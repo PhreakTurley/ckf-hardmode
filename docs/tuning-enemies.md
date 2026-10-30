@@ -6,6 +6,9 @@ tuning values. The CSV format is in [`overlays.md`](overlays.md), row insertion
 is in [`cloning-rows.md`](cloning-rows.md), and validation steps are in
 [`workflow.md`](workflow.md).
 
+For the first-party SQL port of authored enemy changes, use
+[Enemy Difficulty preparation](enemy-difficulty-workshop.md).
+
 The live files are under `BepInEx\config\ckf.hardmode.d\`; inspect them directly
 for current values. Tier ids per block are in
 `overlays/_reference/gear-blocks.md`;
