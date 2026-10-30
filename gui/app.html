@@ -1804,7 +1804,7 @@ function renderPlayer(panel, page) {
   const toolbar = el('div', {class:'pb-tools'}, [search,
     el('label', {class:'small'}, [showAll,document.createTextNode(' Show all columns')]),
     el('span', {class:'small',text:'Red: override · Yellow: nonzero baseline'})]);
-  panel.appendChild(toolbar);
+  if (page.grids.length) panel.appendChild(toolbar);
   if (page.multipliers) {
     panel.appendChild(el('p', {class:'doc',text:'Applied to every implant after individual adjustments.'}));
     for (const col in page.multipliers) {

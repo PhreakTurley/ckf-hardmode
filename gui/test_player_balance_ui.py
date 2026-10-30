@@ -50,6 +50,9 @@ setTimeout(async function () {
   const count = find(function(n) {return n.tagName==='TH';}).length;
   all.checked=true;all.fire('change');
   ck('advanced columns can be revealed', find(function(n) {return n.tagName==='TH';}).length>count);
+  SEL='pb:implant-global';render();
+  ck('global cyberware settings omit irrelevant grid controls', !find(function(n) {return n.tagName==='INPUT' && n.getAttribute('type')==='search';}).length
+     && find(function(n) {return n.tagName==='INPUT' && n.getAttribute('type')==='number';}).length===3);
   const pending = JSON.stringify(W.player);
   await $('#save').listeners.click[0]();
   ck('a refused save preserves pending edits', JSON.stringify(W.player) === pending && dirtyPaths().length > 0);
