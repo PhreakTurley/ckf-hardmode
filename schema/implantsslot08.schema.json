@@ -1,58 +1,35 @@
 {
   "subsystem": "ImplantsSlot08",
-  "title":     "Implant Slot 08",
-  "targets":   {
+  "title": "Implant Slot 08",
+  "targets": {
     "cfg": "ckf.hardmode.cfg",
     "overlays": [
       "ckf.hardmode.d/implants-slot08.csv"
     ]
   },
-  "enable":    { "cfg": "Slices.ImplantsSlot08" },
-
+  "enable": {
+    "cfg": "Slices.ImplantsSlot08"
+  },
   "doc": [
-    "Slice toggle. Off: Slices.VerdictForOverlay skips every file below before",
-    "it is opened, so none of its rows reach RulePlan. These files are loaded",
-    "by the row-edit engine, so they also have no effect while [Slices]",
-    "ModelRules is off (ModelRules.Init returns before Overlays.Load).",
+    "Legacy compatibility declaration. Hard Mode does not apply these cyberware files.",
+    "Use the CKF Balance Editor Workshop player catalogs; see gui/README.md#workshop-player-catalogs.",
     "",
     "Files this toggle gates:",
-    "  implants-slot08.csv",
-    "",
-    "One of the 11 character implant slot sheets. Each carries only the",
-    "ImplantModel columns live for its own slot, plus the EffectModel",
-    "columns its own effects use. ImplantSlot 100-107, the 20 drone modules,",
-    "get no sheet and no toggle.",
-    "",
-    "Lever sheet, not a direct overlay: the first column is ImplantName, and",
-    "there is no game table called \"implants-slot08\". Implants.Expand",
-    "turns each row into ImplantModel and EffectModel writes at load.",
-    "",
-    "Slot help, copied by hand from Implants.SlotHelp (Implants.cs); nothing",
-    "checks that the two agree:",
-    "",
-    "In the game data nine implant effects carry a non-zero CritMultiBase,",
-    "all in this slot: Display Link, Combat DisplayLink, Target Optimizer,",
-    "Apex DisplayLink, Apex Optimizer and Brightshot Optic 1-4, each at 25.",
-    "Setting those nine cells to 0 removes CritMultiBase from EVERY IMPLANT",
-    "EFFECT IN THE GAME, which the nine rows alone do not show. CritRate and",
-    "RangedAttack are separate columns. Range Finder carries",
-    "CritMultiStealth 25, a different column. These 26 rows include the 18",
-    "optical lasers (ImplantClass 32), which are also in",
-    "cyberweapons-lasers.csv; Cost here is the clinic price, Cost there is",
-    "the item's valuation."
+    "  implants-slot08.csv"
   ],
-
   "uiDoc": [
-    "Turn this off and the mod skips this page's files, so nothing on this page is applied."
+    "Managed by the Workshop player-balance package. This legacy switch has no effect in Hard Mode."
   ],
-
   "fields": [
     {
-      "path": "Slices.ImplantsSlot08", "in": "cfg", "type": "bool",
-      "default": true, "ui": "form",
+      "path": "Slices.ImplantsSlot08",
+      "in": "cfg",
+      "type": "bool",
+      "default": true,
+      "ui": "form",
       "label": "Enable Implant Slot 08",
-      "doc": "On applies this slice's files; off skips them before they are opened. Default true.",
-      "uiDoc": "Turn this off and the mod skips this page's files, so nothing on this page is applied."
+      "doc": "Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs.",
+      "uiDoc": "Managed through Workshop player balance."
     }
   ]
 }

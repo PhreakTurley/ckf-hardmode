@@ -1,70 +1,44 @@
 {
   "subsystem": "CyberweaponsClaws",
-  "title":     "Claw Cyberweapons",
-  "targets":   {
+  "title": "Claw Cyberweapons",
+  "targets": {
     "cfg": "ckf.hardmode.cfg",
     "overlays": [
       "ckf.hardmode.d/cyberweapons-claws.csv"
     ]
   },
-  "enable":    { "cfg": "Slices.CyberweaponsClaws" },
-
+  "enable": {
+    "cfg": "Slices.CyberweaponsClaws"
+  },
   "doc": [
-    "Slice toggle. Off: Slices.VerdictForOverlay skips every file below before",
-    "it is opened, so none of its rows reach RulePlan. These files are loaded",
-    "by the row-edit engine, so they also have no effect while [Slices]",
-    "ModelRules is off (ModelRules.Init returns before Overlays.Load).",
+    "Legacy compatibility declaration. Hard Mode does not apply these cyberware files.",
+    "Use the CKF Balance Editor Workshop player catalogs; see gui/README.md#workshop-player-catalogs.",
     "",
     "Files this toggle gates:",
-    "  cyberweapons-claws.csv",
-    "",
-    "The 16 claws: ImplantClass 27, ImplantSlot 6, WeaponClass 16 (Cyber",
-    "Weapon Claws).",
-    "",
-    "Lever sheet, not a direct overlay: the first column is WeaponName and",
-    "repeats (four each for Hand Blades, Hand Razors, Ripper Blades and",
-    "Mono-Razors). Cyberweapons.cs splits each row at load into a WeaponModel",
-    "rule and a TalentModel rule.",
-    "",
-    "REQUIRES Slices.ImplantsSlot06.",
-    "In the game data TalentModel has exactly 33 rows with a non-zero Weapon,",
-    "and each is pointed at by an ImplantModel row's ImplantTalentId: 17 from",
-    "ImplantClass 32 / ImplantSlot 8 (the eye lasers) and 16 from ImplantClass",
-    "27 / ImplantSlot 6 (the claws), with no other class or slot contributing",
-    "[measured, sheets/raw TalentModel.csv, ImplantModel.csv, WeaponModel.csv].",
-    "So the 16 rows here and the 16 ImplantClass 27 rows of",
-    "implants-slot06.csv are the same items.",
-    "",
-    "Unlike the laser pair, the claw pair shares no effect payload: every",
-    "ImplantClass 27 row has ImplantEffectId 0, and TargetEffect, SelfEffect",
-    "and MatrixEffect are 0 on all 16 claw talents [measured]. The pairing",
-    "rests on item identity, plus Cost, Rarity and PowerLevel appearing on",
-    "both sides with different game values (implant Cost 80/250/900/2400",
-    "against weapon Cost 110/220/400/700 on Hand Blades 1-4) [measured].",
-    "",
-    "check_schema.py evaluates the requires on the two .cfg keys. A run that",
-    "could not compare it prints a SKIPPED line and counts it on the",
-    "'requires:' census line."
+    "  cyberweapons-claws.csv"
   ],
-
   "uiDoc": [
-    "Turn this off and the mod skips this page's files, so nothing on this page is applied."
+    "Managed by the Workshop player-balance package. This legacy switch has no effect in Hard Mode."
   ],
-
   "fields": [
     {
-      "path": "Slices.CyberweaponsClaws", "in": "cfg", "type": "bool",
-      "default": true, "ui": "form",
+      "path": "Slices.CyberweaponsClaws",
+      "in": "cfg",
+      "type": "bool",
+      "default": true,
+      "ui": "form",
       "label": "Enable Claw Cyberweapons",
-      "doc": "On applies this slice's files; off skips them before they are opened. Default true. Lever sheet, not a direct overlay: the first column is WeaponName and repeats, and there is no game table called \"cyberweapons-claws\". Cyberweapons.cs splits each row at load into a WeaponModel rule and a TalentModel rule. Same kind as gear-classes.csv.",
-      "uiDoc": "Turn this off and the mod skips this page's files, so nothing on this page is applied."
+      "doc": "Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs.",
+      "uiDoc": "Managed through Workshop player balance."
     }
   ],
   "invariants": [
     {
       "kind": "requires",
       "key": "ckf.hardmode.cfg#Slices.CyberweaponsClaws",
-      "needs": ["ckf.hardmode.cfg#Slices.ImplantsSlot06"],
+      "needs": [
+        "ckf.hardmode.cfg#Slices.ImplantsSlot06"
+      ],
       "reason": "Claw combat rules and the slot-6 implant rows describe the same 16 items."
     }
   ]

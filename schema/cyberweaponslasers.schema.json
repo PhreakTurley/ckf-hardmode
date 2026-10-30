@@ -1,90 +1,44 @@
 {
   "subsystem": "CyberweaponsLasers",
-  "title":     "Eye Laser Cyberweapons",
-  "targets":   {
+  "title": "Eye Laser Cyberweapons",
+  "targets": {
     "cfg": "ckf.hardmode.cfg",
     "overlays": [
       "ckf.hardmode.d/cyberweapons-lasers.csv"
     ]
   },
-  "enable":    { "cfg": "Slices.CyberweaponsLasers" },
-
+  "enable": {
+    "cfg": "Slices.CyberweaponsLasers"
+  },
   "doc": [
-    "Slice toggle. Off: Slices.VerdictForOverlay skips every file below before",
-    "it is opened, so none of its rows reach RulePlan. These files are loaded",
-    "by the row-edit engine, so they also have no effect while [Slices]",
-    "ModelRules is off (ModelRules.Init returns before Overlays.Load).",
+    "Legacy compatibility declaration. Hard Mode does not apply these cyberware files.",
+    "Use the CKF Balance Editor Workshop player catalogs; see gui/README.md#workshop-player-catalogs.",
     "",
     "Files this toggle gates:",
-    "  cyberweapons-lasers.csv",
-    "",
-    "The 17 eye lasers: ImplantClass 32, ImplantSlot 8, WeaponClass 17",
-    "(Gear.WeaponClass.CyberWeaponEyes). Their install economics live in",
-    "implants-slot08.csv and their combat stats here. Cost appears in both",
-    "and means different things: the clinic price there, the item's",
-    "valuation here.",
-    "",
-    "Lever sheet, not a direct overlay: the first column is WeaponName and",
-    "repeats (four each for Brightshot Optic, Lumen Spear, Photon Lance and",
-    "Helios Beam, then one Luem Trident). Cyberweapons.cs splits each row at",
-    "load into a WeaponModel rule and a TalentModel rule.",
-    "",
-    "SpecialRule (WeaponModel) and ApCost (TalentModel) are levers on this",
-    "sheet although both are constant across the 17 game rows (SpecialRule 3,",
-    "ApCost 20) [measured, sheets/raw]. A column that is constant in the game",
-    "data can still carry a lever, so the usual \"omit a constant column\"",
-    "rule does not drop them (Cyberweapons.cs lever map).",
-    "",
-    "REQUIRES Slices.ImplantsSlot08.",
-    "In the game data TalentModel has exactly 33 rows with a non-zero Weapon,",
-    "and each is pointed at by an ImplantModel row's ImplantTalentId: 17 from",
-    "ImplantClass 32 / ImplantSlot 8 (the eye lasers) and 16 from ImplantClass",
-    "27 / ImplantSlot 6 (the claws), with no other class or slot contributing",
-    "[measured, sheets/raw TalentModel.csv, ImplantModel.csv, WeaponModel.csv].",
-    "So the 17 rows here and 17 of the 18 ImplantClass 32 rows of",
-    "implants-slot08.csv are the same items. The 18th, ImplantTypeId 3217",
-    "\"Lumen Trident\", has ImplantTalentId 0 and so no laser row.",
-    "ImplantModel 3217 and 3218 are both named \"Lumen Trident\" while the",
-    "weapon, 25016, is \"Luem Trident\"; neither spelling is normalised.",
-    "[measured]",
-    "",
-    "Brightshot Optic 1-4 are on both sheets (weapons 25000-25003, talents",
-    "80007-80010; ImplantTypeId 3200-3203, ImplantEffectId 50107-50110), and",
-    "both sheets carry a crit column for them against different tables: this",
-    "sheet's CritMultiBase/CritMultiStealth on WeaponModel, the slot-8",
-    "sheet's CritMultiBase on EffectModel. In the game data they are 4 of",
-    "the 9 implant effects with a non-zero CritMultiBase (25), all in slot 8",
-    "[measured, sheets/raw/EffectModel.csv]. With slot 8 off and lasers on,",
-    "the implant side keeps the game's value while this sheet's values",
-    "apply.",
-    "",
-    "Rarity and PowerLevel also appear on both sides and differ: over the 33",
-    "paired items Rarity agrees on 17 and PowerLevel on 8 [measured]. What",
-    "either column does in the game is not established here.",
-    "",
-    "check_schema.py evaluates the requires on the two .cfg keys. A run that",
-    "could not compare it prints a SKIPPED line and counts it on the",
-    "'requires:' census line."
+    "  cyberweapons-lasers.csv"
   ],
-
   "uiDoc": [
-    "Turn this off and the mod skips this page's files, so nothing on this page is applied."
+    "Managed by the Workshop player-balance package. This legacy switch has no effect in Hard Mode."
   ],
-
   "fields": [
     {
-      "path": "Slices.CyberweaponsLasers", "in": "cfg", "type": "bool",
-      "default": true, "ui": "form",
+      "path": "Slices.CyberweaponsLasers",
+      "in": "cfg",
+      "type": "bool",
+      "default": true,
+      "ui": "form",
       "label": "Enable Eye Laser Cyberweapons",
-      "doc": "On applies this slice's files; off skips them before they are opened. Default true. Lever sheet, not a direct overlay: the first column is WeaponName and repeats, and there is no game table called \"cyberweapons-lasers\". Cyberweapons.cs splits each row at load into a WeaponModel rule and a TalentModel rule. Same kind as gear-classes.csv.",
-      "uiDoc": "Turn this off and the mod skips this page's files, so nothing on this page is applied."
+      "doc": "Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs.",
+      "uiDoc": "Managed through Workshop player balance."
     }
   ],
   "invariants": [
     {
       "kind": "requires",
       "key": "ckf.hardmode.cfg#Slices.CyberweaponsLasers",
-      "needs": ["ckf.hardmode.cfg#Slices.ImplantsSlot08"],
+      "needs": [
+        "ckf.hardmode.cfg#Slices.ImplantsSlot08"
+      ],
       "reason": "Laser damage rules and the slot-8 implant payloads describe the same items."
     }
   ]

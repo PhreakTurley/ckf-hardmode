@@ -1,59 +1,35 @@
 {
   "subsystem": "ImplantsSlot01",
-  "title":     "Implant Slot 01",
-  "targets":   {
+  "title": "Implant Slot 01",
+  "targets": {
     "cfg": "ckf.hardmode.cfg",
     "overlays": [
       "ckf.hardmode.d/implants-slot01.csv"
     ]
   },
-  "enable":    { "cfg": "Slices.ImplantsSlot01" },
-
+  "enable": {
+    "cfg": "Slices.ImplantsSlot01"
+  },
   "doc": [
-    "Slice toggle. Off: Slices.VerdictForOverlay skips every file below before",
-    "it is opened, so none of its rows reach RulePlan. These files are loaded",
-    "by the row-edit engine, so they also have no effect while [Slices]",
-    "ModelRules is off (ModelRules.Init returns before Overlays.Load).",
+    "Legacy compatibility declaration. Hard Mode does not apply these cyberware files.",
+    "Use the CKF Balance Editor Workshop player catalogs; see gui/README.md#workshop-player-catalogs.",
     "",
     "Files this toggle gates:",
-    "  implants-slot01.csv",
-    "",
-    "One of the 11 character implant slot sheets. Each carries only the",
-    "ImplantModel columns live for its own slot, plus the EffectModel",
-    "columns its own effects use. ImplantSlot 100-107, the 20 drone modules,",
-    "get no sheet and no toggle.",
-    "",
-    "Lever sheet, not a direct overlay: the first column is ImplantName, and",
-    "there is no game table called \"implants-slot01\". Implants.Expand",
-    "turns each row into ImplantModel and EffectModel writes at load.",
-    "",
-    "Slot help, copied by hand from Implants.SlotHelp (Implants.cs); nothing",
-    "checks that the two agree:",
-    "",
-    "Slot 1 is the only slot where ArmorRestriction is live (6 of the 198",
-    "rows carry a 1; all of them are here). Two rows carry a crit multiplier",
-    "in the game data: Chameleon Sheathe at CritMultiStealth 20 and",
-    "Chameleon S-Mesh at 25. Dermal Plating 1's effect row, EffectModel",
-    "50000, is SHARED with all 20 drone modules, which have no table — an",
-    "edit to its payload reaches them too. That marker informs; it does not",
-    "block, because there is only one editable owner and divergence is",
-    "therefore impossible.",
-    "",
-    "That is CritMultiStealth. CritMultiBase is carried only by slot 8,",
-    "which holds every implant effect in the game that has one."
+    "  implants-slot01.csv"
   ],
-
   "uiDoc": [
-    "Turn this off and the mod skips this page's files, so nothing on this page is applied."
+    "Managed by the Workshop player-balance package. This legacy switch has no effect in Hard Mode."
   ],
-
   "fields": [
     {
-      "path": "Slices.ImplantsSlot01", "in": "cfg", "type": "bool",
-      "default": true, "ui": "form",
+      "path": "Slices.ImplantsSlot01",
+      "in": "cfg",
+      "type": "bool",
+      "default": true,
+      "ui": "form",
       "label": "Enable Implant Slot 01",
-      "doc": "On applies this slice's files; off skips them before they are opened. Default true.",
-      "uiDoc": "Turn this off and the mod skips this page's files, so nothing on this page is applied."
+      "doc": "Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs.",
+      "uiDoc": "Managed through Workshop player balance."
     }
   ]
 }

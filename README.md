@@ -40,7 +40,7 @@ Major slices include:
 | Rule engine | `ModelRules`, `RuleModel`, `SelfCheck` |
 | Mission systems | `PowerLevel`, `Progression`, `MissionRewards`, `RewardCurve`, `Elapse` |
 | Character systems | `Fatigue`, `LimitBreakTraits`, eleven `Talents*` slices |
-| Equipment | `GearClasses`, `Cyberweapons*`, `ImplantsGlobal`, eleven `ImplantsSlot*` slices, six `Consumables*` slices |
+| Equipment | `GearClasses`, six `Consumables*` slices |
 | Enemy data | `SpawnWeights`; enemy gear overlays apply while `ModelRules` is active |
 | Game settings | `Difficulty` |
 
@@ -57,6 +57,9 @@ Five talent keys retain legacy names so upgrades do not orphan saved settings:
 | `TalentsWraith` | Wireghost |
 
 The generated [configuration reference](docs/config-reference.md) describes every switch and field.
+
+Cyberware is managed through the separate [Workshop player-balance workflow](gui/README.md#workshop-player-catalogs).
+Its legacy Hard Mode switches are retained for compatibility and have no effect.
 
 ## Upgrade from version 1.0.0
 

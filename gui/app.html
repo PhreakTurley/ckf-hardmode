@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CKF Hard Mode — config</title>
+<title>CKF Balance Editor</title>
 <style>
 :root{
   --bg:#14161a; --panel:#1c1f25; --panel2:#22262e; --line:#31363f;
@@ -218,12 +218,49 @@ table.grid td.annotation .node-detail{display:block;color:var(--muted)}
 .hidden{display:none}
 .small{font-size:12.5px;color:var(--dim)}
 .kbd{border:1px solid var(--line);border-radius:4px;padding:0 5px;font-size:12.25px}
+/* A compact tuning desk: names anchor the grid; numeric columns stay narrow. */
+:root{--bg:#171b23;--panel:#202632;--panel2:#293140;--line:#3a4556;
+  --ink:#edf0f5;--dim:#b0bacb;--faint:#8f9aaf;--accent:#90b6ea}
+body{font-family:'Segoe UI Variable Text','Segoe UI',sans-serif}
+nav .navgroup{font-size:12px;letter-spacing:0;text-transform:none;color:var(--dim)}
+.pill{text-transform:none;letter-spacing:0}
+.field label.lab code{display:none}
+body.technical .field label.lab code{display:block}
+body:not(.technical) .field.gate .meta{display:none}
+body:not(.technical) table.grid .node-detail{display:none}
+body:not(.technical) table.grid .technical-key{display:none}
+.doc,.meta,.legend{max-width:78ch}
+.pb-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}
+.pb-heading h2{font-size:23px;margin:0;font-weight:600}
+.pb-tools{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:10px 0}
+.pb-tools input[type=search]{width:26ch}
+.pb-grid th{min-width:7.5ch;max-width:11ch!important;word-break:normal}
+.pb-grid td input{width:8.5ch!important;font-variant-numeric:tabular-nums}
+.pb-grid .pb-name{position:sticky;left:0;min-width:19rem;max-width:23rem;
+  white-space:normal;background:var(--panel);padding:7px 10px;z-index:1}
+.pb-grid th.pb-name{z-index:4;background:var(--panel2)}
+.pb-grid .pb-name small{display:none;color:var(--faint);font-weight:400}
+body.technical .pb-grid .pb-name small{display:block}
+.pb-grid td.overlay-overwrite input{background:#482326;color:#ffb5b9}
+.pb-grid td.shipped-interesting input{background:#403817;color:#ffe28a}
+.pb-grid td input::placeholder{opacity:1;color:inherit;font-style:normal}
+.pb-grid td.readonly{color:var(--dim);padding:5px 8px}
+.pb-nav summary{cursor:pointer;padding:9px 12px;font-weight:600;color:var(--dim)}
+.pb-nav .navitem{padding-left:20px}
+.pb-multiplier{display:flex;gap:12px;align-items:center;margin:12px 0}
+.pb-multiplier label{width:12rem;font-weight:600}
+.pb-multiplier input{width:7ch}
+table.grid td.annotation{min-width:16rem;width:19rem;max-width:23rem}
+table.grid th{overflow-wrap:normal}
+@media(max-width:780px){header{position:static;flex-wrap:wrap}nav{position:static;width:174px;flex-basis:174px}
+  .pb-grid .pb-name{min-width:13rem}.pb-heading{align-items:flex-start;flex-direction:column}}
+button:focus-visible,summary:focus-visible,.navitem:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 </style>
 </head>
 <body>
 
 <header>
-  <h1>CKF Hard Mode — config</h1>
+  <h1>CKF Balance Editor</h1>
   <label class="small" for="gamedir">Game directory</label>
   <input type="text" id="gamedir" spellcheck="false">
   <button id="applydir">Apply</button>
@@ -232,25 +269,30 @@ table.grid td.annotation .node-detail{display:block;color:var(--muted)}
   <span id="dirty" class="small"></span>
   <button id="revalidate">Validate</button>
   <button id="save" class="primary">Save</button>
+  <label class="small"><input type="checkbox" id="technical"> Technical details</label>
 </header>
 
 <div id="banners" style="padding:10px 16px 0"></div>
 
 <details class="card" style="margin:0 16px 10px" id="modkit-export">
-  <summary>Send talent changes to Modkit Uploader</summary>
-  <p class="doc">Save your edits, then send all eleven classes to your Modkit project.
+  <summary>Workshop export</summary>
+  <p class="doc">Save your edits, then send player balance to your Modkit project.
     In Modkit, use Prepare Mod Data, then Local Install Mod.</p>
   <div class="field">
-    <label class="lab" for="talent-project">Talent source repository</label>
+    <label class="lab" for="talent-project">Workshop source repository</label>
     <input id="talent-project" type="text" spellcheck="false">
   </div>
   <div class="field">
     <label class="lab" for="modkit-project">Modkit mod folder</label>
     <input id="modkit-project" type="text" spellcheck="false">
   </div>
+  <div class="field">
+    <label class="lab" for="official-data">Official data.db</label>
+    <input id="official-data" type="text" spellcheck="false">
+  </div>
   <div class="ctl">
     <button id="modkit-paths">Save folders</button>
-    <button id="send-talents" class="primary">Send talents to Modkit</button>
+    <button id="send-talents" class="primary">Send player balance to Modkit</button>
     <span id="modkit-status" class="small" role="status" aria-live="polite"></span>
   </div>
 </details>
@@ -747,6 +789,9 @@ const el = function (tag, attrs, kids) {
     if (k === 'class') n.className = attrs[k];
     else if (k === 'text') n.textContent = attrs[k];
     else if (k.slice(0, 2) === 'on') n.addEventListener(k.slice(2), attrs[k]);
+    else if (['disabled','checked','open','required','selected','multiple','readonly'].indexOf(k) >= 0) {
+      if (attrs[k]) n.setAttribute(k, '');
+    }
     else if (attrs[k] !== null && attrs[k] !== undefined) n.setAttribute(k, attrs[k]);
   }
   for (const kid of (kids || [])) if (kid) n.appendChild(kid);
@@ -757,6 +802,7 @@ let MODEL = null;      // exactly what the server read off disk
 let W = null;          // the working copy every control edits
 let SEL = null;        // selected section id (one subsystem, or a group of them)
 let LAST_SAVE = null;
+const PLAYER_NAV_OPEN = {};
 // What the requires enforcement did to the working copy since the last
 // load: the keys one flip turned on, and the flip that was refused. Both
 // are drawn as banners, because an auto-enable nobody is told about is a
@@ -1139,6 +1185,7 @@ function buildWorking() {
     w.overlays[rel] = { cells: (e.rows || []).map(function (r) {
       return (r.cells || []).slice(); }) };
   }
+  w.player = JSON.parse(JSON.stringify((MODEL.playerBalance || {}).document || {}));
   return w;
 }
 
@@ -1180,6 +1227,8 @@ function dirtyPaths() {
   }
   for (const c of overlayDirtyCells())
     out.push(c.rel + ':' + c.key.join('/') + '.' + c.col);
+  for (const c of playerChanges().cells) out.push(c.table + ':' + c.id + '.' + c.column);
+  for (const k of Object.keys(playerChanges().implantMultipliers)) out.push('All cyberware:' + k);
   return out;
 }
 
@@ -1240,6 +1289,8 @@ function buildEdits() {
     blk.cells.push({ key: c.key, column: col.name,
                      value: c.to === undefined || c.to === null ? '' : String(c.to) });
   }
+  const player = playerChanges();
+  if (player.cells.length || Object.keys(player.implantMultipliers).length) edits.playerBalance = player;
   return edits;
 }
 
@@ -1317,6 +1368,10 @@ function banner(kind, title, lines) {
 function renderBanners() {
   const box = $('#banners');
   box.textContent = '';
+  if (MODEL.playerBalance && MODEL.playerBalance.error)
+    box.appendChild(banner('warn', 'Official player catalog unavailable', [MODEL.playerBalance.error]));
+  if (MODEL.talentCatalogError)
+    box.appendChild(banner('warn', 'Talent catalog needs attention', [MODEL.talentCatalogError]));
 
   const p = MODEL.probe.config;
   if (p.state !== 'ok') {
@@ -1676,6 +1731,22 @@ function groupEmptyWhy(g) {
 function renderIndex() {
   const nav = $('#index');
   nav.textContent = '';
+  const playerGroups = {};
+  for (const page of ((MODEL.playerBalance || {}).pages || [])) {
+    if (!playerGroups[page.group]) {
+      const open = PLAYER_NAV_OPEN[page.group] === undefined
+        ? page.group !== 'Drone weapons' && page.group !== 'Cyberware modules' : PLAYER_NAV_OPEN[page.group];
+      const det = el('details', {class:'pb-nav', open:open}, [el('summary', {text:page.group})]);
+      det.addEventListener('toggle', function () {PLAYER_NAV_OPEN[page.group] = det.open;});
+      playerGroups[page.group] = det;
+      nav.appendChild(det);
+    }
+    playerGroups[page.group].appendChild(el('div', {
+      class:'navitem' + (SEL === 'pb:' + page.id ? ' sel' : ''), role:'button', tabindex:'0',
+      onclick:function () {SEL = 'pb:' + page.id; render();},
+      onkeydown:function (e) {if (e.key === 'Enter' || e.key === ' ') {e.preventDefault(); SEL='pb:'+page.id;render();}}
+    }, [el('div', {class:'nm'}, [el('b', {text:page.title})])]));
+  }
   const ng = MODEL.navGroups || { groups: [], ungrouped: [] };
   const byId = {};
   for (const g of ng.groups) byId[g.id] = g;
@@ -1701,6 +1772,112 @@ function renderIndex() {
 
 // ---------------------------------------------------------------------------
 // controls, chosen by `ui` and `type` — never by name
+
+function playerRound(value) {
+  const floor = Math.floor(value);
+  return value - floor === 0.5 ? (floor % 2 === 0 ? floor : floor + 1) : Math.round(value);
+}
+
+function playerChanges() {
+  const out = {cells:[], implantMultipliers:{}, databaseSha:((MODEL.playerBalance || {}).database || {}).sha256};
+  const old = (MODEL.playerBalance || {}).document || {};
+  const cur = W.player || {};
+  for (const table of new Set(Object.keys(old.tables || {}).concat(Object.keys(cur.tables || {})))) {
+    const a = (old.tables || {})[table] || {}, b = (cur.tables || {})[table] || {};
+    for (const id of new Set(Object.keys(a).concat(Object.keys(b)))) {
+      for (const col of new Set(Object.keys(a[id] || {}).concat(Object.keys(b[id] || {})))) {
+        const before = (a[id] || {})[col] || '', after = (b[id] || {})[col] || '';
+        if (before !== after) out.cells.push({table:table,id:id,column:col,value:after});
+      }
+    }
+  }
+  for (const col in (cur.implantMultipliers || {}))
+    if ((old.implantMultipliers || {})[col] !== cur.implantMultipliers[col]) out.implantMultipliers[col] = cur.implantMultipliers[col];
+  return out;
+}
+
+function renderPlayer(panel, page) {
+  panel.appendChild(el('div', {class:'pb-heading'}, [el('h2', {text:page.title}),
+    el('span', {class:'small', text:'Workshop player balance'})]));
+  const search = el('input', {type:'search',placeholder:'Filter by name', 'aria-label':'Filter '+page.title});
+  const showAll = el('input', {type:'checkbox'});
+  const toolbar = el('div', {class:'pb-tools'}, [search,
+    el('label', {class:'small'}, [showAll,document.createTextNode(' Show all columns')]),
+    el('span', {class:'small',text:'Red: override · Yellow: nonzero baseline'})]);
+  panel.appendChild(toolbar);
+  if (page.multipliers) {
+    panel.appendChild(el('p', {class:'doc',text:'Applied to every implant after individual adjustments.'}));
+    for (const col in page.multipliers) {
+      const input = el('input', {type:'number',min:'0',max:'10',step:'0.1',value:W.player.implantMultipliers[col],
+        'aria-label':page.multipliers[col]+' multiplier'});
+      input.addEventListener('input', function () {W.player.implantMultipliers[col] = input.value === '' ? null : Number(input.value);updateDirty();});
+      panel.appendChild(el('div', {class:'pb-multiplier'}, [el('label', {text:page.multipliers[col]}),input,el('span',{class:'small',text:'×'})]));
+    }
+  }
+  const grids = el('div', {});
+  const pageNumbers = {};
+  panel.appendChild(grids);
+  function paint() {
+    grids.textContent = '';
+    const query = search.value.toLocaleLowerCase();
+    for (const grid of page.grids) {
+      const matches = grid.rows.filter(function (r) {return (r.name+' '+r.id).toLocaleLowerCase().includes(query);});
+      const number = pageNumbers[grid.table] || 0;
+      const rows = matches.slice(number * 75, (number + 1) * 75);
+      if (!matches.length && !grid.warning) continue;
+      if (grid.title !== page.title) grids.appendChild(el('h3', {text:grid.title}));
+      if (matches.length > 75) grids.appendChild(el('div', {class:'pb-tools'}, [
+        el('button', {text:'Previous',disabled:number === 0,onclick:function () {pageNumbers[grid.table] = number - 1;paint();}}),
+        el('span', {class:'small',text:(number * 75 + 1)+'–'+Math.min((number+1)*75,matches.length)+' of '+matches.length}),
+        el('button', {text:'Next',disabled:(number + 1) * 75 >= matches.length,onclick:function () {pageNumbers[grid.table] = number + 1;paint();}})]));
+      if (grid.warning) grids.appendChild(el('div', {class:'banner warn',text:grid.warning}));
+      const cols = grid.columns.concat(showAll.checked ? grid.advanced : []);
+      if (!rows.length) continue;
+      const tbl = el('table', {class:'grid pb-grid'});
+      tbl.appendChild(el('thead', {}, [el('tr', {}, [el('th', {class:'pb-name',text:'Name'})].concat(cols.map(function (c) {
+        return el('th', {text:c.label,title:c.name});
+      })))]));
+      const body = el('tbody', {});
+      for (const row of rows) {
+        const tr = el('tr', {}, [el('td', {class:'pb-name',title:grid.table+' '+row.id}, [
+          document.createTextNode(row.name),el('small', {text:grid.table+' '+row.id})])]);
+        for (const col of cols) {
+          const fields = ((W.player.tables || {})[grid.table] || {})[row.id] || {};
+          const value = fields[col.name] || '';
+          const base = row.baseline[col.name];
+          const multiplier = (grid.multipliers || {})[col.name] === undefined ? 1 : grid.multipliers[col.name];
+          // The placeholder includes the sweep. An individual entry is still
+          // edited before it, matching the SQL operation order.
+          const displayBase = multiplier === 1 ? base : String(playerRound(Number(base) * multiplier));
+          const td = el('td', {});
+          function style(v) {td.className = v.trim() !== '' || multiplier !== 1 ? 'overlay-overwrite' : Number(base) !== 0 ? 'shipped-interesting' : '';}
+          style(value);
+          if (row.readOnly) {
+            td.className = 'readonly';td.textContent = base;
+            td.title = 'Managed by Hard Mode Fatigue / limit-break traits';
+          } else {
+            const input = el('input', {type:'text',value:value,placeholder:displayBase,spellcheck:'false',
+              'aria-label':row.name+' '+col.label,title:col.label+' · baseline '+base + (multiplier !== 1 ? ' · global ×'+multiplier+' after individual adjustments' : '')});
+            input.addEventListener('input', function () {
+              const table = W.player.tables[grid.table] || (W.player.tables[grid.table] = {});
+              const record = table[row.id] || (table[row.id] = {});
+              if (input.value.trim()) record[col.name] = input.value;
+              else delete record[col.name];
+              style(input.value);updateDirty();
+            });
+            td.appendChild(input);
+          }
+          tr.appendChild(td);
+        }
+        body.appendChild(tr);
+      }
+      tbl.appendChild(body);
+      grids.appendChild(el('div', {class:'grid-wrap'}, [tbl]));
+    }
+  }
+  search.addEventListener('input',function () {for (const key in pageNumbers) delete pageNumbers[key];paint();});
+  showAll.addEventListener('change',paint);paint();
+}
 
 // One line per group: the short facts read as a run, `absent means` is a
 // sentence and gets its own line rather than trailing off the end of one.
@@ -2591,9 +2768,9 @@ function overlayBlock(sch, rel, sectionTitle) {
 
   const wrap = el('div', { class: 'grid-wrap' });
   const tbl = el('table', { class: 'grid' });
-  const head = [el('th', { text: ov.keyColumn + ' (key)' })];
   const leadComments = (ov.groupOrder || []).length
     ? ctlCols.filter(function (v) {return v.c.annotation;}) : [];
+  const head = [el('th', {class:leadComments.length ? 'technical-key' : '', text: ov.keyColumn + ' (key)' })];
   const tailControls = ctlCols.filter(function (v) {return leadComments.indexOf(v) < 0;});
   for (const v of leadComments)
     head.push(el('th', {text: 'Node & details'}));
@@ -2644,7 +2821,7 @@ function overlayBlock(sch, rel, sectionTitle) {
       // addition that may or may not have landed, and NOTHING HERE MAY SPELL
       // ONE OF THE NAMES.
       const rowLab = ((ov.rowLabels || {})[String(r.key)] || '');
-      tr.appendChild(el('td', { class: 'ro' }, [
+      tr.appendChild(el('td', { class: 'ro' + (leadComments.length ? ' technical-key' : '') }, [
         document.createTextNode(String(r.key)),
         rowLab ? el('span', { class: 'small', text: '  ' + rowLab }) : null,
         r.suffix ? el('span', { class: 'pill na', text: r.suffix }) : null]));
@@ -2952,7 +3129,11 @@ function renderSubsystem(p, sch, fields) {
   const head = el('div', { class: 'card' }, [
     el('h3', { text: sch.title || sch.subsystem }),
   ]);
-  for (const para of docParas(sch)) head.appendChild(el('p', { class: 'doc', text: para }));
+  const prose = docParas(sch);
+  if (prose.length) head.appendChild(el('details', {class:'disc'}, [
+    el('summary', {text:'Details'}), el('div', {class:'discbody'}, prose.map(function (para) {
+      return el('p', {class:'doc',text:para});
+    }))]));
   head.appendChild(gateControl(sch, ent));
   p.appendChild(head);
 
@@ -3002,6 +3183,8 @@ function renderSubsystem(p, sch, fields) {
 function renderPanel() {
   const p = $('#panel');
   p.textContent = '';
+  const playerPage = ((MODEL.playerBalance || {}).pages || []).find(function (page) {return SEL === 'pb:' + page.id;});
+  if (playerPage) {renderPlayer(p, playerPage); return;}
   const sec = sectionOf(SEL);
   if (!sec) return;
   const schs = schemasOf(sec);
@@ -3012,10 +3195,6 @@ function renderPanel() {
     // count is counted rather than spelled.
     p.appendChild(el('div', { class: 'card' }, [
       el('h3', { text: sec.title }),
-      el('p', { class: 'doc', text:
-        schs.length + ' pages, shown together because they are parts of one '
-        + 'question. Each keeps its own switch and its own file, and they are '
-        + 'set independently.' }),
     ]));
   }
 
@@ -3083,10 +3262,11 @@ async function load() {
   // warning. (Under 'use strict' an assignment to an undeclared name here is a
   // ReferenceError that stops load(); undeclared_globals_in_app_html in
   // serve.py guards that.)
-  if (!SEL || !sectionOf(SEL)) SEL = MODEL.sections[0].id;
+  if (!SEL || (!sectionOf(SEL) && !((MODEL.playerBalance || {}).pages || []).some(function (p) {return SEL === 'pb:'+p.id;}))) SEL = MODEL.sections[0].id;
   $('#gamedir').value = MODEL.configDirOverride || MODEL.gameDir || '';
   $('#talent-project').value = MODEL.modkit.talentProjectDir;
   $('#modkit-project').value = MODEL.modkit.modkitProjectDir;
+  $('#official-data').value = MODEL.officialDataPath || '';
   renderProbe();
   render();
 }
@@ -3121,10 +3301,10 @@ $('#modkit-paths').addEventListener('click', async function () {
   try {
     const result = await api('/api/settings', {
       talentProjectDir: $('#talent-project').value.trim(),
-      modkitProjectDir: $('#modkit-project').value.trim()
+      modkitProjectDir: $('#modkit-project').value.trim(),
+      officialDataPath: $('#official-data').value.trim()
     });
-    MODEL.modkit = result.modkit;
-    updateDirty();
+    await load();
     $('#modkit-status').textContent = 'Folders saved.';
   } catch (e) {
     $('#modkit-status').textContent = String(e);
@@ -3136,11 +3316,11 @@ for (const id of ['talent-project', 'modkit-project'])
 
 $('#send-talents').addEventListener('click', async function () {
   $('#send-talents').disabled = true;
-  $('#modkit-status').textContent = 'Sending saved talent changes…';
+  $('#modkit-status').textContent = 'Sending saved player balance…';
   try {
     const result = await api('/api/talent-export', { fingerprints: MODEL.fingerprints });
     $('#modkit-status').textContent = result.ok
-      ? result.records + ' talent updates sent. ' + result.next
+      ? 'Player balance sent. ' + result.next
       : 'Export failed: ' + result.error;
   } catch (e) {
     $('#modkit-status').textContent = 'Export failed: ' + String(e);
@@ -3160,6 +3340,7 @@ $('#save').addEventListener('click', async function () {
   } catch (e) {
     LAST_SAVE = { ok: false, refused: { summary: 'the request failed', detail: String(e) } };
   }
+  if (!LAST_SAVE.ok) {render();return;}
   const keep = LAST_SAVE;
   await load();
   LAST_SAVE = keep;
@@ -3169,6 +3350,25 @@ $('#save').addEventListener('click', async function () {
 load().catch(function (e) {
   $('#banners').appendChild(banner('err', 'Could not load the config', [String(e)]));
 });
+$('#technical').addEventListener('change', function (e) {document.body.classList.toggle('technical', e.target.checked);});
+if (window.setInterval) window.setInterval(async function () {
+  if (!MODEL || !(MODEL.playerBalance || {}).database) return;
+  try {
+    const status = await api('/api/data-status');
+    if (status.sha256 === MODEL.playerBalance.database.sha256) return;
+    if (dirtyPaths().length) {
+      if (!$('#database-changed')) {
+        const warning = banner('warn', 'Official data changed', ['Pending edits are preserved. Reload before saving or exporting.']);
+        warning.id = 'database-changed';$('#banners').prepend(warning);
+      }
+      $('#send-talents').disabled = true;
+    } else {
+      await load();
+    }
+  } catch (e) {
+    // Keep the current working copy; save/export perform their own fresh read.
+  }
+}, 20000);
 </script>
 </body>
 </html>

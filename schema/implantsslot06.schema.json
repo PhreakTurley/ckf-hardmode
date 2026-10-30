@@ -1,56 +1,35 @@
 {
   "subsystem": "ImplantsSlot06",
-  "title":     "Implant Slot 06",
-  "targets":   {
+  "title": "Implant Slot 06",
+  "targets": {
     "cfg": "ckf.hardmode.cfg",
     "overlays": [
       "ckf.hardmode.d/implants-slot06.csv"
     ]
   },
-  "enable":    { "cfg": "Slices.ImplantsSlot06" },
-
+  "enable": {
+    "cfg": "Slices.ImplantsSlot06"
+  },
   "doc": [
-    "Slice toggle. Off: Slices.VerdictForOverlay skips every file below before",
-    "it is opened, so none of its rows reach RulePlan. These files are loaded",
-    "by the row-edit engine, so they also have no effect while [Slices]",
-    "ModelRules is off (ModelRules.Init returns before Overlays.Load).",
+    "Legacy compatibility declaration. Hard Mode does not apply these cyberware files.",
+    "Use the CKF Balance Editor Workshop player catalogs; see gui/README.md#workshop-player-catalogs.",
     "",
     "Files this toggle gates:",
-    "  implants-slot06.csv",
-    "",
-    "One of the 11 character implant slot sheets. Each carries only the",
-    "ImplantModel columns live for its own slot, plus the EffectModel",
-    "columns its own effects use. ImplantSlot 100-107, the 20 drone modules,",
-    "get no sheet and no toggle.",
-    "",
-    "Lever sheet, not a direct overlay: the first column is ImplantName, and",
-    "there is no game table called \"implants-slot06\". Implants.Expand",
-    "turns each row into ImplantModel and EffectModel writes at load.",
-    "",
-    "Slot help, copied by hand from Implants.SlotHelp (Implants.cs); nothing",
-    "checks that the two agree:",
-    "",
-    "These 25 rows include the 16 cyberweapon claws (ImplantClass 27). The",
-    "claws are ALSO in cyberweapons-claws.csv, and the columns do not",
-    "collide: this table carries the install economics and the implant-side",
-    "effect, that sheet carries the weapon and talent combat stats. Cost",
-    "here is the CLINIC PRICE (80-10200 across the table); Cost there is the",
-    "item's valuation (50-700). Every class-27 row has ImplantEffectId 0, so",
-    "its payload cells are blank and there is nothing here to edit for a",
-    "claw's effect."
+    "  implants-slot06.csv"
   ],
-
   "uiDoc": [
-    "Turn this off and the mod skips this page's files, so nothing on this page is applied."
+    "Managed by the Workshop player-balance package. This legacy switch has no effect in Hard Mode."
   ],
-
   "fields": [
     {
-      "path": "Slices.ImplantsSlot06", "in": "cfg", "type": "bool",
-      "default": true, "ui": "form",
+      "path": "Slices.ImplantsSlot06",
+      "in": "cfg",
+      "type": "bool",
+      "default": true,
+      "ui": "form",
       "label": "Enable Implant Slot 06",
-      "doc": "On applies this slice's files; off skips them before they are opened. Default true.",
-      "uiDoc": "Turn this off and the mod skips this page's files, so nothing on this page is applied."
+      "doc": "Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs.",
+      "uiDoc": "Managed through Workshop player balance."
     }
   ]
 }

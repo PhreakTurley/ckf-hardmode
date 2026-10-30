@@ -1,7 +1,8 @@
-# Config editor (`gui/`)
+# CKF Balance Editor (`gui/`)
 
-A local web page that edits the live Hard Mode config under the game's
-`BepInEx/config/`, rendered from `schema/*.schema.json`. Use this page to run it
+A local web page that edits Hard Mode and Workshop player tuning under the game's
+`BepInEx/config/`. Hard Mode controls come from `schema/*.schema.json`; player
+catalogs come from the selected official database. Use this page to run it
 from source, understand a refused save, or maintain the frozen executable.
 Per-key meanings are in
 [`../docs/config-reference.md`](../docs/config-reference.md); the schema format
@@ -16,7 +17,8 @@ values happen to agree. The editor writes the live files and keeps no backup.
 | `serve.py` | Stdlib-only server. Does all file I/O and all validation. |
 | `app.html` | The page. No CDN, no build step. Names no file, field, column or cfg key. |
 | `settings.json` | Per-machine game/config paths, `stripReadme`, and optional Modkit paths. Not committed. |
-| `modkit.py` | Guarded handoff to the separate talent repository's exporter. |
+| `modkit.py` | Guarded handoff of talent and player-balance sources to Modkit. |
+| `player_balance.py` | Workshop tuning, official-data catalogs, and SQL generation. |
 | `ckf-config-editor.spec` | PyInstaller spec used by `scripts/make_release.py`. |
 
 ## Run the editor from source
@@ -37,6 +39,7 @@ python gui/serve.py --config "<game root>\BepInEx\config"
 | `--no-browser` | Don't open a browser. |
 | `--selftest` | Run the verification suite (see [Self-tests](#self-tests)). |
 | `--selftest-js` | Run `app.html`'s pure functions under `node`. |
+| `--legacy-cyberware-help` | With `--selftest`, run the two retired cyberware prose checks. Default runs report each as `NOT RUN`; the Workshop catalogs replace those help panels. |
 | `--frozen-exe PATH` | With `--selftest`: also run the frozen-exe cases against a built exe. |
 | `--migrate` | Convert a 3.x layout to the current slice layout (introduced in 4.0; settings stamp 4.1.0) and rename the originals to `*.pre-4.0-backup`. Refuses, writing nothing, if an input is missing, the slice layout already exists, a backup exists, or `MonsterTypeModel.csv` cannot be read. Maintainer-only; players install a fresh zip. |
 | `--run-check-schema --config DIR` | Must be the first argument. Runs `schema/check_schema.py` in-process and exits with its code. This is how the frozen exe validates a save. |
@@ -58,15 +61,15 @@ Procedure: [`../docs/workflow.md`](../docs/workflow.md). Traps: [`../docs/gotcha
 
 ## Send talents to Modkit Uploader
 
-Open **Send talent changes to Modkit Uploader** above the editor. Set **Talent
+Open **Workshop export** above the editor. Set **Workshop
 source repository** to a checkout of `ckf-talent-balance` containing
 `scripts/export_talent_balance.py` with `build_export()`. Set **Modkit mod
 folder** to the initialized `WorkshopContent/<ModName>` folder beside its
 `<ModName>.workshop.json`, then click **Save folders**. The paths persist as
 `talentProjectDir` and `modkitProjectDir` in the editor's settings file.
 
-1. Edit talent values and click **Save** in the editor.
-2. Click **Send talents to Modkit**. It regenerates the standalone repository's
+1. Edit values and click **Save** in the editor.
+2. Click **Send player balance to Modkit**. It regenerates the standalone repository's
    `source_content/talent-balance.json` and `provenance/SOURCE.json`, then copies
    the manifest and parser JSON into the Modkit project's `source_data`.
 3. In Modkit Uploader, click **Prepare Mod Data**, then **Local Install Mod**.
@@ -75,14 +78,55 @@ folder** to the initialized `WorkshopContent/<ModName>` folder beside its
 The export includes all eleven classes even when their BepInEx slice switches
 are off. Keep those talent slices off when testing the Workshop package to
 avoid applying both implementations. The handoff uses the standalone exporter
-for every table/field mapping; it exports only talent overlays. Other Hard Mode
-settings remain in the BepInEx workflow.
+for native talent field mappings and `player_balance.py` for the additional
+Workshop SQL. Unmoved Hard Mode settings remain in the BepInEx workflow.
 
 The button requires saved edits and saved folder paths. The server validates
 the config, checks source and destination fingerprints before replacement,
 verifies the written bytes, and rolls back its own completed replacements if
 the handoff fails. A conflicting Modkit manifest is refused for review.
 Preparing SQL, installing locally, and submitting remain uploader actions.
+
+### Workshop player catalogs
+
+`BepInEx/config/ckf.player-balance.json` is the only authoring source for the
+Workshop-owned cyberware, weapon, leverage, trait and combat adjustments. It is
+outside Hard Mode's overlay directory. Records are sparse adjustments keyed by
+SQL table, content id and column. Clearing a cell removes its adjustment.
+Shared effects have one stored value wherever the editor displays them.
+
+The weapon tabs follow the classes present in the official database and omit
+the effective enemy weapon pointers. Their default view hides uniform columns.
+Leverage and linked bonus grids show fields with at least one nonzero baseline.
+Explicit overrides always remain visible, including zero. **Show all columns**
+reveals the remaining numeric fields. Names stay fixed while the grid scrolls;
+large catalogs are searchable and paginated. Red marks overrides or a global
+implant multiplier; yellow marks other nonzero baselines.
+
+**All cyberware** edits price, installation-time and implant-stress multipliers.
+SQL applies individual adjustments first and global multipliers last, matching
+the former rule order. The global UPDATE has no row selector: it also reaches
+modules and rows introduced after export. Integer conversions use ties-to-even
+rounding before arithmetic and on each integer write. Implant placeholders
+include the global sweep; tooltips identify its multiplier.
+
+Fatigue's configured traits, their effects, and the limit-break overlay effects
+are read-only in the Workshop catalog. Their source and runtime owner remain
+Hard Mode. The separate Hard Mode controls remain available.
+
+Set **Official data.db** to the developer-provided content database. Every model
+request opens a fresh read transaction. While the editor is open, it checks for
+replacement every 20 seconds and reloads clean working copies. Pending edits
+are preserved with a warning; saves and exports refuse changed fingerprints.
+Talent catalogs refresh through `talent_catalog.complete` when the database
+changes, preserving exported assignments; a failed refresh reports its reason.
+An absent, corrupt or incompatible database shows a warning instead of a stale
+catalog. No encrypted game/save database is used.
+
+`transfer_player_balance.py` is an explicit one-time maintainer transfer. It
+guards and verifies a batch that imports legacy cyberware adjustments, clears
+their old cells, neutralizes the old global settings, and clears the two moved
+or retired combat-rule cells. It refuses to overwrite existing player tuning.
 
 ## What it edits
 
@@ -130,7 +174,7 @@ The server grades each column (`serve.py:overlay_roles`, `overlay_editable`) and
 
 ### Complete talent catalogs
 
-`talent_catalog.py` is an explicit maintainer annotation pass. It adds missing
+`talent_catalog.py` is the guarded annotation pass used when official data changes. It adds missing
 class JobNode rows and related records to the already declared talent sheets,
 leaves all new override cells blank, and preserves existing override cells.
 Class ownership comes from `JobNodeModel.JobId`, including every captured

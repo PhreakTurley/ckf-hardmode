@@ -1,51 +1,35 @@
 {
   "subsystem": "ImplantsSlot09",
-  "title":     "Implant Slot 09",
-  "targets":   {
+  "title": "Implant Slot 09",
+  "targets": {
     "cfg": "ckf.hardmode.cfg",
     "overlays": [
       "ckf.hardmode.d/implants-slot09.csv"
     ]
   },
-  "enable":    { "cfg": "Slices.ImplantsSlot09" },
-
+  "enable": {
+    "cfg": "Slices.ImplantsSlot09"
+  },
   "doc": [
-    "Slice toggle. Off: Slices.VerdictForOverlay skips every file below before",
-    "it is opened, so none of its rows reach RulePlan. These files are loaded",
-    "by the row-edit engine, so they also have no effect while [Slices]",
-    "ModelRules is off (ModelRules.Init returns before Overlays.Load).",
+    "Legacy compatibility declaration. Hard Mode does not apply these cyberware files.",
+    "Use the CKF Balance Editor Workshop player catalogs; see gui/README.md#workshop-player-catalogs.",
     "",
     "Files this toggle gates:",
-    "  implants-slot09.csv",
-    "",
-    "One of the 11 character implant slot sheets. Each carries only the",
-    "ImplantModel columns live for its own slot, plus the EffectModel",
-    "columns its own effects use. ImplantSlot 100-107, the 20 drone modules,",
-    "get no sheet and no toggle.",
-    "",
-    "Lever sheet, not a direct overlay: the first column is ImplantName, and",
-    "there is no game table called \"implants-slot09\". Implants.Expand",
-    "turns each row into ImplantModel and EffectModel writes at load.",
-    "",
-    "Slot help, copied by hand from Implants.SlotHelp (Implants.cs); nothing",
-    "checks that the two agree:",
-    "",
-    "MatrixEffectId, InstallJobId, ImplantConflictId, ArmorRestriction and",
-    "BackstoryGroup are all zero on every row of this slot and are not",
-    "shown. 14 of the 18 rows have ImplantEffectId 0."
+    "  implants-slot09.csv"
   ],
-
   "uiDoc": [
-    "Turn this off and the mod skips this page's files, so nothing on this page is applied."
+    "Managed by the Workshop player-balance package. This legacy switch has no effect in Hard Mode."
   ],
-
   "fields": [
     {
-      "path": "Slices.ImplantsSlot09", "in": "cfg", "type": "bool",
-      "default": true, "ui": "form",
+      "path": "Slices.ImplantsSlot09",
+      "in": "cfg",
+      "type": "bool",
+      "default": true,
+      "ui": "form",
       "label": "Enable Implant Slot 09",
-      "doc": "On applies this slice's files; off skips them before they are opened. Default true.",
-      "uiDoc": "Turn this off and the mod skips this page's files, so nothing on this page is applied."
+      "doc": "Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs.",
+      "uiDoc": "Managed through Workshop player balance."
     }
   ]
 }

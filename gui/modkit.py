@@ -1,7 +1,7 @@
-"""Send saved talent tuning through the standalone exporter to Modkit.
+"""Send saved player tuning through the guarded Workshop exporter to Modkit.
 
-The standalone talent repository owns all field mappings. This module only
-loads its exporter, checks the inputs, and commits verified source files.
+The standalone repository owns native talent mappings; player_balance owns
+the additional SQL. This module checks inputs and commits verified sources.
 It never prepares SQL, installs a mod, or submits a Workshop item.
 """
 
@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import player_balance
 
 
 def state(path):
@@ -87,7 +88,7 @@ def commit_files(outputs, expected, inputs):
             if path.read_bytes() != data:
                 raise OSError('%s changed before verification completed' % path)
         for path, fingerprint in inputs.items():
-            if state(path) != fingerprint:
+            if path not in outputs and state(path) != fingerprint:
                 raise ValueError('%s changed before export completed' % path)
     except Exception as exc:
         rollback_errors = []
@@ -123,7 +124,7 @@ def commit_files(outputs, expected, inputs):
     return [str(p) for p in written]
 
 
-def send(config_dir, project_dir, mod_dir):
+def send(config_dir, project_dir, mod_dir, database=None):
     project, mod = Path(project_dir).resolve(), Path(mod_dir).resolve()
     if not (mod.parent / (mod.name + '.workshop.json')).is_file():
         raise ValueError('Choose the mod folder beside its .workshop.json file.')
@@ -139,6 +140,13 @@ def send(config_dir, project_dir, mod_dir):
               for filename, _prefix, _key in exporter.expected_files()}
     cfg = live.parent / 'ckf.hardmode.cfg'
     inputs[cfg] = state(cfg)
+    player_path = Path(config_dir) / player_balance.FILE
+    inputs[player_path] = state(player_path)
+    for name in ('fatigue.json', 'EffectModel.limitbreak.csv'):
+        path = live / name
+        inputs[path] = state(path)
+    database_path = player_balance.static_data.database_path(database)
+    inputs[database_path] = state(database_path)
     inputs[script] = script_state
     manifest = project / 'source_content' / 'stories.manifest'
     inputs[manifest] = state(manifest)
@@ -157,6 +165,9 @@ def send(config_dir, project_dir, mod_dir):
     if any(Path(config_dir).resolve() in p.resolve().parents for p in paths):
         raise ValueError('Export destinations must be outside the live config directory.')
     data, provenance, metadata = exporter.build_export(live, source_commit(project))
+    if inputs[player_path] is not None:
+        data, provenance, receipt = player_balance.augment(data, provenance, config_dir, database)
+        metadata['player_balance'] = receipt['player_balance']
     # Check the exact bytes the exporter consumed, as well as their mtimes.
     for filename, info in metadata['overlay_inputs'].items():
         if inputs[live / filename][2] != info['sha256']:

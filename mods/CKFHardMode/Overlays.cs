@@ -196,6 +196,14 @@ namespace CKFHardMode
             {
                 var name = Path.GetFileName(f);
 
+                // Cyberware is owned by the player-balance Workshop package.
+                // Ignore legacy files even if an old slice switch is enabled.
+                if (Cyberweapons.Owns(name) || Implants.Owns(name))
+                {
+                    skipped.Add(name + " [Workshop] player balance");
+                    continue;
+                }
+
                 // NOT A RULES FILE. See the header: deserialising one of the ten
                 // settings files as a RuleFile succeeds and yields nothing, with
                 // no error anywhere. ConfigDoc owns these, has already read them
@@ -319,26 +327,8 @@ namespace CKFHardMode
                     + "slice and were loaded unconditionally: " + string.Join(", ", unclaimed)
                     + ". They have no toggle in ckf.hardmode.cfg.");
 
-            // implants-global.json IS NOT A RULE FILE IN THE OVERLAY DIALECT.
-            // It is caught by ConfigDoc.OwnsFile above and counted among the
-            // settings files, so this walk never opens it -- which means
-            // nothing in this walk would otherwise say a word about it. Its
-            // three multipliers still have to reach the rule plan, and
-            // Implants.ExpandGlobal is what puts them there: ONE unscoped
-            // ImplantModel rule, no `where`, adopted here at the end of the
-            // walk. It logs the three numbers it read whether or not it
-            // emitted, because a file read and not applied in silence is a
-            // silent instrument (AGENTS.md).
-            //
-            // These are MULTIPLY rules, and `multiply` is not idempotent: if
-            // the same multipliers also arrived from another rules file they
-            // would apply twice.
-            //
-            // Its count joins `lines` like every other expander's, so the total
-            // below includes it. It is NOT added to `lever`: that list names
-            // the sheet files this walk opened and expanded, and this file was
-            // not opened by this walk at all.
-            lines += Implants.ExpandGlobal(dir, adopt);
+            // Global implant multipliers are exported as Workshop SQL.
+            // The legacy JSON is read only for compatibility, never applied.
 
             SkippedFiles = skipped;
             FilesRead = read;
@@ -352,7 +342,7 @@ namespace CKFHardMode
             Plugin.Log.LogInfo($"Overlays: {files.Count} file(s) in the directory, "
                 + $"{settings.Count} of them settings files ConfigDoc reads, "
                 + $"{read} read here, {lever.Count} of them lever sheet(s) expanded "
-                + $"by their own expander, {skipped.Count} skipped by a disabled slice, "
+                + $"by their own expander, {skipped.Count} skipped by a disabled slice or Workshop ownership, "
                 + $"{unclaimed.Count} claimed by no slice; {lines} row(s) merged"
                 + (clones > 0 ? $", {clones} of them inserts" : "")
                 + $", {untouched} line(s) named a row and set nothing"
@@ -361,7 +351,7 @@ namespace CKFHardMode
                 + ".");
         }
 
-        /// <summary>Files the last Load skipped because their slice is off,
+        /// <summary>Files the last Load skipped because their slice is off or Workshop owns them,
         /// each as "&lt;file&gt; [Slices] &lt;Key&gt;". ModelRules' rule-count line
         /// names them, because a total that does not say what it left out cannot
         /// tell "skipped" from "found nothing" (AGENTS.md). Empty, never
@@ -547,6 +537,12 @@ namespace CKFHardMode
             {
                 Plugin.Log.LogWarning($"Overlays[{file}:{lineNo}]: '{idText}' is not an id.");
                 return LineResult.Bad;
+            }
+
+            if (model == "RuleModel" && keyColumn == "RuleId" && id == 22)
+            {
+                Plugin.Log.LogInfo("Overlays: RuleModel[22] is Workshop-owned; ignoring this legacy row.");
+                return LineResult.Untouched;
             }
 
             string comment = null, serveOn = null, cloneFrom = null;

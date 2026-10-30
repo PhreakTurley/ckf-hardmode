@@ -45,9 +45,9 @@ These files are data for the rule engine, so they apply only while `ModelRules` 
 | Switch | Source | File(s) | What it does |
 |---|---|---|---|
 | `GearClasses` | `GearClasses.cs` | `gear-classes.csv` | Lever sheet with one row per player weapon class. Classes resolve against the post-overlay `WeaponTypeId` set in `MonsterTypeModel.csv`, not the shipped table; if that file is missing or unreadable, the sheet emits no rules and the log says why. |
-| `CyberweaponsClaws`, `CyberweaponsLasers` | `Cyberweapons.cs` | `cyberweapons-claws.csv`, `cyberweapons-lasers.csv` | Lever sheets. Each row becomes a `WeaponModel` rule and a `TalentModel` rule. |
-| `ImplantsGlobal` | `Implants.cs` (`ExpandGlobal`) | `implants-global.json` | Three multipliers applied to every `ImplantModel` row. |
-| `ImplantsSlot01` … `ImplantsSlot11` | `Implants.cs` | `implants-slot01.csv` … `implants-slot11.csv` | Lever sheets, one per implant slot. Each row becomes an `ImplantModel` rule and an `EffectModel` rule. |
+| `CyberweaponsClaws`, `CyberweaponsLasers` | `Overlays.Load` | `cyberweapons-claws.csv`, `cyberweapons-lasers.csv` | Legacy files skipped before opening. Cyberware tuning belongs to the Workshop exporter. |
+| `ImplantsGlobal` | `ConfigDoc`, `Overlays.Load` | `implants-global.json` | Legacy settings accepted for compatibility; no global implant rule is emitted. |
+| `ImplantsSlot01` … `ImplantsSlot11` | `Overlays.Load` | `implants-slot01.csv` … `implants-slot11.csv` | Legacy files skipped before opening. See the [Workshop editor](../../gui/README.md#workshop-player-catalogs). |
 | `ConsumablesChems`, `ConsumablesDevices`, `ConsumablesGrenades`, `ConsumablesMatrix`, `ConsumablesMedical`, `ConsumablesSploitkits` | `Consumables.cs` | `consumables-<family>.csv` | Lever sheets. Each row can expand into rules on up to four tables: `ItemModel`, `TalentModel`, `EffectModel` and `MatrixEffectModel`. |
 | `RuleModel` | `Overlays.cs` | `RuleModel.csv` | Direct overlay of the game's rule constants. |
 | `SpawnWeights` | `Overlays.cs` | `MonsterGroupMemberModel.spawn-*.csv` (12 files) | Direct overlays for the faction spawn pools declared by `spawnweights.schema.json`. |

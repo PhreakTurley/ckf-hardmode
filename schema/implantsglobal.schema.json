@@ -10,30 +10,14 @@
     "cfg": "Slices.ImplantsGlobal"
   },
   "doc": [
-    "Slice toggle and settings for implants-global.json. Implants.ExpandGlobal,",
-    "called from Overlays.Load, reads the three multipliers and emits one",
-    "ImplantModel rule with no where clause. Off: the rule is not emitted and",
-    "every ImplantModel row keeps the game's Cost, InstallTime and",
-    "ImplantStress. The rule is part of the overlay load, so it also has no",
-    "effect while [Slices] ModelRules is off.",
+    "Legacy compatibility declaration. Hard Mode does not apply these cyberware files.",
+    "Use the CKF Balance Editor Workshop player catalogs; see gui/README.md#workshop-player-catalogs.",
     "",
     "Files this toggle gates:",
-    "  implants-global.json",
-    "",
-    "Three scalars, so a form, not a table.",
-    "",
-    "No where clause, deliberately: the rule reaches all 198 ImplantModel rows",
-    "in the game data, including the 20 drone modules (slots 100-107) that no",
-    "sheet shows. That reach is accepted (David).",
-    "",
-    "There is no stress floor. A leftover implantStressClampMin key is parsed,",
-    "reported at Warning and not applied: in the game data ImplantStress is 1",
-    "on 197 rows and 5 on Quantum Rider, so after the stress multiplier",
-    "nothing is below 1 for a floor to lift [measured; scripts/implants.py",
-    "D-CLAMP re-derives it]."
+    "  implants-global.json"
   ],
   "uiDoc": [
-    "Turn this off and the three multipliers on this page are not applied."
+    "Managed by the Workshop player-balance package. This legacy switch has no effect in Hard Mode."
   ],
   "fields": [
     {
@@ -43,8 +27,8 @@
       "default": true,
       "ui": "form",
       "label": "Enable Implant Global Multipliers",
-      "doc": "On emits the implants-global.json rule; off skips it. Default true.",
-      "uiDoc": "Turn this off and the three multipliers on this page are not applied."
+      "doc": "Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs.",
+      "uiDoc": "Managed through Workshop player balance."
     },
     {
       "path": "costMultiply",
@@ -57,8 +41,8 @@
       ],
       "ui": "form",
       "label": "Install cost multiplier",
-      "doc": "Multiplies ImplantModel.Cost (the clinic price) on every row. In the game data Cost runs 80 to 10200 over the 198 rows [measured, sheets/raw/ImplantModel.csv]. The range is an editor guard rail, not an engine limit: nothing bounds a multiply operand at runtime, and [0.0, 10.0] matches elapse.tiers[].multiplier, the other plain value-scaler in these schemas. 0 zeroes the column; 1 leaves it alone.",
-      "uiDoc": "Multiplies every implant's clinic price. 1 leaves prices as the game ships them; 0.5 halves them."
+      "doc": "Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs.",
+      "uiDoc": "Managed through Workshop player balance."
     },
     {
       "path": "installTimeMultiply",
@@ -71,8 +55,8 @@
       ],
       "ui": "form",
       "label": "Install time multiplier",
-      "doc": "Multiplies ImplantModel.InstallTime on every row. In the game data InstallTime runs 0 to 84 over the 198 rows, 15 distinct values [measured, sheets/raw/ImplantModel.csv]. Range: an editor guard rail, derived as for costMultiply. 1 leaves it alone.",
-      "uiDoc": "Multiplies the days an implant takes to fit. 1 leaves them as the game ships them."
+      "doc": "Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs.",
+      "uiDoc": "Managed through Workshop player balance."
     },
     {
       "path": "implantStressMultiply",
@@ -85,8 +69,8 @@
       ],
       "ui": "form",
       "label": "Implant stress multiplier",
-      "doc": "Multiplies ImplantModel.ImplantStress on every row. In the game data ImplantStress is 1 on 197 rows and 5 on Quantum Rider, so 3 takes them to 3 and 15 [measured, sheets/raw/ImplantModel.csv]. Range: an editor guard rail, derived as for costMultiply. Declared float; check_schema.coerce and check_range accept an integer such as 3.",
-      "uiDoc": "Multiplies the stress each implant costs to carry. 1 leaves it as the game ships it."
+      "doc": "Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs.",
+      "uiDoc": "Managed through Workshop player balance."
     }
   ]
 }

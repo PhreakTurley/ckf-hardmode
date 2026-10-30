@@ -627,7 +627,7 @@ None declared.
 
 **Claw Cyberweapons** &nbsp;·&nbsp; `.cfg` section `[CyberweaponsClaws]` &nbsp;·&nbsp; declared in `schema/cyberweaponsclaws.schema.json`
 
-Slice toggle. Off: Slices.VerdictForOverlay skips every file below before it is opened, so none of its rows reach RulePlan. These files are loaded by the row-edit engine, so they also have no effect while [Slices] ModelRules is off (ModelRules.Init returns before Overlays.Load).
+Legacy compatibility declaration. Hard Mode does not apply these cyberware files. Use the CKF Balance Editor Workshop player catalogs; see gui/README.md#workshop-player-catalogs.
 
 Files this toggle gates:
 
@@ -635,21 +635,11 @@ Files this toggle gates:
   cyberweapons-claws.csv
 ```
 
-The 16 claws: ImplantClass 27, ImplantSlot 6, WeaponClass 16 (Cyber Weapon Claws).
-
-Lever sheet, not a direct overlay: the first column is WeaponName and repeats (four each for Hand Blades, Hand Razors, Ripper Blades and Mono-Razors). Cyberweapons.cs splits each row at load into a WeaponModel rule and a TalentModel rule.
-
-REQUIRES Slices.ImplantsSlot06. In the game data TalentModel has exactly 33 rows with a non-zero Weapon, and each is pointed at by an ImplantModel row's ImplantTalentId: 17 from ImplantClass 32 / ImplantSlot 8 (the eye lasers) and 16 from ImplantClass 27 / ImplantSlot 6 (the claws), with no other class or slot contributing [measured, sheets/raw TalentModel.csv, ImplantModel.csv, WeaponModel.csv]. So the 16 rows here and the 16 ImplantClass 27 rows of implants-slot06.csv are the same items.
-
-Unlike the laser pair, the claw pair shares no effect payload: every ImplantClass 27 row has ImplantEffectId 0, and TargetEffect, SelfEffect and MatrixEffect are 0 on all 16 claw talents [measured]. The pairing rests on item identity, plus Cost, Rarity and PowerLevel appearing on both sides with different game values (implant Cost 80/250/900/2400 against weapon Cost 110/220/400/700 on Hand Blades 1-4) [measured].
-
-check_schema.py evaluates the requires on the two .cfg keys. A run that could not compare it prints a SKIPPED line and counts it on the 'requires:' census line.
-
 ### What the config GUI shows for this section
 
 The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
 
-Turn this off and the mod skips this page's files, so nothing on this page is applied.
+Managed by the Workshop player-balance package. This legacy switch has no effect in Hard Mode.
 
 ### Files this subsystem writes
 
@@ -676,13 +666,13 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.CyberweaponsClaws` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Claw Cyberweapons | On applies this slice's files; off skips them before they are opened. Default true. Lever sheet, not a direct overlay: the first column is WeaponName and repeats, and there is no game table called "cyberweapons-claws". Cyberweapons.cs splits each row at load into a WeaponModel rule and a TalentModel rule. Same kind as gear-classes.csv. |
+| `Slices.CyberweaponsClaws` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Claw Cyberweapons | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
 
 **What the config GUI shows for these fields.**
 
 | Field | GUI help |
 |---|---|
-| `Slices.CyberweaponsClaws` | Turn this off and the mod skips this page's files, so nothing on this page is applied. |
+| `Slices.CyberweaponsClaws` | Managed through Workshop player balance. |
 
 1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
 
@@ -698,7 +688,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 **Eye Laser Cyberweapons** &nbsp;·&nbsp; `.cfg` section `[CyberweaponsLasers]` &nbsp;·&nbsp; declared in `schema/cyberweaponslasers.schema.json`
 
-Slice toggle. Off: Slices.VerdictForOverlay skips every file below before it is opened, so none of its rows reach RulePlan. These files are loaded by the row-edit engine, so they also have no effect while [Slices] ModelRules is off (ModelRules.Init returns before Overlays.Load).
+Legacy compatibility declaration. Hard Mode does not apply these cyberware files. Use the CKF Balance Editor Workshop player catalogs; see gui/README.md#workshop-player-catalogs.
 
 Files this toggle gates:
 
@@ -706,25 +696,11 @@ Files this toggle gates:
   cyberweapons-lasers.csv
 ```
 
-The 17 eye lasers: ImplantClass 32, ImplantSlot 8, WeaponClass 17 (Gear.WeaponClass.CyberWeaponEyes). Their install economics live in implants-slot08.csv and their combat stats here. Cost appears in both and means different things: the clinic price there, the item's valuation here.
-
-Lever sheet, not a direct overlay: the first column is WeaponName and repeats (four each for Brightshot Optic, Lumen Spear, Photon Lance and Helios Beam, then one Luem Trident). Cyberweapons.cs splits each row at load into a WeaponModel rule and a TalentModel rule.
-
-SpecialRule (WeaponModel) and ApCost (TalentModel) are levers on this sheet although both are constant across the 17 game rows (SpecialRule 3, ApCost 20) [measured, sheets/raw]. A column that is constant in the game data can still carry a lever, so the usual "omit a constant column" rule does not drop them (Cyberweapons.cs lever map).
-
-REQUIRES Slices.ImplantsSlot08. In the game data TalentModel has exactly 33 rows with a non-zero Weapon, and each is pointed at by an ImplantModel row's ImplantTalentId: 17 from ImplantClass 32 / ImplantSlot 8 (the eye lasers) and 16 from ImplantClass 27 / ImplantSlot 6 (the claws), with no other class or slot contributing [measured, sheets/raw TalentModel.csv, ImplantModel.csv, WeaponModel.csv]. So the 17 rows here and 17 of the 18 ImplantClass 32 rows of implants-slot08.csv are the same items. The 18th, ImplantTypeId 3217 "Lumen Trident", has ImplantTalentId 0 and so no laser row. ImplantModel 3217 and 3218 are both named "Lumen Trident" while the weapon, 25016, is "Luem Trident"; neither spelling is normalised. [measured]
-
-Brightshot Optic 1-4 are on both sheets (weapons 25000-25003, talents 80007-80010; ImplantTypeId 3200-3203, ImplantEffectId 50107-50110), and both sheets carry a crit column for them against different tables: this sheet's CritMultiBase/CritMultiStealth on WeaponModel, the slot-8 sheet's CritMultiBase on EffectModel. In the game data they are 4 of the 9 implant effects with a non-zero CritMultiBase (25), all in slot 8 [measured, sheets/raw/EffectModel.csv]. With slot 8 off and lasers on, the implant side keeps the game's value while this sheet's values apply.
-
-Rarity and PowerLevel also appear on both sides and differ: over the 33 paired items Rarity agrees on 17 and PowerLevel on 8 [measured]. What either column does in the game is not established here.
-
-check_schema.py evaluates the requires on the two .cfg keys. A run that could not compare it prints a SKIPPED line and counts it on the 'requires:' census line.
-
 ### What the config GUI shows for this section
 
 The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
 
-Turn this off and the mod skips this page's files, so nothing on this page is applied.
+Managed by the Workshop player-balance package. This legacy switch has no effect in Hard Mode.
 
 ### Files this subsystem writes
 
@@ -751,13 +727,13 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.CyberweaponsLasers` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Eye Laser Cyberweapons | On applies this slice's files; off skips them before they are opened. Default true. Lever sheet, not a direct overlay: the first column is WeaponName and repeats, and there is no game table called "cyberweapons-lasers". Cyberweapons.cs splits each row at load into a WeaponModel rule and a TalentModel rule. Same kind as gear-classes.csv. |
+| `Slices.CyberweaponsLasers` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Eye Laser Cyberweapons | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
 
 **What the config GUI shows for these fields.**
 
 | Field | GUI help |
 |---|---|
-| `Slices.CyberweaponsLasers` | Turn this off and the mod skips this page's files, so nothing on this page is applied. |
+| `Slices.CyberweaponsLasers` | Managed through Workshop player balance. |
 
 1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
 
@@ -1200,7 +1176,7 @@ None declared.
 
 **Implant Global Multipliers** &nbsp;·&nbsp; `.cfg` section `[ImplantsGlobal]` &nbsp;·&nbsp; declared in `schema/implantsglobal.schema.json`
 
-Slice toggle and settings for implants-global.json. Implants.ExpandGlobal, called from Overlays.Load, reads the three multipliers and emits one ImplantModel rule with no where clause. Off: the rule is not emitted and every ImplantModel row keeps the game's Cost, InstallTime and ImplantStress. The rule is part of the overlay load, so it also has no effect while [Slices] ModelRules is off.
+Legacy compatibility declaration. Hard Mode does not apply these cyberware files. Use the CKF Balance Editor Workshop player catalogs; see gui/README.md#workshop-player-catalogs.
 
 Files this toggle gates:
 
@@ -1208,17 +1184,11 @@ Files this toggle gates:
   implants-global.json
 ```
 
-Three scalars, so a form, not a table.
-
-No where clause, deliberately: the rule reaches all 198 ImplantModel rows in the game data, including the 20 drone modules (slots 100-107) that no sheet shows. That reach is accepted (David).
-
-There is no stress floor. A leftover implantStressClampMin key is parsed, reported at Warning and not applied: in the game data ImplantStress is 1 on 197 rows and 5 on Quantum Rider, so after the stress multiplier nothing is below 1 for a floor to lift [measured; scripts/implants.py D-CLAMP re-derives it].
-
 ### What the config GUI shows for this section
 
 The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
 
-Turn this off and the three multipliers on this page are not applied.
+Managed by the Workshop player-balance package. This legacy switch has no effect in Hard Mode.
 
 ### Files this subsystem writes
 
@@ -1246,19 +1216,19 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.ImplantsGlobal` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Global Multipliers | On emits the implants-global.json rule; off skips it. Default true. |
-| `costMultiply` | json | `float` | `form` | `0.5` |  | `0.0` to `10.0` |  |  | Install cost multiplier | Multiplies ImplantModel.Cost (the clinic price) on every row. In the game data Cost runs 80 to 10200 over the 198 rows [measured, sheets/raw/ImplantModel.csv]. The range is an editor guard rail, not an engine limit: nothing bounds a multiply operand at runtime, and [0.0, 10.0] matches elapse.tiers[].multiplier, the other plain value-scaler in these schemas. 0 zeroes the column; 1 leaves it alone. |
-| `installTimeMultiply` | json | `float` | `form` | `0.5` |  | `0.0` to `10.0` |  |  | Install time multiplier | Multiplies ImplantModel.InstallTime on every row. In the game data InstallTime runs 0 to 84 over the 198 rows, 15 distinct values [measured, sheets/raw/ImplantModel.csv]. Range: an editor guard rail, derived as for costMultiply. 1 leaves it alone. |
-| `implantStressMultiply` | json | `float` | `form` | `3` |  | `0.0` to `10.0` |  |  | Implant stress multiplier | Multiplies ImplantModel.ImplantStress on every row. In the game data ImplantStress is 1 on 197 rows and 5 on Quantum Rider, so 3 takes them to 3 and 15 [measured, sheets/raw/ImplantModel.csv]. Range: an editor guard rail, derived as for costMultiply. Declared float; check_schema.coerce and check_range accept an integer such as 3. |
+| `Slices.ImplantsGlobal` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Global Multipliers | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
+| `costMultiply` | json | `float` | `form` | `0.5` |  | `0.0` to `10.0` |  |  | Install cost multiplier | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
+| `installTimeMultiply` | json | `float` | `form` | `0.5` |  | `0.0` to `10.0` |  |  | Install time multiplier | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
+| `implantStressMultiply` | json | `float` | `form` | `3` |  | `0.0` to `10.0` |  |  | Implant stress multiplier | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
 
 **What the config GUI shows for these fields.**
 
 | Field | GUI help |
 |---|---|
-| `Slices.ImplantsGlobal` | Turn this off and the three multipliers on this page are not applied. |
-| `costMultiply` | Multiplies every implant's clinic price. 1 leaves prices as the game ships them; 0.5 halves them. |
-| `installTimeMultiply` | Multiplies the days an implant takes to fit. 1 leaves them as the game ships them. |
-| `implantStressMultiply` | Multiplies the stress each implant costs to carry. 1 leaves it as the game ships it. |
+| `Slices.ImplantsGlobal` | Managed through Workshop player balance. |
+| `costMultiply` | Managed through Workshop player balance. |
+| `installTimeMultiply` | Managed through Workshop player balance. |
+| `implantStressMultiply` | Managed through Workshop player balance. |
 
 4 of 4 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
 
@@ -1272,7 +1242,7 @@ None declared.
 
 **Implant Slot 01** &nbsp;·&nbsp; `.cfg` section `[ImplantsSlot01]` &nbsp;·&nbsp; declared in `schema/implantsslot01.schema.json`
 
-Slice toggle. Off: Slices.VerdictForOverlay skips every file below before it is opened, so none of its rows reach RulePlan. These files are loaded by the row-edit engine, so they also have no effect while [Slices] ModelRules is off (ModelRules.Init returns before Overlays.Load).
+Legacy compatibility declaration. Hard Mode does not apply these cyberware files. Use the CKF Balance Editor Workshop player catalogs; see gui/README.md#workshop-player-catalogs.
 
 Files this toggle gates:
 
@@ -1280,21 +1250,11 @@ Files this toggle gates:
   implants-slot01.csv
 ```
 
-One of the 11 character implant slot sheets. Each carries only the ImplantModel columns live for its own slot, plus the EffectModel columns its own effects use. ImplantSlot 100-107, the 20 drone modules, get no sheet and no toggle.
-
-Lever sheet, not a direct overlay: the first column is ImplantName, and there is no game table called "implants-slot01". Implants.Expand turns each row into ImplantModel and EffectModel writes at load.
-
-Slot help, copied by hand from Implants.SlotHelp (Implants.cs); nothing checks that the two agree:
-
-Slot 1 is the only slot where ArmorRestriction is live (6 of the 198 rows carry a 1; all of them are here). Two rows carry a crit multiplier in the game data: Chameleon Sheathe at CritMultiStealth 20 and Chameleon S-Mesh at 25. Dermal Plating 1's effect row, EffectModel 50000, is SHARED with all 20 drone modules, which have no table — an edit to its payload reaches them too. That marker informs; it does not block, because there is only one editable owner and divergence is therefore impossible.
-
-That is CritMultiStealth. CritMultiBase is carried only by slot 8, which holds every implant effect in the game that has one.
-
 ### What the config GUI shows for this section
 
 The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
 
-Turn this off and the mod skips this page's files, so nothing on this page is applied.
+Managed by the Workshop player-balance package. This legacy switch has no effect in Hard Mode.
 
 ### Files this subsystem writes
 
@@ -1321,13 +1281,13 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.ImplantsSlot01` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 01 | On applies this slice's files; off skips them before they are opened. Default true. |
+| `Slices.ImplantsSlot01` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 01 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
 
 **What the config GUI shows for these fields.**
 
 | Field | GUI help |
 |---|---|
-| `Slices.ImplantsSlot01` | Turn this off and the mod skips this page's files, so nothing on this page is applied. |
+| `Slices.ImplantsSlot01` | Managed through Workshop player balance. |
 
 1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
 
@@ -1341,7 +1301,7 @@ None declared.
 
 **Implant Slot 02** &nbsp;·&nbsp; `.cfg` section `[ImplantsSlot02]` &nbsp;·&nbsp; declared in `schema/implantsslot02.schema.json`
 
-Slice toggle. Off: Slices.VerdictForOverlay skips every file below before it is opened, so none of its rows reach RulePlan. These files are loaded by the row-edit engine, so they also have no effect while [Slices] ModelRules is off (ModelRules.Init returns before Overlays.Load).
+Legacy compatibility declaration. Hard Mode does not apply these cyberware files. Use the CKF Balance Editor Workshop player catalogs; see gui/README.md#workshop-player-catalogs.
 
 Files this toggle gates:
 
@@ -1349,19 +1309,11 @@ Files this toggle gates:
   implants-slot02.csv
 ```
 
-One of the 11 character implant slot sheets. Each carries only the ImplantModel columns live for its own slot, plus the EffectModel columns its own effects use. ImplantSlot 100-107, the 20 drone modules, get no sheet and no toggle.
-
-Lever sheet, not a direct overlay: the first column is ImplantName, and there is no game table called "implants-slot02". Implants.Expand turns each row into ImplantModel and EffectModel writes at load.
-
-Slot help, copied by hand from Implants.SlotHelp (Implants.cs); nothing checks that the two agree:
-
-ImplantConflictId is live in slots 2 and 4 only (16 rows carry a 1). This slot holds seven different ImplantClass values, including the single Pain Inhibitors row of class 16 — the one class that spans two slots, its other six rows being the CombatLinks in slot 3.
-
 ### What the config GUI shows for this section
 
 The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
 
-Turn this off and the mod skips this page's files, so nothing on this page is applied.
+Managed by the Workshop player-balance package. This legacy switch has no effect in Hard Mode.
 
 ### Files this subsystem writes
 
@@ -1388,13 +1340,13 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.ImplantsSlot02` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 02 | On applies this slice's files; off skips them before they are opened. Default true. |
+| `Slices.ImplantsSlot02` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 02 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
 
 **What the config GUI shows for these fields.**
 
 | Field | GUI help |
 |---|---|
-| `Slices.ImplantsSlot02` | Turn this off and the mod skips this page's files, so nothing on this page is applied. |
+| `Slices.ImplantsSlot02` | Managed through Workshop player balance. |
 
 1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
 
@@ -1408,7 +1360,7 @@ None declared.
 
 **Implant Slot 03** &nbsp;·&nbsp; `.cfg` section `[ImplantsSlot03]` &nbsp;·&nbsp; declared in `schema/implantsslot03.schema.json`
 
-Slice toggle. Off: Slices.VerdictForOverlay skips every file below before it is opened, so none of its rows reach RulePlan. These files are loaded by the row-edit engine, so they also have no effect while [Slices] ModelRules is off (ModelRules.Init returns before Overlays.Load).
+Legacy compatibility declaration. Hard Mode does not apply these cyberware files. Use the CKF Balance Editor Workshop player catalogs; see gui/README.md#workshop-player-catalogs.
 
 Files this toggle gates:
 
@@ -1416,19 +1368,11 @@ Files this toggle gates:
   implants-slot03.csv
 ```
 
-One of the 11 character implant slot sheets. Each carries only the ImplantModel columns live for its own slot, plus the EffectModel columns its own effects use. ImplantSlot 100-107, the 20 drone modules, get no sheet and no toggle.
-
-Lever sheet, not a direct overlay: the first column is ImplantName, and there is no game table called "implants-slot03". Implants.Expand turns each row into ImplantModel and EffectModel writes at load.
-
-Slot help, copied by hand from Implants.SlotHelp (Implants.cs); nothing checks that the two agree:
-
-ImplantLevel IS NOT A TIER INDEX HERE, so these rows are in dump file order rather than sorted. All four CombatLink rows, both M-Grade CombatLink rows and all five Cortex Wetgates rows are ImplantLevel 1; no column orders those tiers. Do not read the order as a ladder. EffectModel 50126 is SHARED by CombatLink 4 and M-Grade CombatLink: both are editable here, so giving them different payloads is refused and the refusal names both. See docs\gotchas.md for row 904's self-pointing Deactivated, which ships as-is.
-
 ### What the config GUI shows for this section
 
 The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
 
-Turn this off and the mod skips this page's files, so nothing on this page is applied.
+Managed by the Workshop player-balance package. This legacy switch has no effect in Hard Mode.
 
 ### Files this subsystem writes
 
@@ -1455,13 +1399,13 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.ImplantsSlot03` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 03 | On applies this slice's files; off skips them before they are opened. Default true. |
+| `Slices.ImplantsSlot03` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 03 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
 
 **What the config GUI shows for these fields.**
 
 | Field | GUI help |
 |---|---|
-| `Slices.ImplantsSlot03` | Turn this off and the mod skips this page's files, so nothing on this page is applied. |
+| `Slices.ImplantsSlot03` | Managed through Workshop player balance. |
 
 1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
 
@@ -1475,7 +1419,7 @@ None declared.
 
 **Implant Slot 04** &nbsp;·&nbsp; `.cfg` section `[ImplantsSlot04]` &nbsp;·&nbsp; declared in `schema/implantsslot04.schema.json`
 
-Slice toggle. Off: Slices.VerdictForOverlay skips every file below before it is opened, so none of its rows reach RulePlan. These files are loaded by the row-edit engine, so they also have no effect while [Slices] ModelRules is off (ModelRules.Init returns before Overlays.Load).
+Legacy compatibility declaration. Hard Mode does not apply these cyberware files. Use the CKF Balance Editor Workshop player catalogs; see gui/README.md#workshop-player-catalogs.
 
 Files this toggle gates:
 
@@ -1483,19 +1427,11 @@ Files this toggle gates:
   implants-slot04.csv
 ```
 
-One of the 11 character implant slot sheets. Each carries only the ImplantModel columns live for its own slot, plus the EffectModel columns its own effects use. ImplantSlot 100-107, the 20 drone modules, get no sheet and no toggle.
-
-Lever sheet, not a direct overlay: the first column is ImplantName, and there is no game table called "implants-slot04". Implants.Expand turns each row into ImplantModel and EffectModel writes at load.
-
-Slot help, copied by hand from Implants.SlotHelp (Implants.cs); nothing checks that the two agree:
-
-ImplantConflictId is live in slots 2 and 4 only. MatrixEffectId is live in slots 1, 3, 4 and 11 only.
-
 ### What the config GUI shows for this section
 
 The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
 
-Turn this off and the mod skips this page's files, so nothing on this page is applied.
+Managed by the Workshop player-balance package. This legacy switch has no effect in Hard Mode.
 
 ### Files this subsystem writes
 
@@ -1522,13 +1458,13 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.ImplantsSlot04` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 04 | On applies this slice's files; off skips them before they are opened. Default true. |
+| `Slices.ImplantsSlot04` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 04 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
 
 **What the config GUI shows for these fields.**
 
 | Field | GUI help |
 |---|---|
-| `Slices.ImplantsSlot04` | Turn this off and the mod skips this page's files, so nothing on this page is applied. |
+| `Slices.ImplantsSlot04` | Managed through Workshop player balance. |
 
 1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
 
@@ -1542,7 +1478,7 @@ None declared.
 
 **Implant Slot 05** &nbsp;·&nbsp; `.cfg` section `[ImplantsSlot05]` &nbsp;·&nbsp; declared in `schema/implantsslot05.schema.json`
 
-Slice toggle. Off: Slices.VerdictForOverlay skips every file below before it is opened, so none of its rows reach RulePlan. These files are loaded by the row-edit engine, so they also have no effect while [Slices] ModelRules is off (ModelRules.Init returns before Overlays.Load).
+Legacy compatibility declaration. Hard Mode does not apply these cyberware files. Use the CKF Balance Editor Workshop player catalogs; see gui/README.md#workshop-player-catalogs.
 
 Files this toggle gates:
 
@@ -1550,19 +1486,11 @@ Files this toggle gates:
   implants-slot05.csv
 ```
 
-One of the 11 character implant slot sheets. Each carries only the ImplantModel columns live for its own slot, plus the EffectModel columns its own effects use. ImplantSlot 100-107, the 20 drone modules, get no sheet and no toggle.
-
-Lever sheet, not a direct overlay: the first column is ImplantName, and there is no game table called "implants-slot05". Implants.Expand turns each row into ImplantModel and EffectModel writes at load.
-
-Slot help, copied by hand from Implants.SlotHelp (Implants.cs); nothing checks that the two agree:
-
-BackstoryGroup is live in slot 5 and nowhere else — exactly one row of the 198 carries a 1. No row in this slot has a talent.
-
 ### What the config GUI shows for this section
 
 The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
 
-Turn this off and the mod skips this page's files, so nothing on this page is applied.
+Managed by the Workshop player-balance package. This legacy switch has no effect in Hard Mode.
 
 ### Files this subsystem writes
 
@@ -1589,13 +1517,13 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.ImplantsSlot05` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 05 | On applies this slice's files; off skips them before they are opened. Default true. |
+| `Slices.ImplantsSlot05` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 05 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
 
 **What the config GUI shows for these fields.**
 
 | Field | GUI help |
 |---|---|
-| `Slices.ImplantsSlot05` | Turn this off and the mod skips this page's files, so nothing on this page is applied. |
+| `Slices.ImplantsSlot05` | Managed through Workshop player balance. |
 
 1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
 
@@ -1609,7 +1537,7 @@ None declared.
 
 **Implant Slot 06** &nbsp;·&nbsp; `.cfg` section `[ImplantsSlot06]` &nbsp;·&nbsp; declared in `schema/implantsslot06.schema.json`
 
-Slice toggle. Off: Slices.VerdictForOverlay skips every file below before it is opened, so none of its rows reach RulePlan. These files are loaded by the row-edit engine, so they also have no effect while [Slices] ModelRules is off (ModelRules.Init returns before Overlays.Load).
+Legacy compatibility declaration. Hard Mode does not apply these cyberware files. Use the CKF Balance Editor Workshop player catalogs; see gui/README.md#workshop-player-catalogs.
 
 Files this toggle gates:
 
@@ -1617,19 +1545,11 @@ Files this toggle gates:
   implants-slot06.csv
 ```
 
-One of the 11 character implant slot sheets. Each carries only the ImplantModel columns live for its own slot, plus the EffectModel columns its own effects use. ImplantSlot 100-107, the 20 drone modules, get no sheet and no toggle.
-
-Lever sheet, not a direct overlay: the first column is ImplantName, and there is no game table called "implants-slot06". Implants.Expand turns each row into ImplantModel and EffectModel writes at load.
-
-Slot help, copied by hand from Implants.SlotHelp (Implants.cs); nothing checks that the two agree:
-
-These 25 rows include the 16 cyberweapon claws (ImplantClass 27). The claws are ALSO in cyberweapons-claws.csv, and the columns do not collide: this table carries the install economics and the implant-side effect, that sheet carries the weapon and talent combat stats. Cost here is the CLINIC PRICE (80-10200 across the table); Cost there is the item's valuation (50-700). Every class-27 row has ImplantEffectId 0, so its payload cells are blank and there is nothing here to edit for a claw's effect.
-
 ### What the config GUI shows for this section
 
 The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
 
-Turn this off and the mod skips this page's files, so nothing on this page is applied.
+Managed by the Workshop player-balance package. This legacy switch has no effect in Hard Mode.
 
 ### Files this subsystem writes
 
@@ -1656,13 +1576,13 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.ImplantsSlot06` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 06 | On applies this slice's files; off skips them before they are opened. Default true. |
+| `Slices.ImplantsSlot06` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 06 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
 
 **What the config GUI shows for these fields.**
 
 | Field | GUI help |
 |---|---|
-| `Slices.ImplantsSlot06` | Turn this off and the mod skips this page's files, so nothing on this page is applied. |
+| `Slices.ImplantsSlot06` | Managed through Workshop player balance. |
 
 1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
 
@@ -1676,7 +1596,7 @@ None declared.
 
 **Implant Slot 07** &nbsp;·&nbsp; `.cfg` section `[ImplantsSlot07]` &nbsp;·&nbsp; declared in `schema/implantsslot07.schema.json`
 
-Slice toggle. Off: Slices.VerdictForOverlay skips every file below before it is opened, so none of its rows reach RulePlan. These files are loaded by the row-edit engine, so they also have no effect while [Slices] ModelRules is off (ModelRules.Init returns before Overlays.Load).
+Legacy compatibility declaration. Hard Mode does not apply these cyberware files. Use the CKF Balance Editor Workshop player catalogs; see gui/README.md#workshop-player-catalogs.
 
 Files this toggle gates:
 
@@ -1684,19 +1604,11 @@ Files this toggle gates:
   implants-slot07.csv
 ```
 
-One of the 11 character implant slot sheets. Each carries only the ImplantModel columns live for its own slot, plus the EffectModel columns its own effects use. ImplantSlot 100-107, the 20 drone modules, get no sheet and no toggle.
-
-Lever sheet, not a direct overlay: the first column is ImplantName, and there is no game table called "implants-slot07". Implants.Expand turns each row into ImplantModel and EffectModel writes at load.
-
-Slot help, copied by hand from Implants.SlotHelp (Implants.cs); nothing checks that the two agree:
-
-ImplantLevel IS NOT A TIER INDEX HERE either, so these rows are in dump file order. SynthMuscle 3, SynthMuscle 4 and both SynthBuilder ROM rows are all ImplantLevel 3. Do not read the order as a ladder.
-
 ### What the config GUI shows for this section
 
 The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
 
-Turn this off and the mod skips this page's files, so nothing on this page is applied.
+Managed by the Workshop player-balance package. This legacy switch has no effect in Hard Mode.
 
 ### Files this subsystem writes
 
@@ -1723,13 +1635,13 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.ImplantsSlot07` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 07 | On applies this slice's files; off skips them before they are opened. Default true. |
+| `Slices.ImplantsSlot07` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 07 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
 
 **What the config GUI shows for these fields.**
 
 | Field | GUI help |
 |---|---|
-| `Slices.ImplantsSlot07` | Turn this off and the mod skips this page's files, so nothing on this page is applied. |
+| `Slices.ImplantsSlot07` | Managed through Workshop player balance. |
 
 1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
 
@@ -1743,7 +1655,7 @@ None declared.
 
 **Implant Slot 08** &nbsp;·&nbsp; `.cfg` section `[ImplantsSlot08]` &nbsp;·&nbsp; declared in `schema/implantsslot08.schema.json`
 
-Slice toggle. Off: Slices.VerdictForOverlay skips every file below before it is opened, so none of its rows reach RulePlan. These files are loaded by the row-edit engine, so they also have no effect while [Slices] ModelRules is off (ModelRules.Init returns before Overlays.Load).
+Legacy compatibility declaration. Hard Mode does not apply these cyberware files. Use the CKF Balance Editor Workshop player catalogs; see gui/README.md#workshop-player-catalogs.
 
 Files this toggle gates:
 
@@ -1751,19 +1663,11 @@ Files this toggle gates:
   implants-slot08.csv
 ```
 
-One of the 11 character implant slot sheets. Each carries only the ImplantModel columns live for its own slot, plus the EffectModel columns its own effects use. ImplantSlot 100-107, the 20 drone modules, get no sheet and no toggle.
-
-Lever sheet, not a direct overlay: the first column is ImplantName, and there is no game table called "implants-slot08". Implants.Expand turns each row into ImplantModel and EffectModel writes at load.
-
-Slot help, copied by hand from Implants.SlotHelp (Implants.cs); nothing checks that the two agree:
-
-In the game data nine implant effects carry a non-zero CritMultiBase, all in this slot: Display Link, Combat DisplayLink, Target Optimizer, Apex DisplayLink, Apex Optimizer and Brightshot Optic 1-4, each at 25. Setting those nine cells to 0 removes CritMultiBase from EVERY IMPLANT EFFECT IN THE GAME, which the nine rows alone do not show. CritRate and RangedAttack are separate columns. Range Finder carries CritMultiStealth 25, a different column. These 26 rows include the 18 optical lasers (ImplantClass 32), which are also in cyberweapons-lasers.csv; Cost here is the clinic price, Cost there is the item's valuation.
-
 ### What the config GUI shows for this section
 
 The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
 
-Turn this off and the mod skips this page's files, so nothing on this page is applied.
+Managed by the Workshop player-balance package. This legacy switch has no effect in Hard Mode.
 
 ### Files this subsystem writes
 
@@ -1790,13 +1694,13 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.ImplantsSlot08` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 08 | On applies this slice's files; off skips them before they are opened. Default true. |
+| `Slices.ImplantsSlot08` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 08 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
 
 **What the config GUI shows for these fields.**
 
 | Field | GUI help |
 |---|---|
-| `Slices.ImplantsSlot08` | Turn this off and the mod skips this page's files, so nothing on this page is applied. |
+| `Slices.ImplantsSlot08` | Managed through Workshop player balance. |
 
 1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
 
@@ -1810,7 +1714,7 @@ None declared.
 
 **Implant Slot 09** &nbsp;·&nbsp; `.cfg` section `[ImplantsSlot09]` &nbsp;·&nbsp; declared in `schema/implantsslot09.schema.json`
 
-Slice toggle. Off: Slices.VerdictForOverlay skips every file below before it is opened, so none of its rows reach RulePlan. These files are loaded by the row-edit engine, so they also have no effect while [Slices] ModelRules is off (ModelRules.Init returns before Overlays.Load).
+Legacy compatibility declaration. Hard Mode does not apply these cyberware files. Use the CKF Balance Editor Workshop player catalogs; see gui/README.md#workshop-player-catalogs.
 
 Files this toggle gates:
 
@@ -1818,19 +1722,11 @@ Files this toggle gates:
   implants-slot09.csv
 ```
 
-One of the 11 character implant slot sheets. Each carries only the ImplantModel columns live for its own slot, plus the EffectModel columns its own effects use. ImplantSlot 100-107, the 20 drone modules, get no sheet and no toggle.
-
-Lever sheet, not a direct overlay: the first column is ImplantName, and there is no game table called "implants-slot09". Implants.Expand turns each row into ImplantModel and EffectModel writes at load.
-
-Slot help, copied by hand from Implants.SlotHelp (Implants.cs); nothing checks that the two agree:
-
-MatrixEffectId, InstallJobId, ImplantConflictId, ArmorRestriction and BackstoryGroup are all zero on every row of this slot and are not shown. 14 of the 18 rows have ImplantEffectId 0.
-
 ### What the config GUI shows for this section
 
 The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
 
-Turn this off and the mod skips this page's files, so nothing on this page is applied.
+Managed by the Workshop player-balance package. This legacy switch has no effect in Hard Mode.
 
 ### Files this subsystem writes
 
@@ -1857,13 +1753,13 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.ImplantsSlot09` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 09 | On applies this slice's files; off skips them before they are opened. Default true. |
+| `Slices.ImplantsSlot09` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 09 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
 
 **What the config GUI shows for these fields.**
 
 | Field | GUI help |
 |---|---|
-| `Slices.ImplantsSlot09` | Turn this off and the mod skips this page's files, so nothing on this page is applied. |
+| `Slices.ImplantsSlot09` | Managed through Workshop player balance. |
 
 1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
 
@@ -1877,7 +1773,7 @@ None declared.
 
 **Implant Slot 10** &nbsp;·&nbsp; `.cfg` section `[ImplantsSlot10]` &nbsp;·&nbsp; declared in `schema/implantsslot10.schema.json`
 
-Slice toggle. Off: Slices.VerdictForOverlay skips every file below before it is opened, so none of its rows reach RulePlan. These files are loaded by the row-edit engine, so they also have no effect while [Slices] ModelRules is off (ModelRules.Init returns before Overlays.Load).
+Legacy compatibility declaration. Hard Mode does not apply these cyberware files. Use the CKF Balance Editor Workshop player catalogs; see gui/README.md#workshop-player-catalogs.
 
 Files this toggle gates:
 
@@ -1885,19 +1781,11 @@ Files this toggle gates:
   implants-slot10.csv
 ```
 
-One of the 11 character implant slot sheets. Each carries only the ImplantModel columns live for its own slot, plus the EffectModel columns its own effects use. ImplantSlot 100-107, the 20 drone modules, get no sheet and no toggle.
-
-Lever sheet, not a direct overlay: the first column is ImplantName, and there is no game table called "implants-slot10". Implants.Expand turns each row into ImplantModel and EffectModel writes at load.
-
-Slot help, copied by hand from Implants.SlotHelp (Implants.cs); nothing checks that the two agree:
-
-Rarity is 0 on every row of this slot and is not shown. See docs\gotchas.md for row 3801's Deactivated = -2, which ships as-is.
-
 ### What the config GUI shows for this section
 
 The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
 
-Turn this off and the mod skips this page's files, so nothing on this page is applied.
+Managed by the Workshop player-balance package. This legacy switch has no effect in Hard Mode.
 
 ### Files this subsystem writes
 
@@ -1924,13 +1812,13 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.ImplantsSlot10` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 10 | On applies this slice's files; off skips them before they are opened. Default true. |
+| `Slices.ImplantsSlot10` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 10 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
 
 **What the config GUI shows for these fields.**
 
 | Field | GUI help |
 |---|---|
-| `Slices.ImplantsSlot10` | Turn this off and the mod skips this page's files, so nothing on this page is applied. |
+| `Slices.ImplantsSlot10` | Managed through Workshop player balance. |
 
 1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
 
@@ -1944,7 +1832,7 @@ None declared.
 
 **Implant Slot 11** &nbsp;·&nbsp; `.cfg` section `[ImplantsSlot11]` &nbsp;·&nbsp; declared in `schema/implantsslot11.schema.json`
 
-Slice toggle. Off: Slices.VerdictForOverlay skips every file below before it is opened, so none of its rows reach RulePlan. These files are loaded by the row-edit engine, so they also have no effect while [Slices] ModelRules is off (ModelRules.Init returns before Overlays.Load).
+Legacy compatibility declaration. Hard Mode does not apply these cyberware files. Use the CKF Balance Editor Workshop player catalogs; see gui/README.md#workshop-player-catalogs.
 
 Files this toggle gates:
 
@@ -1952,19 +1840,11 @@ Files this toggle gates:
   implants-slot11.csv
 ```
 
-One of the 11 character implant slot sheets. Each carries only the ImplantModel columns live for its own slot, plus the EffectModel columns its own effects use. ImplantSlot 100-107, the 20 drone modules, get no sheet and no toggle.
-
-Lever sheet, not a direct overlay: the first column is ImplantName, and there is no game table called "implants-slot11". Implants.Expand turns each row into ImplantModel and EffectModel writes at load.
-
-Slot help, copied by hand from Implants.SlotHelp (Implants.cs); nothing checks that the two agree:
-
-One row, drawn as a grid like every other implant slot. Every column is trivially constant across one row, so the usual 'omit a column constant across the table's own rows' rule is not applied here; only the all-zero test is. See docs\gotchas.md for Quantum Rider's MatrixEffectId 50014, which has no MatrixEffectModel row and ships as-is.
-
 ### What the config GUI shows for this section
 
 The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
 
-Turn this off and the mod skips this page's files, so nothing on this page is applied.
+Managed by the Workshop player-balance package. This legacy switch has no effect in Hard Mode.
 
 ### Files this subsystem writes
 
@@ -1991,13 +1871,13 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.ImplantsSlot11` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 11 | On applies this slice's files; off skips them before they are opened. Default true. |
+| `Slices.ImplantsSlot11` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 11 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
 
 **What the config GUI shows for these fields.**
 
 | Field | GUI help |
 |---|---|
-| `Slices.ImplantsSlot11` | Turn this off and the mod skips this page's files, so nothing on this page is applied. |
+| `Slices.ImplantsSlot11` | Managed through Workshop player balance. |
 
 1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
 

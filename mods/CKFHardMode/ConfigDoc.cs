@@ -666,16 +666,10 @@ namespace CKFHardMode
             if (missing.Count > 0 || broken.Count > 0 || strays > 0) Plugin.Log.LogError(line);
             else Plugin.Log.LogInfo(line);
 
-            // implants-global.json is read and guarded here but applied by
-            // Implants.ExpandGlobal, so this line says where its numbers go.
             var ig = slots[ImplantsGlobal];
             if (ig.State == State.Ok)
-                Plugin.Log.LogInfo("ConfigDoc: " + FileFor(ImplantsGlobal) + " was read and "
-                    + "guarded. It is the only source of the three blanket implant "
-                    + "multipliers: Implants.ExpandGlobal applies them to every ImplantModel "
-                    + "row with no selector, including the drone modules in slots 100-107 "
-                    + "that no table shows (accepted, not a bug). See the Implants: lines "
-                    + "below for the numbers.");
+                Plugin.Log.LogInfo("ConfigDoc: legacy implants-global.json is ignored; "
+                    + "cyberware tuning is owned by the player-balance Workshop package.");
         }
     }
 }

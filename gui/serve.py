@@ -95,6 +95,7 @@ import threading
 import time
 import traceback
 import webbrowser
+from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 # FROZEN OR NOT. PyInstaller one-file unpacks the read-only payload into a
@@ -129,9 +130,10 @@ DOCS_DIR = os.path.join(REPO, 'docs')
 APP_HTML = os.path.join(GUI_DIR, 'app.html')
 
 sys.path.insert(0, GUI_DIR)
-import modkit
 sys.path.insert(0, SCRIPTS_DIR)
 import static_data
+import player_balance
+import modkit
 
 DEFAULT_GAME_DIR = r'C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint'
 
@@ -1046,7 +1048,9 @@ def csv_render_cell(value, sep=','):
     return s
 
 
-GUI_EXCLUDED_ROWS = {}
+GUI_EXCLUDED_ROWS = {
+    ('RuleModel.csv', 'RuleId', '22'): ('Surprised accuracy', 'Managed by Workshop player balance'),
+}
 
 
 def overlay_excluded(rel, names, rows):
@@ -2882,7 +2886,7 @@ def files_check_schema_reads(schemas):
     `fingerprints` uses the same list, so an overlay edited on disk between the
     browser's read and the save is detected too.
     """
-    rel = {'ckf.hardmode.cfg'}
+    rel = {'ckf.hardmode.cfg', player_balance.FILE}
     rel.update(overlay_paths_all(schemas))
     for sch in schemas:
         j = sch.get('targets', {}).get('json')
@@ -5392,12 +5396,51 @@ class App:
         self.static_source = static_source
         self.schemas = load_schemas()
         self.lock = threading.Lock()
+        self.catalog_sha = None
+        self.catalog_error = None
+
+    def data_source(self):
+        return self.static_source or self.settings.get('officialDataPath') or default_static_source()
+
+    def api_data_status(self):
+        path = static_data.database_path(self.data_source())
+        try:
+            return {'path': str(path), 'sha256': modkit.state(path)[2]}
+        except (OSError, TypeError, ValueError) as exc:
+            return {'path': str(path), 'sha256': None, 'error': str(exc)}
+
+    def current_fingerprints(self, cd):
+        result = fingerprints(cd, self.schemas)
+        if self.static_source is not False:
+            result['@official-data.db'] = self.api_data_status().get('sha256')
+        return result
+
+    def refresh_talent_catalog(self):
+        if self.static_source is False:
+            return
+        status = self.api_data_status()
+        digest = status.get('sha256')
+        signature = (digest, self.settings.get('talentProjectDir'), config_dir_for(self.settings))
+        if signature == self.catalog_sha:
+            return
+        self.catalog_error = None
+        if digest and self.settings.get('talentProjectDir'):
+            try:
+                import talent_catalog
+                talent_catalog.complete(Path(config_dir_for(self.settings)),
+                                        Path(status['path']), Path(self.settings['talentProjectDir']))
+            except (ValueError, OSError, ImportError) as exc:
+                self.catalog_error = 'Talent catalog could not refresh: %s' % exc
+        elif digest:
+            self.catalog_error = 'Choose the Workshop source repository to refresh talent catalogs automatically.'
+        self.catalog_sha = signature if not self.catalog_error else None
 
     def snapshot(self):
+        self.refresh_talent_catalog()
         cd = config_dir_for(self.settings)
         recovery = recover_journal(cd) if os.path.isdir(cd) else {
             'found': False, 'completed': [], 'missing': [], 'error': None}
-        source = None if self.static_source is False else (self.static_source or default_static_source())
+        source = None if self.static_source is False else self.data_source()
         doc = read_document(cd, self.schemas, source)
         model, extras = build_model(doc)
         return doc, model, extras, cd, recovery
@@ -5407,21 +5450,41 @@ class App:
         secs = sections_for(self.schemas)
         check = run_check_schema(cd) if os.path.isdir(cd) else {
             'ran': False, 'problems': [], 'error': 'config directory does not exist'}
+        player = player_balance.catalog(cd, False if self.static_source is False else self.data_source())
+        retired = {'CyberweaponsClaws', 'CyberweaponsLasers', 'ImplantsGlobal'}
+        retired.update('ImplantsSlot%02d' % n for n in range(1, 12))
+        # Keep legacy declarations readable for validation and old installations;
+        # their controls are replaced by the Workshop catalogs.
+        visible_sections = [dict(s, subsystems=[u for u in s['subsystems'] if u not in retired]) for s in secs]
+        visible_sections = [s for s in visible_sections if s['subsystems']]
+        for section in visible_sections:
+            if len(section['subsystems']) == 1 and section['subsystems'][0].startswith('Talents'):
+                section['title'] = section['title'].removesuffix(' Talent Balance')
+        visible_schemas = [s for s in self.schemas if s['subsystem'] not in retired]
+        nav_groups = nav_groups_for(self.schemas, secs)
+        visible_ids = {s['id'] for s in visible_sections}
+        for group in nav_groups['groups']:
+            group['sections'] = [sid for sid in group['sections'] if sid in visible_ids]
         return {
             'token': self.token,
             'gameDir': self.settings.get('gameDir'),
             'configDir': cd,
             'configDirOverride': self.settings.get('configDirOverride'),
             'stripReadme': bool(self.settings.get('stripReadme', True)),
+            'officialDataPath': str(static_data.database_path(self.data_source())),
             'modkit': {'talentProjectDir': self.settings.get('talentProjectDir', ''),
                        'modkitProjectDir': self.settings.get('modkitProjectDir', '')},
             'defaultGameDir': default_game_dir(),
             'probe': {'config': probe_writable(cd),
                       'overlays': probe_writable(os.path.join(cd, 'ckf.hardmode.d'))
                       if os.path.isdir(cd) else {'state': 'unset', 'detail': 'config dir not readable'}},
-            'schemas': decorate_schemas(self.schemas),
-            'sections': secs,
-            'navGroups': nav_groups_for(self.schemas, secs),
+            'schemas': [dict(s, title=s['title'].removesuffix(' Talent Balance'))
+                        if s['subsystem'].startswith('Talents') else s
+                        for s in decorate_schemas(visible_schemas)],
+            'sections': visible_sections,
+            'playerBalance': player,
+            'talentCatalogError': self.catalog_error,
+            'navGroups': nav_groups,
             'values': model,
             'enableIndex': enable_index(doc, model),
             'masterKey': MASTER_KEY,
@@ -5432,7 +5495,8 @@ class App:
             'missionReference': read_mission_reference(),
             'recovery': recovery,
             'fieldCount': sum(len(s['fields']) for s in self.schemas),
-            'fingerprints': fingerprints(cd, self.schemas) if os.path.isdir(cd) else {},
+            'visibleFieldCount': sum(len(s['fields']) for s in visible_schemas),
+            'fingerprints': self.current_fingerprints(cd) if os.path.isdir(cd) else {},
         }
 
     def api_talent_export(self, expect=None):
@@ -5440,7 +5504,7 @@ class App:
             cd = config_dir_for(self.settings)
             try:
                 if expect:
-                    now = fingerprints(cd, self.schemas)
+                    now = self.current_fingerprints(cd)
                     moved = [k for k, v in expect.items() if now.get(k) != v]
                     if moved:
                         raise ValueError('Config changed on disk; reload before sending: %s'
@@ -5453,9 +5517,28 @@ class App:
                     raise ValueError('Config validation must pass before sending talents. %s'
                                      % (check.get('error') or blocking))
                 return modkit.send(cd, self.settings.get('talentProjectDir') or '',
-                                   self.settings.get('modkitProjectDir') or '')
+                                   self.settings.get('modkitProjectDir') or '',
+                                   self.data_source())
             except Exception as e:
                 return {'ok': False, 'error': str(e)}
+
+    def player_edits(self, cd, edits, proposed):
+        change = edits.get('playerBalance')
+        path = os.path.join(cd, player_balance.FILE)
+        if os.path.exists(path):
+            proposed[player_balance.FILE] = read_bytes(path)
+        if change is None or (not change.get('cells') and not change.get('implantMultipliers')):
+            return
+        try:
+            with static_data.StaticData(self.data_source()) as source:
+                if change.get('databaseSha') != player_balance.identity(source)['sha256']:
+                    raise ValueError('Official data changed; reload before saving player tuning.')
+                result = player_balance.apply_edits(player_balance.load(cd), change, source, cd)
+            data = player_balance.encode(result)
+            if not os.path.exists(path) or read_bytes(path) != data:
+                proposed[player_balance.FILE] = data
+        except (ValueError, OSError, static_data.DataError) as exc:
+            raise SaveRefused({'summary': 'Player tuning was not saved', 'detail': str(exc)})
 
     def api_validate(self, edits, strip_readme=None):
         with self.lock:
@@ -5466,6 +5549,7 @@ class App:
                 apply_table_formats(doc, extras, model, edits)
                 edits, notes = requires_pass(doc.schemas, doc, edits)
                 proposed, more = apply_edits(doc, extras, edits, strip_readme)
+                self.player_edits(cd, edits, proposed)
                 notes = (reformat_notes(doc) + stray_notes(doc, doc.schemas)
                          + notes + more)
             except SaveRefused as e:
@@ -5486,7 +5570,7 @@ class App:
             if strip_readme is None:
                 strip_readme = bool(self.settings.get('stripReadme', True))
             if expect:
-                now = fingerprints(cd, self.schemas)
+                now = self.current_fingerprints(cd)
                 moved = sorted(k for k, v in expect.items()
                                if k in now and now[k] != v)
                 if moved:
@@ -5505,6 +5589,7 @@ class App:
                 # dependent. See requires_pass.
                 edits, notes = requires_pass(doc.schemas, doc, edits)
                 proposed, more = apply_edits(doc, extras, edits, strip_readme)
+                self.player_edits(cd, edits, proposed)
                 notes = (reformat_notes(doc) + stray_notes(doc, doc.schemas)
                          + notes + more)
             except SaveRefused as e:
@@ -5523,6 +5608,12 @@ class App:
                     'check': check, 'blocking': blocking}
 
             current = {}
+            if expect:
+                latest = self.current_fingerprints(cd)
+                moved = [k for k, value in expect.items() if latest.get(k) != value]
+                if moved:
+                    return {'ok': False, 'refused': {'summary': 'Files changed during validation; nothing was written',
+                                                   'detail': ', '.join(sorted(moved))}}
             for rel in proposed:
                 p = os.path.join(cd, rel)
                 if os.path.exists(p):
@@ -5616,6 +5707,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, self.app.api_model())
             except Exception:
                 return self._json(500, {'error': traceback.format_exc()})
+        if path == '/api/data-status':
+            if not (self._token_ok() and self._origin_ok()):
+                return self._send(403, 'forbidden', 'text/plain; charset=utf-8')
+            return self._json(200, self.app.api_data_status())
         return self._send(404, 'no such route', 'text/plain; charset=utf-8')
 
     def do_POST(self):
@@ -5659,7 +5754,7 @@ class Handler(BaseHTTPRequestHandler):
                     s['configDirOverride'] = str(v) if v else None
                 if 'stripReadme' in body:
                     s['stripReadme'] = bool(body['stripReadme'])
-                for key in ('talentProjectDir', 'modkitProjectDir'):
+                for key in ('talentProjectDir', 'modkitProjectDir', 'officialDataPath'):
                     if key in body:
                         s[key] = str(body[key] or '').strip()
                 save_settings(s)
@@ -6222,7 +6317,7 @@ def selftest_source(config_arg):
         % (staged, live or '(settings.json names no game directory)'))
 
 
-def selftest(config_arg, frozen_exe=None):
+def selftest(config_arg, frozen_exe=None, legacy_cyberware_help=False):
     src, how = selftest_source(config_arg)
     print('CKF Hard Mode config GUI — verification')
     print('  source config (copied, never written): %s' % src)
@@ -7410,19 +7505,22 @@ def selftest(config_arg, frozen_exe=None):
                      if 'every implant effect in the game' in _doc_of(_sub_of[f])]
         print('        sheets whose help carries the table-level crit '
               'sentence: %s' % (', '.join(_carriers) or 'none'))
-        t.check('the table-level sentence — that after the rules run the '
-                'multiplier is zero on EVERY implant effect in the game, which '
-                'no row shows — is in the help of the slice that owns those '
-                'rows', _carriers, _crit_files)
+        legacy_crit_name = 'legacy cyberware help: blanket implant crit-removal sentence'
+        if legacy_cyberware_help:
+            t.check(legacy_crit_name, _carriers, _crit_files)
+        else:
+            t.skip(legacy_crit_name, 'Cyberware controls moved to Workshop. Run --legacy-cyberware-help for the historical prose check.')
         # file order, said in the help of the slices whose rows it reorders
         _fo = sorted(os.path.basename(r) for r, e in ov_read.items()
                      if e['fileOrder'] and os.path.basename(r) in _sub_of
                      and 'file order' in _doc_of(_sub_of[os.path.basename(r)]))
         print('        sheets whose help says the rows are in file order: %d %s'
               % (len(_fo), _fo))
-        t.check('the slices whose numeric column does not order their rows say '
-                'so in their help, so a reader is not left to infer it from a '
-                'grid that looks sorted', _fo, _fo)
+        legacy_order_name = 'legacy cyberware help: implant sheet file-order explanation'
+        if legacy_cyberware_help:
+            t.check(legacy_order_name, _fo, _fo)
+        else:
+            t.skip(legacy_order_name, 'Workshop catalogs sort named rows. Run --legacy-cyberware-help for the historical prose check.')
 
         # ---- the sheets that override nothing
         for rel, e in sorted(ov_read.items()):
@@ -9168,6 +9266,9 @@ def selftest(config_arg, frozen_exe=None):
                   % (len(missing_keys), ', '.join(missing_keys) or 'none'))
             appl = App({'gameDir': '', 'configDirOverride': cdl,
                         'stripReadme': False}, 'x', static_source=False)
+            # Exercise a real half-on transition independently of live switches.
+            initial_linked = appl.api_save(_edits_for_keys(lg['keys'], True))
+            t.check('the linkedEnable fixture starts with every member on', initial_linked['ok'], initial_linked)
             t.check('every key of the group is readable in the fixture before '
                     'anything is written to it',
                     all(_live_value(cdl, k) is not None for k in lg['keys']),
@@ -10353,6 +10454,7 @@ def selftest(config_arg, frozen_exe=None):
                 'for the wrong reason',
                 sorted(set(unit_file(u) for u in _noop['json'])
                        | set(_noop.get('overlays') or {})
+                       | ({player_balance.FILE} if _noop.get('playerBalance') is not None else set())
                        | {'ckf.hardmode.cfg'})
                 == sorted(set(owned) - set(mirrors)),
                 (sorted(set(unit_file(u) for u in _noop['json'])
@@ -10636,6 +10738,12 @@ def selftest(config_arg, frozen_exe=None):
             sub = sch['subsystem']
             cdp = _sandbox(src, os.path.join(td, 'gate-' + sub))
             appp = App({'gameDir': '', 'configDirOverride': cdp, 'stripReadme': False}, 'x', static_source=False)
+            # An off dependent cannot test the downward requires guard. Build
+            # the complete dependency graph on, then turn this one gate off.
+            dependency_keys = {k for _s, d, needs, _r in requires_groups(appp.schemas)
+                               for k in [d] + needs}
+            seeded = appp.api_save({'cfg': {k: {'value': True} for k in dependency_keys}})
+            t.check('%s: dependency fixture is enabled before testing its guard' % sub, seeded['ok'], seeded)
             en = sch['enable']
             if en.get('json'):
                 gate, unit = en['json'], sidecar_unit(sch)
@@ -11860,6 +11968,10 @@ def _edits_for(schemas, model):
     the only shape in which that sentence is worth asserting.
     """
     edits = {'cfg': {}, 'json': {}, 'overlays': {}}
+    if model.get('playerBalance', {}).get('document'):
+        # No-op coverage includes the Workshop file without pretending its
+        # catalog is readable when this harness deliberately disables static data.
+        edits['playerBalance'] = {'cells': [], 'implantMultipliers': {}}
     for rel, ent in (model['values'].get('overlays') or {}).items():
         if not ent.get('writable'):
             continue
@@ -12484,7 +12596,11 @@ Node.prototype.insertBefore = function (n, ref) {
 Node.prototype.removeChild = function (n) {
   const i = this.children.indexOf(n); if (i >= 0) this.children.splice(i, 1); return n;
 };
-Node.prototype.setAttribute = function (k, v) { this.attrs[k] = String(v); if (k === 'type') this.type = String(v); };
+Node.prototype.setAttribute = function (k, v) {
+  this.attrs[k] = String(v);
+  if (['type','value','placeholder','title'].includes(k)) this[k] = String(v);
+  if (['disabled','checked','open','required','selected','multiple'].includes(k)) this[k] = true;
+};
 Node.prototype.getAttribute = function (k) { return this.attrs[k]; };
 Node.prototype.addEventListener = function (k, fn) { (this.listeners[k] = this.listeners[k] || []).push(fn); };
 Node.prototype.removeEventListener = function () {};
@@ -12527,7 +12643,7 @@ const document = {
 };
 for (const id of ['banners', 'index', 'panel', 'dirty', 'save', 'gamedir', 'probe',
                   'applydir', 'revalidate', 'talent-project', 'modkit-project',
-                  'modkit-paths', 'send-talents', 'modkit-status']) {
+                  'modkit-paths', 'send-talents', 'modkit-status', 'technical', 'official-data']) {
   const n = new Node(id === 'gamedir' ? 'input' : 'div');
   n.setAttribute('id', id); document._ids[id] = n;
 }
@@ -12542,6 +12658,22 @@ def dom_driver(model_json, asserts=None):
     # readonly renderer explicitly instead of relying on mutable tuning to
     # leave an entire sheet constant. Keep all original sheets in the fixture.
     fixture = json.loads(model_json)
+    # Cyberware's dependent switches are retired from the production UI.
+    # Exercise the generic client dependency guard using two visible fixture
+    # sections, rather than depending on live tuning to leave one enabled.
+    if not any(inv.get('kind') == 'requires' for sch in fixture['schemas'] for inv in sch.get('invariants', [])):
+        candidates = [sch for sch in fixture['schemas']
+                      if (sch.get('enable') or {}).get('cfg', '').startswith('Slices.')]
+        if len(candidates) >= 2:
+            owner, needed = candidates[:2]
+            for candidate in (owner, needed):
+                slot = fixture['values']['cfg'][candidate['enable']['cfg']]
+                slot.update(present=True, value=True, raw='true', error=None)
+            cfg_name = owner['targets']['cfg']
+            owner.setdefault('invariants', []).append({'kind': 'requires',
+                'key': cfg_name + '#' + owner['enable']['cfg'],
+                'needs': [cfg_name + '#' + needed['enable']['cfg']],
+                'reason': 'Explicit client dependency test fixture'})
     for schema in fixture['schemas']:
         if any(f.get('in') == 'reference' for f in schema.get('fields', [])):
             continue
@@ -12559,6 +12691,12 @@ def dom_driver(model_json, asserts=None):
         ent['rowGroups'], ent['groupOrder'] = {}, []
         fixture['values']['overlays'][rel] = ent
         schema['targets']['overlays'] = list(paths) + [rel]
+        one = json.loads(json.dumps(candidates[0]))
+        one_rel = 'ckf.hardmode.d/one-row-render-fixture.csv'
+        one['path'], one['rows'] = one_rel, one['rows'][:1]
+        one['rowGroups'], one['groupOrder'] = {}, []
+        fixture['values']['overlays'][one_rel] = one
+        schema['targets']['overlays'].append(one_rel)
         break
     model_json = json.dumps(fixture)
     with open(APP_HTML, encoding='utf-8') as f:
@@ -13553,13 +13691,20 @@ setTimeout(function () {
            + 'to put beside the override', !!labCol && !!valCol,
            (ref.row || []).map(function (c) { return c.name; }));
         if (labCol && valCol) {
-          const bad = refTable.rows.filter(function (r) {
+          const excluded = files.reduce(function (all, rel) {
+            return all.concat((FIXTURE.values.overlays[rel] || {}).excluded || []);
+          }, []);
+          const ownedRows = refTable.rows.filter(function (r) {
+            return !excluded.some(function (x) {return String(r.cells[x.column]) === String(x.id);});
+          });
+          ck(s.subsystem + ': the reference still contains Hard Mode-owned rows', ownedRows.length > 0);
+          const bad = ownedRows.filter(function (r) {
             const row = panel.find(function (n) {
               return n.tagName === 'TR'
                      && txt(n).indexOf(String(r.cells[labCol.name])) >= 0; })[0];
             return !row || txt(row).indexOf(String(r.cells[valCol.name])) < 0;
           });
-          ck(s.subsystem + ': every rule is drawn on one row carrying both its '
+          ck(s.subsystem + ': every Hard Mode-owned rule is drawn on one row carrying both its '
              + 'name and the value the game ships',
              bad.length === 0, bad.slice(0, 3).map(function (r) {
                return r.cells[labCol.name]; }));
@@ -13985,10 +14130,12 @@ def main(argv=None):
                          'reported NOT RUN rather than passing')
     ap.add_argument('--selftest-js', action='store_true',
                     help='run app.html\'s pure functions under node')
+    ap.add_argument('--legacy-cyberware-help', action='store_true',
+                    help='run the retired legacy cyberware prose checks in --selftest')
     a = ap.parse_args(args)
 
     if a.selftest:
-        return selftest(a.config, a.frozen_exe)
+        return selftest(a.config, a.frozen_exe, a.legacy_cyberware_help)
     if a.selftest_js:
         return selftest_js()
     if a.migrate:

@@ -50,8 +50,8 @@ The table below identifies candidates to investigate. “Candidate” means the 
 | Limit-break trait effects | `EffectModel.limitbreak.csv` under `LimitBreakTraits` | Candidate `Effect` updates. This is separate from Fatigue's runtime trait grants. |
 | Mission Power Level label | `MissionPowerLevelModel.generated.json` under `ModelRules` | Candidate `MissionPowerLevel` update for the label only. Keep it coupled to `Progression`'s award logic until both are verified together. |
 | Gear-class lever sheet | `GearClasses.Expand`, driven by `gear-classes.csv` and post-overlay `MonsterTypeModel.WeaponTypeId` | Export expanded `Weapon` edits only after reproducing the player/enemy partition from the chosen config and data revision. |
-| Cyberweapon lever sheets | `Cyberweapons.Expand` reads two CSVs | Export paired `Weapon` and `Talent` edits as one tuning unit. |
-| Implant global and slot levers | `Implants.ExpandGlobal` plus 11 slot CSVs | Export related `Implant` and `Effect` edits; avoid applying the global multiplier twice. |
+| Cyberweapon tuning | Workshop-owned `ckf.player-balance.json`; Hard Mode skips legacy sheets | Paired `Weapon` and `Talent` SQL updates through the [Workshop editor](../gui/README.md#workshop-player-catalogs). |
+| Implant global and slot tuning | Workshop-owned `ckf.player-balance.json`; no Hard Mode expansion | Related `Implant` and `Effect` updates followed by unscoped global multipliers; see the same editor reference. |
 | Consumable family levers | `Consumables.Expand` reads six family CSVs | Export related `Item`, `Talent`, `Effect`, `MatrixEffect` edits as each lever requires. |
 | Row clones from any overlay/rule | `_clone`/`as` through `RowClone` | Test SQL inserts separately from updates. Parser defaults do not imply a clone of every source-column value. Check new ID ownership, references, reader behavior and localization. |
 | General table rules | `ModelRules` set/multiply/add/clamps/curves | Native sparse `UPDATE` directly represents supplied set values. Arithmetic, clamping and curves require an explicit translation strategy and parity check; do not silently evaluate them against an old dump. |
@@ -73,7 +73,10 @@ For every conversion, key records by `(table, id)`. Preserve the difference betw
 5. **Compare behavior at the right sampling moment.** Validate SQL pointers and unique IDs, turn off only the corresponding BepInEx owner, then exercise the affected game read. For a row selected by SQL filters, test the selection path; for a clone, test both by-id and filtered-list access; for a label paired with a saved award, test both outputs. A missing trace is meaningful only after establishing that the instrument covered that path.
 6. **Move the owner and packaging together.** Once parity is observed, update the editor/exporter, BepInEx gates and release packaging so that the value has one maintained source and one runtime owner. Re-run the live BepInEx checks and the new SQL checks. Record the final Workshop item boundary, companion DLL requirement, install/activation sequence, and rollback path in the owning release docs.
 
-This sequence is a proposed migration method. No port or bundle has been implemented yet, and save-writing test paths still require review before execution under `AGENTS.md`.
+Use this sequence for remaining ports. The talent/player-balance and enemy
+packages have their own implemented export workflows; their owning documents
+record verification limits. Save-writing test paths still require review
+before execution under `AGENTS.md`.
 
 ## Questions to settle before bundling
 
