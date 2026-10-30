@@ -5,9 +5,28 @@ import unittest
 
 from export_enemy_difficulty import PROJECT
 from verify_enemy_difficulty import verify
+from install_enemy_difficulty import require_steam_install
 
 
 class EnemyDifficultyChecks(unittest.TestCase):
+    def test_requires_a_registered_steam_install(self):
+        with TemporaryDirectory(prefix='registration-test-', dir=PROJECT) as temporary:
+            root = Path(temporary).resolve()
+            self.assertTrue(root.is_relative_to(PROJECT.resolve()))
+            workshop = root / 'workshop/content/1021210/3829942905'
+            workshop.mkdir(parents=True)
+            manifest = root / 'workshop/appworkshop_1021210.acf'
+            with self.assertRaisesRegex(ValueError, 'Could not establish Steam installation'):
+                require_steam_install(workshop)
+            manifest.write_text('"AppWorkshop" { "WorkshopItemsInstalled" { "3814427009" { "size" "1" } } }')
+            with self.assertRaisesRegex(ValueError, 'Steam has not registered Workshop item 3829942905'):
+                require_steam_install(workshop)
+            manifest.write_text('"AppWorkshop" { "WorkshopItemsInstalled" { "3829942905" { "size" "1" } } }')
+            self.assertEqual(require_steam_install(workshop)['itemid'], '3829942905')
+            manifest.write_text('"AppWorkshop" { "WorkshopItemsInstalled" {')
+            with self.assertRaisesRegex(ValueError, 'Could not establish Steam installation'):
+                require_steam_install(workshop)
+
     def test_rejects_corrupted_payloads(self):
         cases = (
             ("wrong enemy ceiling", 'UPDATE Rule SET Value=12 WHERE RuleId=82;', 'Row mismatch: Rule 82'),

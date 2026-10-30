@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 from uuid import uuid4
 
@@ -18,10 +19,58 @@ def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def require_steam_install(workshop):
+    """A manually created directory is not an installed Steam Workshop item."""
+    appid, itemid = workshop.parent.name, workshop.name
+    if not appid.isdecimal() or not itemid.isdecimal():
+        raise ValueError(f"Expected workshop/content/<appid>/<itemid>: {workshop}")
+    manifest = workshop.parents[2] / f"appworkshop_{appid}.acf"
+    try:
+        tokens = re.findall(r'"((?:\\.|[^"\\])*)"|([{}])', manifest.read_text(encoding="utf-8-sig"))
+        index = 0
+
+        def object_value(nested=False):
+            nonlocal index
+            result = {}
+            while index < len(tokens):
+                text, brace = tokens[index]
+                index += 1
+                if brace == "}":
+                    if not nested:
+                        raise ValueError("Unexpected closing brace")
+                    return result
+                if brace or index >= len(tokens):
+                    raise ValueError("Missing key/value")
+                value, delimiter = tokens[index]
+                index += 1
+                if delimiter == "{":
+                    result[text] = object_value(True)
+                elif delimiter:
+                    raise ValueError("Missing value")
+                else:
+                    result[text] = value
+            if nested:
+                raise ValueError("Unclosed object")
+            return result
+
+        root = object_value()["AppWorkshop"]
+        installed = root.get("WorkshopItemsInstalled", {})
+        if not isinstance(installed, dict):
+            raise ValueError("WorkshopItemsInstalled is not an object")
+    except (OSError, KeyError, ValueError) as exc:
+        raise ValueError(f"Could not establish Steam installation from {manifest}: {exc}") from exc
+    if itemid not in installed:
+        raise ValueError(f"Steam has not registered Workshop item {itemid} as installed. "
+                         "Subscribe to your own item and let Steam finish downloading before Local Install. "
+                         "Creating its folder or copying SQL alone does not register it.")
+    return {"manifest": str(manifest), "appid": appid, "itemid": itemid}
+
+
 def install(project, uploader, workshop):
     for path in (uploader, workshop):
         if not path.is_dir():
             raise ValueError(f"Create the destination first: {path}")
+    require_steam_install(workshop)
     receipt = json.loads((project / "review/SOURCE.json").read_bytes())
     for name, expected in receipt["source_inputs"].items():
         if digest(Path(name).read_bytes()) != expected:

@@ -108,13 +108,35 @@ tests keep those refusals runnable.
 
 ## Hand off and test
 
+The official [Quick Start](https://cyberknightswiki.tresebrothers.com/Modding_Quick_Start#Setup_Your_Mod)
+requires an initial Private upload, subscription to that item, and a completed
+Steam download. Later development iterations use Local Install without another
+upload; Public publication is a separate release step. A manually created
+`steamapps/workshop/content/<appid>/<itemid>`
+directory does not register the item with Steam. [measured] The failed local
+test's `Logs/EnemyDifficulty-undiscovered-Player-20261029.log`,
+`ModManager.ReadSteamSubscribedItems` output, listed only the other Workshop
+item even though Enemy Difficulty's SQL was present on disk. The uploader's
+[Local Install](https://cyberknightswiki.tresebrothers.com/Modding_Mod_Uploader#Local_Install)
+copies prepared files into the selected Steam folder; it does not replace
+subscription and in-game activation.
+
 After the preceding checks, `scripts/install_enemy_difficulty.py` takes explicit
-`--uploader-project` and `--workshop-dir` paths. It writes parser sources to
+`--uploader-project` and `--workshop-dir` paths. It first verifies the item is
+registered in Steam's `appworkshop_<appid>.acf` installed-item list, refusing
+missing or unreadable registration before any writes. It writes parser sources to
 `source_data`, prepared SQL/locales to `upload_content/_data`, and the same
 payload to the downloaded Workshop item's `_data`. It stages distinct files,
 checks expected modification times and hashes before committing, then hashes
 the disk copies. It does not change Workshop metadata, publish, subscribe or
 activate the mod.
+
+If Steam downloads the published version after a local copy was installed,
+repeat Local Install and verify the SQL/locale hashes again. Restart the game,
+enable Enemy Difficulty in its Mods list and apply the selection before loading
+the test save. Discovery in the startup log, activation and SQL application are
+separate observations; verify each before interpreting a generated mission's
+power level.
 
 For the Workshop test, keep Hard Mode's master enabled with only its
 `Difficulty` slice enabled. Its mission-generation hooks, ModelRules, gear,
