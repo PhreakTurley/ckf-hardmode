@@ -34,15 +34,39 @@ setTimeout(async function () {
   const native = document.querySelector('#index');
   const drones = native.find(function(n) {return n.tagName==='DETAILS' && n.textContent.startsWith('Drone weapons');})[0];
   ck('drone weapon sections start collapsed', !drones.open);
+  SEL='pb:weapon-1';render();
+  const melee = MODEL.playerBalance.pages.find(function(p) {return p.id==='weapon-1';}).grids[0];
+  const headers = find(function(n) {return n.tagName==='TH';});
+  ck('PL rarity and cost follow name', headers.slice(0,4).map(function(n) {return n.textContent;}).join('|')==='Name|PL|Rarity|Cost');
+  ck('icon references and separating headings are displayed', find(function(n) {return n._cls().includes('pb-icon');}).length > 0
+     && find(function(n) {return n._cls().includes('pb-section');}).length > 1);
+  ck('varying damage fields are grouped into attack modes', ['Damage 1','Damage 2'].every(function(group) {
+    return headers.some(function(n) {return n.textContent===group;})===melee.columns.some(function(c) {return c.group===group;});
+  }));
+  ck('varying weapon effects are visible', headers.some(function(n) {return n.getAttribute('title')==='WeaponEffect';})
+     ===melee.columns.some(function(c) {return c.name==='WeaponEffect';}));
+  const widthGrid = {table:'WidthFixture',rows:[{id:'1',baseline:{value:'1'}},{id:'2',baseline:{value:'1234567890123'}}]};
+  ck('column widths include longest heading and offscreen value', playerColumnWidth(widthGrid,{name:'value',label:'Value'})
+     >playerColumnWidth({table:'WidthFixture',rows:[widthGrid.rows[0]]},{name:'value',label:'Value'})
+     && playerColumnWidth(widthGrid,{name:'value',label:'An even longer title for this field'})>playerColumnWidth(widthGrid,{name:'value',label:'Value'}));
+  SEL='pb:weapon-mods';render();
+  ck('weapon mods have editable stat cells', find(function(n) {return n.tagName==='INPUT' && n.getAttribute('type')==='text';}).length > 0);
+  const modInput = find(function(n) {return n.tagName==='INPUT' && n.getAttribute('type')==='text';})[0];
+  modInput.value='=19';modInput.fire('input');
+  ck('weapon mod edits retain their table identity', buildEdits().playerBalance.cells.some(function(c) {return c.table==='WeaponMod' && c.value==='=19';}));
   SEL='pb:traits';render();
+  ck('traits have score subsections', find(function(n) {return n.tagName==='SUMMARY' && n.textContent.startsWith('Trait score ');}).length>1);
+  ck('trait effects display their owners', find(function(n) {return n._cls().includes('pb-section-name');}).length>0);
   ck('traits are paginated', find(function(n) {return n.tagName==='BUTTON' && n.textContent==='Next' && !n.disabled;}).length>0);
   const next = find(function(n) {return n.tagName==='BUTTON' && n.textContent==='Next' && !n.disabled;})[0];
   next.fire('click');
   ck('pagination advances', panel.textContent.includes('76–'));
+  ck('pagination advances only its own grid', find(function(n) {return n.tagName==='SPAN' && n.textContent.startsWith('76–');}).length===1);
   const search = find(function(n) {return n.tagName==='INPUT' && n.getAttribute('type')==='search';})[0];
   search.value='Checked Out';search.fire('input');
   ck('fatigue rows are read-only in the Workshop trait catalog', find(function(n) {return n._cls().includes('readonly');}).length>0);
   SEL='pb:leverage';render();
+  ck('leverage has data-backed subsets', panel.textContent.includes('Face talent:') && panel.textContent.includes('Room level 2'));
   const leverageSearch = find(function(n) {return n.tagName==='INPUT' && n.getAttribute('type')==='search';})[0];
   leverageSearch.value='Suppressed Alarm';leverageSearch.fire('input');
   ck('leverage has readable names', panel.textContent.includes('Suppressed Alarm'));

@@ -17,13 +17,13 @@ import static_data
 import gear_classes
 
 FILE = 'ckf.player-balance.json'
-TABLE_KEYS = {'Weapon': 'WeaponId', 'Armor': 'ArmorId', 'Implant': 'ImplantTypeId',
+TABLE_KEYS = {'Weapon': 'WeaponId', 'WeaponMod': 'WeaponModId', 'Armor': 'ArmorId', 'Implant': 'ImplantTypeId',
               'Talent': 'TalentId', 'Effect': 'EffectId', 'MatrixEffect': 'MatrixEffectId',
               'MissionAdvantage': 'AdvantageTypeId', 'Trait': 'TraitId', 'Rule': 'RuleId'}
 MULTIPLIERS = {'Cost': 'Price', 'InstallTime': 'Installation time', 'ImplantStress': 'Implant stress'}
 # The limit-break edits remain exclusively in Hard Mode.
 HARDMODE_EFFECTS = {10505, 10507}
-METADATA = {'Rarity', 'Locked', 'FactionId', 'ServiceOptionId', 'Asset3DTypeId',
+METADATA = {'Locked', 'FactionId', 'ServiceOptionId', 'Asset3DTypeId', 'ModClassId', 'ModSlot',
             'ShotVFXCount', 'WeaponClass', 'ImplantClass', 'ImplantSlot',
             'ImplantLevel', 'ImplantConflictId', 'Deactivated', 'BackstoryGroup',
             'InstallJobId', 'EffectClassification', 'EffectClearType', 'EffectPurgeType',
@@ -36,12 +36,12 @@ METADATA = {'Rarity', 'Locked', 'FactionId', 'ServiceOptionId', 'Asset3DTypeId',
             'AlternateAdjustment', 'AltOverride', 'AlternateCharge', 'Counter'}
 METADATA.update({'EffectTypeId', 'MatrixEffectTypeId', 'ImplantEffectId', 'ImplantTraitGroup',
                  'MatrixEffectId', 'EffectTriggerType', 'TriggerEffectId', 'WoundTraitId',
-                 'ImplantTalentId', 'ArmorEffectId', 'WeaponEffect', 'TargetEffect',
+                 'ImplantTalentId', 'ArmorEffectId', 'TargetEffect',
                  'SelfEffect', 'MatrixEffect', 'Token'})
 LABELS = {'ApCost': 'AP cost', 'CritMultiBase': 'Crit damage', 'CritMultiStealth': 'Stealth crit damage',
           'ImplantStress': 'Stress', 'InstallTime': 'Install time', 'BaseCost': 'Price',
           'BallisticDamage1': 'Ballistic · 1', 'BallisticDamage2': 'Ballistic · 2',
-          'PhysicalDamage1': 'Kinetic · 1', 'PhysicalDamage2': 'Kinetic · 2',
+          'PhysicalDamage1': 'Physical · 1', 'PhysicalDamage2': 'Physical · 2',
           'PureDamage1': 'Pure · 1', 'PureDamage2': 'Pure · 2',
           'ActionPoints1': 'AP · 1', 'ActionPoints2': 'AP · 2',
           'Accuracy1': 'Accuracy · 1', 'Accuracy2': 'Accuracy · 2',
@@ -51,8 +51,64 @@ CLASS_NAMES = {1: 'Melee', 2: 'Pistols', 3: 'Assault rifles', 4: 'Shotguns',
                5: 'Energy rifles', 6: 'Sniper rifles', 7: 'Canine rigs', 9: 'Drone assault rifles',
                10: 'SMGs', 11: 'Revolvers', 12: 'Urban assault rifles', 14: 'Railguns',
                16: 'Cyber claws', 17: 'Eye lasers', 18: 'Drone SMGs', 19: 'Drone energy rifles'}
-SLOT_NAMES = {1: 'Skin', 2: 'Spine', 3: 'Deep brain', 4: 'Fast brain', 5: 'Skeleton',
-              6: 'Arms', 7: 'Legs', 8: 'Eyes', 9: 'Chest', 10: 'Lungs', 11: 'Quantum Rider'}
+SLOT_NAMES = {1: 'Skin', 2: 'Spinal', 3: 'Deep Brain', 4: 'Fast Brain', 5: 'Skeletal',
+              6: 'Arms', 7: 'Legs', 8: 'Ocular', 9: 'Heart', 10: 'Lungs', 11: 'Quantum Rider'}
+SLOT_ORDER = [8, 6, 1, 5, 3, 4, 2, 9, 10, 7]
+# Explicit presentation order, independent of SQL's physical column order.
+WEAPON_GROUPS = [
+    ('Damage 1', ['PhysicalDamage1', 'BallisticDamage1', 'PureDamage1']),
+    ('Damage 2', ['PhysicalDamage2', 'BallisticDamage2', 'PureDamage2']),
+    ('Damage', ['PhysicalDamageMod', 'BallisticDamageMod', 'PureDamageMod']),
+    ('Accuracy', ['Accuracy1', 'Accuracy2', 'AccuracyMod']),
+    ('Armor crit', ['ArmorCritRate1', 'ArmorCritRate2', 'ArmorCritRateMod']),
+    ('Crit damage', ['CritMultiStealth', 'CritMultiBase']),
+    ('Range', ['OptimalRangeA1', 'OptimalRangeB1', 'OptimalRangeA2', 'OptimalRangeB2',
+               'OptimalRangeAMod', 'OptimalRangeBMod', 'MaxRange', 'MaxRangeMod']),
+    ('Recoil', ['RecoilRate1', 'RecoilRate2', 'RecoilRateMod']),
+    ('', ['ShotVolume']), ('Arc', ['AngleFire1', 'AngleFire2', 'AngleFireMod']),
+    ('', ['ReloadSize', 'WeaponEffect'])]
+LEADING_COLUMNS = ['PowerLevel', 'Rarity', 'Cost']
+GEAR_ORDER = LEADING_COLUMNS + [c for _, columns in WEAPON_GROUPS for c in columns]
+
+
+def natural(value):
+    return [int(x) if x.isdigit() else x.casefold() for x in re.split(r'(\d+)', value)]
+
+
+def effective(doc, table, row, column):
+    value = float(row.get(column, '0') or 0)
+    parsed = adjustment(doc['tables'].get(table, {}).get(row[TABLE_KEYS[table]], {}).get(column, ''))
+    if parsed is not None:
+        op, n = parsed
+        value = round(n if op == 'set' else value + n if op == 'add' else value * n)
+    if table == 'Implant' and column in MULTIPLIERS:
+        value = round(value * doc.get('implantMultipliers', {}).get(column, 1))
+    return value
+
+
+def column_presentation(table, column):
+    if column == 'PowerLevel':
+        return {'label': 'PL'}
+    if table not in ('Weapon', 'WeaponMod'):
+        return {}
+    for group, columns in WEAPON_GROUPS:
+        if column not in columns:
+            continue
+        short = {'CritMultiStealth': 'Stealth', 'CritMultiBase': 'Non-stealth',
+                 'ShotVolume': 'Noise', 'ReloadSize': 'Reload size', 'WeaponEffect': 'Weapon effect',
+                 'MaxRange': 'Max', 'MaxRangeMod': 'Max'}
+        if column.startswith(('PhysicalDamage', 'BallisticDamage', 'PureDamage')):
+            title = column.split('Damage')[0]
+        elif column.startswith('OptimalRange'):
+            title = ('Optimal min' if column[12] == 'A' else 'Optimal max')
+            if column[-1:] in ('1', '2'):
+                title += ' ' + column[-1]
+        elif column[-1:] in ('1', '2'):
+            title = column[-1]
+        else:
+            title = 'Modifier'
+        return {'group': group, 'label': short.get(column, title)}
+    return {}
 
 
 def encode(value):
@@ -181,6 +237,10 @@ def catalog(config_dir, database):
             protected = protected_rows(config_dir, source)
             allrows = {t: {r[TABLE_KEYS[t]]: r for r in source.read(t + 'Model')[1]}
                        for t in TABLE_KEYS}
+            assets = {r['WeaponModelId']: r for r in source.read('Weapon3DAssetModel')[1]}
+            for trait in allrows['Trait'].values():
+                if trait['TraitName'].startswith('Trait.Name.'):
+                    trait['TraitName'] = source.locale.get('Trait.Name.' + trait['TraitGroup'] + '_Male', trait['TraitName'])
 
             def grid(table, rows, title, policy='varying'):
                 cols = declarations(source, table)
@@ -189,11 +249,19 @@ def catalog(config_dir, database):
                 for col in cols:
                     values = {r.get(col, '') for r in rows}
                     has_override = any(overrides.get(r[TABLE_KEYS[table]], {}).get(col, '') != '' for r in rows)
-                    interesting = (len(values) > 1 if policy == 'varying' and len(rows) > 1
+                    interesting = (len(values) > 1 if policy == 'varying'
                                    else any(v not in ('', '0', '0.0') for v in values))
                     target = visible if has_override or (interesting and col not in METADATA) else advanced
-                    target.append({'name': col, 'label': label(col)})
+                    target.append({'name': col, 'label': label(col), **column_presentation(table, col)})
+                order = GEAR_ORDER if table in ('Weapon', 'WeaponMod') else LEADING_COLUMNS
+                for columns in (visible, advanced):
+                    for column in columns:
+                        column['order'] = (order.index(column['name']) if column['name'] in order
+                                           else len(order) + list(cols).index(column['name']))
+                        column['leading'] = column['name'] in LEADING_COLUMNS
+                    columns.sort(key=lambda c: c['order'])
                 namekey = {'Weapon': 'WeaponName', 'Armor': 'ArmorName', 'Implant': 'ImplantName',
+                           'WeaponMod': 'ModName',
                            'Trait': 'TraitName', 'Effect': 'EffectName', 'MatrixEffect': 'EffectName',
                            'Talent': 'TalentName'}.get(table)
                 records = []
@@ -207,17 +275,27 @@ def catalog(config_dir, database):
                     records.append({'id': rid, 'name': name or title + ' ' + rid,
                                     'baseline': {c: r[c] for c in cols},
                                     'readOnly': rid in protected.get(table, set())})
-                records.sort(key=lambda r: [int(x) if x.isdigit() else x.casefold()
-                                            for x in re.split(r'(\d+)', r['name'])])
+                raw = {r[TABLE_KEYS[table]]: r for r in rows}
+                records.sort(key=lambda r: (tuple(effective(doc, table, raw[r['id']], c)
+                                                  for c in LEADING_COLUMNS), natural(r['name']))
+                             if table in ('Weapon', 'WeaponMod', 'Implant') else ((), natural(r['name'])))
                 return {'table': table, 'title': title, 'columns': visible, 'advanced': advanced, 'rows': records,
                         'multipliers': doc.get('implantMultipliers', {}) if table == 'Implant' else {}}
 
-            def linked(rows, field, table, title):
+            def linked(rows, field, table, title, related=False):
                 ids = {r.get(field) for r in rows} - {None, '', '0', '-1'}
                 missing = ids - allrows[table].keys()
                 result_grid = grid(table, [allrows[table][i] for i in ids if i in allrows[table]], title, 'nonzero') if ids else None
                 if missing and result_grid is not None:
                     result_grid['warning'] = 'Official data has unresolved %s pointers: %s' % (field, ', '.join(sorted(missing)))
+                if related and result_grid:
+                    for record in result_grid['rows']:
+                        owners = sorted((r for r in rows if r.get(field) == record['id']),
+                                        key=lambda r: natural(r['TraitName']))
+                        record['section'] = ', '.join(dict.fromkeys(r['TraitName'] for r in owners))
+                        if record['name'].startswith(('Effect.Name.', 'MatrixEffect.Name.')):
+                            record['name'] = 'Level ' + ', '.join(sorted({r['TraitLevel'] for r in owners}, key=int))
+                    result_grid['rows'].sort(key=lambda r: (natural(r['section']), natural(r['name'])))
                 return result_grid
 
             def page(pid, title, group, grids, **kwargs):
@@ -232,21 +310,69 @@ def catalog(config_dir, database):
                 names = {r.get('WeaponClassName', '') for r in rows
                          if r.get('WeaponClassName') and not r['WeaponClassName'].startswith('Gear.')}
                 title = next(iter(names)) if len(names) == 1 else CLASS_NAMES.get(cls, 'Weapon class %s' % cls)
-                page('weapon-%s' % cls, title, 'Drone weapons' if cls in (9, 18, 19) else 'Weapons', [grid('Weapon', rows, 'Weapon stats'),
+                weapon_grid = grid('Weapon', rows, 'Weapon stats')
+                if cls in (1, 10):
+                    weapon_grid['iconColumn'] = True
+                    for record in weapon_grid['rows']:
+                        asset_id = allrows['Weapon'][record['id']]['Asset3DTypeId']
+                        path = assets.get(asset_id, {}).get('Thumbnail', '')
+                        # This is the actual official thumbnail reference, not
+                        # a weapon-name heuristic or an invented subtype.
+                        icon = path.rsplit('/', 1)[-1]
+                        record['icon'] = label(re.sub(r'^W_(Melee|Pistol)_', '', icon).replace('_', ' ')) or 'Asset ' + asset_id
+                        record['iconPath'] = path
+                        record['section'] = record['icon']
+                    weapon_grid['rows'].sort(key=lambda r: natural(r['icon']))
+                page('weapon-%s' % cls, title, 'Drone weapons' if cls in (9, 18, 19) else 'Weapons', [weapon_grid,
                      grid('Talent', talents, 'Attacks', 'varying') if talents else None])
 
+            page('weapon-mods', 'Weapon mods', 'Weapons',
+                 [grid('WeaponMod', list(allrows['WeaponMod'].values()), 'Weapon mods')])
             page('implant-global', 'All cyberware', 'Cyberware', [], multipliers=MULTIPLIERS)
-            for slot in sorted({int(r['ImplantSlot']) for r in allrows['Implant'].values()}):
+            for slot in sorted({int(r['ImplantSlot']) for r in allrows['Implant'].values()},
+                               key=lambda s: (SLOT_ORDER.index(s) if s in SLOT_ORDER else len(SLOT_ORDER), s)):
                 rows = [r for r in allrows['Implant'].values() if int(r['ImplantSlot']) == slot]
                 page('implant-%s' % slot, SLOT_NAMES.get(slot, 'Module slot %s' % slot), 'Cyberware modules' if slot >= 100 else 'Cyberware',
                      [grid('Implant', rows, 'Implants'), linked(rows, 'ImplantEffectId', 'Effect', 'Bonuses'),
                       linked(rows, 'MatrixEffectId', 'MatrixEffect', 'Matrix bonuses')])
             rows = list(allrows['MissionAdvantage'].values())
-            page('leverage', 'Leverage', 'Character', [grid('MissionAdvantage', rows, 'Leverage', 'nonzero')])
+            leverage = grid('MissionAdvantage', rows, 'Leverage', 'nonzero')
+            face_actions = {}
+            for talent in allrows['Talent'].values():
+                if talent['TalentIsFace'] != '0' and talent['TargetType'] == 'LEVERAGE':
+                    face_actions.setdefault(talent['ActionId'], []).append(talent['TalentName'])
+            for record in leverage['rows']:
+                row = allrows['MissionAdvantage'][record['id']]
+                if record['id'] in face_actions:
+                    record['section'] = 'Face talent: ' + ', '.join(sorted(face_actions[record['id']]))
+                    record['sectionEvidence'] = 'Talent.ActionId → MissionAdvantage.AdvantageTypeId'
+                    record['sectionOrder'] = 0
+                elif float(row['RoomLevel']) > 0:
+                    record['section'] = 'Room level ' + row['RoomLevel']
+                    record['sectionEvidence'] = 'MissionAdvantage.RoomLevel (no named-room pointer in this table)'
+                    record['sectionOrder'] = 1
+                elif row['AdvantageIsMatrixOnly'] != '0':
+                    record['section'] = 'Matrix only'
+                    record['sectionEvidence'] = 'MissionAdvantage.AdvantageIsMatrixOnly'
+                    record['sectionOrder'] = 2
+                else:
+                    record['section'] = 'Other leverage'
+                    record['sectionOrder'] = 3
+            leverage['rows'].sort(key=lambda r: (r['sectionOrder'], natural(r['section']), natural(r['name'])))
+            page('leverage', 'Leverage', 'Character', [leverage])
             rows = list(allrows['Trait'].values())
-            page('traits', 'Traits', 'Character', [grid('Trait', rows, 'Traits', 'nonzero'),
-                 linked(rows, 'EffectTypeId', 'Effect', 'Effects'),
-                 linked(rows, 'MatrixEffectTypeId', 'MatrixEffect', 'Matrix effects')])
+            trait_grids = []
+            for score in sorted({effective(doc, 'Trait', r, 'TraitScore') for r in rows}):
+                subset = [r for r in rows if effective(doc, 'Trait', r, 'TraitScore') == score]
+                heading = 'Trait score %s' % (format(score, '+g') if score else '0')
+                for g in (grid('Trait', subset, 'Traits', 'nonzero'),
+                          linked(subset, 'EffectTypeId', 'Effect', 'Effects', related=True),
+                          linked(subset, 'MatrixEffectTypeId', 'MatrixEffect', 'Matrix effects', related=True)):
+                    if g:
+                        g['subsection'] = heading
+                        g['key'] = '%s:%s' % (g['table'], heading)
+                        trait_grids.append(g)
+            page('traits', 'Traits', 'Character', trait_grids)
             page('combat', 'Combat', 'Character', [grid('Rule', [allrows['Rule']['22']], 'Surprised accuracy', 'nonzero')])
     except (ValueError, OSError, static_data.DataError) as exc:
         result['error'] = str(exc)

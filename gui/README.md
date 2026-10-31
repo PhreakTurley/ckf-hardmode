@@ -90,7 +90,7 @@ Preparing SQL, installing locally, and submitting remain uploader actions.
 ### Workshop player catalogs
 
 `BepInEx/config/ckf.player-balance.json` is the only authoring source for the
-Workshop-owned cyberware, weapon, leverage, trait and combat adjustments. It is
+Workshop-owned cyberware, weapon, weapon-mod, leverage, trait and combat adjustments. It is
 outside Hard Mode's overlay directory. Records are sparse adjustments keyed by
 SQL table, content id and column. Clearing a cell removes its adjustment.
 Shared effects have one stored value wherever the editor displays them.
@@ -102,6 +102,29 @@ Explicit overrides always remain visible, including zero. **Show all columns**
 reveals the remaining numeric fields. Names stay fixed while the grid scrolls;
 large catalogs are searchable and paginated. Red marks overrides or a global
 implant multiplier; yellow marks other nonzero baselines.
+
+Weapons, weapon mods and implants sort by PL, rarity and cost, with those
+columns immediately after the name when visible. Melee and SMG rows first
+group by `Weapon3DAsset.Thumbnail`, joined through `Asset3DTypeId`; the Icon
+column displays the thumbnail's asset name. Weapon headers group damage,
+accuracy, armor crit, crit damage, range, recoil, noise, arc, reload size and
+weapon effect in that order. Varying rarity and weapon-effect fields are
+included. Columns size to their longest heading or value across the full
+category, including rows on other pages.
+
+Cyberware tabs follow ocular, arms, skin, skeletal, deep brain, fast brain,
+spinal, heart, lungs and legs, followed by other slots. Traits have independent
+score subsections, using saved score adjustments, and linked effects group by
+their owning trait names. Missing individual trait labels resolve through the
+official `TraitGroup` locale key; unnamed linked effects display their related
+trait level. Shared effects retain the same table/id identity
+across subsections. Each grid has its own pagination.
+
+Leverage headings use direct Face `Talent.ActionId` references for talents
+targeting `LEVERAGE`, then positive `MissionAdvantage.RoomLevel`, then the
+matrix-only flag, then other rows. The room-level heading does not infer a
+named safehouse room: `MissionAdvantage` has no such pointer. Heading tooltips
+identify the source field or join.
 
 **All cyberware** edits price, installation-time and implant-stress multipliers.
 SQL applies individual adjustments first and global multipliers last, matching

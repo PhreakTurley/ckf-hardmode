@@ -234,11 +234,21 @@ body:not(.technical) table.grid .technical-key{display:none}
 .pb-heading h2{font-size:23px;margin:0;font-weight:600}
 .pb-tools{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:10px 0}
 .pb-tools input[type=search]{width:26ch}
-.pb-grid th{min-width:7.5ch;max-width:11ch!important;word-break:normal}
-.pb-grid td input{width:8.5ch!important;font-variant-numeric:tabular-nums}
-.pb-grid .pb-name{position:sticky;left:0;min-width:19rem;max-width:23rem;
-  white-space:normal;background:var(--panel);padding:7px 10px;z-index:1}
+table.pb-grid{min-width:0;table-layout:fixed}
+table.pb-grid th{min-width:0;max-width:none!important;white-space:nowrap;word-break:normal}
+.pb-grid td input{font-variant-numeric:tabular-nums;min-width:0}
+.pb-grid .pb-name{position:sticky;left:0;min-width:0;max-width:none;
+  white-space:nowrap;background:var(--panel);padding:4px 7px;z-index:1}
 .pb-grid th.pb-name{z-index:4;background:var(--panel2)}
+.pb-grid thead tr.pb-subheads th{top:24px}
+.pb-grid thead tr:first-child{height:24px}
+.pb-grid th.pb-colgroup{text-align:center;color:var(--dim);border-bottom:0}
+.pb-grid .pb-section th{position:static;padding:8px 7px 5px;background:#28344a;color:#c6d9f6;white-space:normal}
+.pb-section-name{display:inline-block;max-width:70ch;white-space:normal}
+.pb-grid .pb-icon{padding:4px 7px;color:var(--dim);white-space:nowrap}
+.pb-subsection{margin:18px 0}
+.pb-subsection>summary{font-size:18px;font-weight:600;cursor:pointer;margin:0 0 10px}
+.pb-subsection h3{font-size:15px;font-weight:600;margin:14px 0 6px}
 .pb-grid .pb-name small{display:none;color:var(--faint);font-weight:400}
 body.technical .pb-grid .pb-name small{display:block}
 .pb-grid td.overlay-overwrite input{background:#482326;color:#ffb5b9}
@@ -253,7 +263,7 @@ body.technical .pb-grid .pb-name small{display:block}
 table.grid td.annotation{min-width:16rem;width:19rem;max-width:23rem}
 table.grid th{overflow-wrap:normal}
 @media(max-width:780px){header{position:static;flex-wrap:wrap}nav{position:static;width:174px;flex-basis:174px}
-  .pb-grid .pb-name{min-width:13rem}.pb-heading{align-items:flex-start;flex-direction:column}}
+  .pb-heading{align-items:flex-start;flex-direction:column}}
 button:focus-visible,summary:focus-visible,.navitem:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 </style>
 </head>
@@ -1796,6 +1806,28 @@ function playerChanges() {
   return out;
 }
 
+function playerTextWidth(text, heading) {
+  if (playerTextWidth.context === undefined) {
+    const canvas = document.createElement('canvas');
+    playerTextWidth.context = canvas.getContext ? canvas.getContext('2d') : null;
+  }
+  const ctx = playerTextWidth.context;
+  if (!ctx) return String(text).length * 7.5; // CSS-less test environment
+  ctx.font = (heading ? '600 12.25px ' : '400 13px ') + '"Segoe UI",system-ui,sans-serif';
+  return ctx.measureText(String(text)).width;
+}
+
+function playerColumnWidth(grid, column) {
+  let width = playerTextWidth(column.label, true);
+  for (const row of grid.rows) {
+    const fields = ((W.player.tables || {})[grid.table] || {})[row.id] || {};
+    const multiplier = (grid.multipliers || {})[column.name] === undefined ? 1 : grid.multipliers[column.name];
+    const base = multiplier === 1 ? row.baseline[column.name] : playerRound(Number(row.baseline[column.name]) * multiplier);
+    width = Math.max(width, playerTextWidth(base, false), playerTextWidth(fields[column.name] || '', false));
+  }
+  return Math.ceil(width + 16);
+}
+
 function renderPlayer(panel, page) {
   panel.appendChild(el('div', {class:'pb-heading'}, [el('h2', {text:page.title}),
     el('span', {class:'small', text:'Workshop player balance'})]));
@@ -1816,32 +1848,84 @@ function renderPlayer(panel, page) {
   }
   const grids = el('div', {});
   const pageNumbers = {};
+  const openSections = {};
   panel.appendChild(grids);
   function paint() {
     grids.textContent = '';
     const query = search.value.toLocaleLowerCase();
+    const subsections = {};
     for (const grid of page.grids) {
-      const matches = grid.rows.filter(function (r) {return (r.name+' '+r.id).toLocaleLowerCase().includes(query);});
-      const number = pageNumbers[grid.table] || 0;
+      const matches = grid.rows.filter(function (r) {return (r.name+' '+r.id+' '+(r.section || '')).toLocaleLowerCase().includes(query);});
+      const gridKey = grid.key || grid.table;
+      const number = pageNumbers[gridKey] || 0;
       const rows = matches.slice(number * 75, (number + 1) * 75);
       if (!matches.length && !grid.warning) continue;
-      if (grid.title !== page.title) grids.appendChild(el('h3', {text:grid.title}));
-      if (matches.length > 75) grids.appendChild(el('div', {class:'pb-tools'}, [
-        el('button', {text:'Previous',disabled:number === 0,onclick:function () {pageNumbers[grid.table] = number - 1;paint();}}),
+      let target = grids;
+      if (grid.subsection) {
+        if (!subsections[grid.subsection]) {
+          const first = Object.keys(subsections).length === 0;
+          const det = el('details', {class:'pb-subsection',open:!!query || (openSections[grid.subsection] === undefined ? first : openSections[grid.subsection])},
+            [el('summary', {text:grid.subsection})]);
+          det.addEventListener('toggle', function () {openSections[grid.subsection] = det.open;});
+          grids.appendChild(det);subsections[grid.subsection] = det;
+        }
+        target = subsections[grid.subsection];
+      }
+      if (grid.title !== page.title) target.appendChild(el('h3', {text:grid.title}));
+      if (matches.length > 75) target.appendChild(el('div', {class:'pb-tools'}, [
+        el('button', {text:'Previous',disabled:number === 0,onclick:function () {pageNumbers[gridKey] = number - 1;paint();}}),
         el('span', {class:'small',text:(number * 75 + 1)+'–'+Math.min((number+1)*75,matches.length)+' of '+matches.length}),
-        el('button', {text:'Next',disabled:(number + 1) * 75 >= matches.length,onclick:function () {pageNumbers[grid.table] = number + 1;paint();}})]));
-      if (grid.warning) grids.appendChild(el('div', {class:'banner warn',text:grid.warning}));
-      const cols = grid.columns.concat(showAll.checked ? grid.advanced : []);
+        el('button', {text:'Next',disabled:(number + 1) * 75 >= matches.length,onclick:function () {pageNumbers[gridKey] = number + 1;paint();}})]));
+      if (grid.warning) target.appendChild(el('div', {class:'banner warn',text:grid.warning}));
+      const cols = grid.columns.concat(showAll.checked ? grid.advanced : []).sort(function(a,b) {return a.order-b.order;});
       if (!rows.length) continue;
       const tbl = el('table', {class:'grid pb-grid'});
-      tbl.appendChild(el('thead', {}, [el('tr', {}, [el('th', {class:'pb-name',text:'Name'})].concat(cols.map(function (c) {
-        return el('th', {text:c.label,title:c.name});
-      })))]));
+      const widths = cols.map(function (c) {return playerColumnWidth(grid, c);});
+      const nameWidth = Math.ceil(Math.max(playerTextWidth('Name',true), ...grid.rows.map(function (r) {return playerTextWidth(r.name,false);})) + 16);
+      const iconWidth = grid.iconColumn ? Math.ceil(Math.max(playerTextWidth('Icon',true), ...grid.rows.map(function (r) {return playerTextWidth(r.icon || '',false);})) + 16) : 0;
+      // Icon follows the leading PL/Rarity/Cost columns. Those three always
+      // remain immediately after Name when they differ in this category.
+      const leading = grid.iconColumn ? cols.filter(function(c) {return c.leading;}).length : 0;
+      const displayCols = cols.map(function(c,i) {return {column:c,width:widths[i]};});
+      if (grid.iconColumn) displayCols.splice(leading,0,{icon:true,width:iconWidth,column:{label:'Icon',name:'icon'}});
+      for (let i=0;i<displayCols.length;) {
+        const group = displayCols[i].column.group;
+        if (!group) {i++;continue;}
+        let end=i+1;
+        while (end<displayCols.length && displayCols[end].column.group===group) end++;
+        const available = displayCols.slice(i,end).reduce(function(sum,c) {return sum+c.width;},0);
+        const extra = Math.max(0, Math.ceil(playerTextWidth(group,true)+16-available));
+        if (extra) displayCols[i].width += extra;
+        i=end;
+      }
+      tbl.appendChild(el('colgroup', {}, [el('col',{style:'width:'+nameWidth+'px'})].concat(displayCols.map(function(c) {return el('col',{style:'width:'+c.width+'px'});} ))));
+      const grouped = cols.some(function(c) {return !!c.group;});
+      const top = el('tr', {}, [el('th',{class:'pb-name',text:'Name',rowspan:grouped ? '2' : '1'})]);
+      const sub = el('tr', {class:'pb-subheads'});
+      for (let i=0;i<displayCols.length;) {
+        const c = displayCols[i].column;
+        if (!grouped || !c.group) {
+          top.appendChild(el('th',{text:c.label,title:c.name,rowspan:grouped ? '2' : '1'}));i++;continue;
+        }
+        let end=i+1;
+        while (end<displayCols.length && displayCols[end].column.group===c.group) end++;
+        top.appendChild(el('th',{class:'pb-colgroup',text:c.group,colspan:String(end-i)}));
+        for (;i<end;i++) sub.appendChild(el('th',{text:displayCols[i].column.label,title:displayCols[i].column.name}));
+      }
+      tbl.appendChild(el('thead', {}, grouped ? [top,sub] : [top]));
       const body = el('tbody', {});
+      let section = null;
       for (const row of rows) {
+        if (row.section && section !== row.section) {
+          section = row.section;
+          body.appendChild(el('tr', {class:'pb-section'}, [el('th',{colspan:String(displayCols.length+1),scope:'rowgroup',title:row.sectionEvidence || ''},
+            [el('span',{class:'pb-section-name',text:section})])]));
+        }
         const tr = el('tr', {}, [el('td', {class:'pb-name',title:grid.table+' '+row.id}, [
           document.createTextNode(row.name),el('small', {text:grid.table+' '+row.id})])]);
-        for (const col of cols) {
+        for (const item of displayCols) {
+          if (item.icon) {tr.appendChild(el('td',{class:'pb-icon',text:row.icon || '',title:row.iconPath || ''}));continue;}
+          const col = item.column;
           const fields = ((W.player.tables || {})[grid.table] || {})[row.id] || {};
           const value = fields[col.name] || '';
           const base = row.baseline[col.name];
@@ -1857,12 +1941,14 @@ function renderPlayer(panel, page) {
             td.title = 'Managed by Hard Mode Fatigue / limit-break traits';
           } else {
             const input = el('input', {type:'text',value:value,placeholder:displayBase,spellcheck:'false',
+              style:'width:'+(item.width-1)+'px',
               'aria-label':row.name+' '+col.label,title:col.label+' · baseline '+base + (multiplier !== 1 ? ' · global ×'+multiplier+' after individual adjustments' : '')});
             input.addEventListener('input', function () {
               const table = W.player.tables[grid.table] || (W.player.tables[grid.table] = {});
               const record = table[row.id] || (table[row.id] = {});
               if (input.value.trim()) record[col.name] = input.value;
               else delete record[col.name];
+              input.style.width = Math.max(item.width-1, Math.ceil(playerTextWidth(input.value,false)+15))+'px';
               style(input.value);updateDirty();
             });
             td.appendChild(input);
@@ -1872,7 +1958,7 @@ function renderPlayer(panel, page) {
         body.appendChild(tr);
       }
       tbl.appendChild(body);
-      grids.appendChild(el('div', {class:'grid-wrap'}, [tbl]));
+      target.appendChild(el('div', {class:'grid-wrap'}, [tbl]));
     }
   }
   search.addEventListener('input',function () {for (const key in pageNumbers) delete pageNumbers[key];paint();});

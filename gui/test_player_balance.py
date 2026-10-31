@@ -112,11 +112,81 @@ class PlayerBalanceTests(unittest.TestCase):
             if not page['id'].startswith('weapon-'):
                 continue
             for grid in page['grids']:
-                if len(grid['rows']) < 2:
-                    continue
                 for column in grid['columns']:
                     values = {row['baseline'][column['name']] for row in grid['rows']}
                     self.assertGreater(len(values), 1, (page['id'], grid['table'], column['name']))
+
+    def test_gear_order_visibility_and_icon_sections(self):
+        with tempfile.TemporaryDirectory() as config:
+            model = pb.catalog(config, static_data.DEFAULT_DB)
+        self.assertIsNone(model['error'])
+        for page in model['pages']:
+            for grid in page['grids']:
+                if grid['table'] not in ('Weapon', 'WeaponMod', 'Implant'):
+                    continue
+                columns = [c['name'] for c in grid['columns']]
+                expected = [c for c in pb.LEADING_COLUMNS if c in columns]
+                self.assertEqual(columns[:len(expected)], expected)
+                for col in pb.GEAR_ORDER if grid['table'] in ('Weapon', 'WeaponMod') else pb.LEADING_COLUMNS:
+                    if col in grid['rows'][0]['baseline']:
+                        values = {r['baseline'][col] for r in grid['rows']}
+                        if len(values) > 1:
+                            self.assertIn(col, columns, (page['id'], col))
+                order = [c for c in pb.GEAR_ORDER if c in columns] if grid['table'] in ('Weapon', 'WeaponMod') else expected
+                self.assertEqual([c for c in columns if c in order], order)
+                keys = [(r.get('icon', ''), *(float(r['baseline'][c]) for c in pb.LEADING_COLUMNS), pb.natural(r['name']))
+                        for r in grid['rows']]
+                self.assertEqual(keys, sorted(keys, key=lambda k: (pb.natural(k[0]), *k[1:])), page['id'])
+        for pid in ('weapon-1', 'weapon-10'):
+            grid = next(p for p in model['pages'] if p['id'] == pid)['grids'][0]
+            self.assertTrue(grid['iconColumn'])
+            self.assertTrue(all(r['section'] == r['icon'] and r['iconPath'] for r in grid['rows']))
+        implants = [p['id'] for p in model['pages'] if p['id'].startswith('implant-') and p['id'] != 'implant-global']
+        self.assertEqual(implants[:10], ['implant-%d' % s for s in pb.SLOT_ORDER])
+
+    def test_trait_and_leverage_links_are_complete_and_traceable(self):
+        with tempfile.TemporaryDirectory() as config:
+            model = pb.catalog(config, static_data.DEFAULT_DB)
+        with static_data.StaticData() as source:
+            traits = {r['TraitId']: r for r in source.read('TraitModel')[1]}
+            grids = next(p for p in model['pages'] if p['id'] == 'traits')['grids']
+            shown = [r for g in grids if g['table'] == 'Trait' for r in g['rows']]
+            self.assertEqual(set(traits), {r['id'] for r in shown})
+            self.assertEqual(len(shown), len(traits))
+            for g in grids:
+                if g['table'] == 'Trait':
+                    self.assertEqual(len({r['baseline']['TraitScore'] for r in g['rows']}), 1)
+                else:
+                    pointer = 'EffectTypeId' if g['table'] == 'Effect' else 'MatrixEffectTypeId'
+                    for r in g['rows']:
+                        owners = [source.locale.get('Trait.Name.' + t['TraitId'] + '_Male',
+                                                    source.locale.get('Trait.Name.' + t['TraitGroup'] + '_Male', t['TraitName']))
+                                  for t in traits.values() if t[pointer] == r['id']]
+                        self.assertTrue(owners)
+                        self.assertTrue(any(name in r['section'] for name in owners))
+                        self.assertFalse(r['name'].startswith(('Effect.Name.', 'MatrixEffect.Name.')))
+            self.assertFalse(any(r['name'].startswith('Trait.Name.') for r in shown))
+            leverage = next(p for p in model['pages'] if p['id'] == 'leverage')['grids'][0]
+            talents = source.read('TalentModel')[1]
+            for r in leverage['rows']:
+                if r['section'].startswith('Face talent:'):
+                    self.assertTrue(any(t['ActionId'] == r['id'] and t['TalentIsFace'] != '0'
+                                        and t['TargetType'] == 'LEVERAGE' for t in talents))
+                if r['section'].startswith('Room level '):
+                    self.assertEqual(r['section'], 'Room level ' + r['baseline']['RoomLevel'])
+            self.assertEqual(len(leverage['rows']), len(source.read('MissionAdvantageModel')[1]))
+
+    def test_weapon_mod_edits_export_to_sql(self):
+        with static_data.StaticData() as source:
+            rid = source.read('WeaponModModel')[1][0]['WeaponModId']
+            doc = pb.apply_edits(pb.empty(), {'cells': [{'table': 'WeaponMod', 'id': rid,
+                                                       'column': 'AccuracyMod', 'value': '=17'}]}, source)
+            statements, touched = pb.sql(doc, source)
+            memory = sqlite3.connect(':memory:'); source.connection.backup(memory)
+            memory.executescript('\n'.join(statements))
+            self.assertEqual(memory.execute('SELECT AccuracyMod FROM WeaponMod WHERE WeaponModId=?', (rid,)).fetchone()[0], 17)
+            self.assertEqual(touched, {('WeaponMod', rid, 'AccuracyMod')})
+            memory.close()
 
     def test_api_save_clear_noop_and_stale_database(self):
         import serve
@@ -134,6 +204,9 @@ class PlayerBalanceTests(unittest.TestCase):
             self.assertEqual(pb.load(config)['tables']['Trait']['3']['TraitScore'], '=-9')
             self.assertEqual(saved['written'], [pb.FILE])
             model = app.api_model()
+            trait = next(g for p in model['playerBalance']['pages'] if p['id'] == 'traits'
+                         for g in p['grids'] if g['table'] == 'Trait' and any(r['id'] == '3' for r in g['rows']))
+            self.assertEqual(trait['subsection'], 'Trait score -9')
             edit['cells'][0]['value'] = ''
             cleared = app.api_save({'playerBalance': edit}, expect=model['fingerprints'])
             self.assertTrue(cleared['ok'], cleared)
