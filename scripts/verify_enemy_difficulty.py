@@ -17,7 +17,7 @@ from pathlib import Path
 import sqlite3
 
 from static_data import StaticData, DEFAULT_DB, quote, integer_text
-from export_enemy_difficulty import CONFIG, PROJECT, FIXES_FILE
+from export_enemy_difficulty import CONFIG, PROJECT, FIXES_FILE, SPAWN_TAGS
 
 
 def require(condition, message):
@@ -30,6 +30,7 @@ def verify(sql_path, data_path=DEFAULT_DB, config_dir=CONFIG, native_integrity=F
     locale = json.loads(sql_path.with_name("en-US.json").read_bytes())
     fixes = json.loads((config_dir.parent / FIXES_FILE).read_bytes())
     require(fixes.get("format") == 1, "Unsupported surgical fix format")
+    require(not fixes.get("clones"), "Surgical clones are disabled; use native pointers")
     conn = sqlite3.connect(":memory:")
     counts = Counter()
     try:
@@ -43,7 +44,7 @@ def verify(sql_path, data_path=DEFAULT_DB, config_dir=CONFIG, native_integrity=F
                 return conn.execute("SELECT * FROM " + quote(t) + order).fetchall()
 
             before = {t: raw_rows(t) for t in db.schema}
-            kinds = {t: {c[1]: c[2] for c in db.schema[t]} for t in ("Armor", "MonsterType", "Rule", "Weapon", "MonsterTalent", "Effect")}
+            kinds = {t: {c[1]: c[2] for c in db.schema[t]} for t in ("Armor", "MonsterType", "Rule", "Weapon", "MonsterTalent", "Effect", "MonsterGroupMember")}
 
             def normalize(t, rows):
                 columns = list(kinds[t])
@@ -62,8 +63,9 @@ def verify(sql_path, data_path=DEFAULT_DB, config_dir=CONFIG, native_integrity=F
             original = {t: normalize(t, before[t]) for t in kinds}
             target = {t: {i: dict(r) for i, r in rows.items()} for t, rows in original.items()}
             authored, expected_names = set(), {}
-            for t in ("Armor", "MonsterType"):
-                filename = t + "Model.csv"
+            inputs = [("Armor", "ArmorModel.csv"), ("MonsterType", "MonsterTypeModel.csv")]
+            inputs += [("MonsterGroupMember", f"MonsterGroupMemberModel.spawn-{tag}.csv") for tag in SPAWN_TAGS]
+            for t, filename in inputs:
                 paths = [p for p in (config_dir / filename, config_dir / (filename + ".disabled")) if p.is_file()]
                 require(len(paths) == 1, "Ambiguous source: " + filename)
                 with paths[0].open(encoding="utf-8-sig", newline="") as handle:
@@ -89,7 +91,7 @@ def verify(sql_path, data_path=DEFAULT_DB, config_dir=CONFIG, native_integrity=F
                         else:
                             changes[c] = value
                     source = raw.get("_clone", "").strip()
-                    require(t == "Armor" or not source, "MonsterType clone outside armor scope")
+                    require(t in ("Armor", "MonsterGroupMember") or not source, "MonsterType clone outside armor scope")
                     converted.append((identity, source, changes, raw.get("_comment", "")))
                     if t == "MonsterType":
                         authored.add(identity)
@@ -102,9 +104,10 @@ def verify(sql_path, data_path=DEFAULT_DB, config_dir=CONFIG, native_integrity=F
                         require(identity not in target[t], f"Authored clone collision: {t} {identity}")
                         require(int(source) in target[t], f"Authored clone source missing: {t} {source}")
                         target[t][identity] = {**target[t][int(source)], **changes, keys[t][0]: identity}
-                        family = comment.split(" tier PL ")[0].replace("-", " ").title()
-                        label = db.locale.get("ArmorName." + source, family)
-                        expected_names["ArmorName." + str(identity)] = f"{label} (PL {target[t][identity]['PowerLevel']})"
+                        if t == "Armor":
+                            family = comment.split(" tier PL ")[0].replace("-", " ").title()
+                            label = db.locale.get("ArmorName." + source, family)
+                            expected_names["ArmorName." + str(identity)] = f"{label} (PL {target[t][identity]['PowerLevel']})"
                 counts["authored_rows"] += len(converted)
 
             require(target["Rule"][82]["ConfigName"] == "Max Enemy Power Level", "Rule82 declaration changed")
@@ -135,30 +138,12 @@ def verify(sql_path, data_path=DEFAULT_DB, config_dir=CONFIG, native_integrity=F
                 "Weapon": {"Accuracy1", "Accuracy2"},
                 "MonsterTalent": {"TargetEffect", "MonsterTalentGroup"},
             }
-            clone_columns = {"Weapon": {"BallisticDamage1", "CritMultiBase"}, "Effect": {"Evasion"}}
-            permitted_columns, inserted_tables, seen_updates = defaultdict(set), {"Armor"}, set()
+            permitted_columns, inserted_tables, seen_updates = defaultdict(set), {"Armor", "MonsterGroupMember"}, set()
             def check_numeric(spec):
                 for value in spec['set'].values():
                     require(type(value) in (int, float) and math.isfinite(value), 'Non-numeric surgical value')
                     require(float(value).is_integer(), 'Fractional surgical integer value')
 
-            for spec in fixes.get("clones", []):
-                check_numeric(spec)
-                table, identity, source = spec["table"], spec["id"], spec["source"]
-                require(table in clone_columns, "Unsupported surgical clone table")
-                require(identity not in target[table] and source in original[table], "Surgical clone collision/source missing")
-                require(set(spec["set"]) <= clone_columns[table] and set(spec["set"]) == set(spec["expect_source"]),
-                        "Unsupported surgical clone fields")
-                for field, value in spec["expect_source"].items():
-                    require(original[table][source][field] == value, f"Surgical clone source changed: {table} {source}.{field}")
-                # All fields not explicitly named are independently copied
-                # from the native row, including every weapon/effect value.
-                target[table][identity] = {**original[table][source], **spec["set"], keys[table][0]: identity}
-                stem = "WeaponName." if table == "Weapon" else "Effect.Name."
-                require(stem + str(source) in db.locale, "Surgical source locale missing")
-                expected_names[stem + str(identity)] = db.locale[stem + str(source)]
-                inserted_tables.add(table)
-                counts["surgical_clones"] += 1
             for spec in fixes.get("updates", []):
                 check_numeric(spec)
                 table, identity = spec["table"], spec["id"]
@@ -185,6 +170,7 @@ def verify(sql_path, data_path=DEFAULT_DB, config_dir=CONFIG, native_integrity=F
                     allowed = ((table == "Armor" and column != "ArmorId")
                                or (table == "MonsterType" and column == "ArmorTypeId")
                                or (table == "Rule" and column == "Value")
+                               or (table == "MonsterGroupMember" and column != "MonsterGroupMemberId")
                                or column in permitted_columns.get(table, set()))
                 elif action == sqlite3.SQLITE_INSERT:
                     allowed = table in inserted_tables
@@ -249,6 +235,22 @@ def verify(sql_path, data_path=DEFAULT_DB, config_dir=CONFIG, native_integrity=F
                 for identity, effect in conn.execute("SELECT MonsterTalentId,TargetEffect FROM MonsterTalent"):
                     require(not effect or effect in effect_ids, f"Unresolved talent effect: {identity}")
                 native_checks = {name: "PASS" for name in native_checks}
+            # Preserve the independent per-PL weighted-pool check alongside
+            # the full row comparison when roster authoring is enabled.
+            roster_groups = {r["MonsterGroupId"] for identity, r in actual["MonsterGroupMember"].items()
+                             if identity not in original["MonsterGroupMember"]}
+            for group in roster_groups:
+                for pl in range(1, 21):
+                    def pool(rows):
+                        values = Counter()
+                        for row in rows.values():
+                            if row["MonsterGroupId"] == group and row["MinPowerLevel"] <= pl and (not row["MaxPowerLevel"] or pl <= row["MaxPowerLevel"]):
+                                key = tuple(row[c] for c in ("MonsterType", "Slot", "Faction", "MinSecLevel", "MaxSecLevel", "Exclusive"))
+                                values[key] += row["WeightedRoll"]
+                        return values
+                    require(pool(actual["MonsterGroupMember"]) == pool(target["MonsterGroupMember"]),
+                            f"Roster weight mismatch: {group} PL {pl}")
+                    counts["roster_PL_checks"] += 1
             first = {t: raw_rows(t) for t in db.schema}
             apply()
             for t in db.schema:
@@ -256,7 +258,7 @@ def verify(sql_path, data_path=DEFAULT_DB, config_dir=CONFIG, native_integrity=F
             counts["repeat_application_tables"] = len(db.schema)
             counts["localized_inserted_armors"] = len(locale)
             db.assert_unchanged()
-        return {"status": "PASS", "scope": "Enemy armor, Rule82=20 and reviewed surgical native corrections",
+        return {"status": "PASS", "scope": "Enemy armor, authored rosters, Rule82=20 and surgical native corrections",
                 "sql_sha256": hashlib.sha256(sql_bytes).hexdigest(), "checks": dict(counts),
                 "native_integrity_checks": native_checks,
                 "native_runtime": "NOT RUN: armor and surgical-fix Workshop activation remains to be tested"}

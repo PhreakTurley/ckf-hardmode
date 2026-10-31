@@ -4,7 +4,7 @@ from tempfile import TemporaryDirectory
 import unittest
 import csv
 
-from export_enemy_difficulty import PROJECT, build, guarded_write, FIXES_FILE
+from export_enemy_difficulty import PROJECT, build, guarded_write, FIXES_FILE, SPAWN_TAGS
 from static_data import StaticData
 from verify_enemy_difficulty import verify
 from install_enemy_difficulty import require_steam_install
@@ -29,9 +29,9 @@ class EnemyDifficultyChecks(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Could not establish Steam installation'):
                 require_steam_install(workshop)
 
-    def test_export_ignores_legacy_nonarmor_fields_and_sheets(self):
+    def test_export_ignores_legacy_weapon_and_stat_fields(self):
         # Synthetic identity-only fixture, not a copy of live tuning. There is
-        # deliberately no weapon or roster sheet for the exporter to read.
+        # deliberately no weapon sheet; roster fixtures contain no tuning.
         with TemporaryDirectory(prefix='verifier-test-', dir=PROJECT) as temporary:
             directory = Path(temporary) / "ckf.hardmode.d"
             directory.mkdir()
@@ -39,6 +39,9 @@ class EnemyDifficultyChecks(unittest.TestCase):
             with StaticData() as db:
                 ids = [r['MonsterTypeId'] for r in db.read('MonsterTypeModel')[1]]
             guarded_write(directory / 'ArmorModel.csv', b'ArmorId,BallisticArmor\n')
+            for tag in SPAWN_TAGS:
+                guarded_write(directory / f'MonsterGroupMemberModel.spawn-{tag}.csv',
+                              b'MonsterGroupMemberId,WeightedRoll\n')
             monster = 'MonsterTypeId,ArmorTypeId,HitPoints,WeaponTypeId,MonsterTalentGroup\n'
             monster += ''.join(f'{identity},,1,999999,999999\n' for identity in ids)
             guarded_write(directory / 'MonsterTypeModel.csv', monster.encode())
@@ -55,6 +58,10 @@ class EnemyDifficultyChecks(unittest.TestCase):
             guarded_write(directory.parent / FIXES_FILE, json.dumps(stale).encode())
             with self.assertRaisesRegex(ValueError, 'Native surgical target changed: Weapon 20007.Accuracy1'):
                 build(config_dir=directory)
+            guarded_write(directory.parent / FIXES_FILE,
+                          b'{"format":1,"updates":[],"clones":[{"table":"Weapon","id":980010}]}')
+            with self.assertRaisesRegex(ValueError, 'clones are disabled'):
+                build(config_dir=directory)
 
 
     def test_native_integrity_gate_remains_runnable(self):
@@ -65,11 +72,6 @@ class EnemyDifficultyChecks(unittest.TestCase):
         with (PROJECT / "review/column-ledger.csv").open(encoding="utf-8-sig", newline="") as handle:
             armor = next(int(row["Id"]) for row in csv.DictReader(handle)
                          if row["Table"] == "Armor" and row["Column"] == "BallisticArmor")
-        with StaticData() as db:
-            weapon_columns = [c[1] for c in db.schema['Weapon']]
-        extra_clone = 'INSERT INTO Weapon (' + ','.join('"' + c + '"' for c in weapon_columns) + ') SELECT '
-        extra_clone += ','.join('989999' if c == 'WeaponId' else '"' + c + '"' for c in weapon_columns)
-        extra_clone += ' FROM Weapon WHERE WeaponId=6015;'
         cases = (
             ("authored armor changed", f'UPDATE Armor SET BallisticArmor=BallisticArmor+1 WHERE ArmorId={armor};', f'Row mismatch: Armor {armor}'),
             ("wrong enemy ceiling", 'UPDATE Rule SET Value=12 WHERE RuleId=82;', 'Row mismatch: Rule 82'),
@@ -82,15 +84,17 @@ class EnemyDifficultyChecks(unittest.TestCase):
             ("weapon pointer overwritten", 'UPDATE MonsterType SET WeaponTypeId=22010 WHERE MonsterTypeId=189;', 'Row mismatch: MonsterType 189'),
             ("unreviewed native talent changed", 'UPDATE MonsterTalent SET TargetEffect=TargetEffect+1 WHERE MonsterTalentId=836;', 'Row mismatch: MonsterTalent 836'),
             ("talent band gap", 'UPDATE MonsterTalent SET MaxPowerLevel=0 WHERE MonsterTalentId=857;', 'Forbidden SQL write: MonsterTalent.MaxPowerLevel'),
-            ("roster taper changed", 'UPDATE MonsterGroupMember SET WeightedRoll=9999 WHERE MonsterGroupMemberId=30;', 'Forbidden SQL write: MonsterGroupMember.WeightedRoll'),
+            ("roster taper changed", 'UPDATE MonsterGroupMember SET WeightedRoll=9999 WHERE MonsterGroupMemberId=30;', 'Row mismatch: MonsterGroupMember 30'),
             ("player talent changed", 'UPDATE Talent SET Range=999 WHERE TalentId=5001;', 'Forbidden SQL write: Talent.Range'),
             ("shared effect changed", 'UPDATE Effect SET Heals=999 WHERE EffectId=64192;', 'Forbidden SQL write: Effect.Heals'),
             ("effect variant ownership lost", 'UPDATE Effect SET EffectOwner=0 WHERE EffectId=960002;', 'Forbidden SQL write: Effect.EffectOwner'),
             ("no-op weapon write", 'UPDATE Weapon SET BallisticDamage1=BallisticDamage1 WHERE WeaponId=20010;', 'Forbidden SQL write: Weapon.BallisticDamage1'),
-            ("unreviewed weapon clone", extra_clone, 'Row identities differ: Weapon'),
+            ("weapon insert forbidden", 'INSERT INTO Weapon SELECT * FROM Weapon WHERE 0;', 'Forbidden SQL write: Weapon'),
             ("accuracy correction changed", 'UPDATE Weapon SET Accuracy1=1 WHERE WeaponId=20012;', 'Row mismatch: Weapon 20012'),
-            ("isolated sniper changed", 'UPDATE Weapon SET Accuracy1=1 WHERE WeaponId=980010;', 'Row mismatch: Weapon 980010'),
-            ("VTOL native Stunned changed", 'UPDATE Effect SET Stunned=0 WHERE EffectId=980000;', 'Forbidden SQL write: Effect.Stunned'),
+            ("native sniper source changed", 'UPDATE Weapon SET Accuracy1=1 WHERE WeaponId=6014;', 'Row mismatch: Weapon 6014'),
+            ("VTOL native source changed", 'UPDATE Effect SET Stunned=0 WHERE EffectId=64175;', 'Forbidden SQL write: Effect.Stunned'),
+            ("VTOL pointer repair lost", 'UPDATE MonsterType SET EffectId=64173 WHERE MonsterTypeId=1150;', 'Row mismatch: MonsterType 1150'),
+            ("sniper pointer repair lost", 'UPDATE MonsterType SET WeaponTypeId=6015 WHERE MonsterTypeId=3310;', 'Row mismatch: MonsterType 3310'),
             ("Vita-Tech group repair lost", 'UPDATE MonsterTalent SET MonsterTalentGroup=603 WHERE MonsterTalentId=603;', 'Row mismatch: MonsterTalent 603'),
             ("Rallying Cry repair lost", 'UPDATE MonsterTalent SET TargetEffect=64006 WHERE MonsterTalentId=303;', 'Row mismatch: MonsterTalent 303'),
             ("armor removal", f'DELETE FROM Armor WHERE ArmorId={armor};', 'Forbidden SQL write: Armor'),
