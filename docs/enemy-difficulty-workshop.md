@@ -1,11 +1,11 @@
 # Prepare Enemy Difficulty for Workshop
 
-Enemy Difficulty changes `Armor` rows and `MonsterType.ArmorTypeId`, and sets
-`Rule82.Value` to 20. Weapons, weapon pointers, enemy stats, effects, talents,
-roster membership and every other rule remain native. Shipped backslides are
-observations to report, not values the exporter repairs.
+Enemy Difficulty applies authored enemy armor and armor assignments, sets
+`Rule82.Value` to 20, and applies reviewed surgical native corrections from a
+separate Workshop authoring document. Other native weapon, talent, effect and
+stat scaling remains unchanged. Roster membership stays native.
 
-This is separate from the `ckf-enemy-scaling` PL4–20 roster project. The armor
+This is separate from the `ckf-enemy-scaling` PL4–20 roster project. This
 exporter never reads or changes that project's policy or prepared content.
 Hard Mode's deprecated enemy-scaling ownership is documented in
 [Tuning enemies](tuning-enemies.md).
@@ -13,11 +13,25 @@ Hard Mode's deprecated enemy-scaling ownership is documented in
 ## Authoring and outputs
 
 `scripts/export_enemy_difficulty.py:build` reads the current official database,
-the installed Data Parser declaration, and two legacy authoring inputs under
+the installed Data Parser declaration, and two legacy armor inputs under
 `BepInEx/config/ckf.hardmode.d`:
 
 - all authored fields in `ArmorModel.csv`;
 - only `ArmorTypeId` from `MonsterTypeModel.csv`.
+
+The additional surgical source is `BepInEx/config/ckf.enemy-difficulty.json`.
+It is the single live authoring document for sparse native corrections, kept
+outside Git like the armor inputs. Each update names its table, id, changed
+fields, expected native values and replacements. Clone entries name a native
+source and only the fields to change. Expected-value disagreements refuse
+export, so an updated official row cannot silently receive a stale patch.
+
+The supported surgical fields are declared in `FIX_COLUMNS` and
+`FIX_CLONE_COLUMNS` in the exporter. The verifier interprets the document
+independently and compares every native row and field. Isolated weapon/effect
+copies preserve their native source values outside the named corrections;
+source rows and unrelated consumers remain unchanged. The exporter records the
+fix document's hash in `review/SOURCE.json` and origins in the column ledger.
 
 Other columns in the legacy monster sheet do not become SQL assignments. The
 weapon and roster sheets are not export inputs. For each named input, exactly
@@ -32,8 +46,9 @@ and receive localized names. The BepInEx `_serveOn` control has no SQL equivalen
 For newly shipped complete PL1–20 ladders absent from the authoring sheet, the
 exporter extends only armor pointers. Their native PL1–10 armor signature must
 match authored donors, and every donor must agree on the PL11–20 result.
-Missing or ambiguous matches refuse preparation. No stat floors, weapon
-extensions, talent upgrades or effect clones are generated.
+Missing or ambiguous matches refuse preparation. No broad stat floors, weapon
+extensions or talent upgrades are generated. Non-armor corrections and any
+isolated copies must be explicitly declared in the surgical document.
 
 Generated files under local `ckf-enemy-difficulty/` are:
 
@@ -72,13 +87,12 @@ bytes. It neither opens the uploader nor submits anything. The independent
 verifier applies the actual prepared SQL to an in-memory copy of Official data;
 it never opens a campaign save. It independently evaluates armor inputs,
 compares every row and column, checks authored armor pointers and localized
-clones, and checks repeat application. Its SQL authorizer rejects writes outside
-`Armor`, `MonsterType.ArmorTypeId` and `Rule.Value`, including no-op writes.
-The exact row comparison permits only Rule82 to change, to 20. All other tables
-and enemy fields are checked against the official baseline. The corruption
-suite retains checks for weapon, talent, effect, stat and roster writes
-as forbidden changes, and Rule81/Rule82 mutations as incorrect values rather than expecting those features in the output. The
-old global native weapon/armor and talent-effect resolution checks remain
+clones, and checks repeat application. Its SQL authorizer limits table and
+column writes; the complete row comparison enforces the exact reviewed id,
+field and value set. Weapon, talent, effect, stat, rule and roster corruption
+cases remain runnable, including changes outside the reviewed surgical rows,
+source fields accidentally changed on an isolated copy, and stale native
+preconditions. The old global native weapon/armor and talent-effect resolution checks remain
 runnable with `verify_enemy_difficulty.py --native-integrity`; default runs
 report each by name as `NOT RUN`. Authored armor-pointer validation always runs.
 This distinguishes native reference defects from defects introduced by the mod.
@@ -120,5 +134,5 @@ For the Workshop test, keep Hard Mode's master enabled with only its
 spawn and talent changes must be off so they cannot stack with this package.
 The exporter does not change that configuration; configure and verify it on
 disk as part of the handoff. Data-mod activation in game and a newly generated
-mission remain the runtime acceptance step. Verify the armor rows equipped by actual enemies; successful SQL preparation
+mission remain the runtime acceptance step. Verify actual enemy armor and surgical corrections; successful SQL preparation
 alone does not establish their in-game behavior.

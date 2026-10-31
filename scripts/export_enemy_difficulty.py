@@ -1,9 +1,8 @@
-"""Export enemy armor and armor lookups to a first-party Workshop data mod.
+"""Export enemy armor, Rule82 and reviewed surgical native corrections.
 
-Reads ArmorModel.csv and only ArmorTypeId from MonsterTypeModel.csv, including
-parked .disabled inputs. Rule82.Value is set to 20. Every other official table and enemy
-field is outside the write set. Never edits tuning, saves, Workshop metadata or the separate
-PL4-20 roster project.
+Legacy armor inputs and the separate live Workshop fix document are the only
+authoring sources. Other legacy enemy fields are ignored. Never edits tuning,
+saves, Workshop metadata or the separate PL4-20 roster project.
 """
 from __future__ import annotations
 
@@ -14,6 +13,7 @@ from decimal import Decimal, ROUND_HALF_EVEN
 import hashlib
 import io
 import json
+import math
 import os
 from pathlib import Path
 from uuid import uuid4
@@ -25,7 +25,15 @@ CONFIG = Path(r"C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flas
 MODKIT = Path(r"C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Mod Uploader")
 PARSER_SCHEMA = MODKIT / "CyberKnightsModkit_Data/StreamingAssets/config.json"
 PROJECT = ROOT / "ckf-enemy-difficulty"
-KEYS = {"Armor": "ArmorId", "MonsterType": "MonsterTypeId", "Rule": "RuleId"}
+KEYS = {"Armor": "ArmorId", "MonsterType": "MonsterTypeId", "Rule": "RuleId",
+        "Weapon": "WeaponId", "MonsterTalent": "MonsterTalentId", "Effect": "EffectId"}
+FIXES_FILE = "ckf.enemy-difficulty.json"
+FIX_COLUMNS = {
+    "MonsterType": {"HitPoints", "MovePoints", "MaxTalentCount", "WeaponTypeId", "EffectId"},
+    "Weapon": {"Accuracy1", "Accuracy2"},
+    "MonsterTalent": {"TargetEffect", "MonsterTalentGroup"},
+}
+FIX_CLONE_COLUMNS = {"Weapon": {"BallisticDamage1", "CritMultiBase"}, "Effect": {"Evasion"}}
 
 
 def sha(data):
@@ -96,8 +104,21 @@ def build(data_path=DEFAULT_DB, config_dir=CONFIG, schema_path=PARSER_SCHEMA):
         inputs[str(path)] = sha(raw)
         return raw
 
+    fixes = json.loads(read(config_dir.parent / FIXES_FILE))
+    if fixes.get("format") != 1 or set(fixes) - {"format", "basis", "updates", "clones"}:
+        raise ValueError("Unsupported surgical enemy fixes document")
     schema = json.loads(read(schema_path))
     contracts = {t: {f["name"]: f["type"] for f in schema[t]["sql"]["fields"]} for t in KEYS}
+
+    def numeric_fix_values(table, values):
+        result = {}
+        for field, value in values.items():
+            if type(value) not in (int, float) or not math.isfinite(value):
+                raise ValueError(f"Surgical value must be finite numeric: {table}.{field}")
+            if "INT" in contracts[table][field].upper() and value != int(value):
+                raise ValueError(f"Surgical integer value is fractional: {table}.{field}")
+            result[field] = number(value, contracts[table][field])
+        return result
     with StaticData(data_path) as db:
         read(db.path)
         read(db.locale_path)
@@ -110,10 +131,12 @@ def build(data_path=DEFAULT_DB, config_dir=CONFIG, schema_path=PARSER_SCHEMA):
         base = {t: {i: dict(r) for i, r in rows.items()} for t, rows in tables.items()}
         statements, locales, ledger, overlay_rows, clone_rows = [], {}, [], {}, {}
 
-        def update(t, identity, values, origin):
+        def update(t, identity, values, origin, surgical=False):
             if t == "Rule" and (identity != 82 or set(values) != {"Value"} or values["Value"] != 20):
                 raise ValueError("Only Rule82.Value=20 belongs to this export")
-            if t == "MonsterType" and set(values) - {"ArmorTypeId"}:
+            if surgical and (t not in FIX_COLUMNS or set(values) - FIX_COLUMNS[t]):
+                raise ValueError(f"Unsupported surgical fields: {t} {identity}")
+            if t == "MonsterType" and not surgical and set(values) - {"ArmorTypeId"}:
                 raise ValueError("Enemy armor export cannot write other MonsterType fields")
             values = {c: v for c, v in values.items() if tables[t][identity][c] != v}
             if values:
@@ -203,14 +226,73 @@ def build(data_path=DEFAULT_DB, config_dir=CONFIG, schema_path=PARSER_SCHEMA):
             for pl, pointer in zip(range(11, 21), next(iter(outcomes))):
                 update("MonsterType", levels[pl]["MonsterTypeId"], {"ArmorTypeId": pointer}, "new official ladder: matched authored armor")
             extensions.append({"PowerGroupId": pg, "Column": "ArmorTypeId", "MatchingAuthoredGroups": matches})
+        # The live Workshop-only document is a sparse, reviewed patch list.
+        # Guards compare against native values, not the legacy broad overlays.
+        surgical_clones, surgical_cells = Counter(), 0
+        seen_clones, seen_updates = set(), set()
+        for spec in fixes.get("clones", []):
+            if set(spec) != {"table", "id", "source", "expect_source", "set", "reason"}:
+                raise ValueError("Malformed surgical clone")
+            tname, identity, source = spec["table"], spec["id"], spec["source"]
+            if tname not in FIX_CLONE_COLUMNS or type(identity) is not int or type(source) is not int:
+                raise ValueError("Unsupported surgical clone identity")
+            if (tname, identity) in seen_clones or identity in tables[tname] or source not in base[tname]:
+                raise ValueError(f"Invalid surgical clone: {tname} {identity} from {source}")
+            seen_clones.add((tname, identity))
+            values, guard = spec["set"], spec["expect_source"]
+            if not values or set(values) - FIX_CLONE_COLUMNS[tname] or set(guard) != set(values):
+                raise ValueError("Unsupported surgical clone fields")
+            values = numeric_fix_values(tname, values)
+            for c, previous in guard.items():
+                if base[tname][source][c] != previous:
+                    raise ValueError(f"Surgical clone source changed: {tname} {source}.{c}")
+            columns = list(contracts[tname])
+            assignments = {**values, KEYS[tname]: identity}
+            expressions = [sql_value(assignments[c]) if c in assignments else quote(c) for c in columns]
+            statements.append(f"INSERT OR REPLACE INTO {quote(tname)} ({','.join(map(quote, columns))}) SELECT "
+                              + ",".join(expressions) + f" FROM {quote(tname)} WHERE {quote(KEYS[tname])}={source};")
+            tables[tname][identity] = {**base[tname][source], **assignments}
+            origin = f"{FIXES_FILE}: isolated native {tname} {source}; {spec['reason']}"
+            ledger.extend({"Table": tname, "Id": identity, "Column": c,
+                           "Value": tables[tname][identity][c], "Origin": origin} for c in columns)
+            locale_stem = "WeaponName." if tname == "Weapon" else "Effect.Name."
+            source_key = locale_stem + str(source)
+            if source_key not in db.locale:
+                raise ValueError("Missing surgical source locale: " + source_key)
+            locales[locale_stem + str(identity)] = db.locale[source_key]
+            surgical_clones[tname] += 1
+        for spec in fixes.get("updates", []):
+            if set(spec) != {"table", "id", "expect", "set", "reason"}:
+                raise ValueError("Malformed surgical update")
+            tname, identity, values, guard = spec["table"], spec["id"], spec["set"], spec["expect"]
+            if tname not in FIX_COLUMNS or type(identity) is not int or identity not in base[tname]:
+                raise ValueError("Unsupported surgical update identity")
+            if not values or set(guard) != set(values) or set(values) - FIX_COLUMNS[tname]:
+                raise ValueError("Unsupported surgical update fields")
+            for c, previous in guard.items():
+                if (tname, identity, c) in seen_updates:
+                    raise ValueError(f"Duplicate surgical field: {tname} {identity}.{c}")
+                seen_updates.add((tname, identity, c))
+                if base[tname][identity][c] != previous:
+                    raise ValueError(f"Native surgical target changed: {tname} {identity}.{c}")
+            values = numeric_fix_values(tname, values)
+            update(tname, identity, values, f"{FIXES_FILE}: {spec['reason']}", surgical=True)
+            surgical_cells += len(values)
+        # Every pointer assigned by the surgical document must resolve.
+        for spec in fixes.get("updates", []):
+            for field, pointer in spec["set"].items():
+                target = {("MonsterType", "WeaponTypeId"): "Weapon", ("MonsterType", "EffectId"): "Effect",
+                          ("MonsterTalent", "TargetEffect"): "Effect"}.get((spec["table"], field))
+                if target and pointer not in tables[target]:
+                    raise ValueError(f"Unresolved surgical pointer: {spec['table']} {spec['id']}.{field}")
         for identity, row in tables["MonsterType"].items():
             if row["ArmorTypeId"] != base["MonsterType"][identity]["ArmorTypeId"] and row["ArmorTypeId"] not in tables["Armor"]:
                 raise ValueError(f"Unresolved authored armor: MonsterType {identity} ArmorTypeId={row['ArmorTypeId']}")
-        statement_bytes = ("-- CKF Enemy Difficulty: armor, enemy armor lookups and Rule82=20.\n"
+        statement_bytes = ("-- CKF Enemy Difficulty: armor, Rule82=20 and reviewed surgical native corrections.\n"
                            + "\n".join(statements) + "\n").encode("utf-8")
         source_bytes = encode({"Metadata": {"StoryKey": "CKFEnemyDifficulty", "StartingId": 900000},
                                "RawSQL": statements, "RawText": {"Generic": locales}})
-        summary = {"format": 2, "scope": "Armor rows, MonsterType.ArmorTypeId and Rule82.Value=20",
+        summary = {"format": 3, "scope": "Enemy armor, Rule82=20, surgical backslide fixes and restored accuracy",
                    "official_database": str(db.path), "official_database_sha256": inputs[str(db.path)],
                    "configuration_directory": str(config_dir.resolve()), "parser_schema": str(schema_path.resolve()),
                    "source_inputs": inputs, "exporter_sha256": sha(Path(__file__).read_bytes()),
@@ -219,9 +301,11 @@ def build(data_path=DEFAULT_DB, config_dir=CONFIG, schema_path=PARSER_SCHEMA):
                    "authored_gear_clones": {t: len(r) for t, r in clone_rows.items()},
                    "sql_statements": len(statements), "column_writes": len(ledger),
                    "column_writes_by_table": dict(Counter(r["Table"] for r in ledger)),
+                   "surgical_update_rows": len(fixes.get("updates", [])),
+                   "surgical_update_cells": surgical_cells, "surgical_clones": dict(surgical_clones),
                    "locale_entries": len(locales), "parser_source_sha256": sha(source_bytes),
                    "direct_sql_sha256": sha(statement_bytes),
-                   "runtime": "Armor-only payload has not been exercised in game."}
+                   "runtime": "Armor and surgical-fix payload has not been exercised in game."}
         artifacts = {"source_content/stories.manifest": b"# CKF Enemy Difficulty\nenemy-difficulty.json\n",
                      "source_content/enemy-difficulty.json": source_bytes,
                      "prepared/_data/data.sql": statement_bytes,

@@ -1,7 +1,8 @@
-"""Independently verify armor-only SQL against official and authored data.
+"""Independently verify enemy armor and reviewed surgical corrections.
 
-Every official table is compared. Only Armor rows, MonsterType.ArmorTypeId and Rule82.Value=20
-may change; SQL write attempts outside that scope are rejected even if no-op.
+Every official row is compared with an independently evaluated target. Only
+armor, Rule82 and the exact live surgical document may differ. Native weapon,
+talent, effect and stat fields outside those assignments are checked unchanged.
 """
 from __future__ import annotations
 
@@ -11,11 +12,12 @@ import csv
 from decimal import Decimal, ROUND_HALF_EVEN
 import hashlib
 import json
+import math
 from pathlib import Path
 import sqlite3
 
 from static_data import StaticData, DEFAULT_DB, quote, integer_text
-from export_enemy_difficulty import CONFIG, PROJECT
+from export_enemy_difficulty import CONFIG, PROJECT, FIXES_FILE
 
 
 def require(condition, message):
@@ -26,6 +28,8 @@ def require(condition, message):
 def verify(sql_path, data_path=DEFAULT_DB, config_dir=CONFIG, native_integrity=False):
     sql_bytes = sql_path.read_bytes()
     locale = json.loads(sql_path.with_name("en-US.json").read_bytes())
+    fixes = json.loads((config_dir.parent / FIXES_FILE).read_bytes())
+    require(fixes.get("format") == 1, "Unsupported surgical fix format")
     conn = sqlite3.connect(":memory:")
     counts = Counter()
     try:
@@ -39,7 +43,7 @@ def verify(sql_path, data_path=DEFAULT_DB, config_dir=CONFIG, native_integrity=F
                 return conn.execute("SELECT * FROM " + quote(t) + order).fetchall()
 
             before = {t: raw_rows(t) for t in db.schema}
-            kinds = {t: {c[1]: c[2] for c in db.schema[t]} for t in ("Armor", "MonsterType", "Rule")}
+            kinds = {t: {c[1]: c[2] for c in db.schema[t]} for t in ("Armor", "MonsterType", "Rule", "Weapon", "MonsterTalent", "Effect")}
 
             def normalize(t, rows):
                 columns = list(kinds[t])
@@ -125,15 +129,65 @@ def verify(sql_path, data_path=DEFAULT_DB, config_dir=CONFIG, native_integrity=F
                     target["MonsterType"][levels[p]["MonsterTypeId"]]["ArmorTypeId"] = pointer
                     counts["new_ladder_armor_assignments"] += 1
 
+            # Independent interpretation of the reviewed sparse document.
+            update_columns = {
+                "MonsterType": {"HitPoints", "MovePoints", "MaxTalentCount", "WeaponTypeId", "EffectId"},
+                "Weapon": {"Accuracy1", "Accuracy2"},
+                "MonsterTalent": {"TargetEffect", "MonsterTalentGroup"},
+            }
+            clone_columns = {"Weapon": {"BallisticDamage1", "CritMultiBase"}, "Effect": {"Evasion"}}
+            permitted_columns, inserted_tables, seen_updates = defaultdict(set), {"Armor"}, set()
+            def check_numeric(spec):
+                for value in spec['set'].values():
+                    require(type(value) in (int, float) and math.isfinite(value), 'Non-numeric surgical value')
+                    require(float(value).is_integer(), 'Fractional surgical integer value')
+
+            for spec in fixes.get("clones", []):
+                check_numeric(spec)
+                table, identity, source = spec["table"], spec["id"], spec["source"]
+                require(table in clone_columns, "Unsupported surgical clone table")
+                require(identity not in target[table] and source in original[table], "Surgical clone collision/source missing")
+                require(set(spec["set"]) <= clone_columns[table] and set(spec["set"]) == set(spec["expect_source"]),
+                        "Unsupported surgical clone fields")
+                for field, value in spec["expect_source"].items():
+                    require(original[table][source][field] == value, f"Surgical clone source changed: {table} {source}.{field}")
+                # All fields not explicitly named are independently copied
+                # from the native row, including every weapon/effect value.
+                target[table][identity] = {**original[table][source], **spec["set"], keys[table][0]: identity}
+                stem = "WeaponName." if table == "Weapon" else "Effect.Name."
+                require(stem + str(source) in db.locale, "Surgical source locale missing")
+                expected_names[stem + str(identity)] = db.locale[stem + str(source)]
+                inserted_tables.add(table)
+                counts["surgical_clones"] += 1
+            for spec in fixes.get("updates", []):
+                check_numeric(spec)
+                table, identity = spec["table"], spec["id"]
+                require(table in update_columns and identity in original[table], "Unsupported surgical target")
+                require(set(spec["set"]) <= update_columns[table] and set(spec["set"]) == set(spec["expect"]),
+                        "Unsupported surgical fields")
+                for field, value in spec["expect"].items():
+                    require((table, identity, field) not in seen_updates, "Duplicate surgical assignment")
+                    seen_updates.add((table, identity, field))
+                    require(original[table][identity][field] == value, f"Native surgical target changed: {table} {identity}.{field}")
+                target[table][identity].update(spec["set"])
+                permitted_columns[table].update(spec["set"])
+                counts["surgical_update_cells"] += len(spec["set"])
+            for spec in fixes.get("updates", []):
+                for field, pointer in spec["set"].items():
+                    referenced = {("MonsterType", "WeaponTypeId"): "Weapon", ("MonsterType", "EffectId"): "Effect",
+                                  ("MonsterTalent", "TargetEffect"): "Effect"}.get((spec["table"], field))
+                    require(not referenced or pointer in target[referenced], "Unresolved surgical pointer")
+
             denied = []
 
             def authorizer(action, table, column, _db, _trigger):
                 if action == sqlite3.SQLITE_UPDATE:
                     allowed = ((table == "Armor" and column != "ArmorId")
                                or (table == "MonsterType" and column == "ArmorTypeId")
-                               or (table == "Rule" and column == "Value"))
+                               or (table == "Rule" and column == "Value")
+                               or column in permitted_columns.get(table, set()))
                 elif action == sqlite3.SQLITE_INSERT:
-                    allowed = table == "Armor"
+                    allowed = table in inserted_tables
                 elif action in (sqlite3.SQLITE_DELETE, sqlite3.SQLITE_CREATE_TABLE,
                                 sqlite3.SQLITE_DROP_TABLE, sqlite3.SQLITE_ALTER_TABLE,
                                 sqlite3.SQLITE_CREATE_TRIGGER, sqlite3.SQLITE_DROP_TRIGGER,
@@ -202,10 +256,10 @@ def verify(sql_path, data_path=DEFAULT_DB, config_dir=CONFIG, native_integrity=F
             counts["repeat_application_tables"] = len(db.schema)
             counts["localized_inserted_armors"] = len(locale)
             db.assert_unchanged()
-        return {"status": "PASS", "scope": "Armor rows, MonsterType.ArmorTypeId and Rule82.Value=20",
+        return {"status": "PASS", "scope": "Enemy armor, Rule82=20 and reviewed surgical native corrections",
                 "sql_sha256": hashlib.sha256(sql_bytes).hexdigest(), "checks": dict(counts),
                 "native_integrity_checks": native_checks,
-                "native_runtime": "NOT RUN: armor-only Workshop activation remains to be tested"}
+                "native_runtime": "NOT RUN: armor and surgical-fix Workshop activation remains to be tested"}
     finally:
         conn.close()
 
