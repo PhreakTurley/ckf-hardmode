@@ -1,8 +1,9 @@
-"""Export authored Hard Mode enemies to a first-party Workshop data mod.
+"""Export enemy armor and armor lookups to a first-party Workshop data mod.
 
-Reads the live overlays (including explicitly parked .disabled files), current
-official data, and the installed Data Parser declaration. Never edits tuning,
-save files, Workshop metadata, or the separate PL1-10 Enemy Scaling project.
+Reads ArmorModel.csv and only ArmorTypeId from MonsterTypeModel.csv, including
+parked .disabled inputs. Rule82.Value is set to 20. Every other official table and enemy
+field is outside the write set. Never edits tuning, saves, Workshop metadata or the separate
+PL4-20 roster project.
 """
 from __future__ import annotations
 
@@ -24,30 +25,7 @@ CONFIG = Path(r"C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flas
 MODKIT = Path(r"C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Mod Uploader")
 PARSER_SCHEMA = MODKIT / "CyberKnightsModkit_Data/StreamingAssets/config.json"
 PROJECT = ROOT / "ckf-enemy-difficulty"
-KEYS = {"Rule": "RuleId", "Weapon": "WeaponId", "Armor": "ArmorId",
-        "MonsterType": "MonsterTypeId", "MonsterTalent": "MonsterTalentId",
-        "MonsterGroupMember": "MonsterGroupMemberId", "Effect": "EffectId"}
-SPAWN_TAGS = ("bravestar", "corp-a", "corp-c", "fsc", "gang", "jupiter",
-              "kemco", "matsumoto", "mckellen", "syndicate", "ultratek", "warnerbraun")
-STAT_FLOORS = ("HitPoints", "CritRate", "ActionPoints", "MovePoints", "InitBonus",
-               "MaxTalentCount", "FlankAllowance", "SightDistance", "DetectDistance",
-               "FieldOfView", "ShotLimit")
-# Explicit official upgrade exemplars. Do not infer ability identity from names
-# alone: each family also requires the baseline effect and talent type to match.
-FAMILIES = ((804, 805, 806), (820, 821, 822), (3600, 3603, 3604),
-            (845, 833, 834), (851, 879, 880), (867, 877, 878),
-            (3300, 3301, 3302), (3400, 3402, 3403), (3500, 3501, 3502))
-EXISTING_TIERS = {804: (805, 806), 820: (821, 822), 845: (833, 834),
-                  846: (835, 836), 851: (879, 880), 867: (877, 878),
-                  3300: (3301, 3302), 3400: (3402, 3403), 3500: (3501, 3502),
-                  3600: (3603, 3604), 125001: (125010, 125011),
-                  125005: (125012, 125013), 125008: (125014, 125015)}
-TALENT_ID_START = 950000
-# These two independently inspected variants use different baseline effects.
-# Upgrade cloned effects by the official effect deltas, retaining their weaker
-# starting heal / stronger starting AP penalty and their effect ownership.
-EFFECT_VARIANTS = {15: 804, 41600: 867}
-EFFECT_ID_START = 960000
+KEYS = {"Armor": "ArmorId", "MonsterType": "MonsterTypeId", "Rule": "RuleId"}
 
 
 def sha(data):
@@ -106,8 +84,7 @@ def guarded_write(path, data, expected=None):
 
 
 def build(data_path=DEFAULT_DB, config_dir=CONFIG, schema_path=PARSER_SCHEMA):
-    inputs = {}
-    stamps = {}
+    inputs, stamps = {}, {}
 
     def read(path):
         path = path.resolve()
@@ -131,41 +108,28 @@ def build(data_path=DEFAULT_DB, config_dir=CONFIG, schema_path=PARSER_SCHEMA):
             tables[t] = {int(r[key]): {c: number(v, contracts[t][c]) for c, v in r.items()}
                          for r in db.read(t + "Model", labels=False)[1]}
         base = {t: {i: dict(r) for i, r in rows.items()} for t, rows in tables.items()}
-        if tables["Rule"][82]["ConfigName"] != "Max Enemy Power Level":
-            raise ValueError("Rule82 no longer declares the enemy ceiling")
-        statements, locales, ledger = [], {}, []
-        overlay_rows, clone_rows = {}, {}
-        summary = {"official_database": str(db.path), "official_database_sha256": inputs[str(db.path)],
-                   "configuration_directory": str(config_dir.resolve()), "parser_schema": str(schema_path.resolve())}
+        statements, locales, ledger, overlay_rows, clone_rows = [], {}, [], {}, {}
 
         def update(t, identity, values, origin):
+            if t == "Rule" and (identity != 82 or set(values) != {"Value"} or values["Value"] != 20):
+                raise ValueError("Only Rule82.Value=20 belongs to this export")
+            if t == "MonsterType" and set(values) - {"ArmorTypeId"}:
+                raise ValueError("Enemy armor export cannot write other MonsterType fields")
             values = {c: v for c, v in values.items() if tables[t][identity][c] != v}
-            if not values:
-                return
-            statements.append(f"UPDATE {quote(t)} SET " + ",".join(quote(c) + "=" + sql_value(v) for c, v in values.items())
-                              + f" WHERE {quote(KEYS[t])}={identity};")
-            tables[t][identity].update(values)
-            ledger.extend({"Table": t, "Id": identity, "Column": c, "Value": v, "Origin": origin} for c, v in values.items())
+            if values:
+                statements.append(f"UPDATE {quote(t)} SET " + ",".join(quote(c) + "=" + sql_value(v) for c, v in values.items())
+                                  + f" WHERE {quote(KEYS[t])}={identity};")
+                tables[t][identity].update(values)
+                ledger.extend({"Table": t, "Id": identity, "Column": c, "Value": v, "Origin": origin} for c, v in values.items())
 
-        def clone(t, identity, source, values, origin):
-            if identity in base[t]:
-                raise ValueError(f"Clone collides with official ({t}, {identity})")
-            row = {**tables[t][source], **values, KEYS[t]: identity}
-            columns = list(contracts[t])
-            assignments = {**values, KEYS[t]: identity}
-            expressions = [sql_value(assignments[c]) if c in assignments else quote(c) for c in columns]
-            statements.append(f"INSERT OR REPLACE INTO {quote(t)} ({','.join(map(quote, columns))}) SELECT "
-                              + ",".join(expressions) + f" FROM {quote(t)} WHERE {quote(KEYS[t])}={source};")
-            tables[t][identity] = row
-            ledger.extend({"Table": t, "Id": identity, "Column": c, "Value": row[c], "Origin": origin} for c in columns)
-
-        def overlay(t, filename):
+        def overlay(t):
+            filename = t + "Model.csv"
             choices = [p for p in (config_dir / filename, config_dir / (filename + ".disabled")) if p.is_file()]
             if len(choices) != 1:
                 raise ValueError(f"Need exactly one active or parked source for {filename}: {choices}")
             path = choices[0]
             reader = csv.DictReader(io.StringIO(read(path).decode("utf-8-sig")))
-            if reader.fieldnames[0] != KEYS[t]:
+            if not reader.fieldnames or reader.fieldnames[0] != KEYS[t]:
                 raise ValueError(f"Wrong key header: {path}")
             for c in reader.fieldnames:
                 if not c.startswith("_") and c not in contracts[t]:
@@ -179,183 +143,91 @@ def build(data_path=DEFAULT_DB, config_dir=CONFIG, schema_path=PARSER_SCHEMA):
                     raise ValueError(f"Duplicate ({t}, {identity}) in {path}")
                 seen.add(identity)
                 values = {c: number(v.strip(), contracts[t][c]) for c, v in raw.items()
-                          if c != KEYS[t] and not c.startswith("_") and v and v.strip()}
-                rows.append((identity, int(raw["_clone"]) if raw.get("_clone", "").strip() else None,
-                             values, f"{path.name}:{line}", raw.get("_comment", "")))
-            overlay_rows.setdefault(t, []).extend(rows)
-            # All normal rules apply to source rows before Hard Mode builds a clone.
-            for identity, source, values, origin, comment in rows:
+                          if c != KEYS[t] and not c.startswith("_") and v and v.strip()
+                          and (t == "Armor" or c == "ArmorTypeId")}
+                source = int(raw["_clone"]) if raw.get("_clone", "").strip() else None
+                if t == "MonsterType" and source is not None:
+                    raise ValueError(f"MonsterType clones are outside armor-only scope: {identity}")
+                rows.append((identity, source, values, f"{path.name}:{line}", raw.get("_comment", "")))
+            overlay_rows[t] = rows
+            for identity, source, values, origin, _ in rows:
                 if source is None:
                     if identity not in base[t]:
                         raise ValueError(f"Overlay update has no official row: ({t}, {identity})")
                     update(t, identity, values, origin)
             for identity, source, values, origin, comment in rows:
-                if source is not None:
-                    if source not in base[t] or identity in tables[t]:
-                        raise ValueError(f"Invalid clone: ({t}, {identity}) from {source}")
-                    clone(t, identity, source, values, origin)
-                    clone_rows.setdefault(t, []).append((identity, source))
-                    if t in ("Weapon", "Armor"):
-                        source_key = ("WeaponName." if t == "Weapon" else "ArmorName.") + str(source)
-                        # Many shipped enemy weapons have no per-ID locale key.
-                        # Give inserted tiers an authored display name instead
-                        # of emitting a missing localization key as their name.
-                        family = comment.split(" tier PL ")[0].replace("-", " ").title()
-                        label = db.locale.get(source_key, family)
-                        locales[("WeaponName." if t == "Weapon" else "ArmorName.") + str(identity)] = f"{label} (PL {tables[t][identity]['PowerLevel']})"
+                if source is None:
+                    continue
+                if t != "Armor" or source not in base[t] or identity in tables[t]:
+                    raise ValueError(f"Invalid armor clone: ({t}, {identity}) from {source}")
+                columns = list(contracts[t])
+                assignments = {**values, KEYS[t]: identity}
+                expressions = [sql_value(assignments[c]) if c in assignments else quote(c) for c in columns]
+                statements.append(f"INSERT OR REPLACE INTO {quote(t)} ({','.join(map(quote, columns))}) SELECT "
+                                  + ",".join(expressions) + f" FROM {quote(t)} WHERE {quote(KEYS[t])}={source};")
+                tables[t][identity] = {**tables[t][source], **assignments}
+                clone_rows.setdefault(t, []).append((identity, source))
+                ledger.extend({"Table": t, "Id": identity, "Column": c,
+                               "Value": tables[t][identity][c], "Origin": origin} for c in columns)
+                family = comment.split(" tier PL ")[0].replace("-", " ").title()
+                label = db.locale.get("ArmorName." + str(source), family)
+                locales["ArmorName." + str(identity)] = f"{label} (PL {tables[t][identity]['PowerLevel']})"
 
-        update("Rule", 82, {"Value": 20}, "enemy ceiling")
-        overlay("Armor", "ArmorModel.csv")
-        overlay("Weapon", "WeaponModel.csv")
-        overlay("MonsterType", "MonsterTypeModel.csv")
-        for tag in SPAWN_TAGS:
-            overlay("MonsterGroupMember", f"MonsterGroupMemberModel.spawn-{tag}.csv")
-
-        # Extend authored gear to new official ladders only when both the
-        # official PL1-10 signature and the authored PL11-20 outcome agree.
-        original_groups, effective_groups = defaultdict(dict), defaultdict(dict)
-        authored_ids = {i for i, _, _, _, _ in overlay_rows["MonsterType"]}
-        for i, row in base["MonsterType"].items():
-            original_groups[row["PowerGroupId"]][row["PowerLevel"]] = row
-            effective_groups[row["PowerGroupId"]][row["PowerLevel"]] = tables["MonsterType"][i]
+        if base["Rule"][82]["ConfigName"] != "Max Enemy Power Level":
+            raise ValueError("Rule82 no longer declares the enemy ceiling")
+        update("Rule", 82, {"Value": 20}, "native enemy ceiling")
+        overlay("Armor")
+        overlay("MonsterType")
+        # Extend only armor lookups to newly shipped ladders. Native weapon,
+        # talent and stat fields never enter the assignments.
+        groups, ambiguous = defaultdict(dict), set()
+        authored_ids = {r[0] for r in overlay_rows["MonsterType"]}
+        for row in base["MonsterType"].values():
+            pg, pl = row["PowerGroupId"], row["PowerLevel"]
+            if pl in groups[pg]:
+                ambiguous.add(pg)
+            groups[pg][pl] = row
         extensions = []
-        for pg, levels in sorted(original_groups.items()):
+        for pg, levels in sorted(groups.items()):
             if set(levels) != set(range(1, 21)) or any(r["MonsterTypeId"] in authored_ids for r in levels.values()):
                 continue
-            for column in ("WeaponTypeId", "ArmorTypeId"):
-                signature = tuple(levels[p][column] for p in range(1, 11))
-                matches = [g for g, lv in original_groups.items() if set(lv) == set(range(1, 21))
-                           and all(r["MonsterTypeId"] in authored_ids for r in lv.values())
-                           and tuple(lv[p][column] for p in range(1, 11)) == signature]
-                outcomes = {tuple(effective_groups[g][p][column] for p in range(11, 21)) for g in matches}
-                if len(outcomes) != 1:
-                    raise ValueError(f"New PowerGroup {pg} has ambiguous/missing authored {column} ladder")
-                chosen = next(iter(outcomes))
-                for pl, pointer in zip(range(11, 21), chosen):
-                    update("MonsterType", levels[pl]["MonsterTypeId"], {column: pointer}, "new official ladder: matched authored gear")
-                extensions.append({"PowerGroupId": pg, "Column": column, "MatchingAuthoredGroups": matches})
-
-        floors = []
-        for pg, levels in sorted(effective_groups.items()):
-            maxima = {}
-            for pl, row in sorted(levels.items()):
-                values = {}
-                for c in STAT_FLOORS:
-                    maxima[c] = max(maxima.get(c, row[c]), row[c])
-                    if pl >= 11 and row[c] < maxima[c]:
-                        values[c] = maxima[c]
-                        floors.append({"MonsterTypeId": row["MonsterTypeId"], "PowerGroupId": pg,
-                                       "PowerLevel": pl, "Column": c, "Before": row[c], "After": maxima[c]})
-                update("MonsterType", row["MonsterTypeId"], values, "high-PL stat backslide floor")
-
-        # Carry official upgrade deltas to untiered copies. Existing variants
-        # keep their AI, charges, range, damage offsets and group ownership.
-        # The two weak group-860 Shrapnel tiers are aligned to the improved
-        # official group-861 exemplars rather than retaining their old effect.
-        talent_coverage, considered = [], set()
-        next_id = TALENT_ID_START
-        next_effect = EFFECT_ID_START
-        for baseline_id, mid_id, high_id in FAMILIES:
-            baseline, mid, high = (base["MonsterTalent"][i] for i in (baseline_id, mid_id, high_id))
-            label = db.locale[f"MonsterTalent.Name.{baseline_id}"]
-            tier_start = mid["MinPowerLevel"]
-            candidates = []
-            for identity, row in base["MonsterTalent"].items():
-                if row["MinPowerLevel"] != 0 or db.locale.get(f"MonsterTalent.Name.{identity}") != label:
-                    continue
-                if row["MonsterTalentTypeId"] != baseline["MonsterTalentTypeId"]:
-                    raise ValueError(f"Same-name talent has a different type; review {identity}")
-                if row["TargetEffect"] != baseline["TargetEffect"] and EFFECT_VARIANTS.get(identity) != baseline_id:
-                    raise ValueError(f"Unmapped same-name effect variant; review {identity}")
-                candidates.append((identity, row))
-            for identity, row in candidates:
-                if identity in considered:
-                    raise ValueError(f"Talent family assigned twice: {identity}")
-                considered.add(identity)
-                existing = EXISTING_TIERS.get(identity)
-                if existing:
-                    ids = existing
-                else:
-                    ids = (next_id, next_id + 1)
-                    next_id += 2
-                update("MonsterTalent", identity, {"MaxPowerLevel": tier_start - 1}, "official talent band")
-                for tier_id, exemplar in zip(ids, (mid, high)):
-                    values = {"MinPowerLevel": exemplar["MinPowerLevel"], "MaxPowerLevel": exemplar["MaxPowerLevel"]}
-                    for c in contracts["MonsterTalent"]:
-                        if c in ("MonsterTalentId", "MonsterTalentGroup", "MinPowerLevel", "MaxPowerLevel"):
-                            continue
-                        if baseline[c] == exemplar[c]:
-                            continue
-                        if c == "TargetEffect" or not isinstance(baseline[c], (int, float)):
-                            values[c] = exemplar[c]
-                        else:
-                            values[c] = row[c] + exemplar[c] - baseline[c]
-                    if identity in EFFECT_VARIANTS:
-                        original_effect = base["Effect"][row["TargetEffect"]]
-                        canonical_effect = base["Effect"][baseline["TargetEffect"]]
-                        upgraded_effect = base["Effect"][exemplar["TargetEffect"]]
-                        effect_values = {}
-                        for c in contracts["Effect"]:
-                            if c == "EffectId" or canonical_effect[c] == upgraded_effect[c]:
-                                continue
-                            if isinstance(canonical_effect[c], (int, float)):
-                                effect_values[c] = original_effect[c] + upgraded_effect[c] - canonical_effect[c]
-                            else:
-                                effect_values[c] = upgraded_effect[c]
-                        clone("Effect", next_effect, row["TargetEffect"], effect_values, f"official effect upgrade for talent variant {identity}")
-                        locales[f"Effect.Name.{next_effect}"] = db.locale.get(f"Effect.Name.{row['TargetEffect']}", label)
-                        values["TargetEffect"] = next_effect
-                        next_effect += 1
-                    if existing:
-                        if tables["MonsterTalent"][tier_id]["MonsterTalentGroup"] != row["MonsterTalentGroup"]:
-                            raise ValueError(f"Official talent group changed: {tier_id}")
-                        update("MonsterTalent", tier_id, values, f"official upgrade family {baseline_id}, variant {identity}")
-                    else:
-                        clone("MonsterTalent", tier_id, identity, values, f"official upgrade family {baseline_id}, variant {identity}")
-                        locales[f"MonsterTalent.Name.{tier_id}"] = label
-                talent_coverage.append({"Family": label, "BaselineId": identity, "Group": row["MonsterTalentGroup"],
-                                        "MiddleId": ids[0], "HighId": ids[1], "MiddleStarts": tier_start,
-                                        "HighStarts": high["MinPowerLevel"], "NewRows": not bool(existing),
-                                        "OfficialExemplars": [baseline_id, mid_id, high_id]})
-
-        # Every high-PL enemy's direct gear pointers must resolve, including
-        # the previously absent J-family weapon tail supplied by these overlays.
+            if pg in ambiguous:
+                raise ValueError(f"Ambiguous full armor ladder: {pg}")
+            signature = tuple(levels[p]["ArmorTypeId"] for p in range(1, 11))
+            matches = [g for g, lv in groups.items() if set(lv) == set(range(1, 21)) and g not in ambiguous
+                       and all(r["MonsterTypeId"] in authored_ids for r in lv.values())
+                       and tuple(lv[p]["ArmorTypeId"] for p in range(1, 11)) == signature]
+            outcomes = {tuple(tables["MonsterType"][groups[g][p]["MonsterTypeId"]]["ArmorTypeId"] for p in range(11, 21)) for g in matches}
+            if len(outcomes) != 1:
+                raise ValueError(f"New PowerGroup {pg} has ambiguous/missing authored armor ladder")
+            for pl, pointer in zip(range(11, 21), next(iter(outcomes))):
+                update("MonsterType", levels[pl]["MonsterTypeId"], {"ArmorTypeId": pointer}, "new official ladder: matched authored armor")
+            extensions.append({"PowerGroupId": pg, "Column": "ArmorTypeId", "MatchingAuthoredGroups": matches})
         for identity, row in tables["MonsterType"].items():
-            if row["PowerLevel"] < 11:
-                continue
-            for c, target in (("WeaponTypeId", "Weapon"), ("ArmorTypeId", "Armor")):
-                if row[c] not in tables[target]:
-                    raise ValueError(f"Unresolved high-PL gear: MonsterType {identity} {c}={row[c]}")
-        effects = set(tables["Effect"])
-        for row in tables["MonsterTalent"].values():
-            if row["TargetEffect"] and row["TargetEffect"] not in effects:
-                raise ValueError(f"Missing official effect for MonsterTalent {row['MonsterTalentId']}")
-        statement_bytes = ("-- CKF Enemy Difficulty: generated from authored overlays and official talent tiers.\n"
+            if row["ArmorTypeId"] != base["MonsterType"][identity]["ArmorTypeId"] and row["ArmorTypeId"] not in tables["Armor"]:
+                raise ValueError(f"Unresolved authored armor: MonsterType {identity} ArmorTypeId={row['ArmorTypeId']}")
+        statement_bytes = ("-- CKF Enemy Difficulty: armor, enemy armor lookups and Rule82=20.\n"
                            + "\n".join(statements) + "\n").encode("utf-8")
-        parser_json = {"Metadata": {"StoryKey": "CKFEnemyDifficulty", "StartingId": TALENT_ID_START},
-                       "RawSQL": statements, "RawText": {"Generic": locales}}
-        source_bytes = encode(parser_json)
-        summary.update({"format": 1, "scope": "Rule82, authored enemy gear/stats, native roster taper, official enemy talent upgrades",
-                        "source_inputs": inputs, "exporter_sha256": sha(Path(__file__).read_bytes()),
-                        "stat_floor_columns": STAT_FLOORS, "new_ladder_gear_extensions": extensions,
-                        "additional_high_PL_stat_floors": floors, "talent_coverage": talent_coverage,
-                        "effect_variant_families": EFFECT_VARIANTS, "new_effect_rows": next_effect - EFFECT_ID_START,
-                        "authored_overlay_rows": {t: len(r) for t, r in overlay_rows.items()},
-                        "authored_gear_clones": {t: len(r) for t, r in clone_rows.items() if t in ("Armor", "Weapon")},
-                        "sql_statements": len(statements), "column_writes": len(ledger),
-                        "column_writes_by_table": dict(Counter(r["Table"] for r in ledger)),
-                        "new_talent_rows": next_id - TALENT_ID_START, "locale_entries": len(locales),
-                        "parser_source_sha256": sha(source_bytes), "direct_sql_sha256": sha(statement_bytes),
-                        "limits": {"enemy_cap": 20, "mission_cap_override": False, "slider_bounds_in_official_SQL": False},
-                        "runtime": "Workshop package not yet exercised in game; Rule82-only test accepted by David."})
+        source_bytes = encode({"Metadata": {"StoryKey": "CKFEnemyDifficulty", "StartingId": 900000},
+                               "RawSQL": statements, "RawText": {"Generic": locales}})
+        summary = {"format": 2, "scope": "Armor rows, MonsterType.ArmorTypeId and Rule82.Value=20",
+                   "official_database": str(db.path), "official_database_sha256": inputs[str(db.path)],
+                   "configuration_directory": str(config_dir.resolve()), "parser_schema": str(schema_path.resolve()),
+                   "source_inputs": inputs, "exporter_sha256": sha(Path(__file__).read_bytes()),
+                   "new_ladder_gear_extensions": extensions,
+                   "authored_overlay_rows": {t: len(r) for t, r in overlay_rows.items()},
+                   "authored_gear_clones": {t: len(r) for t, r in clone_rows.items()},
+                   "sql_statements": len(statements), "column_writes": len(ledger),
+                   "column_writes_by_table": dict(Counter(r["Table"] for r in ledger)),
+                   "locale_entries": len(locales), "parser_source_sha256": sha(source_bytes),
+                   "direct_sql_sha256": sha(statement_bytes),
+                   "runtime": "Armor-only payload has not been exercised in game."}
         artifacts = {"source_content/stories.manifest": b"# CKF Enemy Difficulty\nenemy-difficulty.json\n",
                      "source_content/enemy-difficulty.json": source_bytes,
                      "prepared/_data/data.sql": statement_bytes,
                      "prepared/_data/en-US.json": encode(locales),
                      "review/SOURCE.json": encode(summary),
-                     "review/column-ledger.csv": csv_bytes(ledger, ("Table", "Id", "Column", "Value", "Origin")),
-                     "review/talent-coverage.csv": csv_bytes([{**r, "OfficialExemplars": ",".join(map(str, r["OfficialExemplars"]))}
-                                                             for r in talent_coverage], tuple(talent_coverage[0]))}
+                     "review/column-ledger.csv": csv_bytes(ledger, ("Table", "Id", "Column", "Value", "Origin"))}
         db.assert_unchanged()
     for path, (stamp, digest) in stamps.items():
         if path.stat().st_mtime_ns != stamp or sha(path.read_bytes()) != digest:
@@ -379,7 +251,7 @@ def main():
                 raise ValueError(f"Stale artifact: {path}")
         else:
             guarded_write(path, content)
-    print(json.dumps({k: summary[k] for k in ("authored_overlay_rows", "authored_gear_clones", "new_talent_rows",
+    print(json.dumps({k: summary[k] for k in ("authored_overlay_rows", "authored_gear_clones",
                                             "sql_statements", "column_writes_by_table", "locale_entries")}, indent=2))
 
 
