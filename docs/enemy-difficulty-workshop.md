@@ -5,8 +5,10 @@ and opening-roster taper to first-party SQL. It raises `Rule` 82 to 20, while
 leaving `Rule` 81 and mission-generation calculations to the game. The native
 cap test and slider distinction are documented in [Power level](power-level.md#native-enemy-ceiling-rule82).
 
-This is separate from the earlier `ckf-enemy-scaling` PL1–10 prototype. The
-exporter never reads or changes that project's policy or prepared content.
+This is separate from the `ckf-enemy-scaling` PL4–20 roster project, which
+preserves native stats, equipment and talents. The exporter never reads or
+changes that project's policy or prepared content. Hard Mode's deprecated
+enemy-scaling ownership is documented in [Tuning enemies](tuning-enemies.md).
 
 ## Authoring and outputs
 

@@ -1,5 +1,10 @@
 # Tuning enemies
 
+Hard Mode enemy scaling is deprecated. Enemy scaling belongs to the Workshop
+mods. The Hard Mode files described below are legacy authoring surfaces; they
+are not an enemy-scaling runtime to extend. See
+[Workshop preparation](enemy-difficulty-workshop.md) for the SQL workflow.
+
 Use this page to locate enemy-stat, gear, appearance, and roster-pool surfaces.
 It explains what has been measured about each path; it does not record current
 tuning values. The CSV format is in [`overlays.md`](overlays.md), row insertion

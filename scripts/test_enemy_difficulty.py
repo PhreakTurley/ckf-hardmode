@@ -2,6 +2,7 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+import csv
 
 from export_enemy_difficulty import PROJECT
 from verify_enemy_difficulty import verify
@@ -28,11 +29,16 @@ class EnemyDifficultyChecks(unittest.TestCase):
                 require_steam_install(workshop)
 
     def test_rejects_corrupted_payloads(self):
+        with (PROJECT / "review/column-ledger.csv").open(encoding="utf-8-sig", newline="") as handle:
+            weapon = next(int(row["Id"]) for row in csv.DictReader(handle)
+                          if row["Table"] == "Weapon" and row["Column"] == "BallisticDamage1")
         cases = (
             ("wrong enemy ceiling", 'UPDATE Rule SET Value=12 WHERE RuleId=82;', 'Row mismatch: Rule 82'),
             ("mission ceiling changed", 'UPDATE Rule SET Value=20 WHERE RuleId=81;', 'Row mismatch: Rule 81'),
             ("high-level HP backslide", 'UPDATE MonsterType SET HitPoints=1 WHERE MonsterTypeId=24;', 'Row mismatch: MonsterType 24'),
-            ("authored weapon changed", 'UPDATE Weapon SET BallisticDamage1=1 WHERE WeaponId=20019;', 'Row mismatch: Weapon 20019'),
+            ("authored weapon changed", f'UPDATE Weapon SET BallisticDamage1=BallisticDamage1+1 WHERE WeaponId={weapon};', f'Row mismatch: Weapon {weapon}'),
+            ("native weapon overwritten", 'UPDATE Weapon SET BallisticDamage1=1 WHERE WeaponId=20012;', 'Row mismatch: Weapon 20012'),
+            ("native effect overwritten", 'UPDATE Effect SET InitBonus=999 WHERE EffectId=64206;', 'Row mismatch: Effect 64206'),
             ("new enemy misses authored gear", 'UPDATE MonsterType SET WeaponTypeId=6016 WHERE PowerGroupId=127620 AND PowerLevel=20;', 'Row mismatch: MonsterType'),
             ("official upgrade missed", 'UPDATE MonsterTalent SET TargetEffect=64140 WHERE MonsterTalentId=836;', 'Row mismatch: MonsterTalent 836'),
             ("talent band gap", 'UPDATE MonsterTalent SET MaxPowerLevel=0 WHERE MonsterTalentId=857;', 'Row mismatch: MonsterTalent 857'),
