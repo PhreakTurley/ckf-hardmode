@@ -1,13 +1,15 @@
-"""Independently verify enemy armor and reviewed surgical corrections.
+"""Independently verify enemy armor, PL1-20 rosters and surgical corrections.
 
 Every official row is compared with an independently evaluated target. Only
-armor, Rule82 and the exact live surgical document may differ. Native weapon,
+armor, the independently verified roster policy, Rule82 and the exact live
+surgical document may differ. Native weapon,
 talent, effect and stat fields outside those assignments are checked unchanged.
 """
 from __future__ import annotations
 
 import argparse
 from collections import Counter, defaultdict
+from contextlib import closing
 import csv
 from decimal import Decimal, ROUND_HALF_EVEN
 import hashlib
@@ -17,7 +19,7 @@ from pathlib import Path
 import sqlite3
 
 from static_data import StaticData, DEFAULT_DB, quote, integer_text
-from export_enemy_difficulty import CONFIG, PROJECT, FIXES_FILE, SPAWN_TAGS
+from export_enemy_difficulty import CONFIG, PROJECT, FIXES_FILE, ROSTER_ROOT, roster_module
 
 
 def require(condition, message):
@@ -27,6 +29,12 @@ def require(condition, message):
 
 def verify(sql_path, data_path=DEFAULT_DB, config_dir=CONFIG, native_integrity=False):
     sql_bytes = sql_path.read_bytes()
+    roster_path = ROSTER_ROOT / "prepared/_data/data.sql"
+    roster_bytes = roster_path.read_bytes()
+    # This verifier reconstructs roster rules independently of the planner.
+    # Composing its exact output below also checks every merged member id/cell.
+    roster_check = roster_module("verify_prepared").verify(data_path, roster_path)
+    require(roster_check["sql_sha256"] == hashlib.sha256(roster_bytes).hexdigest(), "Roster input moved during verification")
     locale = json.loads(sql_path.with_name("en-US.json").read_bytes())
     fixes = json.loads((config_dir.parent / FIXES_FILE).read_bytes())
     require(fixes.get("format") == 1, "Unsupported surgical fix format")
@@ -64,7 +72,6 @@ def verify(sql_path, data_path=DEFAULT_DB, config_dir=CONFIG, native_integrity=F
             target = {t: {i: dict(r) for i, r in rows.items()} for t, rows in original.items()}
             authored, expected_names = set(), {}
             inputs = [("Armor", "ArmorModel.csv"), ("MonsterType", "MonsterTypeModel.csv")]
-            inputs += [("MonsterGroupMember", f"MonsterGroupMemberModel.spawn-{tag}.csv") for tag in SPAWN_TAGS]
             for t, filename in inputs:
                 paths = [p for p in (config_dir / filename, config_dir / (filename + ".disabled")) if p.is_file()]
                 require(len(paths) == 1, "Ambiguous source: " + filename)
@@ -110,6 +117,11 @@ def verify(sql_path, data_path=DEFAULT_DB, config_dir=CONFIG, native_integrity=F
                             expected_names["ArmorName." + str(identity)] = f"{label} (PL {target[t][identity]['PowerLevel']})"
                 counts["authored_rows"] += len(converted)
 
+            with closing(sqlite3.connect(":memory:")) as roster_db:
+                db.connection.backup(roster_db)
+                roster_db.executescript(roster_bytes.decode("utf-8-sig"))
+                target["MonsterGroupMember"] = normalize("MonsterGroupMember", roster_db.execute('SELECT * FROM "MonsterGroupMember"').fetchall())
+            counts.update({"independent_roster_" + name: value for name, value in roster_check["checks"].items()})
             require(target["Rule"][82]["ConfigName"] == "Max Enemy Power Level", "Rule82 declaration changed")
             target["Rule"][82]["Value"] = 20
             groups, ambiguous = defaultdict(dict), set()
@@ -174,7 +186,9 @@ def verify(sql_path, data_path=DEFAULT_DB, config_dir=CONFIG, native_integrity=F
                                or column in permitted_columns.get(table, set()))
                 elif action == sqlite3.SQLITE_INSERT:
                     allowed = table in inserted_tables
-                elif action in (sqlite3.SQLITE_DELETE, sqlite3.SQLITE_CREATE_TABLE,
+                elif action == sqlite3.SQLITE_DELETE:
+                    allowed = table == "MonsterGroupMember"
+                elif action in (sqlite3.SQLITE_CREATE_TABLE,
                                 sqlite3.SQLITE_DROP_TABLE, sqlite3.SQLITE_ALTER_TABLE,
                                 sqlite3.SQLITE_CREATE_TRIGGER, sqlite3.SQLITE_DROP_TRIGGER,
                                 sqlite3.SQLITE_CREATE_INDEX, sqlite3.SQLITE_DROP_INDEX,
@@ -258,10 +272,12 @@ def verify(sql_path, data_path=DEFAULT_DB, config_dir=CONFIG, native_integrity=F
             counts["repeat_application_tables"] = len(db.schema)
             counts["localized_inserted_armors"] = len(locale)
             db.assert_unchanged()
-        return {"status": "PASS", "scope": "Enemy armor, authored rosters, Rule82=20 and surgical native corrections",
+            require(roster_path.read_bytes() == roster_bytes, "Roster input moved during verification")
+        return {"status": "PASS", "scope": "Enemy armor, PL1-20 Patrol/reinforcement/VIP rosters, Rule82=20 and surgical native corrections",
                 "sql_sha256": hashlib.sha256(sql_bytes).hexdigest(), "checks": dict(counts),
                 "native_integrity_checks": native_checks,
-                "native_runtime": "NOT RUN: armor and surgical-fix Workshop activation remains to be tested"}
+                "legacy_roster_checks": roster_check["legacy_checks"],
+                "native_runtime": "NOT RUN: merged armor, roster and surgical-fix payload remains to be tested in a newly generated mission"}
     finally:
         conn.close()
 

@@ -1,13 +1,13 @@
-"""Export enemy armor, Rule82 and reviewed surgical native corrections.
+"""Export enemy armor, PL1-20 rosters and reviewed surgical native corrections.
 
-Legacy armor/roster inputs and the live Workshop fix document are the only
-authoring sources. Other legacy enemy fields are ignored. Never edits tuning,
-saves, Workshop metadata or the separate PL4-20 roster project.
+Armor and surgical fixes use their live authoring inputs; roster authoring is
+owned by ckf-enemy-scaling. Never edits tuning, saves or Workshop metadata.
 """
 from __future__ import annotations
 
 import argparse
 from collections import Counter, defaultdict
+from contextlib import closing
 import csv
 from decimal import Decimal, ROUND_HALF_EVEN
 import hashlib
@@ -15,6 +15,9 @@ import io
 import json
 import math
 import os
+import importlib.util
+import sqlite3
+import sys
 from pathlib import Path
 from uuid import uuid4
 
@@ -25,6 +28,7 @@ CONFIG = Path(r"C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flas
 MODKIT = Path(r"C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Mod Uploader")
 PARSER_SCHEMA = MODKIT / "CyberKnightsModkit_Data/StreamingAssets/config.json"
 PROJECT = ROOT / "ckf-enemy-difficulty"
+ROSTER_ROOT = ROOT / "ckf-enemy-scaling"
 KEYS = {"Armor": "ArmorId", "MonsterType": "MonsterTypeId", "Rule": "RuleId",
         "Weapon": "WeaponId", "MonsterTalent": "MonsterTalentId", "Effect": "EffectId", "MonsterGroupMember": "MonsterGroupMemberId"}
 FIXES_FILE = "ckf.enemy-difficulty.json"
@@ -90,6 +94,37 @@ def guarded_write(path, data, expected=None):
     os.replace(staged, path)
     if sha(path.read_bytes()) != sha(data):
         raise ValueError(f"Written bytes differ: {path}")
+
+
+
+def roster_module(name):
+    """Load the single maintainer roster implementation, without copying it."""
+    directory = ROSTER_ROOT / "scripts"
+    if str(directory) not in sys.path:
+        sys.path.insert(0, str(directory))
+    path = directory / (name + ".py")
+    spec = importlib.util.spec_from_file_location("_ckf_roster_" + name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def roster_source(data_path, read):
+    """Require a fresh policy build, then return only its roster statements."""
+    for relative in ("source_content/policy.json", "scripts/build_overlays.py", "scripts/patrol_plan.py"):
+        read(ROSTER_ROOT / relative)
+    artifacts, receipt = roster_module("build_overlays").build(data_path, ROSTER_ROOT / "source_content/policy.json")
+    for relative in ("prepared/_data/data.sql", "prepared/_data/en-US.json", "review/build.json"):
+        if read(ROSTER_ROOT / relative) != artifacts[relative]:
+            raise ValueError(f"Stale roster input: {relative}; rebuild ckf-enemy-scaling first")
+    statements = []
+    for line in artifacts["prepared/_data/data.sql"].decode("utf-8").splitlines():
+        if not line or line.startswith("--") or line == 'UPDATE "Rule" SET "Value"=20 WHERE "RuleId"=82;':
+            continue
+        if not line.startswith(('DELETE FROM "MonsterGroupMember" ', 'INSERT OR REPLACE INTO "MonsterGroupMember" ')) or not line.endswith(';'):
+            raise ValueError("Unexpected roster statement")
+        statements.append(line)
+    return statements, receipt
 
 
 def build(data_path=DEFAULT_DB, config_dir=CONFIG, schema_path=PARSER_SCHEMA):
@@ -205,8 +240,24 @@ def build(data_path=DEFAULT_DB, config_dir=CONFIG, schema_path=PARSER_SCHEMA):
         update("Rule", 82, {"Value": 20}, "native enemy ceiling")
         overlay("Armor")
         overlay("MonsterType")
-        for tag in SPAWN_TAGS:
-            overlay("MonsterGroupMember", f"MonsterGroupMemberModel.spawn-{tag}.csv")
+        # The reviewed roster policy supersedes legacy spawn sheets entirely.
+        roster_statements, roster_receipt = roster_source(data_path, read)
+        with closing(sqlite3.connect(":memory:")) as roster_db:
+            db.connection.backup(roster_db)
+            roster_db.executescript("\n".join(roster_statements))
+            roster_db.row_factory = sqlite3.Row
+            roster_rows = {int(r["MonsterGroupMemberId"]): {c: number(r[c], contracts["MonsterGroupMember"][c])
+                           for c in contracts["MonsterGroupMember"]}
+                           for r in roster_db.execute('SELECT * FROM "MonsterGroupMember"')}
+        statements.extend(roster_statements)
+        origin = "ckf-enemy-scaling/source_content/policy.json"
+        for identity in sorted(set(tables["MonsterGroupMember"]) - set(roster_rows)):
+            ledger.append({"Table": "MonsterGroupMember", "Id": identity, "Column": "_delete", "Value": 1, "Origin": origin})
+        for identity, row in roster_rows.items():
+            previous = tables["MonsterGroupMember"].get(identity, {})
+            ledger.extend({"Table": "MonsterGroupMember", "Id": identity, "Column": c, "Value": v, "Origin": origin}
+                          for c, v in row.items() if previous.get(c) != v)
+        tables["MonsterGroupMember"] = roster_rows
         # Extend only armor lookups to newly shipped ladders. Native weapon,
         # talent and stat fields never enter the assignments.
         groups, ambiguous = defaultdict(dict), set()
@@ -262,18 +313,21 @@ def build(data_path=DEFAULT_DB, config_dir=CONFIG, schema_path=PARSER_SCHEMA):
         for identity, row in tables["MonsterType"].items():
             if row["ArmorTypeId"] != base["MonsterType"][identity]["ArmorTypeId"] and row["ArmorTypeId"] not in tables["Armor"]:
                 raise ValueError(f"Unresolved authored armor: MonsterType {identity} ArmorTypeId={row['ArmorTypeId']}")
-        statement_bytes = ("-- CKF Enemy Difficulty: armor, Rule82=20 and reviewed surgical native corrections.\n"
+        statement_bytes = ("-- CKF Enemy Difficulty: armor, PL1-20 rosters, Rule82=20 and reviewed surgical native corrections.\n"
                            + "\n".join(statements) + "\n").encode("utf-8")
         source_bytes = encode({"Metadata": {"StoryKey": "CKFEnemyDifficulty", "StartingId": 900000},
                                "RawSQL": statements, "RawText": {"Generic": locales}})
-        summary = {"format": 3, "scope": "Enemy armor, authored rosters, Rule82=20 and surgical native corrections",
+        summary = {"format": 4, "scope": "Enemy armor, PL1-20 Patrol/reinforcement/VIP rosters, Rule82=20 and surgical native corrections",
                    "official_database": str(db.path), "official_database_sha256": inputs[str(db.path)],
                    "configuration_directory": str(config_dir.resolve()), "parser_schema": str(schema_path.resolve()),
                    "source_inputs": inputs, "exporter_sha256": sha(Path(__file__).read_bytes()),
                    "new_ladder_gear_extensions": extensions,
                    "authored_overlay_rows": {t: len(r) for t, r in overlay_rows.items()},
                    "authored_gear_clones": {t: len(r) for t, r in clone_rows.items() if t == "Armor"},
-                   "authored_roster_clones": len(clone_rows.get("MonsterGroupMember", [])),
+                   "roster_source": str(ROSTER_ROOT.resolve()),
+                   "roster_sql_sha256": roster_receipt["sql_sha256"],
+                   "prepared_roster_rows": roster_receipt["prepared_member_rows"],
+                   "removed_roster_rows": roster_receipt["member_original_ids_replaced"],
                    "sql_statements": len(statements), "column_writes": len(ledger),
                    "column_writes_by_table": dict(Counter(r["Table"] for r in ledger)),
                    "surgical_update_rows": len(fixes.get("updates", [])),

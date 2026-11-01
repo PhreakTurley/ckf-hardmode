@@ -29,9 +29,10 @@ class EnemyDifficultyChecks(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Could not establish Steam installation'):
                 require_steam_install(workshop)
 
-    def test_export_ignores_legacy_weapon_and_stat_fields(self):
+    def test_export_ignores_legacy_weapon_stat_and_spawn_fields(self):
         # Synthetic identity-only fixture, not a copy of live tuning. There is
-        # deliberately no weapon sheet; roster fixtures contain no tuning.
+        # deliberately no weapon sheet; invalid legacy spawn columns prove those
+        # obsolete files are not read or stacked with the new roster policy.
         with TemporaryDirectory(prefix='verifier-test-', dir=PROJECT) as temporary:
             directory = Path(temporary) / "ckf.hardmode.d"
             directory.mkdir()
@@ -41,15 +42,18 @@ class EnemyDifficultyChecks(unittest.TestCase):
             guarded_write(directory / 'ArmorModel.csv', b'ArmorId,BallisticArmor\n')
             for tag in SPAWN_TAGS:
                 guarded_write(directory / f'MonsterGroupMemberModel.spawn-{tag}.csv',
-                              b'MonsterGroupMemberId,WeightedRoll\n')
+                              b'MonsterGroupMemberId,InvalidLegacyColumn\n30,999999\n')
             monster = 'MonsterTypeId,ArmorTypeId,HitPoints,WeaponTypeId,MonsterTalentGroup\n'
             monster += ''.join(f'{identity},,1,999999,999999\n' for identity in ids)
             guarded_write(directory / 'MonsterTypeModel.csv', monster.encode())
             artifacts, _ = build(config_dir=directory)
             import json
             payload = json.loads(artifacts['source_content/enemy-difficulty.json'])
-            self.assertEqual(len(payload['RawSQL']), 1)
-            self.assertIn('WHERE "RuleId"=82', payload['RawSQL'][0])
+            non_roster = [statement for statement in payload['RawSQL'] if 'MonsterGroupMember' not in statement]
+            self.assertEqual(len(non_roster), 1)
+            self.assertIn('WHERE "RuleId"=82', non_roster[0])
+            self.assertTrue(any(statement.startswith('DELETE FROM "MonsterGroupMember"') for statement in payload['RawSQL']))
+            self.assertFalse(any('spawn-' in path for path in artifacts['review/SOURCE.json'].decode().splitlines()))
             self.assertEqual(payload['RawText']['Generic'], {})
             # An upstream correction or retune must refuse the old patch,
             # rather than silently applying a stale override.
@@ -73,6 +77,17 @@ class EnemyDifficultyChecks(unittest.TestCase):
             ledger = list(csv.DictReader(handle))
             armor = next(int(row["Id"]) for row in ledger
                          if row["Table"] == "Armor" and row["Column"] == "BallisticArmor")
+        members = {}
+        for row in ledger:
+            if row["Table"] == "MonsterGroupMember":
+                members.setdefault(int(row["Id"]), {})[row["Column"]] = row["Value"]
+        roster = next(identity for identity, row in members.items() if "WeightedRoll" in row)
+        gate = lambda group, maximum: next(identity for identity, row in members.items()
+                      if row.get("MonsterGroupId") == str(group) and row.get("MaxPowerLevel") == str(maximum))
+        vip, armored, reinforcement = gate(12550, 14), gate(12600, 14), gate(12150, 19)
+        with StaticData() as db:
+            unowned = next(int(r["MonsterGroupMemberId"]) for r in db.read("MonsterGroupMemberModel")[1]
+                           if int(r["MonsterGroupMemberId"]) not in members)
         # An unreviewed column is rejected before the exact-row comparison.
         accuracy_reviewed = any(row["Table"] == "Weapon" and row["Column"] == "Accuracy1"
                                 for row in ledger)
@@ -88,7 +103,12 @@ class EnemyDifficultyChecks(unittest.TestCase):
             ("weapon pointer overwritten", 'UPDATE MonsterType SET WeaponTypeId=22010 WHERE MonsterTypeId=189;', 'Row mismatch: MonsterType 189'),
             ("unreviewed native talent changed", 'UPDATE MonsterTalent SET TargetEffect=TargetEffect+1 WHERE MonsterTalentId=836;', 'Row mismatch: MonsterTalent 836'),
             ("talent band gap", 'UPDATE MonsterTalent SET MaxPowerLevel=0 WHERE MonsterTalentId=857;', 'Forbidden SQL write: MonsterTalent.MaxPowerLevel'),
-            ("roster taper changed", 'UPDATE MonsterGroupMember SET WeightedRoll=9999 WHERE MonsterGroupMemberId=30;', 'Row mismatch: MonsterGroupMember 30'),
+            ("roster taper changed", f'UPDATE MonsterGroupMember SET WeightedRoll=9999 WHERE MonsterGroupMemberId={roster};', f'Row mismatch: MonsterGroupMember {roster}'),
+            ("VIP removal gate lost", f'UPDATE MonsterGroupMember SET MaxPowerLevel=20 WHERE MonsterGroupMemberId={vip};', f'Row mismatch: MonsterGroupMember {vip}'),
+            ("Armored VIP removal gate lost", f'UPDATE MonsterGroupMember SET MaxPowerLevel=20 WHERE MonsterGroupMemberId={armored};', f'Row mismatch: MonsterGroupMember {armored}'),
+            ("reinforcement removal gate lost", f'UPDATE MonsterGroupMember SET MaxPowerLevel=20 WHERE MonsterGroupMemberId={reinforcement};', f'Row mismatch: MonsterGroupMember {reinforcement}'),
+            ("unowned roster deleted", f'DELETE FROM MonsterGroupMember WHERE MonsterGroupMemberId={unowned};', 'Row identities differ: MonsterGroupMember'),
+            ("legacy roster restored", 'INSERT INTO MonsterGroupMember (MonsterGroupMemberId,MonsterGroupId,MonsterType,Slot,Faction,MinPowerLevel,MaxPowerLevel,MinSecLevel,MaxSecLevel,Exclusive,WeightedRoll) VALUES (30,100,1,1,0,0,0,0,0,0,5);', 'Row identities differ: MonsterGroupMember'),
             ("player talent changed", 'UPDATE Talent SET Range=999 WHERE TalentId=5001;', 'Forbidden SQL write: Talent.Range'),
             ("shared effect changed", 'UPDATE Effect SET Heals=999 WHERE EffectId=64192;', 'Forbidden SQL write: Effect.Heals'),
             ("effect variant ownership lost", 'UPDATE Effect SET EffectOwner=0 WHERE EffectId=960002;', 'Forbidden SQL write: Effect.EffectOwner'),

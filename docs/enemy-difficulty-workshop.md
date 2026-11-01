@@ -2,23 +2,36 @@
 
 Enemy Difficulty applies authored enemy armor and armor assignments, sets
 `Rule82.Value` to 20, and applies reviewed surgical native corrections from a
-separate Workshop authoring document. Other native weapon, talent, effect and
-stat scaling remains unchanged. Authored opening-roster changes are retained.
+separate Workshop authoring document, and includes the reviewed PL1–20 Patrol,
+reinforcement and VIP roster progression. Other native weapon, talent, effect
+and stat scaling remains unchanged.
 
-This is separate from the `ckf-enemy-scaling` PL4–20 roster project. This
-exporter never reads or changes that project's policy or prepared content.
+Roster authoring has one maintained source in the maintainer's
+`ckf-enemy-scaling/` directory. Enemy Difficulty incorporates its prepared roster
+SQL; it is not a second Workshop item. The exporter refuses stale roster output
+and does not alter the policy. The legacy Hard Mode spawn sheets are not read
+or combined with it.
 Hard Mode's deprecated enemy-scaling ownership is documented in
 [Tuning enemies](tuning-enemies.md).
 
 ## Authoring and outputs
 
 `scripts/export_enemy_difficulty.py:build` reads the current official database,
-the installed Data Parser declaration, and legacy armor/roster inputs under
+the installed Data Parser declaration, and legacy armor inputs under
 `BepInEx/config/ckf.hardmode.d`:
 
 - all authored fields in `ArmorModel.csv`;
-- only `ArmorTypeId` from `MonsterTypeModel.csv`;
-- the twelve `MonsterGroupMemberModel.spawn-*.csv` faction overlays.
+- only `ArmorTypeId` from `MonsterTypeModel.csv`.
+
+Build the roster input with `ckf-enemy-scaling/scripts/build_overlays.py` before
+exporting. Its policy, builder, planner, prepared SQL/locale and receipt hashes
+are included in Enemy Difficulty's provenance. The roster input owns only
+`MonsterGroupMember`; the enemy ceiling is emitted once by Enemy Difficulty.
+Patrol uses the reviewed inclusions and small-integer weight progression.
+VIP and Armored VIP remove Basic at PL15–20; reinforcements remove Basic at
+PL20, with a fallback per slot/security band when no alternative is eligible.
+Other pools retain shipped effective behavior. The roster policy uses matching
+PL numbers, preserves non-Patrol PL1 and restores native behavior above PL20.
 
 The additional surgical source is `BepInEx/config/ckf.enemy-difficulty.json`.
 It is the single live authoring document for sparse native corrections, kept
@@ -74,6 +87,7 @@ Run from the Hard Mode checkout using `cmd.exe`:
 
 ```bat
 cd /d "D:\ckf-data-modding"
+python ckf-enemy-scaling\scripts\build_overlays.py
 python scripts\export_enemy_difficulty.py
 python scripts\export_enemy_difficulty.py --check
 pwsh -NoProfile -File scripts\prepare_enemy_difficulty.ps1
@@ -92,8 +106,11 @@ column writes; the complete row comparison enforces the exact reviewed id,
 field and value set. Weapon, talent, effect, stat, rule and roster corruption
 cases remain runnable, including changes outside the reviewed surgical rows,
 native source rows accidentally changed, forbidden repair clones and stale
-native preconditions. Roster rows are evaluated independently and their
-weighted pools are checked at every PL1–20. The old global native
+native preconditions. The roster verifier independently reconstructs the policy from official data,
+checks its SQL in isolation, and the combined verifier requires every merged
+roster row/field to match that verified result. Weighted pools are checked at
+every PL1–20. Corruption cases also cover the VIP/reinforcement removal gates,
+restored legacy rows and deletion of unowned roster members. The old global native
 weapon/armor and talent-effect resolution checks remain runnable with `verify_enemy_difficulty.py --native-integrity`; default runs
 report each by name as `NOT RUN`. Authored armor-pointer validation always runs.
 This distinguishes native reference defects from defects introduced by the mod.
@@ -135,5 +152,6 @@ For the Workshop test, keep Hard Mode's master enabled with only its
 spawn and talent changes must be off so they cannot stack with this package.
 The exporter does not change that configuration; configure and verify it on
 disk as part of the handoff. Data-mod activation in game and a newly generated
-mission remain the runtime acceptance step. Verify actual enemy armor and surgical corrections; successful SQL preparation
-alone does not establish their in-game behavior.
+mission remain the runtime acceptance step. Verify actual enemy armor, roster
+composition and surgical corrections; successful SQL preparation alone does
+not establish their in-game behavior.
