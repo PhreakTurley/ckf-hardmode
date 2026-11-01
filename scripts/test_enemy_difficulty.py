@@ -70,8 +70,12 @@ class EnemyDifficultyChecks(unittest.TestCase):
 
     def test_rejects_corrupted_payloads(self):
         with (PROJECT / "review/column-ledger.csv").open(encoding="utf-8-sig", newline="") as handle:
-            armor = next(int(row["Id"]) for row in csv.DictReader(handle)
+            ledger = list(csv.DictReader(handle))
+            armor = next(int(row["Id"]) for row in ledger
                          if row["Table"] == "Armor" and row["Column"] == "BallisticArmor")
+        # An unreviewed column is rejected before the exact-row comparison.
+        accuracy_reviewed = any(row["Table"] == "Weapon" and row["Column"] == "Accuracy1"
+                                for row in ledger)
         cases = (
             ("authored armor changed", f'UPDATE Armor SET BallisticArmor=BallisticArmor+1 WHERE ArmorId={armor};', f'Row mismatch: Armor {armor}'),
             ("wrong enemy ceiling", 'UPDATE Rule SET Value=12 WHERE RuleId=82;', 'Row mismatch: Rule 82'),
@@ -90,8 +94,10 @@ class EnemyDifficultyChecks(unittest.TestCase):
             ("effect variant ownership lost", 'UPDATE Effect SET EffectOwner=0 WHERE EffectId=960002;', 'Forbidden SQL write: Effect.EffectOwner'),
             ("no-op weapon write", 'UPDATE Weapon SET BallisticDamage1=BallisticDamage1 WHERE WeaponId=20010;', 'Forbidden SQL write: Weapon.BallisticDamage1'),
             ("weapon insert forbidden", 'INSERT INTO Weapon SELECT * FROM Weapon WHERE 0;', 'Forbidden SQL write: Weapon'),
-            ("accuracy correction changed", 'UPDATE Weapon SET Accuracy1=1 WHERE WeaponId=20012;', 'Row mismatch: Weapon 20012'),
-            ("native sniper source changed", 'UPDATE Weapon SET Accuracy1=1 WHERE WeaponId=6014;', 'Row mismatch: Weapon 6014'),
+            ("unauthorized accuracy change", 'UPDATE Weapon SET Accuracy1=1 WHERE WeaponId=20012;',
+             'Row mismatch: Weapon 20012' if accuracy_reviewed else 'Forbidden SQL write: Weapon.Accuracy1'),
+            ("native sniper source changed", 'UPDATE Weapon SET Accuracy1=1 WHERE WeaponId=6014;',
+             'Row mismatch: Weapon 6014' if accuracy_reviewed else 'Forbidden SQL write: Weapon.Accuracy1'),
             ("VTOL native source changed", 'UPDATE Effect SET Stunned=0 WHERE EffectId=64175;', 'Forbidden SQL write: Effect.Stunned'),
             ("VTOL pointer repair lost", 'UPDATE MonsterType SET EffectId=64173 WHERE MonsterTypeId=1150;', 'Row mismatch: MonsterType 1150'),
             ("sniper pointer repair lost", 'UPDATE MonsterType SET WeaponTypeId=6015 WHERE MonsterTypeId=3310;', 'Row mismatch: MonsterType 3310'),
