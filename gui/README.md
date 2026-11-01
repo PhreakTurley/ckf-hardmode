@@ -95,8 +95,33 @@ outside Hard Mode's overlay directory. Records are sparse adjustments keyed by
 SQL table, content id and column. Clearing a cell removes its adjustment.
 Shared effects have one stored value wherever the editor displays them.
 
-The weapon tabs follow the classes present in the official database and omit
-the effective enemy weapon pointers. Their default view hides uniform columns.
+The weapon tabs put Melee, Pistol, Revolver, SMG, Shotgun, E-Rifle, UAR, AR,
+Sniper Rifle, Railgun, Claws and Eye Lasers first. Canine Attack Rig belongs
+with Drone weapons. Shared weapons remain editable and carry an **Also used
+by enemies** marker. Visibility retains weapons without official enemy
+references and adds enemy-referenced records with positive player-content
+references: a shop service, lootable weapon blueprint, weapon loot, cyberweapon
+talent or pet equipment. Unavailable blueprints alone do not establish player
+availability. Enemy markers include both official and local overlay references,
+so a Hard Mode repoint cannot erase a Workshop warning. This is a static
+catalog policy, not a complete trace of every story reward.
+
+Weapon mods have independent subsections for weapon/slot combinations.
+`player_balance.py:mod_fitment` joins `WeaponClassMod` slot declarations to
+`WeaponMod.ModClassId`, applies `Exclusions`, and uses `Table.Column.ModType.*`
+localization for slot names and crafting integrations. Every mod displays its
+fitment. Mods without either a class mapping or a localization declaration are
+omitted until their compatibility becomes known; existing adjustments are
+preserved. The catalog response records these omissions in `unresolvedMods`.
+
+Every weapon page ends with Special Rule notes from
+`Gear.Weapon.SpecialRule.<id>` and `.Rule` localization. The notes cover the
+whole section, including other pages and filtered-out rows, and update for
+unsaved adjustments. Missing descriptions and game-supplied format arguments
+remain explicit. These strings describe the game's rules; the editor does not
+infer gameplay from assembly method names.
+
+The default view hides uniform columns.
 Leverage and linked bonus grids show fields with at least one nonzero baseline.
 Explicit overrides always remain visible, including zero. **Show all columns**
 reveals the remaining numeric fields. Names stay fixed while the grid scrolls;

@@ -251,6 +251,12 @@ table.pb-grid th{min-width:0;max-width:none!important;white-space:nowrap;word-br
 .pb-subsection h3{font-size:15px;font-weight:600;margin:14px 0 6px}
 .pb-grid .pb-name small{display:none;color:var(--faint);font-weight:400}
 body.technical .pb-grid .pb-name small{display:block}
+.pb-grid .pb-name small.pb-fit{display:block;color:var(--dim);white-space:normal;line-height:1.4;margin-top:3px}
+.pb-grid .pb-name .pb-enemy{display:block;color:#f4c17b;font-size:11px;font-weight:600;margin-top:4px}
+.pb-rule-notes{max-width:80ch;margin-top:24px}
+.pb-rule{margin:16px 0}
+.pb-rule p{margin:5px 0}
+.pb-rule small{color:var(--faint);overflow-wrap:anywhere}
 .pb-grid td.overlay-overwrite input{background:#482326;color:#ffb5b9}
 .pb-grid td.shipped-interesting input{background:#403817;color:#ffe28a}
 .pb-grid td input::placeholder{opacity:1;color:inherit;font-style:normal}
@@ -1837,6 +1843,8 @@ function renderPlayer(panel, page) {
     el('label', {class:'small'}, [showAll,document.createTextNode(' Show all columns')]),
     el('span', {class:'small',text:'Red: override · Yellow: nonzero baseline'})]);
   if (page.grids.length) panel.appendChild(toolbar);
+  if (page.grids.some(function(g) {return g.rows.some(function(r) {return r.enemyUse;});}))
+    panel.appendChild(el('p', {class:'doc',text:'Rows marked “Also used by enemies” share a weapon record with enemies. Changing that weapon also affects enemies that use it.'}));
   if (page.multipliers) {
     panel.appendChild(el('p', {class:'doc',text:'Applied to every implant after individual adjustments.'}));
     for (const col in page.multipliers) {
@@ -1850,6 +1858,38 @@ function renderPlayer(panel, page) {
   const pageNumbers = {};
   const openSections = {};
   panel.appendChild(grids);
+  const ruleNotes = el('div', {class:'pb-rule-notes'});
+  if (page.specialRules) panel.appendChild(ruleNotes);
+  function updateRules() {
+    if (!page.specialRules) return;
+    ruleNotes.textContent = '';
+    ruleNotes.appendChild(el('h3', {text:'Special Rules used in this section'}));
+    const ids = new Set();
+    for (const grid of page.grids) {
+      const col = grid.specialRuleColumn;
+      if (!col) continue;
+      for (const row of grid.rows) {
+        const spec = ((((W.player.tables || {})[grid.table] || {})[row.id] || {})[col]) || '';
+        const parsed = CKF.parseAdjust(spec);
+        if (!parsed.ok) continue;
+        const base = Number(row.baseline[col]);
+        const value = parsed.kind === 'none' ? base : playerRound(parsed.kind === 'set' ? parsed.value
+          : parsed.kind === 'add' ? base + parsed.value : base * parsed.value);
+        ids.add(String(value));
+      }
+    }
+    for (const id of Array.from(ids).sort(function(a,b) {return Number(a)-Number(b);})) {
+      const info = page.specialRules[id];
+      const block = el('div', {class:'pb-rule'});
+      block.appendChild(el('b', {text:id + ' · ' + (id === '0' ? 'No Special Rule' : info ? info.title : 'Unknown Special Rule')}));
+      const description = id === '0' ? 'No Special Rule selected.' : info && info.description && info.description !== info.title
+        ? info.description : 'No gameplay description is available in the selected localization.';
+      block.appendChild(el('p', {class:'doc',text:description}));
+      if (id !== '0') block.appendChild(el('small', {text:info ? info.key + ' / ' + info.key + '.Rule' : 'No matching localization key found.'}));
+      if (/\{\d+\}/.test(description)) block.appendChild(el('p', {class:'small',text:'Braced values are placeholders supplied by the game for each weapon.'}));
+      ruleNotes.appendChild(block);
+    }
+  }
   function paint() {
     grids.textContent = '';
     const query = search.value.toLocaleLowerCase();
@@ -1881,7 +1921,10 @@ function renderPlayer(panel, page) {
       if (!rows.length) continue;
       const tbl = el('table', {class:'grid pb-grid'});
       const widths = cols.map(function (c) {return playerColumnWidth(grid, c);});
-      const nameWidth = Math.ceil(Math.max(playerTextWidth('Name',true), ...grid.rows.map(function (r) {return playerTextWidth(r.name,false);})) + 16);
+      const nameWidth = Math.ceil(Math.max(playerTextWidth('Name',true), ...grid.rows.map(function (r) {
+        return Math.max(playerTextWidth(r.name,false), r.enemyUse ? playerTextWidth('Also used by enemies',false) : 0,
+          r.fitment ? Math.min(320,playerTextWidth(r.fitment,false)) : 0);
+      })) + 16);
       const iconWidth = grid.iconColumn ? Math.ceil(Math.max(playerTextWidth('Icon',true), ...grid.rows.map(function (r) {return playerTextWidth(r.icon || '',false);})) + 16) : 0;
       // Icon follows the leading PL/Rarity/Cost columns. Those three always
       // remain immediately after Name when they differ in this category.
@@ -1921,8 +1964,11 @@ function renderPlayer(panel, page) {
           body.appendChild(el('tr', {class:'pb-section'}, [el('th',{colspan:String(displayCols.length+1),scope:'rowgroup',title:row.sectionEvidence || ''},
             [el('span',{class:'pb-section-name',text:section})])]));
         }
-        const tr = el('tr', {}, [el('td', {class:'pb-name',title:grid.table+' '+row.id}, [
-          document.createTextNode(row.name),el('small', {text:grid.table+' '+row.id})])]);
+        const nameCell = el('td', {class:'pb-name',title:grid.table+' '+row.id}, [
+          document.createTextNode(row.name),el('small', {text:grid.table+' '+row.id})]);
+        if (row.enemyUse) nameCell.appendChild(el('span', {class:'pb-enemy',text:'Also used by enemies',title:'Changing this weapon also affects enemies that use it.'}));
+        if (row.fitment) nameCell.appendChild(el('small', {class:'pb-fit',text:row.fitment,title:row.fitmentSource}));
+        const tr = el('tr', {}, [nameCell]);
         for (const item of displayCols) {
           if (item.icon) {tr.appendChild(el('td',{class:'pb-icon',text:row.icon || '',title:row.iconPath || ''}));continue;}
           const col = item.column;
@@ -1949,7 +1995,7 @@ function renderPlayer(panel, page) {
               if (input.value.trim()) record[col.name] = input.value;
               else delete record[col.name];
               input.style.width = Math.max(item.width-1, Math.ceil(playerTextWidth(input.value,false)+15))+'px';
-              style(input.value);updateDirty();
+              style(input.value);updateDirty();updateRules();
             });
             td.appendChild(input);
           }
@@ -1960,6 +2006,7 @@ function renderPlayer(panel, page) {
       tbl.appendChild(body);
       target.appendChild(el('div', {class:'grid-wrap'}, [tbl]));
     }
+    updateRules();
   }
   search.addEventListener('input',function () {for (const key in pageNumbers) delete pageNumbers[key];paint();});
   showAll.addEventListener('change',paint);paint();

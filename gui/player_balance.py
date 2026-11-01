@@ -47,10 +47,12 @@ LABELS = {'ApCost': 'AP cost', 'CritMultiBase': 'Crit damage', 'CritMultiStealth
           'Accuracy1': 'Accuracy · 1', 'Accuracy2': 'Accuracy · 2',
           'TargetEffectDuration': 'Target duration', 'RechargeTurns': 'Recharge',
           'MaxCharges': 'Charges', 'EffectTypeId': 'Effect', 'MatrixEffectTypeId': 'Matrix effect'}
-CLASS_NAMES = {1: 'Melee', 2: 'Pistols', 3: 'Assault rifles', 4: 'Shotguns',
-               5: 'Energy rifles', 6: 'Sniper rifles', 7: 'Canine rigs', 9: 'Drone assault rifles',
-               10: 'SMGs', 11: 'Revolvers', 12: 'Urban assault rifles', 14: 'Railguns',
-               16: 'Cyber claws', 17: 'Eye lasers', 18: 'Drone SMGs', 19: 'Drone energy rifles'}
+CLASS_NAMES = {1: 'Melee', 2: 'Pistol', 3: 'AR', 4: 'Shotgun',
+               5: 'E-Rifle', 6: 'Sniper Rifle', 7: 'Canine Attack Rig', 9: 'Drone assault rifles',
+               10: 'SMG', 11: 'Revolver', 12: 'UAR', 14: 'Railgun',
+               16: 'Claws', 17: 'Eye Lasers', 18: 'Drone SMGs', 19: 'Drone energy rifles'}
+WEAPON_ORDER = [1, 2, 11, 10, 4, 5, 12, 3, 6, 14, 16, 17]
+DRONE_CLASSES = {7, 9, 18, 19}
 SLOT_NAMES = {1: 'Skin', 2: 'Spinal', 3: 'Deep Brain', 4: 'Fast Brain', 5: 'Skeletal',
               6: 'Arms', 7: 'Legs', 8: 'Ocular', 9: 'Heart', 10: 'Lungs', 11: 'Quantum Rider'}
 SLOT_ORDER = [8, 6, 1, 5, 3, 4, 2, 9, 10, 7]
@@ -220,6 +222,78 @@ def _effective_enemy_ids(source, config_dir, column):
     return {r.get(column) for r in rows.values()}
 
 
+def player_weapon_references(source):
+    """Positive player-content references; absence is not proof of enemy use.
+
+    BlueprintClass.Weapon=1 is declared in CoreRPG_v1.dll; LootTypes.Weapon=8
+    is captured in sheets/raw/_id_constants.csv (LootTypes, Weapon).
+    Keep the table/type with the id: OutputId/LootKey alone can refer to
+    several different content tables. An unavailable, non-lootable blueprint
+    alone is not sufficient evidence of player availability.
+    """
+    services = {r['ServiceOptionId'] for r in source.read('ContactServiceModel', ('ServiceOptionId',))[1]
+                if int(r['ServiceOptionId']) > 0}
+    refs = {r['WeaponId'] for r in source.read('WeaponModel')[1]
+            if r['ServiceOptionId'] in services}
+    refs.update(r['OutputId'] for r in source.read('BlueprintModel', ('OutputId', 'BlueprintClassId', 'Lootable'))[1]
+                if r['BlueprintClassId'] == '1' and r['Lootable'] == '1')
+    refs.update(r['LootKey'] for r in source.read('MissionLootModel', ('LootKey', 'LootTypeId'))[1]
+                if r['LootTypeId'] == '8')
+    refs.update(r['Weapon'] for r in source.read('TalentModel')[1]
+                if r['TalentIsCyber'] == '1')
+    for row in source.read('DroneChassisModel')[1]:
+        refs.update((row['WeaponType1'], row['WeaponType2']))
+    refs.update(r['Weapon'] for r in source.read('DronePrebuiltModel')[1])
+    return refs - {'', '0', '-1'}
+
+
+def special_rules(source):
+    """Pass game localization through, including unresolved format arguments."""
+    result = {}
+    for key, title in source.locale.items():
+        match = re.fullmatch(r'Gear\.Weapon\.SpecialRule\.(\d+)', key)
+        if not match or not isinstance(title, str):
+            continue
+        description = source.locale.get(key + '.Rule', '')
+        result[match[1]] = {'title': title, 'description': description
+                            if isinstance(description, str) else '', 'key': key}
+    return result
+
+
+def mod_fitment(source, row, class_mods):
+    """Use declared mod classes, slot labels and per-mod exclusions.
+
+    Crafting integrations (200+) have their own locale declarations; do not
+    invent a class mapping by subtracting 200. Unknown classes stay explicit.
+    """
+    modclass, slot = row['ModClassId'], row['ModSlot']
+    key = 'Table.Column.ModType.' + modclass
+    declared = source.locale.get(key)
+    declared = declared if isinstance(declared, str) and declared else None
+    classes = [int(c['WeaponClassId']) for c in class_mods
+               if any(c['Slot%dModClassId' % n] == modclass for n in range(1, 7))]
+    excluded = {int(v) for v in re.findall(r'\d+', row['Exclusions'])} - {0}
+    classes = [c for c in classes if c not in excluded]
+    order = [1, 2, 11, 10, 3, 12, 4, 5, 6, 14]
+    classes.sort(key=lambda c: (order.index(c) if c in order else len(order), c))
+    weapons = '+'.join(CLASS_NAMES.get(c, 'Weapon class %s' % c) for c in classes)
+    slot_match = re.search(r'(Barrel|Body Mod|Optic|Scope|Ion Batt|Grip)$', declared or '')
+    if weapons:
+        category = (slot_match[1] if slot_match else declared) or ('Slot ' + slot)
+        title = weapons + ' · ' + category
+    else:
+        title = declared or ('Unresolved mod class ' + modclass)
+        if excluded:
+            title += ' · excludes ' + '+'.join(CLASS_NAMES.get(c, str(c)) for c in sorted(excluded))
+    # Intrinsic and integration slot ids remain visible even where the locale
+    # uses the same label as a detachable mod.
+    if not slot_match or int(modclass) >= 100:
+        title += ' · slot ' + slot
+    return {'title': title, 'key': key, 'declared': declared,
+            'slot': slot, 'modClass': modclass, 'excluded': sorted(excluded),
+            'mapped': bool(classes)}
+
+
 def catalog(config_dir, database):
     """Build rows and visible columns from a fresh, complete official read."""
     try:
@@ -303,14 +377,26 @@ def catalog(config_dir, database):
                                         'grids': [g for g in grids if g and (g['rows'] or g.get('warning'))], **kwargs})
 
             enemy_weapons = _effective_enemy_ids(source, config_dir, 'WeaponTypeId')
-            weapons = [r for r in allrows['Weapon'].values() if r['WeaponId'] not in enemy_weapons]
-            for cls in sorted({int(r['WeaponClass']) for r in weapons}):
+            # Workshop SQL changes official rows even when Hard Mode has
+            # repointed its local enemies to cloned weapons.
+            official_enemy_weapons = {r['WeaponTypeId'] for r in source.read('MonsterTypeModel')[1]}
+            enemy_weapons.update(official_enemy_weapons)
+            player_refs = player_weapon_references(source)
+            weapons = [r for r in allrows['Weapon'].values()
+                       if r['WeaponId'] not in official_enemy_weapons or r['WeaponId'] in player_refs]
+            classes = {int(r['WeaponClass']) for r in weapons}
+            order = WEAPON_ORDER + sorted(classes - set(WEAPON_ORDER) - DRONE_CLASSES) + sorted(classes & DRONE_CLASSES)
+            rules = special_rules(source)
+            for cls in (c for c in order if c in classes):
                 rows = [r for r in weapons if int(r['WeaponClass']) == cls]
                 talents = [r for r in allrows['Talent'].values() if r.get('Weapon') in {w['WeaponId'] for w in rows}]
                 names = {r.get('WeaponClassName', '') for r in rows
                          if r.get('WeaponClassName') and not r['WeaponClassName'].startswith('Gear.')}
-                title = next(iter(names)) if len(names) == 1 else CLASS_NAMES.get(cls, 'Weapon class %s' % cls)
+                title = CLASS_NAMES.get(cls, next(iter(names)) if len(names) == 1 else 'Weapon class %s' % cls)
                 weapon_grid = grid('Weapon', rows, 'Weapon stats')
+                for record in weapon_grid['rows']:
+                    record['enemyUse'] = record['id'] in enemy_weapons
+                weapon_grid['specialRuleColumn'] = 'SpecialRule'
                 if cls in (1, 10):
                     weapon_grid['iconColumn'] = True
                     for record in weapon_grid['rows']:
@@ -323,11 +409,30 @@ def catalog(config_dir, database):
                         record['iconPath'] = path
                         record['section'] = record['icon']
                     weapon_grid['rows'].sort(key=lambda r: natural(r['icon']))
-                page('weapon-%s' % cls, title, 'Drone weapons' if cls in (9, 18, 19) else 'Weapons', [weapon_grid,
-                     grid('Talent', talents, 'Attacks', 'varying') if talents else None])
+                page('weapon-%s' % cls, title, 'Drone weapons' if cls in DRONE_CLASSES else 'Weapons', [weapon_grid,
+                     grid('Talent', talents, 'Attacks', 'varying') if talents else None], specialRules=rules)
 
-            page('weapon-mods', 'Weapon mods', 'Weapons',
-                 [grid('WeaponMod', list(allrows['WeaponMod'].values()), 'Weapon mods')])
+            class_mods = source.read('WeaponClassModModel')[1]
+            mod_groups = {}
+            unresolved_mods = []
+            for row in allrows['WeaponMod'].values():
+                fit = mod_fitment(source, row, class_mods)
+                if not fit['declared'] and not fit['mapped']:
+                    unresolved_mods.append({'id': row['WeaponModId'], 'modClass': fit['modClass'],
+                                            'slot': fit['slot'], 'reason': 'No weapon-class mapping or localization'})
+                    continue
+                mod_groups.setdefault(fit['title'], []).append((row, fit))
+            mod_grids = []
+            for title, members in sorted(mod_groups.items(), key=lambda item: natural(item[0])):
+                g = grid('WeaponMod', [r for r, _ in members], 'Weapon mods')
+                g.update(key='mods-' + '-'.join(r['WeaponModId'] for r, _ in members), subsection=title)
+                fits = {r['WeaponModId']: f for r, f in members}
+                for record in g['rows']:
+                    fit = fits[record['id']]
+                    record['fitment'] = title
+                    record['fitmentSource'] = '%s · ModClassId %s · ModSlot %s' % (fit['key'], fit['modClass'], fit['slot'])
+                mod_grids.append(g)
+            page('weapon-mods', 'Weapon mods', 'Weapons', mod_grids, unresolvedMods=unresolved_mods)
             page('implant-global', 'All cyberware', 'Cyberware', [], multipliers=MULTIPLIERS)
             for slot in sorted({int(r['ImplantSlot']) for r in allrows['Implant'].values()},
                                key=lambda s: (SLOT_ORDER.index(s) if s in SLOT_ORDER else len(SLOT_ORDER), s)):
