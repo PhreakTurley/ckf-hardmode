@@ -14,6 +14,18 @@ import static_data
 
 
 class PlayerBalanceTests(unittest.TestCase):
+    def test_assignment_prefix_normalization_preserves_operations(self):
+        for original, expected in [('=90','90'), ('=-10','-10'), ('=+10','10'),
+                                   (' = -1e1 ','-1e1'), ('+10','+10'),
+                                   ('x1.5','x1.5'), ('+-10','+-10'), ('','')]:
+            with self.subTest(original=original):
+                self.assertEqual(pb.normalize_adjustment(original), expected)
+                self.assertEqual(pb.adjustment(original), pb.adjustment(expected))
+        with static_data.StaticData() as source:
+            doc = pb.apply_edits(pb.empty(), {'cells':[
+                {'table':'Weapon','id':'24000','column':'Cost','value':'=+90'}]}, source)
+            self.assertEqual(doc['tables']['Weapon']['24000']['Cost'], '90')
+
     def test_negative_assignments_and_explicit_commands_match_preview_and_sql(self):
         with static_data.StaticData() as source, sqlite3.connect(':memory:') as db:
             db.execute('CREATE TABLE Weapon (WeaponId INTEGER PRIMARY KEY, RecoilRate1 INTEGER)')
@@ -89,7 +101,7 @@ class PlayerBalanceTests(unittest.TestCase):
     def test_shared_effect_and_hardmode_ownership(self):
         with static_data.StaticData() as source:
             doc = pb.apply_edits(pb.empty(), {'cells': [{'table': 'Effect', 'id': '50007', 'column': 'CritMultiBase', 'value': '=0'}]}, source)
-            self.assertEqual(doc['tables']['Effect'], {'50007': {'CritMultiBase': '=0'}})
+            self.assertEqual(doc['tables']['Effect'], {'50007': {'CritMultiBase': '0'}})
             for effect in pb.HARDMODE_EFFECTS:
                 with self.assertRaisesRegex(ValueError, 'Hard Mode'):
                     pb.apply_edits(doc, {'cells': [{'table': 'Effect', 'id': str(effect), 'column': 'XpBonus', 'value': '0'}]}, source)
@@ -233,7 +245,7 @@ class PlayerBalanceTests(unittest.TestCase):
                     'databaseSha': model['playerBalance']['database']['sha256']}
             saved = app.api_save({'playerBalance': edit}, expect=model['fingerprints'])
             self.assertTrue(saved['ok'], saved)
-            self.assertEqual(pb.load(config)['tables']['Trait']['3']['TraitScore'], '=-9')
+            self.assertEqual(pb.load(config)['tables']['Trait']['3']['TraitScore'], '-9')
             self.assertEqual(saved['written'], [pb.FILE])
             model = app.api_model()
             trait = next(g for p in model['playerBalance']['pages'] if p['id'] == 'traits'

@@ -366,6 +366,13 @@ const CKF = (function () {
     return parseAdjust(s.startsWith('-') ? '=' + s : s);
   }
 
+  function playerDisplayValue(spec) {
+    const s = (spec == null ? '' : String(spec)).trim();
+    if (!s.startsWith('=') || !parsePlayerAdjust(s).ok) return s;
+    const body = s.slice(1).trim();
+    return body.startsWith('+') ? body.slice(1) : body;
+  }
+
   // The string that goes on the right of '=' in the .cfg. Never a comment.
   function renderCfgValue(type, value) {
     if (type === 'bool') return value ? 'true' : 'false';
@@ -789,6 +796,7 @@ const CKF = (function () {
     overlayHighlight: overlayHighlight,
     overlayCellProblem: overlayCellProblem,
     parseAdjust: parseAdjust, describeAdjust: describeAdjust, parsePlayerAdjust: parsePlayerAdjust,
+    playerDisplayValue: playerDisplayValue,
     renderCfgValue: renderCfgValue, coerceCell: coerceCell, inRange: inRange,
     effective: effective, curvePoints: curvePoints, matrixDomain: matrixDomain,
     isKeepValue: isKeepValue, newMatrixCells: newMatrixCells,
@@ -1835,7 +1843,7 @@ function playerColumnWidth(grid, column) {
     const fields = ((W.player.tables || {})[grid.table] || {})[row.id] || {};
     const multiplier = (grid.multipliers || {})[column.name] === undefined ? 1 : grid.multipliers[column.name];
     const base = multiplier === 1 ? row.baseline[column.name] : playerRound(Number(row.baseline[column.name]) * multiplier);
-    width = Math.max(width, playerTextWidth(base, false), playerTextWidth(fields[column.name] || '', false));
+    width = Math.max(width, playerTextWidth(base, false), playerTextWidth(CKF.playerDisplayValue(fields[column.name] || ''), false));
   }
   return Math.ceil(width + 16);
 }
@@ -1980,7 +1988,7 @@ function renderPlayer(panel, page) {
           if (item.icon) {tr.appendChild(el('td',{class:'pb-icon',text:row.icon || '',title:row.iconPath || ''}));continue;}
           const col = item.column;
           const fields = ((W.player.tables || {})[grid.table] || {})[row.id] || {};
-          const value = fields[col.name] || '';
+          const value = CKF.playerDisplayValue(fields[col.name] || '');
           const base = row.baseline[col.name];
           const multiplier = (grid.multipliers || {})[col.name] === undefined ? 1 : grid.multipliers[col.name];
           // The placeholder includes the sweep. An individual entry is still

@@ -97,7 +97,9 @@ Shared effects have one stored value wherever the editor displays them.
 
 Workshop adjustment cells treat plain numbers as assignments, including
 negative numbers: `-10` sets to -10. `+10` adds 10 and `x1.5` multiplies by 1.5.
-`=N` remains an explicit assignment alias; `+-10` explicitly subtracts 10.
+`=N` remains an accepted input alias; the editor displays and saves assignments
+without that prefix. `=+10` becomes `10`, preserving assignment rather than
+turning it into addition. `+-10` explicitly subtracts 10.
 The preview, sorting and SQL export use this grammar. The legacy importer
 translates old `-N` subtraction into `+-N` to preserve its effect. The Hard Mode
 expanded-sheet grammar below remains a separate format.

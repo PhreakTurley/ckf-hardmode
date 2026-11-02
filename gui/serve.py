@@ -12286,6 +12286,12 @@ for (const [s,k,v] of [['-10','set',-10],[' -10 ','set',-10],['-1e1','set',-10],
 }
 for (const s of ['-', '- 10', '-Infinity', 'NaN', '-10; DROP TABLE Weapon'])
   ck('Workshop rejects ' + JSON.stringify(s), !CKF.parsePlayerAdjust(s).ok);
+for (const [s,display] of [['=90','90'],['=-10','-10'],['=+10','10'],[' = -1e1 ','-1e1'],
+                          ['+10','+10'],['x1.5','x1.5'],['+-10','+-10'],['',''],['=oops','=oops']]) {
+  ck('Workshop display ' + JSON.stringify(s), CKF.playerDisplayValue(s) === display);
+  ck('Workshop display preserves operation ' + JSON.stringify(s),
+     JSON.stringify(CKF.parsePlayerAdjust(s)) === JSON.stringify(CKF.parsePlayerAdjust(display)));
+}
 const zeroFixture = {kind: 'direct', columns: [
   {name:'id', op:'set'}, {name:'value', op:'set'},
   {name:'missing', op:'set'}, {name:'multiply', op:'multiply'},

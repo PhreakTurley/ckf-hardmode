@@ -151,6 +151,17 @@ def adjustment(value):
     return op, number
 
 
+def normalize_adjustment(value):
+    """Remove a redundant assignment marker without creating an add command."""
+    spec = str(value).strip()
+    adjustment(spec)
+    if spec.startswith('='):
+        spec = spec[1:].strip()
+        if spec.startswith('+'):
+            spec = spec[1:]
+    return spec
+
+
 def label(column):
     return LABELS.get(column, re.sub(r'(?<=[a-z0-9])(?=[A-Z])', ' ', column))
 
@@ -498,7 +509,7 @@ def apply_edits(doc, edits, source, config_dir=None):
         result.setdefault('implantMultipliers', {})[col] = value
     for cell in edits.get('cells', []):
         table, rid, col = cell['table'], str(cell['id']), cell['column']
-        value = str(cell.get('value', '')).strip()
+        value = normalize_adjustment(cell.get('value', ''))
         fields = result['tables'].setdefault(table, {}).setdefault(rid, {})
         if value:
             adjustment(value)
@@ -600,6 +611,7 @@ def import_legacy(config_dir):
         # Preserve imported arithmetic explicitly as +-N.
         if str(value).strip().startswith('-'):
             value = '+' + str(value).strip()
+        value = normalize_adjustment(value)
         fields = doc['tables'].setdefault(table, {}).setdefault(str(rid), {})
         if column in fields and fields[column] != value:
             raise ValueError('Conflicting legacy edits to %s %s %s' % (table, rid, column))
