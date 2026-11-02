@@ -26,9 +26,9 @@ All relative paths in this table start at the game directory:
 | `StreamingAssets/Locales/en-US.json` | Unencrypted display-name lookup |
 | `%USERPROFILE%\AppData\LocalLow\TreseBrothersGames\CyberKnights\` | Save directory |
 
-The game installation contains the only tuning copy. Hard Mode does not create missing settings files. `Defaults.Install` reports the 17 required paths declared by `Defaults.Expected` and stops there.
+The game installation contains the only tuning copy. Hard Mode does not create missing settings files. `Defaults.Install` reports the 24 required paths declared by `Defaults.Expected` and stops there.
 
-The public plugin version is `4.1.1`; the independent settings-layout stamp is `4.1.0`.
+The public plugin version is `4.2.0`; the independent settings-layout stamp is `4.1.0`.
 
 Remove these legacy files when they appear:
 
@@ -190,6 +190,7 @@ python scripts\make_release.py
 The full build requires:
 
 - A current `CKFHardMode.dll`
+- Verified native rebalance payloads; prepare them using [bundled rebalances](bundled-rebalances.md)
 - The pinned private BepInEx vendor tree
 - The live configuration or an explicit `--config` directory
 - All templates under `release/`
@@ -197,13 +198,13 @@ The full build requires:
 
 `make_release.py` snapshots the configuration before validation. It refuses an editor save journal, any schema problem, a stale Team Power Level mirror, mismatched layout stamps, a version mismatch, an invalid vendor tree, or a failed editor gate.
 
-The current release declaration requires 16 files from the live config plus the rendered `ckf.hardmode.cfg`. It also packages every additional `.csv`, `.tsv`, or `.json` in `ckf.hardmode.d`, because the plugin reads those extensions.
+The current release declaration requires 23 files from the live config plus the rendered `ckf.hardmode.cfg`. It also packages every additional `.csv`, `.tsv`, or `.json` in `ckf.hardmode.d`, because the plugin reads those extensions.
 
 The builder writes:
 
 ```text
 dist\CKF-Config-Editor.exe
-dist\CKF-Hard-Mode-4.1.1.zip
+dist\CKF-Hard-Mode-4.2.0.zip
 ```
 
 `dist/` is private and ignored. Attach the finished archive to the GitHub Release manually.

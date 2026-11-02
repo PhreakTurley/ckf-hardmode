@@ -4,11 +4,12 @@ for Cyber Knights: Flashpoint
 
 WHAT IT IS
 
-A difficulty overhaul. It retunes the enemy, weapon, armour, implant and
-consumable tables, changes how mission rewards and mission power level are
-calculated, and adds a merc fatigue system and a penalty for letting a
-mission's clock run down. Every number it uses is in a config file you can
-edit, and the editor in this zip is how you edit them.
+A combined download of Player Rebalance and Enemy Rebalance, with wider
+custom-difficulty sliders, mission fatigue and the related limit-break trait
+effect changes. Older Hard Mode systems remain available but default to off.
+
+Disable the separate Player Rebalance and Enemy Rebalance Workshop mods
+before using their bundled equivalents. Neither subscription is required.
 
 It is built in slices. Each part of the mod is one file and one on/off switch,
 so you can keep the parts you want and turn off the parts you don't.
@@ -94,9 +95,16 @@ The first key, under [General], is the master switch:
 
 Set it to false and the mod does nothing at all, without uninstalling it.
 
-Under it, [Slices] has one switch per part of the mod -- 44 of them. Set one to
-false and that part alone stops applying; everything else still runs. They are,
+Under it, [Slices] has one switch per part of the mod. Set one to
+false and that part alone stops applying. The enabled release features are
+PlayerRebalance, EnemyRebalance, Difficulty, Fatigue and LimitBreakTraits.
+
+The legacy switches are retained for optional use. They are,
 in the order they appear in the file:
+
+    PlayerRebalance             bundled native player rebalance
+    EnemyRebalance              bundled native enemy rebalance
+    LegacyEnemyData             older enemy overlays; OFF by default
 
     ConsumablesChems            chem consumables
     ConsumablesDevices          device consumables
@@ -123,7 +131,8 @@ in the order they appear in the file:
                                 them, this decides what they cost
 
     MissionRewards              per-mission-type reward overrides
-    ModelRules                  the declarative row-by-row game table edits
+    ModelRules                  general legacy table edits; OFF by default.
+                                LimitBreakTraits works independently.
     PowerLevel                  the mission power level ceiling -- lets missions
                                 generate above PL 10
     Progression                 the Team Power Level award, and the victory
@@ -180,10 +189,15 @@ They come out of this zip into BepInEx\config:
     ckf.hardmode.cfg           the switches: [General] Enabled, plus one
                                [Slices] key per part of the mod
     ckf.hardmode.selfcheck.csv the values the mod checks itself against
+    ckf.hardmode.rebalances\   verified native SQL and locale packages
     ckf.hardmode.d\            one file per part of the mod, plus the table
                                overlays and one generated file
 
-Everything the editor edits is in ckf.hardmode.d\. A .json there holds one
+The editor also edits the master and slice switches. Native rebalance payloads
+are prepared files: regenerating them from changed authoring inputs requires
+the maintainer parser toolchain. See the project's bundled-rebalances guide.
+
+The Hard Mode settings are in ckf.hardmode.d\. A .json there holds one
 part's settings; a .csv there is a table overlay, one line per game row
 changed. The editor edits both.
 

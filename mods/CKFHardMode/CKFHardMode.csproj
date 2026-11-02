@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
     <AssemblyName>CKFHardMode</AssemblyName>
-    <Version>4.1.1</Version>
+    <Version>4.2.0</Version>
     <LangVersion>latest</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!-- BepInEx loads plugins by reflection; no entry point needed -->

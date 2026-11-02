@@ -52,10 +52,10 @@
       "path": "Slices.ConsumablesGrenades",
       "in": "cfg",
       "type": "bool",
-      "default": true,
+      "default": false,
       "ui": "form",
       "label": "Enable Grenade Consumables",
-      "doc": "On applies this slice's files; off skips them before they are opened. Default true. Lever sheet, not a direct overlay: the first column is ItemName, and there is no game table called \"consumables-grenades\".",
+      "doc": "On applies this slice's files; off skips them before they are opened. Default false. Lever sheet, not a direct overlay: the first column is ItemName, and there is no game table called \"consumables-grenades\".",
       "uiDoc": "Turn this off and the mod skips this page's files, so nothing on this page is applied."
     }
   ]

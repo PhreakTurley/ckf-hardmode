@@ -1,0 +1,9 @@
+{
+  "subsystem": "PlayerRebalance",
+  "title": "Bundled Player Rebalance",
+  "targets": {"cfg": "ckf.hardmode.cfg"},
+  "enable": {"cfg": "Slices.PlayerRebalance"},
+  "doc": ["Supplies the verified Player Rebalance SQL and locale payload under BepInEx/config/ckf.hardmode.rebalances/player to the native mod loader. Independent of ModelRules. Disable the separate Player Rebalance Workshop item before using this slice. Regenerate the payload after authoring changes; see docs/bundled-rebalances.md."],
+  "uiDoc": ["Applies the bundled Player Rebalance package. Disable the separate Player Rebalance Workshop mod before enabling this switch."],
+  "fields": [{"path": "Slices.PlayerRebalance", "in": "cfg", "type": "bool", "default": true, "ui": "form", "label": "Enable Bundled Player Rebalance", "doc": "BundledRebalances.Init checks this gate before reading the package and AfterList supplies its active native mod entry. Independent of ModelRules.", "uiDoc": "Enable the bundled player talent, equipment and character adjustments."}]
+}

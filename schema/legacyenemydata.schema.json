@@ -1,0 +1,9 @@
+{
+  "subsystem": "LegacyEnemyData",
+  "title": "Legacy Enemy Overlays",
+  "targets": {"cfg": "ckf.hardmode.cfg"},
+  "enable": {"cfg": "Slices.LegacyEnemyData"},
+  "doc": ["Files this toggle gates:", "  ArmorModel.csv", "  WeaponModel.csv", "  MonsterTypeModel.csv", "", "Gates the older ArmorModel.csv, WeaponModel.csv and MonsterTypeModel.csv runtime overlays. Off by default. Requires ModelRules. These files remain authoring inputs for the native exporter; disabling their runtime application does not exclude their authored armor changes from Enemy Rebalance."],
+  "uiDoc": ["Applies the older enemy overlays. Leave this off when using either the bundled Enemy Rebalance or the Workshop version."],
+  "fields": [{"path": "Slices.LegacyEnemyData", "in": "cfg", "type": "bool", "default": false, "ui": "form", "label": "Enable Legacy Enemy Overlays", "doc": "Slices.VerdictForOverlay gates ArmorModel.csv, WeaponModel.csv and MonsterTypeModel.csv before they are opened. ModelRules is also required.", "uiDoc": "Use the older enemy overlay implementation."}]
+}

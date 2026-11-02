@@ -8,7 +8,7 @@ Per-key meanings are in
 [`../docs/config-reference.md`](../docs/config-reference.md); the schema format
 is in [`../schema/SCHEMA-FORMAT.md`](../schema/SCHEMA-FORMAT.md).
 
-The plugin and the ten settings documents currently carry version `4.1.0`.
+The plugin version is `4.2.0`; the ten settings documents carry layout stamp `4.1.0`.
 The plugin version and settings-layout stamp are independent even when their
 values happen to agree. The editor writes the live files and keeps no backup.
 
@@ -198,7 +198,7 @@ Every file a schema names in `targets`, all under `BepInEx/config/`:
 
 | File | What |
 |---|---|
-| `ckf.hardmode.cfg` | 45 keys: `[General] Enabled` and 44 `[Slices]` toggles. |
+| `ckf.hardmode.cfg` | 49 keys: `[General] Enabled` and 48 `[Slices]` toggles. |
 | `ckf.hardmode.d/*.json` | Ten settings documents stamped `4.1.0` (`difficulty`, `elapse`, `fatigue`, `implants-global`, `missions`, `modelrules`, `powerlevel`, `rewardcurve`, `selfcheck`, `teampl`), plus `MissionPowerLevelModel.generated.json`, which the editor regenerates from `teampl.json` and never edits directly. |
 | `ckf.hardmode.d/*.csv` | The overlay and lever sheets a schema lists in `targets.overlays`. Only lever cells are editable. |
 

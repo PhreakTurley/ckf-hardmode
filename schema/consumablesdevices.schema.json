@@ -52,10 +52,10 @@
       "path": "Slices.ConsumablesDevices",
       "in": "cfg",
       "type": "bool",
-      "default": true,
+      "default": false,
       "ui": "form",
       "label": "Enable Device Consumables",
-      "doc": "On applies this slice's files; off skips them before they are opened. Default true. Lever sheet, not a direct overlay: the first column is ItemName, and there is no game table called \"consumables-devices\".",
+      "doc": "On applies this slice's files; off skips them before they are opened. Default false. Lever sheet, not a direct overlay: the first column is ItemName, and there is no game table called \"consumables-devices\".",
       "uiDoc": "Turn this off and the mod skips this page's files, so nothing on this page is applied."
     }
   ]

@@ -31,9 +31,9 @@
   "fields": [
     {
       "path": "Slices.RuleModel", "in": "cfg", "type": "bool",
-      "default": true, "ui": "form",
+      "default": false, "ui": "form",
       "label": "Enable Game Rule Constants",
-      "doc": "On applies RuleModel.csv; off skips it before it is opened. Default true.",
+      "doc": "On applies RuleModel.csv; off skips it before it is opened. Default false.",
       "uiDoc": "Turn this off and the mod skips this page's files, so nothing on this page is applied."
     },
     {

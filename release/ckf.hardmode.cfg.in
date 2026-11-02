@@ -10,182 +10,194 @@ Enabled = true
 [Slices]
 
 # Setting type: Boolean
-# Default value: true
-ConsumablesChems = true
+# Default value: false
+ConsumablesChems = false
 
 # Setting type: Boolean
-# Default value: true
-ConsumablesDevices = true
+# Default value: false
+ConsumablesDevices = false
 
 # Setting type: Boolean
-# Default value: true
-ConsumablesGrenades = true
+# Default value: false
+ConsumablesGrenades = false
 
 # Setting type: Boolean
-# Default value: true
-ConsumablesMatrix = true
+# Default value: false
+ConsumablesMatrix = false
 
 # Setting type: Boolean
-# Default value: true
-ConsumablesMedical = true
+# Default value: false
+ConsumablesMedical = false
 
 # Setting type: Boolean
-# Default value: true
-ConsumablesSploitkits = true
+# Default value: false
+ConsumablesSploitkits = false
 
 # Setting type: Boolean
-# Default value: true
-CyberweaponsClaws = true
+# Default value: false
+CyberweaponsClaws = false
 
 # Setting type: Boolean
-# Default value: true
-CyberweaponsLasers = true
+# Default value: false
+CyberweaponsLasers = false
 
 # Setting type: Boolean
 # Default value: true
 Difficulty = true
 
 # Setting type: Boolean
+# Default value: false
+Elapse = false
+
+# Setting type: Boolean
 # Default value: true
-Elapse = true
+EnemyRebalance = true
 
 # Setting type: Boolean
 # Default value: true
 Fatigue = true
 
 # Setting type: Boolean
-# Default value: true
-GearClasses = true
+# Default value: false
+GearClasses = false
 
 # Setting type: Boolean
-# Default value: true
-ImplantsGlobal = true
+# Default value: false
+ImplantsGlobal = false
 
 # Setting type: Boolean
-# Default value: true
-ImplantsSlot01 = true
+# Default value: false
+ImplantsSlot01 = false
 
 # Setting type: Boolean
-# Default value: true
-ImplantsSlot02 = true
+# Default value: false
+ImplantsSlot02 = false
 
 # Setting type: Boolean
-# Default value: true
-ImplantsSlot03 = true
+# Default value: false
+ImplantsSlot03 = false
 
 # Setting type: Boolean
-# Default value: true
-ImplantsSlot04 = true
+# Default value: false
+ImplantsSlot04 = false
 
 # Setting type: Boolean
-# Default value: true
-ImplantsSlot05 = true
+# Default value: false
+ImplantsSlot05 = false
 
 # Setting type: Boolean
-# Default value: true
-ImplantsSlot06 = true
+# Default value: false
+ImplantsSlot06 = false
 
 # Setting type: Boolean
-# Default value: true
-ImplantsSlot07 = true
+# Default value: false
+ImplantsSlot07 = false
 
 # Setting type: Boolean
-# Default value: true
-ImplantsSlot08 = true
+# Default value: false
+ImplantsSlot08 = false
 
 # Setting type: Boolean
-# Default value: true
-ImplantsSlot09 = true
+# Default value: false
+ImplantsSlot09 = false
 
 # Setting type: Boolean
-# Default value: true
-ImplantsSlot10 = true
+# Default value: false
+ImplantsSlot10 = false
 
 # Setting type: Boolean
-# Default value: true
-ImplantsSlot11 = true
+# Default value: false
+ImplantsSlot11 = false
+
+# Setting type: Boolean
+# Default value: false
+LegacyEnemyData = false
 
 # Setting type: Boolean
 # Default value: true
 LimitBreakTraits = true
 
 # Setting type: Boolean
-# Default value: true
-MissionRewards = true
+# Default value: false
+MissionRewards = false
+
+# Setting type: Boolean
+# Default value: false
+ModelRules = false
 
 # Setting type: Boolean
 # Default value: true
-ModelRules = true
+PlayerRebalance = true
 
 # Setting type: Boolean
-# Default value: true
-PowerLevel = true
+# Default value: false
+PowerLevel = false
 
 # Setting type: Boolean
-# Default value: true
-Progression = true
+# Default value: false
+Progression = false
 
 # Setting type: Boolean
-# Default value: true
-RewardCurve = true
+# Default value: false
+RewardCurve = false
 
 # Setting type: Boolean
-# Default value: true
-RuleModel = true
+# Default value: false
+RuleModel = false
 
 # Setting type: Boolean
 # Default value: false
 SelfCheck = false
 
 # Setting type: Boolean
-# Default value: true
-SpawnWeights = true
+# Default value: false
+SpawnWeights = false
 
 # Setting type: Boolean
 # Default value: false
 StunClub = false
 
 # Setting type: Boolean
-# Default value: true
-TalentsAEX = true
+# Default value: false
+TalentsAEX = false
 
 # Setting type: Boolean
-# Default value: true
-TalentsCS = true
+# Default value: false
+TalentsCS = false
 
 # Setting type: Boolean
-# Default value: true
-TalentsCyberKnight = true
+# Default value: false
+TalentsCyberKnight = false
 
 # Setting type: Boolean
-# Default value: true
-TalentsGunslinger = true
+# Default value: false
+TalentsGunslinger = false
 
 # Setting type: Boolean
-# Default value: true
-TalentsHacker = true
+# Default value: false
+TalentsHacker = false
 
 # Setting type: Boolean
-# Default value: true
-TalentsSawbones = true
+# Default value: false
+TalentsSawbones = false
 
 # Setting type: Boolean
-# Default value: true
-TalentsSniper = true
+# Default value: false
+TalentsSniper = false
 
 # Setting type: Boolean
-# Default value: true
-TalentsSoldier = true
+# Default value: false
+TalentsSoldier = false
 
 # Setting type: Boolean
-# Default value: true
-TalentsVanguard = true
+# Default value: false
+TalentsVanguard = false
 
 # Setting type: Boolean
-# Default value: true
-TalentsWarMachine = true
+# Default value: false
+TalentsWarMachine = false
 
 # Setting type: Boolean
-# Default value: true
-TalentsWraith = true
+# Default value: false
+TalentsWraith = false
 

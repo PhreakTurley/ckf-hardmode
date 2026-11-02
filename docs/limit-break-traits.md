@@ -94,7 +94,8 @@ So what a trait does can be changed with an `EffectModel` row edit. Which trait 
 ## What the mod overlays
 
 `ckf.hardmode.d/EffectModel.limitbreak.csv` is owned by `[Slices]
-LimitBreakTraits`; it applies only while that slice and `ModelRules` are on. The
+LimitBreakTraits`. With `ModelRules` off, the restricted row-engine path loads
+only this effect overlay; other overlays and probes stay off. The
 switch is separate from `Fatigue`: one controls effect-row edits, while the
 other controls the mission-fatigue grant path. See
 [`overlays.md`](overlays.md#files) for overlay ownership and inspect the live

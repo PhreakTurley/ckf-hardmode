@@ -100,7 +100,7 @@ namespace CKFHardMode
     {
         public const string PluginGuid = "ckf.hardmode";
         public const string PluginName = "CKF Hard Mode";
-        public const string PluginVersion = "4.1.1";
+        public const string PluginVersion = "4.2.0";
 
         internal static new ManualLogSource Log;
         internal static ConfigEntry<bool> Enabled;
@@ -200,6 +200,9 @@ namespace CKFHardMode
                 return;
             }
 
+            try { BundledRebalances.Init(new Harmony(PluginGuid + ".rebalances")); }
+            catch (Exception e) { Log.LogError($"BundledRebalances failed to initialise: {e}"); }
+
             // Difficulty only. A null type must not `return` here: ModelRules
             // has no dependency on GameDifficultyModel, and returning would
             // leave the whole row-edit engine unloaded. The section that needs
@@ -237,7 +240,11 @@ namespace CKFHardMode
             var rulesPath = System.IO.Path.Combine(Paths.ConfigPath, "ckf.hardmode.rules.json");
             try
             {
-                if (System.IO.File.Exists(rulesPath))
+                if (!Slices.On("ModelRules"))
+                {
+                    Log.LogInfo("ModelRules: general rules file is not read; the general engine is off.");
+                }
+                else if (System.IO.File.Exists(rulesPath))
                 {
                     Log.LogError($"ModelRules: {rulesPath} IS ON DISK. The 4.0 layout does "
                         + "not have this file -- its rules live in " + ConfigDoc.DirName

@@ -85,6 +85,13 @@ namespace CKFHardMode
         {
             "ckf.hardmode.cfg",
             "ckf.hardmode.selfcheck.csv",
+            "ckf.player-balance.json",
+            "ckf.hardmode.rebalances/player/_data/data.sql",
+            "ckf.hardmode.rebalances/player/_data/en-US.json",
+            "ckf.hardmode.rebalances/player/receipt.json",
+            "ckf.hardmode.rebalances/enemy/_data/data.sql",
+            "ckf.hardmode.rebalances/enemy/_data/en-US.json",
+            "ckf.hardmode.rebalances/enemy/receipt.json",
             ConfigDoc.DirName + "/EffectModel.limitbreak.csv",
             ConfigDoc.DirName + "/ArmorModel.csv",
             ConfigDoc.DirName + "/WeaponModel.csv",

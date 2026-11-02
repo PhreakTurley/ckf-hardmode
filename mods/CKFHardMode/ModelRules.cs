@@ -437,7 +437,8 @@ namespace CKFHardMode
         {
             // THE GATE IS READ FIRST, from ckf.hardmode.cfg, so an unreadable
             // settings file cannot take this subsystem's switch with it.
-            if (!Slices.On("ModelRules"))
+            bool fullEngine = Slices.On("ModelRules");
+            if (!fullEngine && !Slices.On("LimitBreakTraits"))
             {
                 Plugin.Log.LogInfo(Slices.OffBecause("ModelRules",
                     "no rule is loaded, nothing is hooked, no clone is served and the game's "
@@ -445,7 +446,10 @@ namespace CKFHardMode
                 return;
             }
 
-            var opt = ConfigDoc.ReadSection<Options>("ModelRules", ConfigDoc.ModelRules,
+            // Fatigue's effect edits can run on their own. This restricted
+            // path reads only EffectModel.limitbreak.csv, with no legacy rule
+            // file, other overlay, clone rule or writable-column probe.
+            var opt = !fullEngine ? new Options() : ConfigDoc.ReadSection<Options>("ModelRules", ConfigDoc.ModelRules,
                 "The row-edit engine is OFF this launch: no rule is loaded, nothing is hooked, "
                 + "no clone is served and the game's data is left as it ships.");
             if (opt == null) return;
@@ -460,9 +464,26 @@ namespace CKFHardMode
             // is the single largest saving on the rule hot path.
             Accessors.Configure(true);
 
-            LoadRules(rulesPath);
-            Overlays.Load(Path.Combine(Path.GetDirectoryName(rulesPath) ?? ".",
-                                       "ckf.hardmode.d"), Adopt);
+            var overlayDirectory = Path.Combine(Path.GetDirectoryName(rulesPath) ?? ".", "ckf.hardmode.d");
+            if (fullEngine)
+            {
+                LoadRules(rulesPath);
+                Overlays.Load(overlayDirectory, Adopt);
+            }
+            else
+            {
+                rulesFileRules = -1;
+                Plugin.Log.LogInfo("ModelRules: general row edits OFF; standalone LimitBreakTraits only.");
+                var standalone = new List<Rule>();
+                Overlays.Load(overlayDirectory, standalone.Add, name => new Slices.Verdict {
+                    Open = string.Equals(name, "EffectModel.limitbreak.csv", StringComparison.OrdinalIgnoreCase),
+                    SliceKey = string.Equals(name, "EffectModel.limitbreak.csv", StringComparison.OrdinalIgnoreCase)
+                        ? "LimitBreakTraits" : "ModelRules"
+                });
+                if (standalone.Any(rule => rule.IsClone || rule.Model != "EffectModel"))
+                    throw new InvalidDataException("Standalone LimitBreakTraits accepts only EffectModel updates, not clones.");
+                foreach (var rule in standalone) Adopt(rule);
+            }
 
             // THE PLAN-WIDE TOTAL. It shows that a disabled slice never enters
             // the rule plan, in both count and order.

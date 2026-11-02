@@ -1,0 +1,9 @@
+{
+  "subsystem": "EnemyRebalance",
+  "title": "Bundled Enemy Rebalance",
+  "targets": {"cfg": "ckf.hardmode.cfg"},
+  "enable": {"cfg": "Slices.EnemyRebalance"},
+  "doc": ["Supplies the verified Enemy Rebalance SQL and locale payload under BepInEx/config/ckf.hardmode.rebalances/enemy to the native mod loader. Independent of ModelRules. Disable the separate Enemy Rebalance Workshop item before using this slice. Uses the Workshop armor, roster, ceiling and surgical-correction exporter; see docs/bundled-rebalances.md."],
+  "uiDoc": ["Applies the bundled Enemy Rebalance package. Disable the separate Enemy Rebalance Workshop mod before enabling this switch."],
+  "fields": [{"path": "Slices.EnemyRebalance", "in": "cfg", "type": "bool", "default": true, "ui": "form", "label": "Enable Bundled Enemy Rebalance", "doc": "BundledRebalances.Init checks this gate before reading the package and AfterList supplies its active native mod entry. Independent of ModelRules.", "uiDoc": "Enable the bundled enemy armor, roster progression and corrections."}]
+}

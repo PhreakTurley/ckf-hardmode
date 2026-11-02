@@ -24,7 +24,7 @@
       "path": "Slices.ImplantsGlobal",
       "in": "cfg",
       "type": "bool",
-      "default": true,
+      "default": false,
       "ui": "form",
       "label": "Enable Implant Global Multipliers",
       "doc": "Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs.",

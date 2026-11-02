@@ -20,6 +20,7 @@ This document is the single destination for the settings prose. A fact that is n
 | [CyberweaponsLasers](#cyberweaponslasers) | Eye Laser Cyberweapons | — | 1 | 1 | 1 |
 | [Difficulty](#difficulty) | Custom Difficulty Slider Range | `ckf.hardmode.d/difficulty.json` | 1 | 2 | 1 |
 | [Elapse](#elapse) | Mission Elapse Penalty | `ckf.hardmode.d/elapse.json` | 1 | 13 | 1 + 2 per-field gate(s) |
+| [EnemyRebalance](#enemyrebalance) | Bundled Enemy Rebalance | — | 1 | 1 | 1 |
 | [Fatigue](#fatigue) | Mission Fatigue | `ckf.hardmode.d/fatigue.json` | 1 | 10 | 1 + 1 per-field gate(s) |
 | [GearClasses](#gearclasses) | Player Weapon Classes | — | 1 | 1 | 1 |
 | [General](#general) | Master Switch | — | 1 | 1 | 1 |
@@ -35,9 +36,11 @@ This document is the single destination for the settings prose. A fact that is n
 | [ImplantsSlot09](#implantsslot09) | Implant Slot 09 | — | 1 | 1 | 1 |
 | [ImplantsSlot10](#implantsslot10) | Implant Slot 10 | — | 1 | 1 | 1 |
 | [ImplantsSlot11](#implantsslot11) | Implant Slot 11 | — | 1 | 1 | 1 |
+| [LegacyEnemyData](#legacyenemydata) | Legacy Enemy Overlays | — | 1 | 1 | 1 |
 | [LimitBreakTraits](#limitbreaktraits) | Limit Break Traits | — | 1 | 1 | 1 |
 | [MissionRewards](#missionrewards) | Per-Mission-Type Reward Overrides | `ckf.hardmode.d/missions.json` | 1 | 2 | 1 |
 | [ModelRules](#modelrules) | Declarative Row Edits | `ckf.hardmode.d/modelrules.json` | 1 | 5 | 1 + 1 per-field gate(s) |
+| [PlayerRebalance](#playerrebalance) | Bundled Player Rebalance | — | 1 | 1 | 1 |
 | [PowerLevel](#powerlevel) | Mission Power Level Ceiling | `ckf.hardmode.d/powerlevel.json` | 1 | 5 | 1 |
 | [RewardCurve](#rewardcurve) | Baseline Reward Curve | `ckf.hardmode.d/rewardcurve.json` | 1 | 3 | 1 |
 | [RuleModel](#rulemodel) | Game Rule Constants | — | 1 | 2 | 1 |
@@ -57,7 +60,7 @@ This document is the single destination for the settings prose. A fact that is n
 | [TalentsWraith](#talentswraith) | Wireghost Talent Balance | — | 1 | 1 | 1 |
 | [Progression](#progression) | Team Power Level Award | `ckf.hardmode.d/teampl.json` | 1 | 3 | 1 |
 
-46 subsystems, 46 cfg keys, 87 fields in total.
+49 subsystems, 49 cfg keys, 90 fields in total.
 
 ## Retroactive controls — read before changing these
 
@@ -76,53 +79,56 @@ One row per `Section.Key` in `ckf.hardmode.cfg`. `schema/check_schema.py` report
 | Key | Type | Default | Subsystem | Label |
 |---|---|---|---|---|
 | `General.Enabled` | `bool` | `true` | [General](#general) | Enable CKF Hard Mode |
-| `Slices.ConsumablesChems` | `bool` | `true` | [ConsumablesChems](#consumableschems) | Enable Chem Consumables |
-| `Slices.ConsumablesDevices` | `bool` | `true` | [ConsumablesDevices](#consumablesdevices) | Enable Device Consumables |
-| `Slices.ConsumablesGrenades` | `bool` | `true` | [ConsumablesGrenades](#consumablesgrenades) | Enable Grenade Consumables |
-| `Slices.ConsumablesMatrix` | `bool` | `true` | [ConsumablesMatrix](#consumablesmatrix) | Enable Matrix Consumables |
-| `Slices.ConsumablesMedical` | `bool` | `true` | [ConsumablesMedical](#consumablesmedical) | Enable Medical Consumables |
-| `Slices.ConsumablesSploitkits` | `bool` | `true` | [ConsumablesSploitkits](#consumablessploitkits) | Enable Sploitkit Consumables |
-| `Slices.CyberweaponsClaws` | `bool` | `true` | [CyberweaponsClaws](#cyberweaponsclaws) | Enable Claw Cyberweapons |
-| `Slices.CyberweaponsLasers` | `bool` | `true` | [CyberweaponsLasers](#cyberweaponslasers) | Enable Eye Laser Cyberweapons |
+| `Slices.ConsumablesChems` | `bool` | `false` | [ConsumablesChems](#consumableschems) | Enable Chem Consumables |
+| `Slices.ConsumablesDevices` | `bool` | `false` | [ConsumablesDevices](#consumablesdevices) | Enable Device Consumables |
+| `Slices.ConsumablesGrenades` | `bool` | `false` | [ConsumablesGrenades](#consumablesgrenades) | Enable Grenade Consumables |
+| `Slices.ConsumablesMatrix` | `bool` | `false` | [ConsumablesMatrix](#consumablesmatrix) | Enable Matrix Consumables |
+| `Slices.ConsumablesMedical` | `bool` | `false` | [ConsumablesMedical](#consumablesmedical) | Enable Medical Consumables |
+| `Slices.ConsumablesSploitkits` | `bool` | `false` | [ConsumablesSploitkits](#consumablessploitkits) | Enable Sploitkit Consumables |
+| `Slices.CyberweaponsClaws` | `bool` | `false` | [CyberweaponsClaws](#cyberweaponsclaws) | Enable Claw Cyberweapons |
+| `Slices.CyberweaponsLasers` | `bool` | `false` | [CyberweaponsLasers](#cyberweaponslasers) | Enable Eye Laser Cyberweapons |
 | `Slices.Difficulty` | `bool` | `true` | [Difficulty](#difficulty) | Enable Custom Difficulty Slider Range |
-| `Slices.Elapse` | `bool` | `true` | [Elapse](#elapse) | Enable Mission Elapse Penalty |
+| `Slices.Elapse` | `bool` | `false` | [Elapse](#elapse) | Enable Mission Elapse Penalty |
+| `Slices.EnemyRebalance` | `bool` | `true` | [EnemyRebalance](#enemyrebalance) | Enable Bundled Enemy Rebalance |
 | `Slices.Fatigue` | `bool` | `true` | [Fatigue](#fatigue) | Enable Mission Fatigue |
-| `Slices.GearClasses` | `bool` | `true` | [GearClasses](#gearclasses) | Enable Player Weapon Classes |
-| `Slices.ImplantsGlobal` | `bool` | `true` | [ImplantsGlobal](#implantsglobal) | Enable Implant Global Multipliers |
-| `Slices.ImplantsSlot01` | `bool` | `true` | [ImplantsSlot01](#implantsslot01) | Enable Implant Slot 01 |
-| `Slices.ImplantsSlot02` | `bool` | `true` | [ImplantsSlot02](#implantsslot02) | Enable Implant Slot 02 |
-| `Slices.ImplantsSlot03` | `bool` | `true` | [ImplantsSlot03](#implantsslot03) | Enable Implant Slot 03 |
-| `Slices.ImplantsSlot04` | `bool` | `true` | [ImplantsSlot04](#implantsslot04) | Enable Implant Slot 04 |
-| `Slices.ImplantsSlot05` | `bool` | `true` | [ImplantsSlot05](#implantsslot05) | Enable Implant Slot 05 |
-| `Slices.ImplantsSlot06` | `bool` | `true` | [ImplantsSlot06](#implantsslot06) | Enable Implant Slot 06 |
-| `Slices.ImplantsSlot07` | `bool` | `true` | [ImplantsSlot07](#implantsslot07) | Enable Implant Slot 07 |
-| `Slices.ImplantsSlot08` | `bool` | `true` | [ImplantsSlot08](#implantsslot08) | Enable Implant Slot 08 |
-| `Slices.ImplantsSlot09` | `bool` | `true` | [ImplantsSlot09](#implantsslot09) | Enable Implant Slot 09 |
-| `Slices.ImplantsSlot10` | `bool` | `true` | [ImplantsSlot10](#implantsslot10) | Enable Implant Slot 10 |
-| `Slices.ImplantsSlot11` | `bool` | `true` | [ImplantsSlot11](#implantsslot11) | Enable Implant Slot 11 |
+| `Slices.GearClasses` | `bool` | `false` | [GearClasses](#gearclasses) | Enable Player Weapon Classes |
+| `Slices.ImplantsGlobal` | `bool` | `false` | [ImplantsGlobal](#implantsglobal) | Enable Implant Global Multipliers |
+| `Slices.ImplantsSlot01` | `bool` | `false` | [ImplantsSlot01](#implantsslot01) | Enable Implant Slot 01 |
+| `Slices.ImplantsSlot02` | `bool` | `false` | [ImplantsSlot02](#implantsslot02) | Enable Implant Slot 02 |
+| `Slices.ImplantsSlot03` | `bool` | `false` | [ImplantsSlot03](#implantsslot03) | Enable Implant Slot 03 |
+| `Slices.ImplantsSlot04` | `bool` | `false` | [ImplantsSlot04](#implantsslot04) | Enable Implant Slot 04 |
+| `Slices.ImplantsSlot05` | `bool` | `false` | [ImplantsSlot05](#implantsslot05) | Enable Implant Slot 05 |
+| `Slices.ImplantsSlot06` | `bool` | `false` | [ImplantsSlot06](#implantsslot06) | Enable Implant Slot 06 |
+| `Slices.ImplantsSlot07` | `bool` | `false` | [ImplantsSlot07](#implantsslot07) | Enable Implant Slot 07 |
+| `Slices.ImplantsSlot08` | `bool` | `false` | [ImplantsSlot08](#implantsslot08) | Enable Implant Slot 08 |
+| `Slices.ImplantsSlot09` | `bool` | `false` | [ImplantsSlot09](#implantsslot09) | Enable Implant Slot 09 |
+| `Slices.ImplantsSlot10` | `bool` | `false` | [ImplantsSlot10](#implantsslot10) | Enable Implant Slot 10 |
+| `Slices.ImplantsSlot11` | `bool` | `false` | [ImplantsSlot11](#implantsslot11) | Enable Implant Slot 11 |
+| `Slices.LegacyEnemyData` | `bool` | `false` | [LegacyEnemyData](#legacyenemydata) | Enable Legacy Enemy Overlays |
 | `Slices.LimitBreakTraits` | `bool` | `true` | [LimitBreakTraits](#limitbreaktraits) | Enable Limit Break Traits |
-| `Slices.MissionRewards` | `bool` | `true` | [MissionRewards](#missionrewards) | Enable Per-Mission-Type Reward Overrides |
-| `Slices.ModelRules` | `bool` | `true` | [ModelRules](#modelrules) | Enable Declarative Row Edits |
-| `Slices.PowerLevel` | `bool` | `true` | [PowerLevel](#powerlevel) | Enable Mission Power Level Ceiling |
-| `Slices.Progression` | `bool` | `true` | [Progression](#progression) | Enable Team Power Level Award |
-| `Slices.RewardCurve` | `bool` | `true` | [RewardCurve](#rewardcurve) | Enable Baseline Reward Curve |
-| `Slices.RuleModel` | `bool` | `true` | [RuleModel](#rulemodel) | Enable Game Rule Constants |
+| `Slices.MissionRewards` | `bool` | `false` | [MissionRewards](#missionrewards) | Enable Per-Mission-Type Reward Overrides |
+| `Slices.ModelRules` | `bool` | `false` | [ModelRules](#modelrules) | Enable Declarative Row Edits |
+| `Slices.PlayerRebalance` | `bool` | `true` | [PlayerRebalance](#playerrebalance) | Enable Bundled Player Rebalance |
+| `Slices.PowerLevel` | `bool` | `false` | [PowerLevel](#powerlevel) | Enable Mission Power Level Ceiling |
+| `Slices.Progression` | `bool` | `false` | [Progression](#progression) | Enable Team Power Level Award |
+| `Slices.RewardCurve` | `bool` | `false` | [RewardCurve](#rewardcurve) | Enable Baseline Reward Curve |
+| `Slices.RuleModel` | `bool` | `false` | [RuleModel](#rulemodel) | Enable Game Rule Constants |
 | `Slices.SelfCheck` | `bool` | `false` | [SelfCheck](#selfcheck) | Enable Regression Suite |
-| `Slices.SpawnWeights` | `bool` | `true` | [SpawnWeights](#spawnweights) | Enable Enemy Spawn Weights |
+| `Slices.SpawnWeights` | `bool` | `false` | [SpawnWeights](#spawnweights) | Enable Enemy Spawn Weights |
 | `Slices.StunClub` | `bool` | `false` | [StunClub](#stunclub) | Enable Stun Club Bonus |
-| `Slices.TalentsAEX` | `bool` | `true` | [TalentsAEX](#talentsaex) | Enable Agent EX Talent Balance |
-| `Slices.TalentsCS` | `bool` | `true` | [TalentsCS](#talentscs) | Enable Cybersword Talent Balance |
-| `Slices.TalentsCyberKnight` | `bool` | `true` | [TalentsCyberKnight](#talentscyberknight) | Enable Cyber Knight Talent Balance |
-| `Slices.TalentsGunslinger` | `bool` | `true` | [TalentsGunslinger](#talentsgunslinger) | Enable Gunslinger Talent Balance |
-| `Slices.TalentsHacker` | `bool` | `true` | [TalentsHacker](#talentshacker) | Enable Hacker Talent Balance |
-| `Slices.TalentsSawbones` | `bool` | `true` | [TalentsSawbones](#talentssawbones) | Enable Scourge Talent Balance |
-| `Slices.TalentsSniper` | `bool` | `true` | [TalentsSniper](#talentssniper) | Enable Sniper Talent Balance |
-| `Slices.TalentsSoldier` | `bool` | `true` | [TalentsSoldier](#talentssoldier) | Enable Soldier Talent Balance |
-| `Slices.TalentsVanguard` | `bool` | `true` | [TalentsVanguard](#talentsvanguard) | Enable Vanguard Talent Balance |
-| `Slices.TalentsWarMachine` | `bool` | `true` | [TalentsWarMachine](#talentswarmachine) | Enable Warmachine Talent Balance |
-| `Slices.TalentsWraith` | `bool` | `true` | [TalentsWraith](#talentswraith) | Enable Wireghost Talent Balance |
+| `Slices.TalentsAEX` | `bool` | `false` | [TalentsAEX](#talentsaex) | Enable Agent EX Talent Balance |
+| `Slices.TalentsCS` | `bool` | `false` | [TalentsCS](#talentscs) | Enable Cybersword Talent Balance |
+| `Slices.TalentsCyberKnight` | `bool` | `false` | [TalentsCyberKnight](#talentscyberknight) | Enable Cyber Knight Talent Balance |
+| `Slices.TalentsGunslinger` | `bool` | `false` | [TalentsGunslinger](#talentsgunslinger) | Enable Gunslinger Talent Balance |
+| `Slices.TalentsHacker` | `bool` | `false` | [TalentsHacker](#talentshacker) | Enable Hacker Talent Balance |
+| `Slices.TalentsSawbones` | `bool` | `false` | [TalentsSawbones](#talentssawbones) | Enable Scourge Talent Balance |
+| `Slices.TalentsSniper` | `bool` | `false` | [TalentsSniper](#talentssniper) | Enable Sniper Talent Balance |
+| `Slices.TalentsSoldier` | `bool` | `false` | [TalentsSoldier](#talentssoldier) | Enable Soldier Talent Balance |
+| `Slices.TalentsVanguard` | `bool` | `false` | [TalentsVanguard](#talentsvanguard) | Enable Vanguard Talent Balance |
+| `Slices.TalentsWarMachine` | `bool` | `false` | [TalentsWarMachine](#talentswarmachine) | Enable Warmachine Talent Balance |
+| `Slices.TalentsWraith` | `bool` | `false` | [TalentsWraith](#talentswraith) | Enable Wireghost Talent Balance |
 
-46 key(s).
+49 key(s).
 
 ## Every sidecar field
 
@@ -252,7 +258,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.ConsumablesChems` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Chem Consumables | On applies this slice's files; off skips them before they are opened. Default true. Lever sheet, not a direct overlay: the first column is ItemName, and there is no game table called "consumables-chems". |
+| `Slices.ConsumablesChems` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Chem Consumables | On applies this slice's files; off skips them before they are opened. Default false. Lever sheet, not a direct overlay: the first column is ItemName, and there is no game table called "consumables-chems". |
 
 **What the config GUI shows for these fields.**
 
@@ -323,7 +329,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.ConsumablesDevices` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Device Consumables | On applies this slice's files; off skips them before they are opened. Default true. Lever sheet, not a direct overlay: the first column is ItemName, and there is no game table called "consumables-devices". |
+| `Slices.ConsumablesDevices` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Device Consumables | On applies this slice's files; off skips them before they are opened. Default false. Lever sheet, not a direct overlay: the first column is ItemName, and there is no game table called "consumables-devices". |
 
 **What the config GUI shows for these fields.**
 
@@ -394,7 +400,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.ConsumablesGrenades` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Grenade Consumables | On applies this slice's files; off skips them before they are opened. Default true. Lever sheet, not a direct overlay: the first column is ItemName, and there is no game table called "consumables-grenades". |
+| `Slices.ConsumablesGrenades` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Grenade Consumables | On applies this slice's files; off skips them before they are opened. Default false. Lever sheet, not a direct overlay: the first column is ItemName, and there is no game table called "consumables-grenades". |
 
 **What the config GUI shows for these fields.**
 
@@ -469,7 +475,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.ConsumablesMatrix` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Matrix Consumables | On applies this slice's files; off skips them before they are opened. Default true. Lever sheet, not a direct overlay: the first column is ItemName, and there is no game table called "consumables-matrix". |
+| `Slices.ConsumablesMatrix` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Matrix Consumables | On applies this slice's files; off skips them before they are opened. Default false. Lever sheet, not a direct overlay: the first column is ItemName, and there is no game table called "consumables-matrix". |
 
 **What the config GUI shows for these fields.**
 
@@ -538,7 +544,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.ConsumablesMedical` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Medical Consumables | On applies this slice's files; off skips them before they are opened. Default true. Lever sheet, not a direct overlay: the first column is ItemName, and there is no game table called "consumables-medical". |
+| `Slices.ConsumablesMedical` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Medical Consumables | On applies this slice's files; off skips them before they are opened. Default false. Lever sheet, not a direct overlay: the first column is ItemName, and there is no game table called "consumables-medical". |
 
 **What the config GUI shows for these fields.**
 
@@ -607,7 +613,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.ConsumablesSploitkits` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Sploitkit Consumables | On applies this slice's files; off skips them before they are opened. Default true. Lever sheet, not a direct overlay: the first column is ItemName, and there is no game table called "consumables-sploitkits". |
+| `Slices.ConsumablesSploitkits` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Sploitkit Consumables | On applies this slice's files; off skips them before they are opened. Default false. Lever sheet, not a direct overlay: the first column is ItemName, and there is no game table called "consumables-sploitkits". |
 
 **What the config GUI shows for these fields.**
 
@@ -666,7 +672,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.CyberweaponsClaws` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Claw Cyberweapons | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
+| `Slices.CyberweaponsClaws` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Claw Cyberweapons | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
 
 **What the config GUI shows for these fields.**
 
@@ -727,7 +733,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.CyberweaponsLasers` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Eye Laser Cyberweapons | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
+| `Slices.CyberweaponsLasers` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Eye Laser Cyberweapons | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
 
 **What the config GUI shows for these fields.**
 
@@ -875,7 +881,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.Elapse` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Mission Elapse Penalty | Slice toggle. It lives in ckf.hardmode.cfg because a gate cannot live inside the file it gates, and the .cfg is parsed before anything else loads. Slices.Init binds every [Slices] key above the [General] Enabled bail-out, so BepInEx writes the line even when the mod is off. A key that cannot be read is reported at Error and treated as on. Off: the subsystem logs why and does nothing this launch. The retired "enabled" key inside the subsystem's JSON file is still parsed (RetiredEnabled) so that Slices.ReportRetiredGate can report it: a Warning, or an Error when it is false and this key is not. Nothing branches on it. |
+| `Slices.Elapse` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Mission Elapse Penalty | Slice toggle. It lives in ckf.hardmode.cfg because a gate cannot live inside the file it gates, and the .cfg is parsed before anything else loads. Slices.Init binds every [Slices] key above the [General] Enabled bail-out, so BepInEx writes the line even when the mod is off. A key that cannot be read is reported at Error and treated as on. Off: the subsystem logs why and does nothing this launch. The retired "enabled" key inside the subsystem's JSON file is still parsed (RetiredEnabled) so that Slices.ReportRetiredGate can report it: a Warning, or an Error when it is false and this key is not. Nothing branches on it. |
 | `logFirst` | json | `int` | `form` | `0` |  | `0` to `500` |  |  | Expiries logged in full | How many expiries to log in full detail (one line per channel and per merc). After that each expiry gets a single summary line. |
 | `seedSalt` | json | `int` | `form` | `1163084112` |  | `0` to `2147483647` |  |  | Seed salt | Salt for the deterministic roll. It is XORed into a seed mixed from the expiry's turn and the mission's Id - its title if the Id is unreadable - and that seed orders the merc list, so the same expiry picks the same mercs on every reload (Elapse.cs:1050-1051). It is deliberately a different salt from Fatigue's so the two subsystems' rolls do not correlate. Change it and every future pick in every save changes with it. |
 | `tiers` | json | `table` | `table` | _none declared_ |  |  |  | keyed by `name` | Mission tiers | Multiplier applied to the penalty by mission family, matched by SUBSTRING on MissionTypeId - the same idiom MissionRewards uses. FIRST MATCH WINS, in a fixed order: soloHack, then story, then standard, so the block is not order-independent even though it is a JSON object (Elapse.cs:850-862). A mission matching no tier's patterns falls through to 'standard'. The multiplier scales the credit charge, and the Stress merc count as well only when stress.applyTierMultiplier is on. A pattern that matches nothing makes its tier do nothing at all and logs no complaint, so check the tier= field in the plugin's own expiry log lines against real missions. [unverified: the default story patterns are a starting guess read off the game's MissionModel.csv and _mission_generated.csv dumps, neither of which is in this repository.] |
@@ -937,6 +943,58 @@ On disk this is a JSON **array** of row objects. Sorted by `minPowerLevel`.
 | `minPowerLevel` | `int` | `0` to `25` |
 | `mercCount` | `int` | `0` to `12` |
 | `stressAmount` | `int` | `0` to `100` |
+
+### Invariants
+
+None declared.
+
+---
+
+## EnemyRebalance
+
+**Bundled Enemy Rebalance** &nbsp;·&nbsp; `.cfg` section `[EnemyRebalance]` &nbsp;·&nbsp; declared in `schema/enemyrebalance.schema.json`
+
+Supplies the verified Enemy Rebalance SQL and locale payload under BepInEx/config/ckf.hardmode.rebalances/enemy to the native mod loader. Independent of ModelRules. Disable the separate Enemy Rebalance Workshop item before using this slice. Uses the Workshop armor, roster, ceiling and surgical-correction exporter; see docs/bundled-rebalances.md.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Applies the bundled Enemy Rebalance package. Disable the separate Enemy Rebalance Workshop mod before enabling this switch.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] EnemyRebalance = true     ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, the master switch in `ckf.hardmode.cfg`. Its bail-out in `Plugin.Load()` sits above every subsystem init, so `Enabled = false` stops every subsystem.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.EnemyRebalance` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Bundled Enemy Rebalance | BundledRebalances.Init checks this gate before reading the package and AfterList supplies its active native mod entry. Independent of ModelRules. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.EnemyRebalance` | Enable the bundled enemy armor, roster progression and corrections. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
 
 ### Invariants
 
@@ -1108,7 +1166,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.GearClasses` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Player Weapon Classes | On applies this slice's files; off skips them before they are opened. Default true. Lever sheet, not a direct overlay: the first column is WeaponClass, a class id rather than a row id, and there is no game table called "gear-classes". GearClasses.cs expands each row at load into one rule with a WeaponClass selector and an enemy-id exclusion set. The lever columns are WeaponModel column names, which makes the file look like a direct overlay; the row is what differs. The levers are the suffixed columns (BallisticDamage1, not BallisticDamage), because the unsuffixed names are aliases whose writes the game discards. |
+| `Slices.GearClasses` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Player Weapon Classes | On applies this slice's files; off skips them before they are opened. Default false. Lever sheet, not a direct overlay: the first column is WeaponClass, a class id rather than a row id, and there is no game table called "gear-classes". GearClasses.cs expands each row at load into one rule with a WeaponClass selector and an enemy-id exclusion set. The lever columns are WeaponModel column names, which makes the file look like a direct overlay; the row is what differs. The levers are the suffixed columns (BallisticDamage1, not BallisticDamage), because the unsuffixed names are aliases whose writes the game discards. |
 
 **What the config GUI shows for these fields.**
 
@@ -1216,7 +1274,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.ImplantsGlobal` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Global Multipliers | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
+| `Slices.ImplantsGlobal` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Implant Global Multipliers | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
 | `costMultiply` | json | `float` | `form` | `0.5` |  | `0.0` to `10.0` |  |  | Install cost multiplier | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
 | `installTimeMultiply` | json | `float` | `form` | `0.5` |  | `0.0` to `10.0` |  |  | Install time multiplier | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
 | `implantStressMultiply` | json | `float` | `form` | `3` |  | `0.0` to `10.0` |  |  | Implant stress multiplier | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
@@ -1281,7 +1339,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.ImplantsSlot01` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 01 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
+| `Slices.ImplantsSlot01` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Implant Slot 01 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
 
 **What the config GUI shows for these fields.**
 
@@ -1340,7 +1398,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.ImplantsSlot02` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 02 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
+| `Slices.ImplantsSlot02` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Implant Slot 02 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
 
 **What the config GUI shows for these fields.**
 
@@ -1399,7 +1457,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.ImplantsSlot03` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 03 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
+| `Slices.ImplantsSlot03` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Implant Slot 03 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
 
 **What the config GUI shows for these fields.**
 
@@ -1458,7 +1516,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.ImplantsSlot04` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 04 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
+| `Slices.ImplantsSlot04` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Implant Slot 04 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
 
 **What the config GUI shows for these fields.**
 
@@ -1517,7 +1575,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.ImplantsSlot05` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 05 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
+| `Slices.ImplantsSlot05` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Implant Slot 05 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
 
 **What the config GUI shows for these fields.**
 
@@ -1576,7 +1634,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.ImplantsSlot06` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 06 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
+| `Slices.ImplantsSlot06` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Implant Slot 06 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
 
 **What the config GUI shows for these fields.**
 
@@ -1635,7 +1693,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.ImplantsSlot07` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 07 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
+| `Slices.ImplantsSlot07` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Implant Slot 07 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
 
 **What the config GUI shows for these fields.**
 
@@ -1694,7 +1752,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.ImplantsSlot08` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 08 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
+| `Slices.ImplantsSlot08` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Implant Slot 08 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
 
 **What the config GUI shows for these fields.**
 
@@ -1753,7 +1811,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.ImplantsSlot09` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 09 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
+| `Slices.ImplantsSlot09` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Implant Slot 09 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
 
 **What the config GUI shows for these fields.**
 
@@ -1812,7 +1870,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.ImplantsSlot10` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 10 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
+| `Slices.ImplantsSlot10` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Implant Slot 10 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
 
 **What the config GUI shows for these fields.**
 
@@ -1871,7 +1929,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.ImplantsSlot11` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Implant Slot 11 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
+| `Slices.ImplantsSlot11` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Implant Slot 11 | Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs. |
 
 **What the config GUI shows for these fields.**
 
@@ -1887,11 +1945,71 @@ None declared.
 
 ---
 
+## LegacyEnemyData
+
+**Legacy Enemy Overlays** &nbsp;·&nbsp; `.cfg` section `[LegacyEnemyData]` &nbsp;·&nbsp; declared in `schema/legacyenemydata.schema.json`
+
+Files this toggle gates:
+
+```text
+  ArmorModel.csv
+  WeaponModel.csv
+  MonsterTypeModel.csv
+```
+
+Gates the older ArmorModel.csv, WeaponModel.csv and MonsterTypeModel.csv runtime overlays. Off by default. Requires ModelRules. These files remain authoring inputs for the native exporter; disabling their runtime application does not exclude their authored armor changes from Enemy Rebalance.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Applies the older enemy overlays. Leave this off when using either the bundled Enemy Rebalance or the Workshop version.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] LegacyEnemyData = true    ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, the master switch in `ckf.hardmode.cfg`. Its bail-out in `Plugin.Load()` sits above every subsystem init, so `Enabled = false` stops every subsystem.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.LegacyEnemyData` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Legacy Enemy Overlays | Slices.VerdictForOverlay gates ArmorModel.csv, WeaponModel.csv and MonsterTypeModel.csv before they are opened. ModelRules is also required. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.LegacyEnemyData` | Use the older enemy overlay implementation. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
+
+### Invariants
+
+None declared.
+
+---
+
 ## LimitBreakTraits
 
 **Limit Break Traits** &nbsp;·&nbsp; `.cfg` section `[LimitBreakTraits]` &nbsp;·&nbsp; declared in `schema/limitbreaktraits.schema.json`
 
-Slice toggle. Off: Slices.VerdictForOverlay skips the file below before it is opened, so none of its rows reach RulePlan. The file is loaded by the row-edit engine, so it also has no effect while [Slices] ModelRules is off (ModelRules.Init returns before Overlays.Load).
+Slice toggle. Off: Slices.VerdictForOverlay skips the file below before it is opened, so none of its rows reach RulePlan. The file is loaded by the row-edit engine. When ModelRules is off, its restricted startup path loads only this effect overlay, so the trait changes work independently.
 
 Files this toggle gates:
 
@@ -2028,7 +2146,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.MissionRewards` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Per-Mission-Type Reward Overrides | Slice toggle. It lives in ckf.hardmode.cfg because a gate cannot live inside the file it gates, and the .cfg is parsed before anything else loads. Slices.Init binds every [Slices] key above the [General] Enabled bail-out, so BepInEx writes the line even when the mod is off. A key that cannot be read is reported at Error and treated as on. Off: the subsystem logs why and does nothing this launch. The retired "enabled" key inside the subsystem's JSON file is still parsed (RetiredEnabled) so that Slices.ReportRetiredGate can report it: a Warning, or an Error when it is false and this key is not. Nothing branches on it. The key is named for the subsystem, MissionRewards; its file is missions.json. |
+| `Slices.MissionRewards` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Per-Mission-Type Reward Overrides | Slice toggle. It lives in ckf.hardmode.cfg because a gate cannot live inside the file it gates, and the .cfg is parsed before anything else loads. Slices.Init binds every [Slices] key above the [General] Enabled bail-out, so BepInEx writes the line even when the mod is off. A key that cannot be read is reported at Error and treated as on. Off: the subsystem logs why and does nothing this launch. The retired "enabled" key inside the subsystem's JSON file is still parsed (RetiredEnabled) so that Slices.ReportRetiredGate can report it: a Warning, or an Error when it is false and this key is not. Nothing branches on it. The key is named for the subsystem, MissionRewards; its file is missions.json. |
 | `missions` | json | `table` | `table` | _none declared_ |  |  |  |  | Mission type overrides | One row per MissionTypeId, matched exactly and case-insensitively - there is no pattern layer, so a family is reached one type at a time. A type listed twice is warned about and the later entry wins. A row with every slot blank is inert. The value is a JSON array, not an object keyed by type: MissionRewards.cs declares [JsonPropertyName("missions")] List<MissionOverride> Missions. scripts/refresh_mission_roster.py groups entries into five families (its FAMILIES table), an editorial aid the plugin ignores: story and other non-procedural types (no PGen in the key, or an _M<n> series marker, or a row in MissionModel - hand-authored, often NoPayment); Power Play types (PowerPlay in the key); solo hacks (MaxCharacters 1); pure-combat types (Battle in the key, with RoomFlagTypes.FullCombat as the authoritative test); and everything else, where combat may still happen but a quiet route exists. [unverified: the MissionModel, MaxCharacters and RoomFlagTypes tests are read off game dumps that are not in this repository; family() takes MaxCharacters 1 where a shipped value exists and falls back to the key otherwise.] |
 
 **What the config GUI shows for these fields.**
@@ -2072,7 +2190,7 @@ CKF Hard Mode - declarative row edits.
 
 The rules themselves are the ckf.hardmode.d/*.csv, *.tsv and rules *.json overlays, which this schema does not describe: they are bulk table authoring with their own grammar (docs/overlays.md), edited in a spreadsheet, and each file is gated by its own slice. ckf.hardmode.d/MissionPowerLevelModel.generated.json is generated output and belongs to teampl.schema.json.
 
-With this key off, ModelRules.Init returns before Overlays.Load, so no overlay of any slice is applied.
+With this key off, ModelRules.Init loads only the limit-break effect overlay when LimitBreakTraits is enabled. All general overlays remain off.
 
 The other keys are diagnostics. Row cloning, clone serve-by-id, fresh clone instances and compiled accessors are always on. Serving clones on bulk reads is always off: nothing during play enumerates a whole table, and an append landing after the game has built from the list broke a mission load [measured].
 
@@ -2082,7 +2200,7 @@ The writable-column probe is not a duplicate of CKF Data Dump's WriteProbe. This
 
 The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
 
-Retune the game's talents, equipment, monster and character base stats. The rules themselves live in the CSV overlays and are edited in a spreadsheet, not on this page. Turning this off stops every overlay page from applying.
+Retune the game's talents, equipment, monster and character base stats. The rules themselves live in the CSV overlays and are edited in a spreadsheet, not on this page. Turning this off stops general overlays. Limit Break Traits has an independent restricted path.
 
 Tracing is for confirming a rule did what you meant without hunting for the effect in-game: it logs the first few rows each rule changes, one line per column, before and after. Three to five is enough to see a curve produce different values at different levels. It logs a line per row, so turn it off again for a normal session.
 
@@ -2116,7 +2234,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.ModelRules` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Declarative Row Edits | Slice toggle. It lives in ckf.hardmode.cfg because a gate cannot live inside the file it gates, and the .cfg is parsed before anything else loads. Slices.Init binds every [Slices] key above the [General] Enabled bail-out, so BepInEx writes the line even when the mod is off. A key that cannot be read is reported at Error and treated as on. Off: the subsystem logs why and does nothing this launch. The retired "enabled" key inside the subsystem's JSON file is still parsed (RetiredEnabled) so that Slices.ReportRetiredGate can report it: a Warning, or an Error when it is false and this key is not. Nothing branches on it. Off also means no overlay file of any slice is applied, because ModelRules.Init returns before Overlays.Load. |
+| `Slices.ModelRules` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Declarative Row Edits | Slice toggle. It lives in ckf.hardmode.cfg because a gate cannot live inside the file it gates, and the .cfg is parsed before anything else loads. Slices.Init binds every [Slices] key above the [General] Enabled bail-out, so BepInEx writes the line even when the mod is off. A key that cannot be read is reported at Error and treated as on. Off: the subsystem logs why and does nothing this launch. The retired "enabled" key inside the subsystem's JSON file is still parsed (RetiredEnabled) so that Slices.ReportRetiredGate can report it: a Warning, or an Error when it is false and this key is not. Nothing branches on it. Off stops general overlays; an enabled LimitBreakTraits slice loads only its own effect overlay. |
 | `traceRules` | json | `int` | `form` | `0` |  | `0` to `1000` |  |  | Trace first N rows per rule | Log the first N rows each rule changes, one line per column, as before -> after. This is how you confirm a rule, a curve, a clamp or a clone actually did what you meant without hunting for the effect in-game. 0 is off. 3 to 5 is enough to see a curve produce different values at different power levels. It logs per row, so leave it off for a normal session. |
 | `probeWritableColumns` | json | `bool` | `form` | `false` |  |  |  |  | Probe writable columns | Write a report of which columns actually accept a write. Some setters exist but recompute their value and discard yours - the unsuffixed weapon stats are aliases for the selected firing mode, and the talent Adjusted* columns are computed - and a rule against one of those fails silently. The probe writes a test value onto one materialized row per table, reads it back, and puts the original value straight back. It is a write on the game's hot path, so it is off by default and worth turning on for one launch when a rule is not landing. |
 | `probeTables` | json | `stringList` | `form` | `"[]"` |  |  | `probeWritableColumns` |  | Extra tables to probe | Extra tables to probe, beyond the ones your rules already target (which are probed automatically). A JSON array of strings; the 'Model' suffix is optional. |
@@ -2134,6 +2252,58 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 **Type notes.**
 
 - `stringList` — Comma-separated in the cfg, a JSON array in a sidecar. In the cfg it must stay on ONE line: a list split across lines silently keeps only the first entry.
+
+### Invariants
+
+None declared.
+
+---
+
+## PlayerRebalance
+
+**Bundled Player Rebalance** &nbsp;·&nbsp; `.cfg` section `[PlayerRebalance]` &nbsp;·&nbsp; declared in `schema/playerrebalance.schema.json`
+
+Supplies the verified Player Rebalance SQL and locale payload under BepInEx/config/ckf.hardmode.rebalances/player to the native mod loader. Independent of ModelRules. Disable the separate Player Rebalance Workshop item before using this slice. Regenerate the payload after authoring changes; see docs/bundled-rebalances.md.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Applies the bundled Player Rebalance package. Disable the separate Player Rebalance Workshop mod before enabling this switch.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] PlayerRebalance = true    ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, the master switch in `ckf.hardmode.cfg`. Its bail-out in `Plugin.Load()` sits above every subsystem init, so `Enabled = false` stops every subsystem.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.PlayerRebalance` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Bundled Player Rebalance | BundledRebalances.Init checks this gate before reading the package and AfterList supplies its active native mod entry. Independent of ModelRules. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.PlayerRebalance` | Enable the bundled player talent, equipment and character adjustments. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
 
 ### Invariants
 
@@ -2208,7 +2378,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.PowerLevel` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Mission Power Level Ceiling | Slice toggle. It lives in ckf.hardmode.cfg because a gate cannot live inside the file it gates, and the .cfg is parsed before anything else loads. Slices.Init binds every [Slices] key above the [General] Enabled bail-out, so BepInEx writes the line even when the mod is off. A key that cannot be read is reported at Error and treated as on. Off: the subsystem logs why and does nothing this launch. The retired "enabled" key inside the subsystem's JSON file is still parsed (RetiredEnabled) so that Slices.ReportRetiredGate can report it: a Warning, or an Error when it is false and this key is not. Nothing branches on it. |
+| `Slices.PowerLevel` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Mission Power Level Ceiling | Slice toggle. It lives in ckf.hardmode.cfg because a gate cannot live inside the file it gates, and the .cfg is parsed before anything else loads. Slices.Init binds every [Slices] key above the [General] Enabled bail-out, so BepInEx writes the line even when the mod is off. A key that cannot be read is reported at Error and treated as on. Off: the subsystem logs why and does nothing this launch. The retired "enabled" key inside the subsystem's JSON file is still parsed (RetiredEnabled) so that Slices.ReportRetiredGate can report it: a Warning, or an Error when it is false and this key is not. Nothing branches on it. |
 | `minCap` | json | `int` | `form` | `1` |  | `1` to `25` |  |  | Lower clamp | Lower clamp. Stock is 1. |
 | `maxCap` | json | `int` | `form` | `20` |  | `1` to `25` |  |  | Upper clamp | Upper clamp. Stock is 10; enemy archetypes exist through 20. Must not be below minCap - the subsystem refuses to run if it is. |
 | `matrixMaxCap` | json | `int` | `form` | `10` | 0 means use maxCap for Matrix calls too. | `0` to `25` |  |  | Matrix upper clamp | Separate upper clamp for Matrix calls, so hacking can stay at the stock ceiling while ground missions climb. 0 = use maxCap for both. The lower of this and maxCap wins. |
@@ -2297,7 +2467,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.RewardCurve` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Baseline Reward Curve | Slice toggle. It lives in ckf.hardmode.cfg because a gate cannot live inside the file it gates, and the .cfg is parsed before anything else loads. Slices.Init binds every [Slices] key above the [General] Enabled bail-out, so BepInEx writes the line even when the mod is off. A key that cannot be read is reported at Error and treated as on. Off: the subsystem logs why and does nothing this launch. The retired "enabled" key inside the subsystem's JSON file is still parsed (RetiredEnabled) so that Slices.ReportRetiredGate can report it: a Warning, or an Error when it is false and this key is not. Nothing branches on it. |
+| `Slices.RewardCurve` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Baseline Reward Curve | Slice toggle. It lives in ckf.hardmode.cfg because a gate cannot live inside the file it gates, and the .cfg is parsed before anything else loads. Slices.Init binds every [Slices] key above the [General] Enabled bail-out, so BepInEx writes the line even when the mod is off. A key that cannot be read is reported at Error and treated as on. Off: the subsystem logs why and does nothing this launch. The retired "enabled" key inside the subsystem's JSON file is still parsed (RetiredEnabled) so that Slices.ReportRetiredGate can report it: a Warning, or an Error when it is false and this key is not. Nothing branches on it. |
 | `logEffectiveCurve` | json | `bool` | `form` | `false` |  |  |  |  | Log the effective curve | After patching, call the three functions and log what they now return. This is the verification: CKF Data Dump's _reward_curve.csv cannot show it, because that plugin loads first and sweeps the curve before this one patches it. |
 | `curve` | json | `table` | `curve` | _none declared_ | A column set to -1 or any negative value, or left out of the row, keeps the game's own number for that function at that power level. |  |  | sorted by `PowerLevel` | Reward tiers by power level | One row per PowerLevelUnscaled. Each column replaces the return value of one RulesUtil function at that level, rounded to a whole number. Only the levels named here are touched; a level with no row keeps the game's own three values. Nothing is patched at all if every cell is left absent or negative. |
 
@@ -2377,7 +2547,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.RuleModel` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Game Rule Constants | On applies RuleModel.csv; off skips it before it is opened. Default true. |
+| `Slices.RuleModel` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Game Rule Constants | On applies RuleModel.csv; off skips it before it is opened. Default false. |
 | `ruleReference` | reference | `table` | `readonly` | _none declared_ |  |  |  | sorted by `RuleId` | Game rule constants (reference) | Read-only rule identities, groups, names and shipped values. When an official database is selected, the editor reads current rows from Official/data.db in the same transaction as overlay baselines, including newly added rules. Schema rows provide offline metadata for installed editors without the database. Reference values never enter a save or a game rule. See docs/static-data.md. |
 
 > This document does not render these field `ruleReference` keys: `rows`.
@@ -2564,7 +2734,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.SpawnWeights` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Enemy Spawn Weights | On applies this slice's files; off skips them before they are opened. Default true. Twelve direct overlays onto MonsterGroupMemberModel, one per faction pool that a ProcGenSelect faction can field, each carrying that faction's weakest enemy types - the ones already eligible at power level 2 or below - and the weight each is rolled with at a given power level. The lowest-entering type in each faction tapers: its total weight falls linearly from its baseline at that faction's last-unlock power level to 1 at power level 20. |
+| `Slices.SpawnWeights` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Enemy Spawn Weights | On applies this slice's files; off skips them before they are opened. Default false. Twelve direct overlays onto MonsterGroupMemberModel, one per faction pool that a ProcGenSelect faction can field, each carrying that faction's weakest enemy types - the ones already eligible at power level 2 or below - and the weight each is rolled with at a given power level. The lowest-entering type in each faction tapers: its total weight falls linearly from its baseline at that faction's last-unlock power level to 1 at power level 20. |
 
 **What the config GUI shows for these fields.**
 
@@ -2683,7 +2853,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.TalentsAEX` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Agent EX Talent Balance | On applies this slice's files; off skips them before they are opened. Default true. |
+| `Slices.TalentsAEX` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Agent EX Talent Balance | On applies this slice's files; off skips them before they are opened. Default false. |
 
 **What the config GUI shows for these fields.**
 
@@ -2750,7 +2920,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.TalentsCS` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Cybersword Talent Balance | On applies this slice's files; off skips them before they are opened. Default true. |
+| `Slices.TalentsCS` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Cybersword Talent Balance | On applies this slice's files; off skips them before they are opened. Default false. |
 
 **What the config GUI shows for these fields.**
 
@@ -2815,7 +2985,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.TalentsCyberKnight` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Cyber Knight Talent Balance | On applies this slice's files; off skips them before they are opened. Default true. |
+| `Slices.TalentsCyberKnight` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Cyber Knight Talent Balance | On applies this slice's files; off skips them before they are opened. Default false. |
 
 **What the config GUI shows for these fields.**
 
@@ -2880,7 +3050,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.TalentsGunslinger` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Gunslinger Talent Balance | On applies this slice's files; off skips them before they are opened. Default true. |
+| `Slices.TalentsGunslinger` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Gunslinger Talent Balance | On applies this slice's files; off skips them before they are opened. Default false. |
 
 **What the config GUI shows for these fields.**
 
@@ -2950,7 +3120,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.TalentsHacker` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Hacker Talent Balance | On applies this slice's files; off skips them before they are opened. Default true. |
+| `Slices.TalentsHacker` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Hacker Talent Balance | On applies this slice's files; off skips them before they are opened. Default false. |
 
 **What the config GUI shows for these fields.**
 
@@ -3019,7 +3189,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.TalentsSawbones` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Scourge Talent Balance | On applies this slice's files; off skips them before they are opened. Default true. |
+| `Slices.TalentsSawbones` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Scourge Talent Balance | On applies this slice's files; off skips them before they are opened. Default false. |
 
 **What the config GUI shows for these fields.**
 
@@ -3084,7 +3254,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.TalentsSniper` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Sniper Talent Balance | On applies this slice's files; off skips them before they are opened. Default true. |
+| `Slices.TalentsSniper` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Sniper Talent Balance | On applies this slice's files; off skips them before they are opened. Default false. |
 
 **What the config GUI shows for these fields.**
 
@@ -3149,7 +3319,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.TalentsSoldier` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Soldier Talent Balance | On applies this slice's files; off skips them before they are opened. Default true. |
+| `Slices.TalentsSoldier` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Soldier Talent Balance | On applies this slice's files; off skips them before they are opened. Default false. |
 
 **What the config GUI shows for these fields.**
 
@@ -3214,7 +3384,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.TalentsVanguard` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Vanguard Talent Balance | On applies this slice's files; off skips them before they are opened. Default true. |
+| `Slices.TalentsVanguard` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Vanguard Talent Balance | On applies this slice's files; off skips them before they are opened. Default false. |
 
 **What the config GUI shows for these fields.**
 
@@ -3281,7 +3451,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.TalentsWarMachine` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Warmachine Talent Balance | On applies this slice's files; off skips them before they are opened. Default true. |
+| `Slices.TalentsWarMachine` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Warmachine Talent Balance | On applies this slice's files; off skips them before they are opened. Default false. |
 
 **What the config GUI shows for these fields.**
 
@@ -3348,7 +3518,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.TalentsWraith` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Wireghost Talent Balance | On applies this slice's files; off skips them before they are opened. Default true. |
+| `Slices.TalentsWraith` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Wireghost Talent Balance | On applies this slice's files; off skips them before they are opened. Default false. |
 
 **What the config GUI shows for these fields.**
 
@@ -3433,7 +3603,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.Progression` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Team Power Level Award | Slice toggle. It lives in ckf.hardmode.cfg because a gate cannot live inside the file it gates, and the .cfg is parsed before anything else loads. Slices.Init binds every [Slices] key above the [General] Enabled bail-out, so BepInEx writes the line even when the mod is off. A key that cannot be read is reported at Error and treated as on. Off: the subsystem logs why and does nothing this launch. The retired "enabled" key inside the subsystem's JSON file is still parsed (RetiredEnabled) so that Slices.ReportRetiredGate can report it: a Warning, or an Error when it is false and this key is not. Nothing branches on it. The key is named for the subsystem, Progression; its file is teampl.json. It also gates ckf.hardmode.d/MissionPowerLevelModel.generated.json (Slices.OverlayOwner), the victory-screen label mirror of the award. scripts/gen_teampl_labels.py writes it from teampl.override merged over teampl.table, and serve.py regenerates it in the same save. It reaches the game through the overlay path: a .json in ckf.hardmode.d is an ordinary rules file, so ModelRules postfixes the materialised MissionPowerLevelModel row the victory screen re-reads, while Progression postfixes GameDb.SumGameMissionScore, a SQL aggregate that materialises no row. Two layers, one number. The slice claims the mirror so that turning Progression off cannot leave a stock award with a modded label. |
+| `Slices.Progression` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Team Power Level Award | Slice toggle. It lives in ckf.hardmode.cfg because a gate cannot live inside the file it gates, and the .cfg is parsed before anything else loads. Slices.Init binds every [Slices] key above the [General] Enabled bail-out, so BepInEx writes the line even when the mod is off. A key that cannot be read is reported at Error and treated as on. Off: the subsystem logs why and does nothing this launch. The retired "enabled" key inside the subsystem's JSON file is still parsed (RetiredEnabled) so that Slices.ReportRetiredGate can report it: a Warning, or an Error when it is false and this key is not. Nothing branches on it. The key is named for the subsystem, Progression; its file is teampl.json. It also gates ckf.hardmode.d/MissionPowerLevelModel.generated.json (Slices.OverlayOwner), the victory-screen label mirror of the award. scripts/gen_teampl_labels.py writes it from teampl.override merged over teampl.table, and serve.py regenerates it in the same save. It reaches the game through the overlay path: a .json in ckf.hardmode.d is an ordinary rules file, so ModelRules postfixes the materialised MissionPowerLevelModel row the victory screen re-reads, while Progression postfixes GameDb.SumGameMissionScore, a SQL aggregate that materialises no row. Two layers, one number. The slice claims the mirror so that turning Progression off cannot leave a stock award with a modded label. |
 | `table` | json | `table` | `readonly` | _none declared_ |  |  |  |  | Game's own table (reference) | Reference copy of the game's MissionPowerLevelModel values. The mod checks its own arithmetic against these before substituting. Editing changes no award and can make the reconcile fail, which silently disables the retroactive path. The game's table has 63 cells: classes 1-3 across MissionPowerLevel 0-10, plus a negative-level band from -1 to -10 whose fractions are negative [measured]. Regenerate it from sheets/raw/MissionPowerLevelModel.csv if the game updates. [unverified: no negative level has been seen on an awarded row, and their purpose is unknown.] |
 | **`override`** | json | `table` | `matrix` | _none declared_ |  |  |  | **RETROACTIVE**, matrix axes, over `table` | Award override | Per-cell replacement for the award. A cell absent here keeps its 'table' value, and a cell present here replaces it outright - the value is used verbatim, with no snapping to a game cell and no clamp of any kind in the code (Progression.cs:150-152, 340-342). A cell with no 'table' value works too: it simply contributes its own figure to the sum, and gen_teampl_labels.py emits its label rule marked '(no stock cell)'. THE RANGES BELOW ARE GUARD RAILS FOR THE EDITOR, NOT ENGINE LIMITS. ActionClass runs 0-3 because that is what the save files rows under; the game's table has no class-0 band, so a class-0 override has no stock value behind it and re-prices every LEGWORK row from zero. PowerLevelFraction is allowed to go negative because the game's own table does. A worked example: an override cell of ActionClass 2, MissionPowerLevel 7, PowerLevelFraction 0.015 makes Treaty contracts at PL 7 pay a solo hack's rate, 0.03 down to 0.015, and setting the same cell to 0 stops that class and level advancing the team at all. |
 

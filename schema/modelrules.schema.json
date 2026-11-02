@@ -14,8 +14,8 @@
     "ckf.hardmode.d/MissionPowerLevelModel.generated.json is generated output",
     "and belongs to teampl.schema.json.",
     "",
-    "With this key off, ModelRules.Init returns before Overlays.Load, so no",
-    "overlay of any slice is applied.",
+    "With this key off, ModelRules.Init loads only the limit-break effect overlay",
+    "when LimitBreakTraits is enabled. All general overlays remain off.",
     "",
     "The other keys are diagnostics. Row cloning, clone serve-by-id, fresh",
     "clone instances and compiled accessors are always on. Serving clones on",
@@ -33,7 +33,7 @@
   ],
 
   "uiDoc": [
-    "Retune the game's talents, equipment, monster and character base stats. The rules themselves live in the CSV overlays and are edited in a spreadsheet, not on this page. Turning this off stops every overlay page from applying.",
+    "Retune the game's talents, equipment, monster and character base stats. The rules themselves live in the CSV overlays and are edited in a spreadsheet, not on this page. Turning this off stops general overlays. Limit Break Traits has an independent restricted path.",
     "",
     "Tracing is for confirming a rule did what you meant without hunting for the effect in-game: it logs the first few rows each rule changes, one line per column, before and after. Three to five is enough to see a curve produce different values at different levels. It logs a line per row, so turn it off again for a normal session.",
     "",
@@ -43,9 +43,9 @@
   "fields": [
     {
       "path": "Slices.ModelRules", "in": "cfg", "type": "bool",
-      "default": true, "ui": "form",
+      "default": false, "ui": "form",
       "label": "Enable Declarative Row Edits",
-      "doc": "Slice toggle. It lives in ckf.hardmode.cfg because a gate cannot live inside the file it gates, and the .cfg is parsed before anything else loads. Slices.Init binds every [Slices] key above the [General] Enabled bail-out, so BepInEx writes the line even when the mod is off. A key that cannot be read is reported at Error and treated as on. Off: the subsystem logs why and does nothing this launch. The retired \"enabled\" key inside the subsystem's JSON file is still parsed (RetiredEnabled) so that Slices.ReportRetiredGate can report it: a Warning, or an Error when it is false and this key is not. Nothing branches on it. Off also means no overlay file of any slice is applied, because ModelRules.Init returns before Overlays.Load.",
+      "doc": "Slice toggle. It lives in ckf.hardmode.cfg because a gate cannot live inside the file it gates, and the .cfg is parsed before anything else loads. Slices.Init binds every [Slices] key above the [General] Enabled bail-out, so BepInEx writes the line even when the mod is off. A key that cannot be read is reported at Error and treated as on. Off: the subsystem logs why and does nothing this launch. The retired \"enabled\" key inside the subsystem's JSON file is still parsed (RetiredEnabled) so that Slices.ReportRetiredGate can report it: a Warning, or an Error when it is false and this key is not. Nothing branches on it. Off stops general overlays; an enabled LimitBreakTraits slice loads only its own effect overlay.",
       "uiDoc": "Turn this off and this part of the mod does nothing; the game uses its own values. The master switch on the first page turns off everything at once."
     },
     {

@@ -31,9 +31,9 @@
   "fields": [
     {
       "path": "Slices.GearClasses", "in": "cfg", "type": "bool",
-      "default": true, "ui": "form",
+      "default": false, "ui": "form",
       "label": "Enable Player Weapon Classes",
-      "doc": "On applies this slice's files; off skips them before they are opened. Default true. Lever sheet, not a direct overlay: the first column is WeaponClass, a class id rather than a row id, and there is no game table called \"gear-classes\". GearClasses.cs expands each row at load into one rule with a WeaponClass selector and an enemy-id exclusion set. The lever columns are WeaponModel column names, which makes the file look like a direct overlay; the row is what differs. The levers are the suffixed columns (BallisticDamage1, not BallisticDamage), because the unsuffixed names are aliases whose writes the game discards.",
+      "doc": "On applies this slice's files; off skips them before they are opened. Default false. Lever sheet, not a direct overlay: the first column is WeaponClass, a class id rather than a row id, and there is no game table called \"gear-classes\". GearClasses.cs expands each row at load into one rule with a WeaponClass selector and an enemy-id exclusion set. The lever columns are WeaponModel column names, which makes the file look like a direct overlay; the row is what differs. The levers are the suffixed columns (BallisticDamage1, not BallisticDamage), because the unsuffixed names are aliases whose writes the game discards.",
       "uiDoc": "Turn this off and the mod skips this page's files, so nothing on this page is applied."
     }
   ]

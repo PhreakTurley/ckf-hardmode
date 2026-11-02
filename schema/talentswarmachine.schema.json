@@ -42,9 +42,9 @@
   "fields": [
     {
       "path": "Slices.TalentsWarMachine", "in": "cfg", "type": "bool",
-      "default": true, "ui": "form",
+      "default": false, "ui": "form",
       "label": "Enable Warmachine Talent Balance",
-      "doc": "On applies this slice's files; off skips them before they are opened. Default true.",
+      "doc": "On applies this slice's files; off skips them before they are opened. Default false.",
       "uiDoc": "Turn this off and the mod skips this page's files, so nothing on this page is applied."
     }
   ]

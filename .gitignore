@@ -38,6 +38,7 @@
 !/scripts/gen_docs.py
 !/scripts/gen_teampl_labels.py
 !/scripts/make_release.py
+!/scripts/build_bundled_rebalances.py
 !/scripts/consumables.py
 !/scripts/cyberweapons.py
 !/scripts/gear_classes.py

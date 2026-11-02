@@ -114,9 +114,9 @@
   "fields": [
     {
       "path": "Slices.SpawnWeights", "in": "cfg", "type": "bool",
-      "default": true, "ui": "form",
+      "default": false, "ui": "form",
       "label": "Enable Enemy Spawn Weights",
-      "doc": "On applies this slice's files; off skips them before they are opened. Default true. Twelve direct overlays onto MonsterGroupMemberModel, one per faction pool that a ProcGenSelect faction can field, each carrying that faction's weakest enemy types - the ones already eligible at power level 2 or below - and the weight each is rolled with at a given power level. The lowest-entering type in each faction tapers: its total weight falls linearly from its baseline at that faction's last-unlock power level to 1 at power level 20.",
+      "doc": "On applies this slice's files; off skips them before they are opened. Default false. Twelve direct overlays onto MonsterGroupMemberModel, one per faction pool that a ProcGenSelect faction can field, each carrying that faction's weakest enemy types - the ones already eligible at power level 2 or below - and the weight each is rolled with at a given power level. The lowest-entering type in each faction tapers: its total weight falls linearly from its baseline at that faction's last-unlock power level to 1 at power level 20.",
       "uiDoc": "Turn this off and the mod skips this page's files, so nothing on this page is applied."
     }
   ]

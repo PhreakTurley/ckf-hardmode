@@ -12,8 +12,8 @@
   "doc": [
     "Slice toggle. Off: Slices.VerdictForOverlay skips the file below before it",
     "is opened, so none of its rows reach RulePlan. The file is loaded by the",
-    "row-edit engine, so it also has no effect while [Slices] ModelRules is off",
-    "(ModelRules.Init returns before Overlays.Load).",
+    "row-edit engine. When ModelRules is off, its restricted startup path loads",
+    "only this effect overlay, so the trait changes work independently.",
     "",
     "Files this toggle gates:",
     "  EffectModel.limitbreak.csv",

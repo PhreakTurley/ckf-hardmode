@@ -100,6 +100,9 @@ namespace CKFHardMode
         private static readonly Dictionary<string, string> OverlayOwner =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
+            { "ArmorModel.csv",            "LegacyEnemyData" },
+            { "WeaponModel.csv",           "LegacyEnemyData" },
+            { "MonsterTypeModel.csv",      "LegacyEnemyData" },
             { "EffectModel.aex.csv",        "TalentsAEX" },
             { "EffectModel.ck.csv",         "TalentsCyberKnight" },
             { "EffectModel.cs.csv",         "TalentsCS" },

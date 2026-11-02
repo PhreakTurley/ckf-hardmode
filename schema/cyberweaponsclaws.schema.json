@@ -25,7 +25,7 @@
       "path": "Slices.CyberweaponsClaws",
       "in": "cfg",
       "type": "bool",
-      "default": true,
+      "default": false,
       "ui": "form",
       "label": "Enable Claw Cyberweapons",
       "doc": "Legacy compatibility setting; ignored by Hard Mode. See gui/README.md#workshop-player-catalogs.",

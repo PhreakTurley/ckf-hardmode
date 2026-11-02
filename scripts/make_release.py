@@ -214,6 +214,13 @@ CONFIG_FILES = (
     # the self-check input, at the top of BepInEx/config -- the sweep does not
     # reach outside ckf.hardmode.d, so this name is the only thing shipping it
     'ckf.hardmode.selfcheck.csv',
+    'ckf.player-balance.json',
+    'ckf.hardmode.rebalances/player/_data/data.sql',
+    'ckf.hardmode.rebalances/player/_data/en-US.json',
+    'ckf.hardmode.rebalances/player/receipt.json',
+    'ckf.hardmode.rebalances/enemy/_data/data.sql',
+    'ckf.hardmode.rebalances/enemy/_data/en-US.json',
+    'ckf.hardmode.rebalances/enemy/receipt.json',
     # the limit-break trait overlay, claimed by fatigue.schema.json
     'ckf.hardmode.d/EffectModel.limitbreak.csv',
     # the three enemy-gear overlays no schema claims, plus the Team PL mirror
@@ -541,6 +548,19 @@ def check_json(config_dir):
     if bad:
         raise Refused('these would ship and the game could not read them:\n%s'
                       % '\n'.join(bad))
+
+
+def check_bundled_payloads(config_dir):
+    """Verify the snapshot's exact native SQL/locale bytes against both receipts."""
+    for pack in ('player', 'enemy'):
+        folder = os.path.join(config_dir, 'ckf.hardmode.rebalances', pack)
+        receipt = json.loads(read_text(os.path.join(folder, 'receipt.json')))
+        if receipt.get('format') != 1 or receipt.get('verification', {}).get('status') != 'PASS':
+            raise Refused('unverified bundled rebalance receipt: ' + folder)
+        for name in ('data.sql', 'en-US.json'):
+            content = read_bytes(os.path.join(folder, '_data', name))
+            if hashlib.sha256(content).hexdigest() != receipt['files'].get(name):
+                raise Refused('bundled rebalance digest mismatch: ' + folder + '/' + name)
 
 
 def check_config(config_dir, schema_run=None, teampl_cmd=None):
@@ -1152,6 +1172,7 @@ def build(out_dir, vendor_dir, dll, config_dir, skip_exe=False, echo=True,
             config_dir)
         doc_version = check_doc_version(snap)
         check_json(snap)
+        check_bundled_payloads(snap)
         (check_fn or check_config)(snap)
         if echo:
             print('  version %s, in the csproj, Plugin.cs and the DLL' % version)
@@ -1334,6 +1355,11 @@ def _stub_config_bytes(rel, doc_version='3.0.0'):
     that stamped one file could not tell a check_doc_version that reads all ten
     from one that reads the first and stops.
     """
+    if rel.startswith('ckf.hardmode.rebalances/') and rel.endswith('/receipt.json'):
+        base = rel.rsplit('/', 1)[0] + '/_data/'
+        return json.dumps({'format': 1, 'verification': {'status': 'PASS'},
+            'files': {name: hashlib.sha256(_stub_config_bytes(base + name)).hexdigest()
+                      for name in ('data.sql', 'en-US.json')}}).encode()
     if rel in DOC_STAMPED:
         return ('{"_version": "%s", "from": "%s"}\n' % (doc_version, rel)).encode()
     if rel.endswith('.json'):

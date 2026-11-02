@@ -1,6 +1,6 @@
 # CKF Hard Mode
 
-CKF Hard Mode is a configurable BepInEx 6 IL2CPP plugin for *Cyber Knights: Flashpoint*. It changes talents, equipment, enemies, mission power levels, rewards, progression, and selected campaign systems. Despite the name, each change is independently tunable and not every change increases difficulty.
+CKF Hard Mode is a configurable BepInEx 6 IL2CPP plugin for *Cyber Knights: Flashpoint*. The download combines Player Rebalance and Enemy Rebalance with wider custom-difficulty sliders, mission fatigue, and the related limit-break effect changes. Older Hard Mode systems remain available but are disabled by default.
 
 The code and much of the prose were produced with language models. David made the design and tuning decisions.
 
@@ -10,11 +10,13 @@ This project is not affiliated with Trese Brothers Games. Trese Brothers cannot 
 
 Download the current archive from the repository's [Releases page](https://github.com/PhreakTurley/ckf-hardmode/releases/latest). Extract it into the folder that contains `CyberKnights.exe`, then follow the included `README.txt`.
 
-The plugin identifies itself as version `4.1.1`. Version `1.0.0` was the first public release. References to versions `2.x` through `3.0.0` describe private development builds.
+The plugin identifies itself as version `4.2.0`. Version `1.0.0` was the first public release. References to versions `2.x` through `3.0.0` describe private development builds.
+
+Disable the separate Player Rebalance and Enemy Rebalance Workshop mods before enabling their bundled equivalents. Neither Workshop subscription is required. See [bundled rebalances](docs/bundled-rebalances.md) for package preparation and compatibility.
 
 ## Back up your save
 
-Fatigue and the mission-elapse penalty write to the active save. Back up this directory before your first run:
+Fatigue writes to the active save. The optional mission-elapse penalty also writes when enabled. Back up this directory before your first run:
 
 ```text
 %USERPROFILE%\AppData\LocalLow\TreseBrothersGames\CyberKnights\
@@ -37,14 +39,15 @@ Major slices include:
 
 | Area | Switches |
 |---|---|
+| Bundled content | `PlayerRebalance`, `EnemyRebalance` |
 | Rule engine | `ModelRules`, `RuleModel`, `SelfCheck` |
 | Mission systems | `PowerLevel`, `Progression`, `MissionRewards`, `RewardCurve`, `Elapse` |
 | Character systems | `Fatigue`, `LimitBreakTraits`, eleven `Talents*` slices |
 | Equipment | `GearClasses`, six `Consumables*` slices |
-| Enemy data | `SpawnWeights`; enemy gear overlays apply while `ModelRules` is active |
+| Legacy enemy data | `LegacyEnemyData`, `SpawnWeights` |
 | Game settings | `Difficulty` |
 
-`ModelRules` is the parent gate for every table-based slice. Turning it off also stops the generated Team Power Level label and every overlay or lever sheet.
+`ModelRules` gates the legacy table overlays and lever sheets. `LimitBreakTraits` has a restricted path that applies only its effect overlay while `ModelRules` is off. The bundled native rebalances are independent of that engine.
 
 Five talent keys retain legacy names so upgrades do not orphan saved settings:
 
@@ -58,7 +61,7 @@ Five talent keys retain legacy names so upgrades do not orphan saved settings:
 
 The generated [configuration reference](docs/config-reference.md) describes every switch and field.
 
-Cyberware is managed through the separate [Workshop player-balance workflow](gui/README.md#workshop-player-catalogs).
+Cyberware authoring uses the [player-balance workflow](gui/README.md#workshop-player-catalogs); the combined download includes its prepared native payload.
 Its legacy Hard Mode switches are retained for compatibility and have no effect.
 
 ## Upgrade from version 1.0.0

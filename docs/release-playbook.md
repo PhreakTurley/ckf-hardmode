@@ -6,17 +6,19 @@ For explanations of the build system and version model, see [Workflow](workflow.
 
 All command blocks below use `cmd.exe` syntax. Replace `X.Y.Z`, `OLD.VERSION`, `FULL_COMMIT_SHA`, and `RELEASE NOTES` before running a command that contains them.
 
+Prepare and verify the native rebalance packages using [bundled rebalances](bundled-rebalances.md) before following this checklist.
+
 ## 1. Validate the live tuning
 
-Run both validators against the live game configuration and a complete Data Dump:
+Run both validators against the live game configuration and the developer-provided Official database:
 
 ```bat
 cd /d "D:\ckf-data-modding"
 python schema\check_schema.py --game "C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint"
-python scripts\validate_rules.py --game "C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint" --dump "D:\ckf-data-modding\sheets\raw"
+python scripts\validate_rules.py --game "C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint" --data "D:\ckf-data-modding\Official\data.db"
 ```
 
-Do not continue until `check_schema.py` reports zero problems and `validate_rules.py` reports no errors. Review warnings against [Gotchas](gotchas.md); some documented gates intentionally exit non-zero. Do not run `validate_rules.py --game` without `--dump`: this checkout's dump is not in the default game path, so that invocation is expected to refuse.
+Do not continue until `check_schema.py` reports zero problems and `validate_rules.py` reports no errors. Review warnings against [Gotchas](gotchas.md); some documented gates intentionally exit non-zero.
 
 ## 2. Set the public version
 

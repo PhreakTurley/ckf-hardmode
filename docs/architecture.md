@@ -45,12 +45,13 @@ The game installation contains the only tuning copy. The repository does not con
 3. `Defaults.Install` reports missing loose files without creating them
 4. `ConfigDoc.Init` reads the settings slices and reports layout problems
 5. A mixed pre-4.0 and current layout stops the entire plugin
-6. `ModelRules.Init` loads table overlays, lever sheets, and clone rules
-7. Independent subsystems initialize behind their own switches
+6. `BundledRebalances.Init` supplies enabled native rebalance packages to the game mod loader
+7. `ModelRules.Init` loads general overlays and clone rules, or only the standalone limit-break effect overlay
+8. Independent subsystems initialize behind their own switches
 
 The plugin reads configuration once per process. Relaunch the game after any configuration edit. Rebuild only after a C# change.
 
-`ModelRules` is the parent gate for content slices. When it is off or fails to initialize, table overlays, lever sheets, clone rules, and the generated Team Power Level label do not apply.
+`ModelRules` is the parent gate for content slices. When it is off, only an enabled `LimitBreakTraits` overlay can run through the restricted path; general overlays, lever sheets, clone rules and the Team Power Level label stay off. Bundled native rebalances use a separate loader.
 
 Read the [Hard Mode subsystem guide](../mods/CKFHardMode/README.md), [rule engine reference](rule-engine.md), and [overlay format](overlays.md) before changing this path.
 
