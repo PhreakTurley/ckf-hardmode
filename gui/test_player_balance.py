@@ -14,6 +14,38 @@ import static_data
 
 
 class PlayerBalanceTests(unittest.TestCase):
+    def test_negative_assignments_and_explicit_commands_match_preview_and_sql(self):
+        with static_data.StaticData() as source, sqlite3.connect(':memory:') as db:
+            db.execute('CREATE TABLE Weapon (WeaponId INTEGER PRIMARY KEY, RecoilRate1 INTEGER)')
+            db.execute('INSERT INTO Weapon VALUES (24000, 50)')
+            for spec, expected in [('-10', -10), (' -10 ', -10), ('-1e1', -10),
+                                   ('+10', 60), ('x1.5', 75), ('x-1.5', -75),
+                                   ('+-10', 40), ('=-10', -10)]:
+                with self.subTest(spec=spec):
+                    doc = pb.empty()
+                    doc['tables'] = {'Weapon': {'24000': {'RecoilRate1': spec}}}
+                    statements, touched = pb.sql(doc, source)
+                    self.assertEqual(touched, {('Weapon', '24000', 'RecoilRate1')})
+                    db.execute('UPDATE Weapon SET RecoilRate1=50')
+                    for statement in statements:
+                        db.execute(statement)
+                    self.assertEqual(db.execute('SELECT RecoilRate1 FROM Weapon').fetchone()[0], expected)
+                    self.assertEqual(pb.effective(doc, 'Weapon', {'WeaponId':'24000','RecoilRate1':'50'},
+                                                  'RecoilRate1'), expected)
+
+    def test_legacy_negative_adjustment_keeps_subtracting_after_import(self):
+        with tempfile.TemporaryDirectory() as temp:
+            legacy = Path(temp) / 'ckf.hardmode.d'
+            legacy.mkdir()
+            (legacy / 'implants-global.json').write_text(json.dumps(
+                {'costMultiply':1,'installTimeMultiply':1,'implantStressMultiply':1}))
+            (legacy / 'implants-slot1.csv').write_text('ImplantTypeId,Cost\n100,-10\n')
+            for name in ('cyberweapons-claws.csv', 'cyberweapons-lasers.csv'):
+                (legacy / name).write_text('WeaponId\n')
+            doc = pb.import_legacy(temp)
+            self.assertEqual(doc['tables']['Implant']['100']['Cost'], '+-10')
+            self.assertEqual(pb.adjustment(doc['tables']['Implant']['100']['Cost']), ('add', -10))
+
     def test_rounding_matches_integer_model_writes(self):
         db = sqlite3.connect(':memory:')
         for value in (-5.5, -4.5, -3.5, -2.5, -1.5, -.5, .5, 1.5, 2.5, 3.5, 4.5, 5.5, 2.49, 2.51):

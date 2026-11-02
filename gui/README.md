@@ -95,6 +95,13 @@ outside Hard Mode's overlay directory. Records are sparse adjustments keyed by
 SQL table, content id and column. Clearing a cell removes its adjustment.
 Shared effects have one stored value wherever the editor displays them.
 
+Workshop adjustment cells treat plain numbers as assignments, including
+negative numbers: `-10` sets to -10. `+10` adds 10 and `x1.5` multiplies by 1.5.
+`=N` remains an explicit assignment alias; `+-10` explicitly subtracts 10.
+The preview, sorting and SQL export use this grammar. The legacy importer
+translates old `-N` subtraction into `+-N` to preserve its effect. The Hard Mode
+expanded-sheet grammar below remains a separate format.
+
 The weapon tabs put Melee, Pistol, Revolver, SMG, Shotgun, E-Rifle, UAR, AR,
 Sniper Rifle, Railgun, Claws and Eye Lasers first. Canine Attack Rig belongs
 with Drone weapons. Shared weapons remain editable and carry an **Also used

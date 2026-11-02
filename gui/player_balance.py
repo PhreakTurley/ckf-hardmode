@@ -137,7 +137,11 @@ def load(config_dir):
 
 
 def adjustment(value):
-    op, number, ok = gear_classes.parse_adjust(str(value))
+    """Workshop numbers set, including negatives; +N adds and xN multiplies."""
+    spec = str(value).strip()
+    if spec.startswith('-'):
+        spec = '=' + spec
+    op, number, ok = gear_classes.parse_adjust(spec)
     if not ok:
         raise ValueError('Use a number, =N, +N, -N or xN: %s' % value)
     if op == gear_classes.NONE:
@@ -592,6 +596,10 @@ def import_legacy(config_dir):
         doc['implantMultipliers'][col] = global_doc[old]
 
     def add(table, rid, column, value):
+        # Legacy -N means subtraction; Workshop -N is an absolute value.
+        # Preserve imported arithmetic explicitly as +-N.
+        if str(value).strip().startswith('-'):
+            value = '+' + str(value).strip()
         fields = doc['tables'].setdefault(table, {}).setdefault(str(rid), {})
         if column in fields and fields[column] != value:
             raise ValueError('Conflicting legacy edits to %s %s %s' % (table, rid, column))

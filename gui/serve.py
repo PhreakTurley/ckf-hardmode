@@ -12278,6 +12278,14 @@ for (const s of ['NaN','=NaN','Infinity','-Infinity','inf'])
   ck('refuses ' + JSON.stringify(s) + ' (stricter than C#, deliberately)', !A(s).ok, A(s));
 
 ck('cfg bool renders lowercase', CKF.renderCfgValue('bool', true) === 'true');
+for (const [s,k,v] of [['-10','set',-10],[' -10 ','set',-10],['-1e1','set',-10],
+                      ['+10','add',10],['x1.5','multiply',1.5],['x-1.5','multiply',-1.5],
+                      ['+-10','add',-10],['=-10','set',-10]]) {
+  const r = CKF.parsePlayerAdjust(s);
+  ck('Workshop adjustment ' + JSON.stringify(s), r.ok && r.kind === k && r.value === v, r);
+}
+for (const s of ['-', '- 10', '-Infinity', 'NaN', '-10; DROP TABLE Weapon'])
+  ck('Workshop rejects ' + JSON.stringify(s), !CKF.parsePlayerAdjust(s).ok);
 const zeroFixture = {kind: 'direct', columns: [
   {name:'id', op:'set'}, {name:'value', op:'set'},
   {name:'missing', op:'set'}, {name:'multiply', op:'multiply'},

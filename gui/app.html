@@ -361,6 +361,11 @@ const CKF = (function () {
     return 'multiply by ' + r.value;
   }
 
+  function parsePlayerAdjust(spec) {
+    const s = (spec == null ? '' : String(spec)).trim();
+    return parseAdjust(s.startsWith('-') ? '=' + s : s);
+  }
+
   // The string that goes on the right of '=' in the .cfg. Never a comment.
   function renderCfgValue(type, value) {
     if (type === 'bool') return value ? 'true' : 'false';
@@ -783,7 +788,7 @@ const CKF = (function () {
     overlayProtectedColumns: overlayProtectedColumns,
     overlayHighlight: overlayHighlight,
     overlayCellProblem: overlayCellProblem,
-    parseAdjust: parseAdjust, describeAdjust: describeAdjust,
+    parseAdjust: parseAdjust, describeAdjust: describeAdjust, parsePlayerAdjust: parsePlayerAdjust,
     renderCfgValue: renderCfgValue, coerceCell: coerceCell, inRange: inRange,
     effective: effective, curvePoints: curvePoints, matrixDomain: matrixDomain,
     isKeepValue: isKeepValue, newMatrixCells: newMatrixCells,
@@ -1844,6 +1849,7 @@ function renderPlayer(panel, page) {
     el('label', {class:'small'}, [showAll,document.createTextNode(' Show all columns')]),
     el('span', {class:'small',text:'Red: override · Yellow: nonzero baseline'})]);
   if (page.grids.length) panel.appendChild(toolbar);
+  if (page.grids.length) panel.appendChild(el('p', {class:'doc',text:'Numbers set values, including negatives: -10 sets to -10. +10 adds 10; x1.5 multiplies by 1.5. Clearing a cell removes its adjustment.'}));
   if (page.grids.some(function(g) {return g.rows.some(function(r) {return r.enemyUse;});}))
     panel.appendChild(el('p', {class:'doc',text:'Rows marked “Also used by enemies” share a weapon record with enemies. Changing that weapon also affects enemies that use it.'}));
   if (page.multipliers) {
@@ -1871,7 +1877,7 @@ function renderPlayer(panel, page) {
       if (!col) continue;
       for (const row of grid.rows) {
         const spec = ((((W.player.tables || {})[grid.table] || {})[row.id] || {})[col]) || '';
-        const parsed = CKF.parseAdjust(spec);
+        const parsed = CKF.parsePlayerAdjust(spec);
         if (!parsed.ok) continue;
         const base = Number(row.baseline[col]);
         const value = parsed.kind === 'none' ? base : playerRound(parsed.kind === 'set' ? parsed.value
