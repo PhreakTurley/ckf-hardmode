@@ -33,6 +33,8 @@ def load_exporter(project):
     spec.loader.exec_module(module)
     if not callable(getattr(module, 'build_export', None)):
         raise ValueError('Update the talent repository: its exporter needs build_export().')
+    if getattr(module, 'PARSER_CONTRACT_VERSION', 0) < 1:
+        raise ValueError('Update the talent repository: its exporter needs official Modkit value-mapping validation.')
     return module
 
 
@@ -148,6 +150,8 @@ def send(config_dir, project_dir, mod_dir, database=None):
     database_path = player_balance.static_data.database_path(database)
     inputs[database_path] = state(database_path)
     inputs[script] = script_state
+    parser_config = mod.parent / 'config.json'
+    inputs[parser_config] = state(parser_config)
     manifest = project / 'source_content' / 'stories.manifest'
     inputs[manifest] = state(manifest)
     manifest_bytes = manifest.read_bytes()
@@ -164,10 +168,14 @@ def send(config_dir, project_dir, mod_dir, database=None):
     expected = {p: state(p) for p in paths}
     if any(Path(config_dir).resolve() in p.resolve().parents for p in paths):
         raise ValueError('Export destinations must be outside the live config directory.')
-    data, provenance, metadata = exporter.build_export(live, source_commit(project))
+    data, provenance, metadata = exporter.build_export(live, source_commit(project), parser_config=parser_config)
     if inputs[player_path] is not None:
         data, provenance, receipt = player_balance.augment(data, provenance, config_dir, database)
         metadata['player_balance'] = receipt['player_balance']
+    exporter.validate_parser_source(data, parser_config)
+    if (inputs[parser_config] is None or state(parser_config) != inputs[parser_config]
+            or inputs[parser_config][2] != metadata['parser_contract']['sha256']):
+        raise ValueError('The official Modkit parser contract changed during export; nothing was sent.')
     # Check the exact bytes the exporter consumed, as well as their mtimes.
     for filename, info in metadata['overlay_inputs'].items():
         if inputs[live / filename][2] != info['sha256']:

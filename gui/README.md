@@ -85,6 +85,11 @@ The button requires saved edits and saved folder paths. The server validates
 the config, checks source and destination fingerprints before replacement,
 verifies the written bytes, and rolls back its own completed replacements if
 the handoff fails. A conflicting Modkit manifest is refused for review.
+The handoff reads the selected project's `WorkshopContent/config.json`, converts
+mapped enum numbers to the parser's named values, and validates the final native
+records against its field, type and value-mapping declarations. Unknown or
+ambiguous mappings refuse the handoff before replacing any output. The contract
+is fingerprinted with the other inputs and its hash is recorded in provenance.
 Preparing SQL, installing locally, and submitting remain uploader actions.
 
 ### Workshop player catalogs
