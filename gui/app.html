@@ -128,6 +128,7 @@ code.loc span{display:block}
   background:#241715;margin:8px 0}
 .retrobox h4{margin:0 0 4px;color:#f0a196;font-size:13.75px}
 .grid-wrap{overflow:auto;max-height:72vh;border:1px solid var(--line);border-radius:6px}
+.grid-wrap.page-grid-wrap{max-height:none}
 table.grid{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%}
 table.grid th,table.grid td{border-bottom:1px solid var(--line);
   border-right:1px solid var(--line);padding:0;white-space:nowrap}
@@ -2004,7 +2005,7 @@ function renderPlayer(panel, page) {
         body.appendChild(tr);
       }
       tbl.appendChild(body);
-      target.appendChild(el('div', {class:'grid-wrap'}, [tbl]));
+      target.appendChild(el('div', {class:'grid-wrap' + (grid.scrollWithPage ? ' page-grid-wrap' : '')}, [tbl]));
     }
     updateRules();
   }

@@ -124,7 +124,9 @@ infer gameplay from assembly method names.
 The default view hides uniform columns.
 Leverage and linked bonus grids show fields with at least one nonzero baseline.
 Explicit overrides always remain visible, including zero. **Show all columns**
-reveals the remaining numeric fields. Names stay fixed while the grid scrolls;
+reveals the remaining numeric fields. Weapon and weapon-mod tables grow with
+the page instead of using an inner vertical scrollbar; wide tables retain
+horizontal scrolling. Names stay fixed while the grid scrolls horizontally;
 large catalogs are searchable and paginated. Red marks overrides or a global
 implant multiplier; yellow marks other nonzero baselines.
 

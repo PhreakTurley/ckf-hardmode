@@ -373,6 +373,9 @@ def catalog(config_dir, database):
                 return result_grid
 
             def page(pid, title, group, grids, **kwargs):
+                for g in grids:
+                    if g and group in ('Weapons', 'Drone weapons'):
+                        g['scrollWithPage'] = True
                 result['pages'].append({'id': pid, 'title': title, 'group': group,
                                         'grids': [g for g in grids if g and (g['rows'] or g.get('warning'))], **kwargs})
 
