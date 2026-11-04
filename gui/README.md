@@ -156,6 +156,15 @@ weapon effect in that order. Varying rarity and weapon-effect fields are
 included. Columns size to their longest heading or value across the full
 category, including rows on other pages.
 
+Weapons, weapon mods and consumables always show a **Service** column with
+localized names and display levels. `player_balance.py:service_catalog` joins
+`ServiceOptionId` within `ContactService.ServiceFlow` (weapons 1, mods 3,
+items 7), so an option id cannot pick up a service from another catalog.
+Saved and pending service adjustments affect the label; service names are
+searchable. Nonpositive assignments show **Unassigned**, and unmatched positive
+options show **Unresolved service** with the option id. Tooltips retain the
+ContactService row ids and flow used by the join.
+
 Shotgun and AR rows include an **Icon / model** picker. Each choice names the
 asset and an example weapon using it; the current thumbnail token and asset id
 remain visible beneath the picker. Hover for the complete icon and model paths,
@@ -197,10 +206,15 @@ Balance refuses to save or export an override for it. Its export owner remains
 the [Enemy Balance workflow](../docs/enemy-difficulty-workshop.md).
 
 **Consumables** has a page per `ItemClass`: Medical, Grenades, Devices, Chems,
-Sploitkits and Matrix, plus explicitly named pages for new classes. Item stats,
-actions, effects and matrix effects are joined from the selected database;
-saved item/action pointer assignments are followed. Shared effects keep one
-stored adjustment wherever they appear. These adjustments export through
+Sploitkits and Matrix, plus explicitly named pages for new classes. Each page
+joins item stats, actions, effects and matrix effects into one table with one
+row per item and grouped column headings. Saved item/action pointers determine
+the join. Separate self/target effects get separate column groups when needed;
+a common target is represented once. Missing targets are named as unresolved,
+and absent links have no editable cells. Each cell retains its native
+table/id/column address for saving. Shared actions and effects keep one stored
+adjustment, synchronize their visible cells as you type, and identify other
+items using the same record in their tooltips. These adjustments export through
 Player Balance. The legacy Player Weapons, Consumables, Game Constants and
 Mission Power Level Ceiling controls are omitted from the navigation; their
 declarations remain available to validation and the plugin.

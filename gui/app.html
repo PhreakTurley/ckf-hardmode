@@ -247,6 +247,7 @@ table.pb-grid th{min-width:0;max-width:none!important;white-space:nowrap;word-br
 .pb-grid .pb-section th{position:static;padding:8px 7px 5px;background:#28344a;color:#c6d9f6;white-space:normal}
 .pb-section-name{display:inline-block;max-width:70ch;white-space:normal}
 .pb-grid .pb-icon{padding:4px 7px;color:var(--dim);white-space:nowrap}
+.pb-grid .pb-service{padding:4px 7px;color:var(--dim);white-space:normal;font-size:12px;line-height:1.35}
 .pb-grid .pb-icon select{width:100%;font-size:13px}
 .pb-grid .pb-icon small{display:block;font-size:11px;margin-top:3px;color:var(--dim)}
 .pb-grid td.overlay-overwrite select{background:#482326;color:#ffb5b9}
@@ -1841,13 +1842,37 @@ function playerTextWidth(text, heading) {
   return ctx.measureText(String(text)).width;
 }
 
+function playerCell(grid, row, column) {
+  const target = row.targets ? row.targets[column.name] : {table:grid.table,id:row.id,column:column.name};
+  if (!target) return null;
+  const fields = ((W.player.tables || {})[target.table] || {})[target.id] || {};
+  const multiplier = (grid.multipliers || {})[column.name] === undefined ? 1 : grid.multipliers[column.name];
+  return {target:target,value:CKF.playerDisplayValue(fields[target.column] || ''),
+    base:row.baseline[column.name],multiplier:multiplier,readOnly:target.readOnly || row.readOnly,
+    readOnlyReason:target.readOnlyReason || row.readOnlyReason};
+}
+
+function playerService(grid, row) {
+  if (!grid.serviceColumn) return {label:'',detail:''};
+  const column = grid.serviceColumn.name;
+  const cell = playerCell(grid,row,{name:column});
+  if (!cell) return {label:'Unresolved service',detail:'The service assignment could not be read.'};
+  const parsed = CKF.parsePlayerAdjust(cell.value);
+  if (!parsed.ok) return {label:'Invalid service assignment',detail:cell.value};
+  const base = Number(cell.base);
+  const id = String(parsed.kind === 'none' ? base : playerRound(parsed.kind === 'set' ? parsed.value
+    : parsed.kind === 'add' ? base + parsed.value : base * parsed.value));
+  return grid.serviceColumn.options[id] || {label:Number(id) <= 0 ? 'Unassigned' : 'Unresolved service '+id,
+    detail:'ServiceOptionId '+id+'; no matching service in this catalog.'};
+}
+
 function playerColumnWidth(grid, column) {
   let width = playerTextWidth(column.label, true);
   for (const row of grid.rows) {
-    const fields = ((W.player.tables || {})[grid.table] || {})[row.id] || {};
-    const multiplier = (grid.multipliers || {})[column.name] === undefined ? 1 : grid.multipliers[column.name];
-    const base = multiplier === 1 ? row.baseline[column.name] : playerRound(Number(row.baseline[column.name]) * multiplier);
-    width = Math.max(width, playerTextWidth(base, false), playerTextWidth(CKF.playerDisplayValue(fields[column.name] || ''), false));
+    const cell = playerCell(grid,row,column);
+    if (!cell) continue;
+    const base = cell.multiplier === 1 ? cell.base : playerRound(Number(cell.base) * cell.multiplier);
+    width = Math.max(width, playerTextWidth(base, false), playerTextWidth(cell.value, false));
   }
   return Math.ceil(width + 16);
 }
@@ -1913,6 +1938,8 @@ function renderPlayer(panel, page) {
   }
   function paint() {
     grids.textContent = '';
+    const cellViews = new Map();
+    const serviceViews = [];
     const query = search.value.toLocaleLowerCase();
     const subsections = {};
     for (const grid of page.grids) {
@@ -1921,7 +1948,7 @@ function renderPlayer(panel, page) {
         const fields = ((W.player.tables || {})[grid.table] || {})[r.id] || {};
         const assetId = editor ? CKF.playerDisplayValue(fields[editor.column] || '') || r.baseline[editor.column] : '';
         const token = editor ? (editor.assets[assetId] || {}).token || '' : r.icon || '';
-        return (r.name+' '+r.id+' '+(r.section || '')+' '+token).toLocaleLowerCase().includes(query);
+        return (r.name+' '+r.id+' '+(r.section || '')+' '+token+' '+playerService(grid,r).label).toLocaleLowerCase().includes(query);
       });
       const gridKey = grid.key || grid.table;
       const number = pageNumbers[gridKey] || 0;
@@ -1958,9 +1985,13 @@ function renderPlayer(panel, page) {
       }))) : grid.iconColumn ? Math.ceil(Math.max(playerTextWidth('Icon',true), ...grid.rows.map(function (r) {return playerTextWidth(r.icon || '',false);})) + 16) : 0;
       // Icon follows the leading PL/Rarity/Cost columns. Those three always
       // remain immediately after Name when they differ in this category.
-      const leading = grid.iconColumn ? cols.filter(function(c) {return c.leading;}).length : 0;
+      const leading = grid.iconColumn || grid.serviceColumn ? cols.filter(function(c) {return c.leading;}).length : 0;
       const displayCols = cols.map(function(c,i) {return {column:c,width:widths[i]};});
-      if (grid.iconColumn) displayCols.splice(leading,0,{icon:true,width:iconWidth,column:{label:grid.iconEditor ? 'Icon / model' : 'Icon',name:'icon'}});
+      if (grid.serviceColumn) {
+        const serviceWidth = Math.ceil(Math.min(280,Math.max(145,...grid.rows.map(function(r) {return playerTextWidth(playerService(grid,r).label,false)+16;}))));
+        displayCols.splice(leading,0,{service:true,width:serviceWidth,column:{label:'Service',name:grid.serviceColumn.name}});
+      }
+      if (grid.iconColumn) displayCols.splice(leading+(grid.serviceColumn ? 1 : 0),0,{icon:true,width:iconWidth,column:{label:grid.iconEditor ? 'Icon / model' : 'Icon',name:'icon'}});
       for (let i=0;i<displayCols.length;) {
         const group = displayCols[i].column.group;
         if (!group) {i++;continue;}
@@ -2001,6 +2032,11 @@ function renderPlayer(panel, page) {
         if (row.fitment) nameCell.appendChild(el('small', {class:'pb-fit',text:row.fitment,title:row.fitmentSource}));
         const tr = el('tr', {}, [nameCell]);
         for (const item of displayCols) {
+          if (item.service) {
+            const td = el('td',{class:'pb-service'});
+            function refreshService() {const service=playerService(grid,row);td.textContent=service.label;td.title=service.detail;}
+            refreshService();serviceViews.push(refreshService);tr.appendChild(td);continue;
+          }
           if (item.icon) {
             if (!grid.iconEditor) {tr.appendChild(el('td',{class:'pb-icon',text:row.icon || '',title:row.iconPath || ''}));continue;}
             const editor = grid.iconEditor;
@@ -2036,28 +2072,40 @@ function renderPlayer(panel, page) {
             td.appendChild(select);td.appendChild(detail);tr.appendChild(td);continue;
           }
           const col = item.column;
-          const fields = ((W.player.tables || {})[grid.table] || {})[row.id] || {};
-          const value = CKF.playerDisplayValue(fields[col.name] || '');
-          const base = row.baseline[col.name];
-          const multiplier = (grid.multipliers || {})[col.name] === undefined ? 1 : grid.multipliers[col.name];
+          const cell = playerCell(grid,row,col);
+          if (!cell) {tr.appendChild(el('td',{class:'readonly',text:'—',title:'This item has no linked record for '+col.group}));continue;}
+          const targetCell = cell.target;
+          const value = cell.value;
+          const base = cell.base;
+          const multiplier = cell.multiplier;
           // The placeholder includes the sweep. An individual entry is still
           // edited before it, matching the SQL operation order.
           const displayBase = multiplier === 1 ? base : String(playerRound(Number(base) * multiplier));
           const td = el('td', {});
           function style(v) {td.className = v.trim() !== '' || multiplier !== 1 ? 'overlay-overwrite' : Number(base) !== 0 ? 'shipped-interesting' : '';}
           style(value);
-          if (row.readOnly) {
+          if (cell.readOnly) {
             td.className = 'readonly';td.textContent = base;
-            td.title = row.readOnlyReason || 'Managed by Hard Mode Fatigue / limit-break traits';
+            td.title = cell.readOnlyReason || 'Managed by Hard Mode Fatigue / limit-break traits';
           } else {
+            const controlLabel = row.name+' '+(grid.joined ? col.group+' ' : '')+col.label;
+            const source = targetCell.table+' '+targetCell.id+'.'+targetCell.column;
             const input = el('input', {type:'text',value:value,placeholder:displayBase,spellcheck:'false',
               style:'width:'+(item.width-1)+'px',
-              'aria-label':row.name+' '+col.label,title:col.label+' · baseline '+base + (multiplier !== 1 ? ' · global ×'+multiplier+' after individual adjustments' : '')});
+              'aria-label':controlLabel,'data-player-target':source,
+              title:col.label+' · baseline '+base+'\n'+source
+                + ((targetCell.sharedWith || []).length ? '\nShared with: '+targetCell.sharedWith.join(', ') : '')
+                + (multiplier !== 1 ? ' · global ×'+multiplier+' after individual adjustments' : '')});
+            const cellKey = JSON.stringify([targetCell.table,targetCell.id,targetCell.column]);
+            if (!cellViews.has(cellKey)) cellViews.set(cellKey,[]);
+            cellViews.get(cellKey).push({input:input,style:style});
             input.addEventListener('input', function () {
-              const table = W.player.tables[grid.table] || (W.player.tables[grid.table] = {});
-              const record = table[row.id] || (table[row.id] = {});
-              if (input.value.trim()) record[col.name] = input.value;
-              else delete record[col.name];
+              const table = W.player.tables[targetCell.table] || (W.player.tables[targetCell.table] = {});
+              const record = table[targetCell.id] || (table[targetCell.id] = {});
+              if (input.value.trim()) record[targetCell.column] = input.value;
+              else delete record[targetCell.column];
+              for (const view of cellViews.get(cellKey)) {view.input.value=input.value;view.style(input.value);}
+              for (const refresh of serviceViews) refresh();
               input.style.width = Math.max(item.width-1, Math.ceil(playerTextWidth(input.value,false)+15))+'px';
               style(input.value);updateDirty();updateRules();
             });
