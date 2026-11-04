@@ -206,6 +206,7 @@ def validate(doc, source, config_dir=None):
         if col not in MULTIPLIERS or isinstance(value, bool) or not isinstance(value, (float, int)) or not math.isfinite(value) or not 0 <= value <= 10:
             raise ValueError('Invalid implant multiplier: %s' % col)
     protected = protected_rows(config_dir, source)
+    weapon_assets = None
     for table, records in doc['tables'].items():
         columns = declarations(source, table)
         rows = {r[TABLE_KEYS[table]]: r for r in source.read(table + 'Model')[1]}
@@ -223,7 +224,13 @@ def validate(doc, source, config_dir=None):
             for col, value in fields.items():
                 if col not in columns:
                     raise ValueError('%s.%s is no longer a numeric content field' % (table, col))
-                adjustment(value)
+                parsed = adjustment(value)
+                if table == 'Weapon' and col == 'Asset3DTypeId' and parsed is not None:
+                    if weapon_assets is None:
+                        weapon_assets = {r['WeaponModelId'] for r in source.read('Weapon3DAssetModel')[1]}
+                    op, number = parsed
+                    if op != 'set' or not number.is_integer() or str(int(number)) not in weapon_assets:
+                        raise ValueError('Weapon %s: choose an existing icon / model assignment' % rid)
 
 
 def _effective_enemy_ids(source, config_dir, column):
@@ -427,6 +434,28 @@ def catalog(config_dir, database):
                         record['iconPath'] = path
                         record['section'] = record['icon']
                     weapon_grid['rows'].sort(key=lambda r: natural(r['icon']))
+                if cls in (3, 4):
+                    # Keep the pointer per weapon: editing the shared asset's
+                    # Thumbnail would change every weapon referencing it.
+                    choices = []
+                    for asset_id, asset in assets.items():
+                        owners = [r for r in allrows['Weapon'].values()
+                                  if r['WeaponClass'] == str(cls) and r['Asset3DTypeId'] == asset_id]
+                        if not owners or not asset['Thumbnail'] or not asset['Resource']:
+                            continue
+                        examples = [r for r in rows if r['Asset3DTypeId'] == asset_id] or owners
+                        token = asset['Thumbnail'].rsplit('/', 1)[-1]
+                        choices.append({'id': asset_id, 'name': label(re.sub(r'^W_(AR|Shotgun)_', '', token).replace('_', ' ')),
+                                        'token': token, 'thumbnail': asset['Thumbnail'], 'resource': asset['Resource'],
+                                        'examples': [r['WeaponName'] for r in examples[:3]]})
+                    choices.sort(key=lambda c: natural(c['name']))
+                    weapon_grid['iconColumn'] = True
+                    weapon_grid['iconEditor'] = {'column': 'Asset3DTypeId', 'choices': choices,
+                        'assets': {aid: {'token': a['Thumbnail'].rsplit('/', 1)[-1],
+                                         'thumbnail': a['Thumbnail'], 'resource': a['Resource']}
+                                   for aid, a in assets.items()}}
+                    for column_set in ('columns', 'advanced'):
+                        weapon_grid[column_set] = [c for c in weapon_grid[column_set] if c['name'] != 'Asset3DTypeId']
                 page('weapon-%s' % cls, title, 'Drone weapons' if cls in DRONE_CLASSES else 'Weapons', [weapon_grid,
                      grid('Talent', talents, 'Attacks', 'varying') if talents else None], specialRules=rules)
 

@@ -153,6 +153,16 @@ weapon effect in that order. Varying rarity and weapon-effect fields are
 included. Columns size to their longest heading or value across the full
 category, including rows on other pages.
 
+Shotgun and AR rows include an **Icon / model** picker. Each choice names the
+asset and an example weapon using it; the current thumbnail token and asset id
+remain visible beneath the picker. Hover for the complete icon and model paths,
+or search by the thumbnail token. Choices come from official weapon references
+in that class. The picker edits each weapon's `Asset3DTypeId`, so its icon and
+3D model change together; it never edits the shared `Weapon3DAsset` row.
+**Default** removes the adjustment and restores the official assignment.
+Saved assignments preview on reload and export through Workshop player tuning.
+Validation rejects fractional, arithmetic and unresolved asset assignments.
+
 Cyberware tabs follow ocular, arms, skin, skeletal, deep brain, fast brain,
 spinal, heart, lungs and legs, followed by other slots. Traits have independent
 score subsections, using saved score adjustments, and linked effects group by
