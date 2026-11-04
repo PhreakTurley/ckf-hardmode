@@ -156,10 +156,10 @@ weapon effect in that order. Varying rarity and weapon-effect fields are
 included. Columns size to their longest heading or value across the full
 category, including rows on other pages.
 
-Weapons, weapon mods and consumables always show a **Service** column with
+Weapons, weapon mods, consumables and cyberware always show a **Service** column with
 localized names and display levels. `player_balance.py:service_catalog` joins
 `ServiceOptionId` within `ContactService.ServiceFlow` (weapons 1, mods 3,
-items 7), so an option id cannot pick up a service from another catalog.
+items 7, implants 8), so an option id cannot pick up a service from another catalog.
 Saved and pending service adjustments affect the label; service names are
 searchable. Nonpositive assignments show **Unassigned**, and unmatched positive
 options show **Unresolved service** with the option id. Tooltips retain the
@@ -176,8 +176,17 @@ Saved assignments preview on reload and export through Workshop player tuning.
 Validation rejects fractional, arithmetic and unresolved asset assignments.
 
 Cyberware tabs follow ocular, arms, skin, skeletal, deep brain, fast brain,
-spinal, heart, lungs and legs, followed by other slots. Traits have independent
-score subsections, using saved score adjustments, and linked effects group by
+spinal, heart, lungs and legs, followed by other slots. Each slot has one table
+with one row per implant, grouping its **Implant**, **Effects** and **Matrix
+effects** fields. The joins follow saved `ImplantEffectId` and `MatrixEffectId`
+assignments; each cell retains its native table, id and column for saving and
+export. Shared effects identify the other implants using them, and editing a
+shared field updates its other visible cells. Missing positive assignments
+produce a warning and no editable cells for the missing target. Global implant
+multipliers still apply to implant cost, installation time and stress.
+
+Traits have independent score subsections, using saved score adjustments,
+and linked effects group by
 their owning trait names. Missing individual trait labels resolve through the
 official `TraitGroup` locale key; unnamed linked effects display their related
 trait level. Shared effects retain the same table/id identity

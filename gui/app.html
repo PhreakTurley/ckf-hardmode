@@ -2073,7 +2073,7 @@ function renderPlayer(panel, page) {
           }
           const col = item.column;
           const cell = playerCell(grid,row,col);
-          if (!cell) {tr.appendChild(el('td',{class:'readonly',text:'—',title:'This item has no linked record for '+col.group}));continue;}
+          if (!cell) {tr.appendChild(el('td',{class:'readonly',text:'—',title:'This row has no linked record for '+col.group}));continue;}
           const targetCell = cell.target;
           const value = cell.value;
           const base = cell.base;

@@ -44,7 +44,7 @@ METADATA.update({'ItemClass', 'LeverageClass', 'TalentId'})
 ITEM_CLASSES = {1: 'Medical', 2: 'Grenades', 3: 'Devices', 4: 'Chems', 6: 'Sploitkits', 7: 'Matrix'}
 # ContactService.ServiceFlow scopes the option id: for example the official
 # ContactService rows 1, 4 and 7 use option 1 for different catalogs.
-SERVICE_FLOWS = {'Weapon': '1', 'WeaponMod': '3', 'Item': '7'}
+SERVICE_FLOWS = {'Weapon': '1', 'WeaponMod': '3', 'Item': '7', 'Implant': '8'}
 LABELS = {'ApCost': 'AP cost', 'CritMultiBase': 'Crit damage', 'CritMultiStealth': 'Stealth crit damage',
           'ImplantStress': 'Stress', 'InstallTime': 'Install time', 'BaseCost': 'Price',
           'BallisticDamage1': 'Ballistic · 1', 'BallisticDamage2': 'Ballistic · 2',
@@ -389,6 +389,27 @@ def consumable_links(allrows, doc):
                                    ('Matrix effects', 'MatrixEffect', 'MatrixEffect')]:
             pointer = str(int(effective(doc, 'Talent', action, field))) if action else '0'
             linked[name] = follow(table, pointer, name)
+        linked['Effects'] = linked['Self effect'] or linked['Target effect']
+        links[rid] = linked
+    return links, owners
+
+
+def implant_links(allrows, doc):
+    """Resolve implant effect assignments, retaining unresolved pointers."""
+    links, owners = {}, {}
+    for implant in allrows['Implant'].values():
+        rid = implant['ImplantTypeId']
+        linked = {'ids': {}, 'warnings': []}
+        for heading, table, field in [('Effects', 'Effect', 'ImplantEffectId'),
+                                      ('Matrix effects', 'MatrixEffect', 'MatrixEffectId')]:
+            pointer = str(int(effective(doc, 'Implant', implant, field)))
+            linked['ids'][heading] = pointer
+            target = None if pointer in ('0', '-1', '') else allrows[table].get(pointer)
+            linked[heading] = target
+            if pointer not in ('0', '-1', '') and target is None:
+                linked['warnings'].append('Implant %s: %s %s was not found' % (rid, table, pointer))
+            if target:
+                owners.setdefault((table, pointer), {})[rid] = implant['ImplantName']
         links[rid] = linked
     return links, owners
 
@@ -413,6 +434,7 @@ def catalog(config_dir, database):
             assets = {r['WeaponModelId']: r for r in source.read('Weapon3DAssetModel')[1]}
             services = service_catalog(source)
             item_links, item_owners = consumable_links(allrows, doc)
+            cyberware_links, implant_owners = implant_links(allrows, doc)
             for trait in allrows['Trait'].values():
                 if trait['TraitName'].startswith('Trait.Name.'):
                     trait['TraitName'] = source.locale.get('Trait.Name.' + trait['TraitGroup'] + '_Male', trait['TraitName'])
@@ -465,24 +487,18 @@ def catalog(config_dir, database):
                     result_grid['serviceColumn'] = {'name': 'ServiceOptionId', 'options': services[table]}
                 return result_grid
 
-            def joined_consumables(items, title):
-                joined = grid('Item', items, title)
+            def joined_grid(base_table, rows, title, base_heading, links, owners, blocks):
+                joined = grid(base_table, rows, title)
                 joined['joined'] = True
                 for column in joined['columns'] + joined['advanced']:
-                    column['group'] = 'Item'
+                    column['group'] = base_heading
                 for record in joined['rows']:
-                    record['targets'] = {column['name']: {'table': 'Item', 'id': record['id'], 'column': column['name']}
+                    record['targets'] = {column['name']: {'table': base_table, 'id': record['id'], 'column': column['name']}
                                          for column in joined['columns'] + joined['advanced']}
-                    record['links'] = item_links[record['id']]['ids']
-                separate_effects = any(len({item_links[r['ItemTypeId']]['ids'][name]
-                                            for name in ('Self effect', 'Target effect')} - {'0', '-1', ''}) > 1 for r in items)
-                blocks = [('Action', 'Talent')]
-                blocks += [('Self effect', 'Effect'), ('Target effect', 'Effect')] if separate_effects else [('Effects', 'Effect')]
-                blocks += [('Matrix effects', 'MatrixEffect')]
+                    record['links'] = links[record['id']]['ids']
                 offset = max((c['order'] for c in joined['columns'] + joined['advanced']), default=0) + 1
                 for heading, table in blocks:
-                    targets = {r['ItemTypeId']: (item_links[r['ItemTypeId']]['Self effect'] or item_links[r['ItemTypeId']]['Target effect']
-                                                if heading == 'Effects' else item_links[r['ItemTypeId']][heading]) for r in items}
+                    targets = {r[TABLE_KEYS[base_table]]: links[r[TABLE_KEYS[base_table]]][heading] for r in rows}
                     unique = {r[TABLE_KEYS[table]]: r for r in targets.values() if r}
                     if not unique:
                         continue
@@ -497,13 +513,13 @@ def catalog(config_dir, database):
                                 record['baseline'][name] = target[column['name']] if target else None
                                 if target:
                                     target_id = target[TABLE_KEYS[table]]
-                                    shared = item_owners.get((table, target_id), {})
+                                    shared = owners.get((table, target_id), {})
                                     record['targets'][name] = {'table': table, 'id': target_id, 'column': column['name'],
                                         'readOnly': target_id in protected.get(table, set()),
                                         'readOnlyReason': 'Managed by Hard Mode Fatigue / limit-break traits',
                                         'sharedWith': [n for i, n in shared.items() if i != record['id']]}
                     offset += max((c['order'] for c in donor['columns'] + donor['advanced']), default=0) + 1
-                warnings = list(dict.fromkeys(w for item in items for w in item_links[item['ItemTypeId']]['warnings']))
+                warnings = list(dict.fromkeys(w for row in rows for w in links[row[TABLE_KEYS[base_table]]]['warnings']))
                 joined['joinsComplete'] = not warnings
                 if warnings:
                     joined['warning'] = '; '.join(warnings)
@@ -527,7 +543,7 @@ def catalog(config_dir, database):
 
             def page(pid, title, group, grids, **kwargs):
                 for g in grids:
-                    if g and group in ('Weapons', 'Drone weapons', 'Consumables'):
+                    if g and group in ('Weapons', 'Drone weapons', 'Consumables', 'Cyberware', 'Cyberware modules'):
                         g['scrollWithPage'] = True
                 result['pages'].append({'id': pid, 'title': title, 'group': group,
                                         'grids': [g for g in grids if g and (g['rows'] or g.get('warning'))], **kwargs})
@@ -623,14 +639,21 @@ def catalog(config_dir, database):
             for cls in sorted({int(r['ItemClass']) for r in allrows['Item'].values()}):
                 items = [r for r in allrows['Item'].values() if int(r['ItemClass']) == cls]
                 title = ITEM_CLASSES.get(cls, 'Item class %s' % cls)
-                page('consumable-%s' % cls, title, 'Consumables', [joined_consumables(items, title)])
+                separate_effects = any(len({item_links[r['ItemTypeId']]['ids'][name]
+                                            for name in ('Self effect', 'Target effect')} - {'0', '-1', ''}) > 1 for r in items)
+                blocks = [('Action', 'Talent')]
+                blocks += [('Self effect', 'Effect'), ('Target effect', 'Effect')] if separate_effects else [('Effects', 'Effect')]
+                blocks += [('Matrix effects', 'MatrixEffect')]
+                page('consumable-%s' % cls, title, 'Consumables',
+                     [joined_grid('Item', items, title, 'Item', item_links, item_owners, blocks)])
             page('implant-global', 'All cyberware', 'Cyberware', [], multipliers=MULTIPLIERS)
             for slot in sorted({int(r['ImplantSlot']) for r in allrows['Implant'].values()},
                                key=lambda s: (SLOT_ORDER.index(s) if s in SLOT_ORDER else len(SLOT_ORDER), s)):
                 rows = [r for r in allrows['Implant'].values() if int(r['ImplantSlot']) == slot]
-                page('implant-%s' % slot, SLOT_NAMES.get(slot, 'Module slot %s' % slot), 'Cyberware modules' if slot >= 100 else 'Cyberware',
-                     [grid('Implant', rows, 'Implants'), linked(rows, 'ImplantEffectId', 'Effect', 'Bonuses'),
-                      linked(rows, 'MatrixEffectId', 'MatrixEffect', 'Matrix bonuses')])
+                title = SLOT_NAMES.get(slot, 'Module slot %s' % slot)
+                page('implant-%s' % slot, title, 'Cyberware modules' if slot >= 100 else 'Cyberware',
+                     [joined_grid('Implant', rows, title, 'Implant', cyberware_links, implant_owners,
+                                  [('Effects', 'Effect'), ('Matrix effects', 'MatrixEffect')])])
             face_actions = {}
             for talent in allrows['Talent'].values():
                 if talent['TalentIsFace'] != '0' and talent['TargetType'] == 'LEVERAGE':
