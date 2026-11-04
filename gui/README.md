@@ -95,7 +95,7 @@ Preparing SQL, installing locally, and submitting remain uploader actions.
 ### Workshop player catalogs
 
 `BepInEx/config/ckf.player-balance.json` is the only authoring source for the
-Workshop-owned cyberware, weapon, weapon-mod, leverage, trait and combat adjustments. It is
+Workshop-owned cyberware, weapon, weapon-mod, consumable, leverage, trait and rule adjustments. It is
 outside Hard Mode's overlay directory. Records are sparse adjustments keyed by
 SQL table, content id and column. Clearing a cell removes its adjustment.
 Shared effects have one stored value wherever the editor displays them.
@@ -120,7 +120,10 @@ availability. Enemy markers include both official and local overlay references,
 so a Hard Mode repoint cannot erase a Workshop warning. This is a static
 catalog policy, not a complete trace of every story reward.
 
-Weapon mods have independent subsections for weapon/slot combinations.
+Weapon mods have independent weapon/slot subsections. Within each one, rows
+group by their current `Weapon3DAsset.Thumbnail` and include an Icon column.
+The join follows each mod's `Asset3DTypeId`, including saved adjustments;
+different asset ids pointing to the same thumbnail share an icon group.
 `player_balance.py:mod_fitment` joins `WeaponClassMod` slot declarations to
 `WeaponMod.ModClassId`, applies `Exclusions`, and uses `Table.Column.ModType.*`
 localization for slot names and crafting integrations. Every mod displays its
@@ -171,11 +174,41 @@ official `TraitGroup` locale key; unnamed linked effects display their related
 trait level. Shared effects retain the same table/id identity
 across subsections. Each grid has its own pagination.
 
-Leverage headings use direct Face `Talent.ActionId` references for talents
-targeting `LEVERAGE`, then positive `MissionAdvantage.RoomLevel`, then the
-matrix-only flag, then other rows. The room-level heading does not infer a
-named safehouse room: `MissionAdvantage` has no such pointer. Heading tooltips
-identify the source field or join.
+**Cyber Knight Traits** has its own subsection, outside the score groups.
+`player_balance.py:knight_trait_groups` joins nonzero-`NewGame` backstories
+with `JobTypeId=1` (Cyber Knight) through their trait tags to `Trait.TagMatch`,
+excludes tags referenced by other jobs' backstories, and includes the resulting
+`TraitGroup` families. The catalog carries the backstory ids and fields as
+classification evidence. It does not infer membership from display names.
+
+Leverage has independent **Other leverage**, **Face leverage**, **0-token
+leverage**, **Matrix-only leverage** and **Favor-cost leverage** subsections.
+Face membership uses direct `Talent.ActionId` references for Face talents
+targeting `LEVERAGE`. The remaining tests, in that order, use effective
+`TokenCost=0`, the matrix-only flag and nonzero `FavorCost`, including saved
+adjustments. Every row belongs to exactly one subsection. Other leverage
+starts expanded and the special groups start collapsed; searching opens matches.
+
+**Rules** under Player Balance reads every current `Rule` row and groups it by
+`GroupId`. Names and descriptions come from `ConfigName` and `ConfigDesc`.
+Numeric adjustments export with the rest of Player Balance, except Rule 82:
+it is labeled **Managed by Enemy Balance**, is read-only here, and Player
+Balance refuses to save or export an override for it. Its export owner remains
+the [Enemy Balance workflow](../docs/enemy-difficulty-workshop.md).
+
+**Consumables** has a page per `ItemClass`: Medical, Grenades, Devices, Chems,
+Sploitkits and Matrix, plus explicitly named pages for new classes. Item stats,
+actions, effects and matrix effects are joined from the selected database;
+saved item/action pointer assignments are followed. Shared effects keep one
+stored adjustment wherever they appear. These adjustments export through
+Player Balance. The legacy Player Weapons, Consumables, Game Constants and
+Mission Power Level Ceiling controls are omitted from the navigation; their
+declarations remain available to validation and the plugin.
+
+Numeric baseline placeholders show the number alone. Legacy `_comment` fields
+remain on disk for compatibility and byte-preserving saves but have no raw
+comment column in the UI. Talent grids retain their semantic Node & details
+display so node names and associations remain readable.
 
 **All cyberware** edits price, installation-time and implant-stress multipliers.
 SQL applies individual adjustments first and global multipliers last, matching
@@ -359,7 +392,9 @@ the attribute grid retains its override and variation protections.
 
 The named and constant rules reach the page as separate keys (`entry['hidden']`, `entry['constant']`, from `overlay_hidden` and `overlay_constant`); keep them separate. Zero detection uses the values and baselines already in the model. `app.html` names no column.
 
-Rows can be withheld too. `serve.py:GUI_EXCLUDED_ROWS` withholds `consumables-matrix.csv` `ItemTypeId 5403`. The row stays in the file, and the plugin still expands it.
+Rows can be withheld too. `serve.py:GUI_EXCLUDED_ROWS` withholds Workshop-owned
+rows from legacy overlay grids while preserving their file contents. The
+Consumables catalog reads every item row from the selected database.
 
 The Team PL matrix draws `MissionPowerLevel` 1–10 only (`serve.py:AXIS_WINDOWS`). A value outside that range is still drawn, and the legend explains why. The save uses every row.
 

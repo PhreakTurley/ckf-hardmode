@@ -19,10 +19,12 @@ import gear_classes
 FILE = 'ckf.player-balance.json'
 TABLE_KEYS = {'Weapon': 'WeaponId', 'WeaponMod': 'WeaponModId', 'Armor': 'ArmorId', 'Implant': 'ImplantTypeId',
               'Talent': 'TalentId', 'Effect': 'EffectId', 'MatrixEffect': 'MatrixEffectId',
-              'MissionAdvantage': 'AdvantageTypeId', 'Trait': 'TraitId', 'Rule': 'RuleId'}
+              'MissionAdvantage': 'AdvantageTypeId', 'Trait': 'TraitId', 'Rule': 'RuleId', 'Item': 'ItemTypeId'}
 MULTIPLIERS = {'Cost': 'Price', 'InstallTime': 'Installation time', 'ImplantStress': 'Implant stress'}
 # The limit-break edits remain exclusively in Hard Mode.
 HARDMODE_EFFECTS = {10505, 10507}
+# Enemy Balance owns its spawn-level cap, including in Workshop exports.
+ENEMY_RULES = {'82'}
 METADATA = {'Locked', 'FactionId', 'ServiceOptionId', 'Asset3DTypeId', 'ModClassId', 'ModSlot',
             'ShotVFXCount', 'WeaponClass', 'ImplantClass', 'ImplantSlot',
             'ImplantLevel', 'ImplantConflictId', 'Deactivated', 'BackstoryGroup',
@@ -38,6 +40,8 @@ METADATA.update({'EffectTypeId', 'MatrixEffectTypeId', 'ImplantEffectId', 'Impla
                  'MatrixEffectId', 'EffectTriggerType', 'TriggerEffectId', 'WoundTraitId',
                  'ImplantTalentId', 'ArmorEffectId', 'TargetEffect',
                  'SelfEffect', 'MatrixEffect', 'Token'})
+METADATA.update({'ItemClass', 'LeverageClass', 'TalentId'})
+ITEM_CLASSES = {1: 'Medical', 2: 'Grenades', 3: 'Devices', 4: 'Chems', 6: 'Sploitkits', 7: 'Matrix'}
 LABELS = {'ApCost': 'AP cost', 'CritMultiBase': 'Crit damage', 'CritMultiStealth': 'Stealth crit damage',
           'ImplantStress': 'Stress', 'InstallTime': 'Install time', 'BaseCost': 'Price',
           'BallisticDamage1': 'Ballistic · 1', 'BallisticDamage2': 'Ballistic · 2',
@@ -217,8 +221,8 @@ def validate(doc, source, config_dir=None):
                 raise ValueError('%s %s no longer exists in the official database; review its overrides' % (table, rid))
             if rid in protected.get(table, set()):
                 raise ValueError('%s %s belongs to Hard Mode Fatigue/limit breaks' % (table, rid))
-            if table == 'Rule' and rid != '22':
-                raise ValueError('Only the surprised accuracy rule belongs to this Workshop package')
+            if table == 'Rule' and rid in ENEMY_RULES:
+                raise ValueError('Rule %s belongs to Enemy Balance; it cannot be saved or exported by Player Balance' % rid)
             if not isinstance(fields, dict):
                 raise ValueError('Invalid fields for %s %s' % (table, rid))
             for col, value in fields.items():
@@ -316,6 +320,29 @@ def mod_fitment(source, row, class_mods):
             'mapped': bool(classes)}
 
 
+def knight_trait_groups(source):
+    """Join creation backstory tags to Trait.TagMatch, then TraitGroup levels.
+
+    Job 1 is Cyber Knight in JobModel. Exclude tags referenced by another
+    job's backstory; a shared generic trait is not Knight-specific. Return
+    the backstory/tag evidence instead of identifying traits by their names.
+    """
+    fields = ['BackstoryTrait'] + [r[1] for r in source.schema['Backstory']
+                                  if r[1].startswith(('Trait1', 'Trait2'))]
+    stories = source.read('BackstoryModel')[1]
+    other = {r[c] for r in stories if r['JobTypeId'] != '1' for c in fields if r[c]}
+    evidence = {}
+    for row in stories:
+        if row['JobTypeId'] != '1' or row['NewGame'] == '0':
+            continue
+        for field in fields:
+            tag = row[field]
+            if tag and tag not in other:
+                evidence.setdefault(tag, []).append({'backstory': row['BackstoryId'], 'field': field})
+    return {row['TraitGroup']: {'tag': row['TagMatch'], 'references': evidence[row['TagMatch']]}
+            for row in source.read('TraitModel')[1] if row['TagMatch'] in evidence}
+
+
 def catalog(config_dir, database):
     """Build rows and visible columns from a fresh, complete official read."""
     try:
@@ -345,7 +372,7 @@ def catalog(config_dir, database):
                 for col in cols:
                     values = {r.get(col, '') for r in rows}
                     has_override = any(overrides.get(r[TABLE_KEYS[table]], {}).get(col, '') != '' for r in rows)
-                    interesting = (len(values) > 1 if policy == 'varying'
+                    interesting = policy == 'all' or (len(values) > 1 if policy == 'varying'
                                    else any(v not in ('', '0', '0.0') for v in values))
                     target = visible if has_override or (interesting and col not in METADATA) else advanced
                     target.append({'name': col, 'label': label(col), **column_presentation(table, col)})
@@ -359,7 +386,7 @@ def catalog(config_dir, database):
                 namekey = {'Weapon': 'WeaponName', 'Armor': 'ArmorName', 'Implant': 'ImplantName',
                            'WeaponMod': 'ModName',
                            'Trait': 'TraitName', 'Effect': 'EffectName', 'MatrixEffect': 'EffectName',
-                           'Talent': 'TalentName'}.get(table)
+                           'Talent': 'TalentName', 'Item': 'ItemName'}.get(table)
                 records = []
                 for r in rows:
                     rid = r[TABLE_KEYS[table]]
@@ -369,16 +396,21 @@ def catalog(config_dir, database):
                     if table == 'Rule':
                         name = r['ConfigName']
                     records.append({'id': rid, 'name': name or title + ' ' + rid,
+                                    'description': r.get('ConfigDesc', r.get('ItemDesc', '')),
                                     'baseline': {c: r[c] for c in cols},
-                                    'readOnly': rid in protected.get(table, set())})
+                                    'readOnly': rid in protected.get(table, set()) or (table == 'Rule' and rid in ENEMY_RULES),
+                                    'readOnlyReason': 'Managed by Enemy Balance' if table == 'Rule' and rid in ENEMY_RULES
+                                                      else 'Managed by Hard Mode Fatigue / limit-break traits'})
+                    if table == 'Rule' and rid in ENEMY_RULES:
+                        records[-1]['owner'] = 'Enemy Balance'
                 raw = {r[TABLE_KEYS[table]]: r for r in rows}
                 records.sort(key=lambda r: (tuple(effective(doc, table, raw[r['id']], c)
                                                   for c in LEADING_COLUMNS), natural(r['name']))
-                             if table in ('Weapon', 'WeaponMod', 'Implant') else ((), natural(r['name'])))
+                             if table in ('Weapon', 'WeaponMod', 'Implant', 'Item') else ((), natural(r['name'])))
                 return {'table': table, 'title': title, 'columns': visible, 'advanced': advanced, 'rows': records,
                         'multipliers': doc.get('implantMultipliers', {}) if table == 'Implant' else {}}
 
-            def linked(rows, field, table, title, related=False):
+            def linked(rows, field, table, title, related=False, owner_name='TraitName'):
                 ids = {r.get(field) for r in rows} - {None, '', '0', '-1'}
                 missing = ids - allrows[table].keys()
                 result_grid = grid(table, [allrows[table][i] for i in ids if i in allrows[table]], title, 'nonzero') if ids else None
@@ -387,16 +419,16 @@ def catalog(config_dir, database):
                 if related and result_grid:
                     for record in result_grid['rows']:
                         owners = sorted((r for r in rows if r.get(field) == record['id']),
-                                        key=lambda r: natural(r['TraitName']))
-                        record['section'] = ', '.join(dict.fromkeys(r['TraitName'] for r in owners))
-                        if record['name'].startswith(('Effect.Name.', 'MatrixEffect.Name.')):
+                                        key=lambda r: natural(r[owner_name]))
+                        record['section'] = ', '.join(dict.fromkeys(r[owner_name] for r in owners))
+                        if owner_name == 'TraitName' and record['name'].startswith(('Effect.Name.', 'MatrixEffect.Name.')):
                             record['name'] = 'Level ' + ', '.join(sorted({r['TraitLevel'] for r in owners}, key=int))
                     result_grid['rows'].sort(key=lambda r: (natural(r['section']), natural(r['name'])))
                 return result_grid
 
             def page(pid, title, group, grids, **kwargs):
                 for g in grids:
-                    if g and group in ('Weapons', 'Drone weapons'):
+                    if g and group in ('Weapons', 'Drone weapons', 'Consumables'):
                         g['scrollWithPage'] = True
                 result['pages'].append({'id': pid, 'title': title, 'group': group,
                                         'grids': [g for g in grids if g and (g['rows'] or g.get('warning'))], **kwargs})
@@ -478,8 +510,34 @@ def catalog(config_dir, database):
                     fit = fits[record['id']]
                     record['fitment'] = title
                     record['fitmentSource'] = '%s · ModClassId %s · ModSlot %s' % (fit['key'], fit['modClass'], fit['slot'])
+                    asset_id = str(int(effective(doc, 'WeaponMod', allrows['WeaponMod'][record['id']], 'Asset3DTypeId')))
+                    path = assets.get(asset_id, {}).get('Thumbnail', '')
+                    token = path.rsplit('/', 1)[-1]
+                    record['icon'] = label(re.sub(r'^(WeaponMod_|weapon_mod_)', '', token).replace('_', ' ')) or 'No icon'
+                    record['iconPath'] = path
+                    record['section'] = record['icon']
+                    record['sectionKey'] = path or 'Asset ' + asset_id
+                g['iconColumn'] = True
+                g['rows'].sort(key=lambda r: natural(r['sectionKey']))
                 mod_grids.append(g)
             page('weapon-mods', 'Weapon mods', 'Weapons', mod_grids, unresolvedMods=unresolved_mods)
+            for cls in sorted({int(r['ItemClass']) for r in allrows['Item'].values()}):
+                items = [r for r in allrows['Item'].values() if int(r['ItemClass']) == cls]
+                # Follow saved assignments, retaining the item identity as
+                # the owner label for shared actions and effects.
+                owners = [dict(r, TalentId=str(int(effective(doc, 'Item', r, 'TalentId')))) for r in items]
+                talent_ids = {r['TalentId'] for r in owners} & allrows['Talent'].keys()
+                actions = [dict(allrows['Talent'][tid], ItemName=', '.join(
+                    r['ItemName'] for r in owners if r['TalentId'] == tid)) for tid in talent_ids]
+                effect_owners = [dict(t, EffectId=str(int(effective(doc, 'Talent', t, field))))
+                                 for t in actions for field in ('SelfEffect', 'TargetEffect')]
+                matrix_owners = [dict(t, MatrixEffectId=str(int(effective(doc, 'Talent', t, 'MatrixEffect'))))
+                                 for t in actions]
+                page('consumable-%s' % cls, ITEM_CLASSES.get(cls, 'Item class %s' % cls), 'Consumables',
+                     [grid('Item', items, 'Item stats'),
+                      linked(owners, 'TalentId', 'Talent', 'Actions', related=True, owner_name='ItemName'),
+                      linked(effect_owners, 'EffectId', 'Effect', 'Effects', related=True, owner_name='ItemName'),
+                      linked(matrix_owners, 'MatrixEffectId', 'MatrixEffect', 'Matrix effects', related=True, owner_name='ItemName')])
             page('implant-global', 'All cyberware', 'Cyberware', [], multipliers=MULTIPLIERS)
             for slot in sorted({int(r['ImplantSlot']) for r in allrows['Implant'].values()},
                                key=lambda s: (SLOT_ORDER.index(s) if s in SLOT_ORDER else len(SLOT_ORDER), s)):
@@ -487,36 +545,40 @@ def catalog(config_dir, database):
                 page('implant-%s' % slot, SLOT_NAMES.get(slot, 'Module slot %s' % slot), 'Cyberware modules' if slot >= 100 else 'Cyberware',
                      [grid('Implant', rows, 'Implants'), linked(rows, 'ImplantEffectId', 'Effect', 'Bonuses'),
                       linked(rows, 'MatrixEffectId', 'MatrixEffect', 'Matrix bonuses')])
-            rows = list(allrows['MissionAdvantage'].values())
-            leverage = grid('MissionAdvantage', rows, 'Leverage', 'nonzero')
             face_actions = {}
             for talent in allrows['Talent'].values():
                 if talent['TalentIsFace'] != '0' and talent['TargetType'] == 'LEVERAGE':
                     face_actions.setdefault(talent['ActionId'], []).append(talent['TalentName'])
-            for record in leverage['rows']:
-                row = allrows['MissionAdvantage'][record['id']]
-                if record['id'] in face_actions:
-                    record['section'] = 'Face talent: ' + ', '.join(sorted(face_actions[record['id']]))
-                    record['sectionEvidence'] = 'Talent.ActionId → MissionAdvantage.AdvantageTypeId'
-                    record['sectionOrder'] = 0
-                elif float(row['RoomLevel']) > 0:
-                    record['section'] = 'Room level ' + row['RoomLevel']
-                    record['sectionEvidence'] = 'MissionAdvantage.RoomLevel (no named-room pointer in this table)'
-                    record['sectionOrder'] = 1
-                elif row['AdvantageIsMatrixOnly'] != '0':
-                    record['section'] = 'Matrix only'
-                    record['sectionEvidence'] = 'MissionAdvantage.AdvantageIsMatrixOnly'
-                    record['sectionOrder'] = 2
-                else:
-                    record['section'] = 'Other leverage'
-                    record['sectionOrder'] = 3
-            leverage['rows'].sort(key=lambda r: (r['sectionOrder'], natural(r['section']), natural(r['name'])))
-            page('leverage', 'Leverage', 'Character', [leverage])
+            leverage_groups = {name: [] for name in ('Face leverage', '0-token leverage', 'Matrix-only leverage',
+                                                    'Favor-cost leverage', 'Other leverage')}
+            for row in allrows['MissionAdvantage'].values():
+                heading = ('Face leverage' if row['AdvantageTypeId'] in face_actions else
+                           '0-token leverage' if effective(doc, 'MissionAdvantage', row, 'TokenCost') == 0 else
+                           'Matrix-only leverage' if effective(doc, 'MissionAdvantage', row, 'AdvantageIsMatrixOnly') != 0 else
+                           'Favor-cost leverage' if effective(doc, 'MissionAdvantage', row, 'FavorCost') != 0 else
+                           'Other leverage')
+                leverage_groups[heading].append(row)
+            leverage_grids = []
+            for heading, rows in leverage_groups.items():
+                if not rows:
+                    continue
+                g = grid('MissionAdvantage', rows, 'Leverage', 'nonzero')
+                g.update(key=heading, subsection=heading, subsectionOpen=heading == 'Other leverage')
+                for record in g['rows']:
+                    if record['id'] in face_actions:
+                        record['description'] = ', '.join(sorted(face_actions[record['id']]))
+                leverage_grids.append(g)
+            page('leverage', 'Leverage', 'Character', leverage_grids)
             rows = list(allrows['Trait'].values())
             trait_grids = []
-            for score in sorted({effective(doc, 'Trait', r, 'TraitScore') for r in rows}):
-                subset = [r for r in rows if effective(doc, 'Trait', r, 'TraitScore') == score]
-                heading = 'Trait score %s' % (format(score, '+g') if score else '0')
+            knight_groups = knight_trait_groups(source)
+            knight_rows = [r for r in rows if r['TraitGroup'] in knight_groups]
+            other_rows = [r for r in rows if r['TraitGroup'] not in knight_groups]
+            trait_sections = [('Cyber Knight Traits', knight_rows)] if knight_rows else []
+            for score in sorted({effective(doc, 'Trait', r, 'TraitScore') for r in other_rows}):
+                trait_sections.append(('Trait score %s' % (format(score, '+g') if score else '0'),
+                                       [r for r in other_rows if effective(doc, 'Trait', r, 'TraitScore') == score]))
+            for heading, subset in trait_sections:
                 for g in (grid('Trait', subset, 'Traits', 'nonzero'),
                           linked(subset, 'EffectTypeId', 'Effect', 'Effects', related=True),
                           linked(subset, 'MatrixEffectTypeId', 'MatrixEffect', 'Matrix effects', related=True)):
@@ -524,8 +586,13 @@ def catalog(config_dir, database):
                         g['subsection'] = heading
                         g['key'] = '%s:%s' % (g['table'], heading)
                         trait_grids.append(g)
-            page('traits', 'Traits', 'Character', trait_grids)
-            page('combat', 'Combat', 'Character', [grid('Rule', [allrows['Rule']['22']], 'Surprised accuracy', 'nonzero')])
+            page('traits', 'Traits', 'Character', trait_grids, knightTraitEvidence=knight_groups)
+            rule_grids = []
+            for group in sorted({r['GroupId'] for r in allrows['Rule'].values()}):
+                g = grid('Rule', [r for r in allrows['Rule'].values() if r['GroupId'] == group], 'Rules', 'all')
+                g.update(key='rules-' + group, subsection='Power level' if group == 'POWERLEVEL' else group.replace('_', ' ').title())
+                rule_grids.append(g)
+            page('rules', 'Rules', 'Player Balance', rule_grids)
     except (ValueError, OSError, static_data.DataError) as exc:
         result['error'] = str(exc)
         result['pages'] = []
@@ -618,7 +685,7 @@ def augment(data, provenance, config_dir, database):
                     raise ValueError('Talent and player tuning both own %s %s %s' % (table, row[key], col))
     payload['RawSQL'] = statements
     data = encode(payload)
-    receipt['scope'] = 'player talents, cyberware and explicitly authored player-power tuning'
+    receipt['scope'] = 'player talents, weapons, cyberware, consumables, leverage, traits and rules (excluding Enemy Balance Rule 82)'
     receipt['parser_source']['sha256'] = hashlib.sha256(data).hexdigest()
     receipt['player_balance'] = {'source': FILE, 'sha256': hashlib.sha256((Path(config_dir) / FILE).read_bytes()).hexdigest(),
                                  'statements': len(statements), 'assignments': len(touched)}

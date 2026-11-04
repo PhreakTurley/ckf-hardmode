@@ -257,6 +257,7 @@ table.pb-grid th{min-width:0;max-width:none!important;white-space:nowrap;word-br
 body.technical .pb-grid .pb-name small{display:block}
 .pb-grid .pb-name small.pb-fit{display:block;color:var(--dim);white-space:normal;line-height:1.4;margin-top:3px}
 .pb-grid .pb-name .pb-enemy{display:block;color:#f4c17b;font-size:11px;font-weight:600;margin-top:4px}
+.pb-grid .pb-name .pb-owner{display:block;color:var(--dim);font-size:11px;margin-top:4px}
 .pb-rule-notes{max-width:80ch;margin-top:24px}
 .pb-rule{margin:16px 0}
 .pb-rule p{margin:5px 0}
@@ -1775,7 +1776,7 @@ function renderIndex() {
       nav.appendChild(det);
     }
     playerGroups[page.group].appendChild(el('div', {
-      class:'navitem' + (SEL === 'pb:' + page.id ? ' sel' : ''), role:'button', tabindex:'0',
+      class:'navitem' + (SEL === 'pb:' + page.id ? ' sel' : ''), role:'button', tabindex:'0', 'data-player-page':page.id,
       onclick:function () {SEL = 'pb:' + page.id; render();},
       onkeydown:function (e) {if (e.key === 'Enter' || e.key === ' ') {e.preventDefault(); SEL='pb:'+page.id;render();}}
     }, [el('div', {class:'nm'}, [el('b', {text:page.title})])]));
@@ -1930,8 +1931,9 @@ function renderPlayer(panel, page) {
       if (grid.subsection) {
         if (!subsections[grid.subsection]) {
           const first = Object.keys(subsections).length === 0;
-          const det = el('details', {class:'pb-subsection',open:!!query || (openSections[grid.subsection] === undefined ? first : openSections[grid.subsection])},
-            [el('summary', {text:grid.subsection})]);
+          const det = el('details', {class:'pb-subsection',open:!!query || (openSections[grid.subsection] === undefined
+            ? (grid.subsectionOpen === undefined ? first : grid.subsectionOpen) : openSections[grid.subsection])},
+            [el('summary', {text:grid.subsection,title:grid.iconPath || ''})]);
           det.addEventListener('toggle', function () {openSections[grid.subsection] = det.open;});
           grids.appendChild(det);subsections[grid.subsection] = det;
         }
@@ -1987,14 +1989,15 @@ function renderPlayer(panel, page) {
       const body = el('tbody', {});
       let section = null;
       for (const row of rows) {
-        if (row.section && section !== row.section) {
-          section = row.section;
+        if (row.section && section !== (row.sectionKey || row.section)) {
+          section = row.sectionKey || row.section;
           body.appendChild(el('tr', {class:'pb-section'}, [el('th',{colspan:String(displayCols.length+1),scope:'rowgroup',title:row.sectionEvidence || ''},
-            [el('span',{class:'pb-section-name',text:section})])]));
+            [el('span',{class:'pb-section-name',text:row.section})])]));
         }
-        const nameCell = el('td', {class:'pb-name',title:grid.table+' '+row.id}, [
+        const nameCell = el('td', {class:'pb-name',title:grid.table+' '+row.id+(row.description ? '\n'+row.description : '')}, [
           document.createTextNode(row.name),el('small', {text:grid.table+' '+row.id})]);
         if (row.enemyUse) nameCell.appendChild(el('span', {class:'pb-enemy',text:'Also used by enemies',title:'Changing this weapon also affects enemies that use it.'}));
+        if (row.owner) nameCell.appendChild(el('span', {class:'pb-owner',text:'Managed by '+row.owner}));
         if (row.fitment) nameCell.appendChild(el('small', {class:'pb-fit',text:row.fitment,title:row.fitmentSource}));
         const tr = el('tr', {}, [nameCell]);
         for (const item of displayCols) {
@@ -2045,7 +2048,7 @@ function renderPlayer(panel, page) {
           style(value);
           if (row.readOnly) {
             td.className = 'readonly';td.textContent = base;
-            td.title = 'Managed by Hard Mode Fatigue / limit-break traits';
+            td.title = row.readOnlyReason || 'Managed by Hard Mode Fatigue / limit-break traits';
           } else {
             const input = el('input', {type:'text',value:value,placeholder:displayBase,spellcheck:'false',
               style:'width:'+(item.width-1)+'px',
@@ -2782,8 +2785,8 @@ function disclosure(summary, nodes) {
 // address is built from.
 //
 // A BLANK CELL IS BOTH TYPEABLE AND LEGIBLE, which is the whole difficulty.
-// An empty box and "ships 130, untouched" would look identical, and a box
-// and a span cannot share a cell, so the shipped value is the box's
+// An empty box needs a visible baseline, and a box
+// and a span cannot share a cell, so the baseline is the box's
 // PLACEHOLDER: greyed, in place, and the reader can type over it. Clearing the box
 // brings it straight back, and an empty box is sent as an empty FIELD — not 0,
 // not "" — so "leave the game's column alone" stays expressible. Where the
@@ -2806,11 +2809,11 @@ function overlayInput(ov, rel, ri, ci, opts) {
     const v = String(inp.value);
     const highlight = CKF.overlayHighlight(ov, ri, ci, v);
     const cls = [base, highlight];
-    inp.placeholder = v === '' ? (ship === undefined ? '—' : 'ships ' + ship) : '';
+    inp.placeholder = v === '' ? (ship === undefined ? '—' : String(ship)) : '';
     const why = [col.name + ' — ' + col.op + (lab ? '; here it is ' + lab.why : '')];
     why.push(ship === undefined
       ? 'an empty box leaves the game\'s own column alone'
-      : 'the game ships ' + ship + '; an empty box leaves that alone');
+      : 'Official value: ' + ship + '; an empty box leaves that alone');
     if (highlight) why.push(highlight === 'overlay-overwrite'
       ? 'red: an override is set' : 'yellow: an atypical shipped value');
     const p = CKF.overlayCellProblem(ov, ci, v);
@@ -2901,6 +2904,7 @@ function overlayBlock(sch, rel, sectionTitle) {
   ov.columns.forEach(function (c, i) {
     if (i === 0) return;                       // drawn as the key, at the left
     if (c.sectionHeading || c.metadata) return;
+    if (c.annotation && !(ov.groupOrder || []).length) return;
     if (!eligible[i]) return;                 // excluded from this section only
     const role = roles[i] || (c.control ? 'control' : 'lever');
     const off = !protectedCols[i] && (sup[i] || !!hid[i] || zero[i]);
@@ -2958,7 +2962,7 @@ function overlayBlock(sch, rel, sectionTitle) {
 
   // NO ONE-ROW FORM (David's rule). Everything below runs for every sheet at
   // every row count: a one-row sheet gets the same header, key column, lever
-  // boxes, "ships N" placeholders and key-tuple address as a many-row one.
+  // boxes, numeric baseline placeholders and key-tuple address as a many-row one.
 
   const wrap = el('div', { class: 'grid-wrap' });
   const tbl = el('table', { class: 'grid' });
@@ -3065,12 +3069,11 @@ function overlayBlock(sch, rel, sectionTitle) {
         if (cell) kids.push(document.createTextNode(cell));
         // A BLANK IS NOT AN ABSENCE OF INFORMATION. The sheet states what the
         // game ships in the row's own comment, so a blank cell shows that
-        // value greyed rather than nothing at all — an empty box and "ships
-        // 130, untouched" look identical otherwise. This is still how a cell
+        // value greyed rather than nothing at all. This is still how a cell
         // that takes no edit is drawn; where a box IS offered the same words
         // are the box's placeholder, so they are never lost.
         else if (ship !== undefined)
-          kids.push(el('span', { class: 'small', text: 'ships ' + ship }));
+          kids.push(el('span', { class: 'small', text: String(ship) }));
         else kids.push(el('span', { class: 'small', text: '—' }));
         if (mark) {
           const who = (mark.others || []).map(function (o) {

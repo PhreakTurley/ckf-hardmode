@@ -5453,7 +5453,10 @@ class App:
         check = run_check_schema(cd) if os.path.isdir(cd) else {
             'ran': False, 'problems': [], 'error': 'config directory does not exist'}
         player = player_balance.catalog(cd, False if self.static_source is False else self.data_source())
-        retired = {'CyberweaponsClaws', 'CyberweaponsLasers', 'ImplantsGlobal'}
+        retired = {'CyberweaponsClaws', 'CyberweaponsLasers', 'ImplantsGlobal',
+                   'GearClasses', 'StunClub', 'PowerLevel', 'RuleModel',
+                   'ConsumablesChems', 'ConsumablesDevices', 'ConsumablesGrenades',
+                   'ConsumablesMatrix', 'ConsumablesMedical', 'ConsumablesSploitkits'}
         retired.update('ImplantsSlot%02d' % n for n in range(1, 12))
         # Keep legacy declarations readable for validation and old installations;
         # their controls are replaced by the Workshop catalogs.
@@ -5467,6 +5470,7 @@ class App:
         visible_ids = {s['id'] for s in visible_sections}
         for group in nav_groups['groups']:
             group['sections'] = [sid for sid in group['sections'] if sid in visible_ids]
+        nav_groups['groups'] = [g for g in nav_groups['groups'] if g['sections'] or g['absent']]
         return {
             'token': self.token,
             'gameDir': self.settings.get('gameDir'),
@@ -12729,6 +12733,42 @@ def dom_driver(model_json, asserts=None):
         fixture['values']['overlays'][one_rel] = one
         schema['targets']['overlays'].append(one_rel)
         break
+    # Rules moved to Workshop, and the old gear grids are no longer visible.
+    # Keep the generic reference join and named-column hiding checks exercised
+    # by an explicit fixture instead of depending on a retired production page.
+    if not any(s.get('targets', {}).get('overlays') and
+               any(f.get('in') == 'reference' for f in s.get('fields', []))
+               for s in fixture['schemas']):
+        rel = 'ckf.hardmode.d/WeaponModel.render-fixture.csv'
+        examples = ['Alpha', 'Alpha PL 3', 'Beta', 'Beta PL 3', 'Gamma', 'Gamma Other']
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, 'fixture.csv')
+            with open(path, 'w', encoding='utf-8') as fh:
+                fh.write('WeaponId,PowerLevel,Cost,_comment\n')
+                for i, name in enumerate(examples):
+                    fh.write('%s,%s,,Shipped: PowerLevel %s; Cost %s.\n' % (1004+i, i+1, i+1, 100+i*10))
+            fixture['values']['overlays'][rel] = read_overlay(path, rel)
+        ref = {'path': 'reference', 'in': 'reference', 'type': 'table', 'ui': 'readonly',
+               'sortBy': 'WeaponId', 'groupBy': 'GroupId',
+               'row': [{'name': 'WeaponId', 'type': 'int'}, {'name': 'GroupId', 'type': 'string'},
+                       {'name': 'ConfigName', 'type': 'string'}, {'name': 'Shipped', 'type': 'int'}]}
+        gate = 'RenderFixture.Enabled'
+        fixture['schemas'].append({'subsystem': 'ReferenceRenderFixture', 'title': 'Reference renderer fixture',
+                                   'targets': {'cfg': 'render-fixture.cfg', 'overlays': [rel]}, 'enable': {'cfg': gate},
+                                   'fields': [{'path': gate, 'in': 'cfg', 'type': 'bool', 'default': False,
+                                               'ui': 'form', 'label': 'Enable reference fixture'}, ref]})
+        fixture['values']['cfg'][gate] = {'present': True, 'value': True, 'raw': 'true', 'error': None}
+        fixture['enableIndex'].append({'subsystem': 'ReferenceRenderFixture', 'title': 'Reference renderer fixture',
+                                       'gates': [{'kind': 'cfg', 'name': gate, 'state': True, 'detail': None}],
+                                       'blocks': [], 'effective': 'on', 'gatedByMaster': False, 'masterKnown': True})
+        fixture['values']['tables']['ReferenceRenderFixture|reference'] = {
+            'sidecar': 'ReferenceRenderFixture', 'path': 'reference', 'shape': 'array', 'present': True,
+            'rows': [{'id': i, 'cells': {'WeaponId': 1004+i, 'GroupId': 'EXAMPLE', 'ConfigName': name, 'Shipped': 100+i*10}}
+                     for i, name in enumerate(examples)]}
+        fixture['sections'].insert(-1, {'id': 'ReferenceRenderFixture', 'title': 'Reference renderer fixture',
+                                       'subsystems': ['ReferenceRenderFixture'], 'group': 'render-fixtures'})
+        fixture['navGroups']['groups'].append({'id': 'render-fixtures', 'title': 'Render fixtures',
+                                               'sections': ['ReferenceRenderFixture'], 'absent': [], 'note': None})
     model_json = json.dumps(fixture)
     with open(APP_HTML, encoding='utf-8') as f:
         src = f.read()
@@ -12758,7 +12798,8 @@ const panel = document.querySelector('#panel');
 // is what lets a case compare against the name a schema or a file declares.
 const txt = function (n) {
   return n.textContent.replace(/\u200b/g, '').replace(/\s+/g, ' ').trim(); };
-const navItems = function () { return nav.find(function (n) { return n._cls().includes('navitem'); }); };
+const navItems = function () { return nav.find(function (n) {
+  return n._cls().includes('navitem') && !n.attrs['data-player-page']; }); };
 const titleOf = function (item) { return txt(item.querySelector('b')); };
 const select = function (i) { navItems()[i].fire('click'); };
 // file#section, the same unit key the server builds. Derived from the schema's
@@ -12772,12 +12813,18 @@ setTimeout(function () {
   const items = navItems();
   ck('every section has a nav item', items.length === FIXTURE.sections.length,
      [items.length, FIXTURE.sections.length]);
+  const playerPages = (FIXTURE.playerBalance || {}).pages || [];
+  ck('every Workshop page also has a nav item', nav.find(function (n) {
+    return !!n.attrs['data-player-page']; }).length === playerPages.length);
+  ck('the navigation contains exactly the Hard Mode sections and Workshop pages',
+     nav.find(function (n) {return n._cls().includes('navitem');}).length
+       === items.length + playerPages.length);
 
   // 1. the master switch is the first thing on the page
   const masterSub = FIXTURE.enableIndex.filter(function (e) {
     return (e.gates || []).some(function (g) { return g.name === FIXTURE.masterKey; });
   })[0];
-  ck('the master switch is the first section',
+  ck('the master switch is the first Hard Mode section',
      titleOf(items[0]) === masterSub.title, [titleOf(items[0]), masterSub.title]);
 
   // 2. the regression suite is the last
@@ -14006,6 +14053,15 @@ setTimeout(function () {
   for (let i = 0; i < FIXTURE.sections.length; i++) {
     select(i);
     ck('section ' + FIXTURE.sections[i].id + ' renders', panel.children.length > 0);
+    ck('section ' + FIXTURE.sections[i].id + ' has no raw comment column',
+       !panel.find(function (n) {return n.tagName === 'TH' && txt(n) === '_comment';}).length);
+    ck('section ' + FIXTURE.sections[i].id + ' uses plain numeric placeholders',
+       !panel.find(function (n) {return n.tagName === 'INPUT' && /^ships\s/.test(n.placeholder);}).length);
+  }
+  for (const page of playerPages) {
+    nav.find(function (n) {return n.attrs['data-player-page'] === page.id;})[0].fire('click');
+    ck('Workshop page ' + page.id + ' renders its own heading',
+       panel.find(function (n) {return n.tagName === 'H2' && txt(n) === page.title;}).length === 1);
   }
 
   console.log('\nnode render of app.html: ' + pass + ' passed, ' + fail.length + ' failed');
