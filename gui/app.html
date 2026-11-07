@@ -838,6 +838,7 @@ let W = null;          // the working copy every control edits
 let SEL = null;        // selected section id (one subsystem, or a group of them)
 let LAST_SAVE = null;
 const PLAYER_NAV_OPEN = {};
+const PLAYER_SORT = {}; // View preferences only; never saved as tuning.
 // What the requires enforcement did to the working copy since the last
 // load: the keys one flip turned on, and the flip that was refused. Both
 // are drawn as banners, because an auto-enable nobody is told about is a
@@ -1846,24 +1847,77 @@ function playerCell(grid, row, column) {
   const target = row.targets ? row.targets[column.name] : {table:grid.table,id:row.id,column:column.name};
   if (!target) return null;
   const fields = ((W.player.tables || {})[target.table] || {})[target.id] || {};
-  const multiplier = (grid.multipliers || {})[column.name] === undefined ? 1 : grid.multipliers[column.name];
+  const multipliers = grid.table === 'Implant' ? (W.player.implantMultipliers || grid.multipliers || {}) : (grid.multipliers || {});
+  const multiplier = multipliers[column.name] === undefined ? 1 : multipliers[column.name];
   return {target:target,value:CKF.playerDisplayValue(fields[target.column] || ''),
     base:row.baseline[column.name],multiplier:multiplier,readOnly:target.readOnly || row.readOnly,
     readOnlyReason:target.readOnlyReason || row.readOnlyReason};
 }
 
-function playerService(grid, row) {
-  if (!grid.serviceColumn) return {label:'',detail:''};
-  const column = grid.serviceColumn.name;
-  const cell = playerCell(grid,row,{name:column});
+function playerServiceAssignment(cell, options) {
   if (!cell) return {label:'Unresolved service',detail:'The service assignment could not be read.'};
   const parsed = CKF.parsePlayerAdjust(cell.value);
   if (!parsed.ok) return {label:'Invalid service assignment',detail:cell.value};
   const base = Number(cell.base);
   const id = String(parsed.kind === 'none' ? base : playerRound(parsed.kind === 'set' ? parsed.value
     : parsed.kind === 'add' ? base + parsed.value : base * parsed.value));
-  return grid.serviceColumn.options[id] || {label:Number(id) <= 0 ? 'Unassigned' : 'Unresolved service '+id,
-    detail:'ServiceOptionId '+id+'; no matching service in this catalog.'};
+  return Object.assign({id:id},options[id] || {label:Number(id) <= 0 ? 'Unassigned' : 'Unresolved service '+id,
+    detail:'ServiceOptionId '+id+'; no matching service in this catalog.'});
+}
+
+function playerService(grid, row) {
+  return grid.serviceColumn ? playerServiceAssignment(playerCell(grid,row,{name:grid.serviceColumn.name}),grid.serviceColumn.options)
+    : {label:'',detail:''};
+}
+
+function playerCyberwareService(grid, row) {
+  const references = (row.cyberwareServices || []).map(function(ref) {
+    const cell = playerCell({table:'Implant'}, {id:ref.id,baseline:{ServiceOptionId:ref.baseline}}, {name:'ServiceOptionId'});
+    const service = playerServiceAssignment(cell,grid.cyberwareServiceColumn.options);
+    return {label:service.label+(service.id === undefined ? '' : ' (option '+service.id+')'),
+      detail:ref.name+' · Implant '+ref.id+'.ServiceOptionId\n'+service.detail};
+  });
+  return {label:references.length ? references.map(function(r) {return r.label;}).join('; ') : 'No linked implant',
+    detail:'Read-only reference. Edit Service option id in Cyberware.\n'+references.map(function(r) {return r.detail;}).join('\n')};
+}
+
+function playerSortValue(grid, row, key) {
+  if (key === 'name') return row.name;
+  if (key === 'service') return playerService(grid,row).label;
+  if (key === 'cyberwareService') return playerCyberwareService(grid,row).label;
+  if (key === 'icon') {
+    const editor = grid.iconEditor;
+    if (!editor) return row.icon || '';
+    const fields = ((W.player.tables || {})[grid.table] || {})[row.id] || {};
+    const id = CKF.playerDisplayValue(fields[editor.column] || '') || row.baseline[editor.column];
+    return (editor.assets[id] || {}).token || '';
+  }
+  const cell = playerCell(grid,row,{name:key.slice(7)});
+  if (!cell) return null;
+  const parsed = CKF.parsePlayerAdjust(cell.value);
+  if (!parsed.ok) return null;
+  const base = Number(cell.base);
+  const value = parsed.kind === 'none' ? base : playerRound(parsed.kind === 'set' ? parsed.value
+    : parsed.kind === 'add' ? base + parsed.value : base * parsed.value);
+  return playerRound(value * cell.multiplier);
+}
+
+function playerSortedRows(grid, rows, sort) {
+  if (!sort || !sort.key) return rows;
+  const groups = new Map();
+  for (const row of grid.rows) {
+    const group = row.sectionKey || row.section || '';
+    if (!groups.has(group)) groups.set(group,groups.size);
+  }
+  return rows.map(function(row,index) {return {row:row,index:index,value:playerSortValue(grid,row,sort.key)};})
+    .sort(function(a,b) {
+      const group = groups.get(a.row.sectionKey || a.row.section || '') - groups.get(b.row.sectionKey || b.row.section || '');
+      if (group) return group;
+      if (a.value === null || b.value === null) return a.value === b.value ? a.index-b.index : a.value === null ? 1 : -1;
+      const compared = typeof a.value === 'number' ? a.value-b.value
+        : String(a.value).localeCompare(String(b.value),undefined,{numeric:true,sensitivity:'base'});
+      return (sort.descending ? -compared : compared) || a.index-b.index;
+    }).map(function(item) {return item.row;});
 }
 
 function playerColumnWidth(grid, column) {
@@ -1948,11 +2002,14 @@ function renderPlayer(panel, page) {
         const fields = ((W.player.tables || {})[grid.table] || {})[r.id] || {};
         const assetId = editor ? CKF.playerDisplayValue(fields[editor.column] || '') || r.baseline[editor.column] : '';
         const token = editor ? (editor.assets[assetId] || {}).token || '' : r.icon || '';
-        return (r.name+' '+r.id+' '+(r.section || '')+' '+token+' '+playerService(grid,r).label).toLocaleLowerCase().includes(query);
+        return (r.name+' '+r.id+' '+(r.section || '')+' '+token+' '+playerService(grid,r).label
+          +' '+(grid.cyberwareServiceColumn ? playerCyberwareService(grid,r).label : '')).toLocaleLowerCase().includes(query);
       });
       const gridKey = grid.key || grid.table;
+      const sortId = page.id+':'+gridKey;
+      const sort = PLAYER_SORT[sortId] || {key:'',descending:false};
       const number = pageNumbers[gridKey] || 0;
-      const rows = matches.slice(number * 75, (number + 1) * 75);
+      const rows = playerSortedRows(grid,matches,sort).slice(number * 75, (number + 1) * 75);
       if (!matches.length && !grid.warning) continue;
       let target = grids;
       if (grid.subsection) {
@@ -1967,6 +2024,28 @@ function renderPlayer(panel, page) {
         target = subsections[grid.subsection];
       }
       if (grid.title !== page.title) target.appendChild(el('h3', {text:grid.title}));
+      if (['Weapons','Drone weapons','Cyberware','Cyberware modules','Consumables'].includes(page.group)) {
+        const sortBy = el('select',{'aria-label':'Sort by '+page.title+' · '+grid.title});
+        const choices = [{value:'',text:'Default order'},{value:'name',text:'Name'}];
+        if (grid.serviceColumn) choices.push({value:'service',text:'Service'});
+        if (grid.cyberwareServiceColumn) choices.push({value:'cyberwareService',text:'Cyberware Service'});
+        if (grid.iconColumn) choices.push({value:'icon',text:'Icon'});
+        for (const col of grid.columns.concat(grid.advanced).slice().sort(function(a,b) {return a.order-b.order;}))
+          choices.push({value:'column:'+col.name,text:(col.group ? col.group+' · ' : '')+col.label});
+        for (const choice of choices) sortBy.appendChild(el('option',choice));
+        sortBy.value = sort.key;
+        const direction = el('select',{'aria-label':'Sort direction '+page.title+' · '+grid.title,disabled:!sort.key},[
+          el('option',{value:'ascending',text:'Ascending'}),el('option',{value:'descending',text:'Descending'})]);
+        direction.value = sort.descending ? 'descending' : 'ascending';
+        function changeSort() {
+          PLAYER_SORT[sortId] = {key:sortBy.value,descending:direction.value === 'descending'};
+          pageNumbers[gridKey] = 0;paint();
+        }
+        sortBy.addEventListener('change',changeSort);direction.addEventListener('change',changeSort);
+        target.appendChild(el('div',{class:'pb-tools'},[el('label',{},[document.createTextNode('Sort by '),sortBy]),direction,
+          el('button',{text:'Re-sort',disabled:!sort.key,'aria-label':'Re-sort '+page.title+' · '+grid.title,onclick:changeSort}),
+          ...(grid.rows.some(function(r) {return r.section;}) ? [el('span',{class:'small',text:'Within each icon group'})] : [])]));
+      }
       if (matches.length > 75) target.appendChild(el('div', {class:'pb-tools'}, [
         el('button', {text:'Previous',disabled:number === 0,onclick:function () {pageNumbers[gridKey] = number - 1;paint();}}),
         el('span', {class:'small',text:(number * 75 + 1)+'–'+Math.min((number+1)*75,matches.length)+' of '+matches.length}),
@@ -1992,6 +2071,7 @@ function renderPlayer(panel, page) {
         displayCols.splice(leading,0,{service:true,width:serviceWidth,column:{label:'Service',name:grid.serviceColumn.name}});
       }
       if (grid.iconColumn) displayCols.splice(leading+(grid.serviceColumn ? 1 : 0),0,{icon:true,width:iconWidth,column:{label:grid.iconEditor ? 'Icon / model' : 'Icon',name:'icon'}});
+      if (grid.cyberwareServiceColumn) displayCols.push({cyberwareService:true,width:250,column:{label:'Cyberware Service (read-only)',name:'Cyberware.ServiceOptionId'}});
       for (let i=0;i<displayCols.length;) {
         const group = displayCols[i].column.group;
         if (!group) {i++;continue;}
@@ -2030,8 +2110,14 @@ function renderPlayer(panel, page) {
         if (row.enemyUse) nameCell.appendChild(el('span', {class:'pb-enemy',text:'Also used by enemies',title:'Changing this weapon also affects enemies that use it.'}));
         if (row.owner) nameCell.appendChild(el('span', {class:'pb-owner',text:'Managed by '+row.owner}));
         if (row.fitment) nameCell.appendChild(el('small', {class:'pb-fit',text:row.fitment,title:row.fitmentSource}));
-        const tr = el('tr', {}, [nameCell]);
+        const tr = el('tr', {'data-player-row':grid.table+' '+row.id}, [nameCell]);
         for (const item of displayCols) {
+          if (item.cyberwareService) {
+            const service = playerCyberwareService(grid,row);
+            const td = el('td',{class:'pb-service readonly',text:service.label,title:service.detail});
+            serviceViews.push(function () {const latest=playerCyberwareService(grid,row);td.textContent=latest.label;td.title=latest.detail;});
+            tr.appendChild(td);continue;
+          }
           if (item.service) {
             const td = el('td',{class:'pb-service'});
             function refreshService() {const service=playerService(grid,row);td.textContent=service.label;td.title=service.detail;}

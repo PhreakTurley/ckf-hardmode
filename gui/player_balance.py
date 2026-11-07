@@ -414,6 +414,55 @@ def implant_links(allrows, doc):
     return links, owners
 
 
+def cyberweapon_links(allrows, doc, weapons):
+    """Join effective attack/effect pointers and retain all owning implants."""
+    attacks = {w['WeaponId']: [] for w in weapons}
+    for talent in allrows['Talent'].values():
+        wid = str(int(effective(doc, 'Talent', talent, 'Weapon')))
+        if wid in attacks:
+            attacks[wid].append(talent)
+    count = max((len(a) for a in attacks.values()), default=0)
+    links, owners, blocks = {}, {}, []
+    for index in range(count):
+        prefix = 'Attack' if count == 1 else 'Attack %s' % (index + 1)
+        blocks += [(prefix, 'Talent'), (prefix + ' self effect', 'Effect'),
+                   (prefix + ' target effect', 'Effect'), (prefix + ' matrix effects', 'MatrixEffect')]
+    implants = {}
+    for implant in allrows['Implant'].values():
+        for field in ('ImplantTalentId', 'ImplantTalentId2'):
+            tid = str(int(effective(doc, 'Implant', implant, field)))
+            implants.setdefault(tid, {})[implant['ImplantTypeId']] = implant
+    for weapon in weapons:
+        wid = weapon['WeaponId']
+        actions = sorted(attacks[wid], key=lambda a: int(a['TalentId']))
+        linked = {'ids': {}, 'warnings': [], 'implants': {}}
+        if not actions:
+            linked['warnings'].append('Weapon %s: no attack talent references this weapon' % wid)
+        for index in range(count):
+            prefix = 'Attack' if count == 1 else 'Attack %s' % (index + 1)
+            action = actions[index] if index < len(actions) else None
+            tid = action['TalentId'] if action else '0'
+            linked[prefix] = action
+            linked['ids'][prefix] = tid
+            if action:
+                owners.setdefault(('Talent', tid), {})[wid] = weapon['WeaponName']
+                linked['implants'].update(implants.get(tid, {}))
+            for suffix, table, field in [(' self effect', 'Effect', 'SelfEffect'),
+                                         (' target effect', 'Effect', 'TargetEffect'),
+                                         (' matrix effects', 'MatrixEffect', 'MatrixEffect')]:
+                heading = prefix + suffix
+                pointer = str(int(effective(doc, 'Talent', action, field))) if action else '0'
+                target = None if pointer in ('0', '-1', '') else allrows[table].get(pointer)
+                linked[heading] = target
+                linked['ids'][heading] = pointer
+                if pointer not in ('0', '-1', '') and target is None:
+                    linked['warnings'].append('Weapon %s: %s %s was not found' % (wid, table, pointer))
+                if target:
+                    owners.setdefault((table, pointer), {})[wid] = weapon['WeaponName']
+        links[wid] = linked
+    return links, owners, blocks
+
+
 def catalog(config_dir, database):
     """Build rows and visible columns from a fresh, complete official read."""
     try:
@@ -491,7 +540,7 @@ def catalog(config_dir, database):
                 joined = grid(base_table, rows, title)
                 joined['joined'] = True
                 for column in joined['columns'] + joined['advanced']:
-                    column['group'] = base_heading
+                    column['group'] = column.get('group') or base_heading
                 for record in joined['rows']:
                     record['targets'] = {column['name']: {'table': base_table, 'id': record['id'], 'column': column['name']}
                                          for column in joined['columns'] + joined['advanced']}
@@ -565,7 +614,16 @@ def catalog(config_dir, database):
                 names = {r.get('WeaponClassName', '') for r in rows
                          if r.get('WeaponClassName') and not r['WeaponClassName'].startswith('Gear.')}
                 title = CLASS_NAMES.get(cls, next(iter(names)) if len(names) == 1 else 'Weapon class %s' % cls)
-                weapon_grid = grid('Weapon', rows, 'Weapon stats')
+                if cls in (16, 17):
+                    weapon_links, weapon_owners, blocks = cyberweapon_links(allrows, doc, rows)
+                    weapon_grid = joined_grid('Weapon', rows, title, 'Weapon', weapon_links, weapon_owners, blocks)
+                    weapon_grid['cyberwareServiceColumn'] = {'options': services['Implant']}
+                    for record in weapon_grid['rows']:
+                        record['cyberwareServices'] = [
+                            {'id': i['ImplantTypeId'], 'name': i['ImplantName'], 'baseline': i['ServiceOptionId']}
+                            for i in weapon_links[record['id']]['implants'].values()]
+                else:
+                    weapon_grid = grid('Weapon', rows, 'Weapon stats')
                 for record in weapon_grid['rows']:
                     record['enemyUse'] = record['id'] in enemy_weapons
                 weapon_grid['specialRuleColumn'] = 'SpecialRule'
@@ -604,7 +662,7 @@ def catalog(config_dir, database):
                     for column_set in ('columns', 'advanced'):
                         weapon_grid[column_set] = [c for c in weapon_grid[column_set] if c['name'] != 'Asset3DTypeId']
                 page('weapon-%s' % cls, title, 'Drone weapons' if cls in DRONE_CLASSES else 'Weapons', [weapon_grid,
-                     grid('Talent', talents, 'Attacks', 'varying') if talents else None], specialRules=rules)
+                     grid('Talent', talents, 'Attacks', 'varying') if talents and cls not in (16, 17) else None], specialRules=rules)
 
             class_mods = source.read('WeaponClassModModel')[1]
             mod_groups = {}

@@ -147,7 +147,7 @@ horizontal scrolling. Names stay fixed while the grid scrolls horizontally;
 large catalogs are searchable and paginated. Red marks overrides or a global
 implant multiplier; yellow marks other nonzero baselines.
 
-Weapons, weapon mods and implants sort by PL, rarity and cost, with those
+Weapons, weapon mods and implants default to PL, rarity and cost, with those
 columns immediately after the name when visible. Melee and SMG rows first
 group by `Weapon3DAsset.Thumbnail`, joined through `Asset3DTypeId`; the Icon
 column displays the thumbnail's asset name. Weapon headers group damage,
@@ -155,6 +155,26 @@ accuracy, armor crit, crit damage, range, recoil, noise, arc, reload size and
 weapon effect in that order. Varying rarity and weapon-effect fields are
 included. Columns size to their longest heading or value across the full
 category, including rows on other pages.
+
+Equipment tables have **Sort by** and **Ascending / Descending** controls.
+Choose Name, Service, Icon where available, or any numeric field, including
+linked fields and fields hidden by the default view. Sorting uses current
+adjusted values and global implant multipliers, before pagination. Missing
+linked values sort last in either direction. Icon groups and weapon-mod slot
+subsections stay together. **Default order** restores the catalog order.
+Each table remembers its choice while the editor is open; sorting is a view
+preference and never changes tuning or Workshop exports. After editing a sort
+field, click **Re-sort** to reorder the table without interrupting typing.
+
+**Claws** and **Eye Lasers** join weapon stats, attacks and their linked self,
+target and matrix effects into one row per weapon. The join follows effective
+`Talent.Weapon` assignments and retains multiple attacks separately. The
+appended **Cyberware Service (read-only)** column shows service names and
+option ids from implants linked through `ImplantTalentId` or `ImplantTalentId2`.
+It follows saved adjustments and pending edits made in Cyberware; it provides
+no second editable service assignment. Hover to identify the owning implant.
+Missing attack/effect links remain explicit. All editable joined cells retain
+their native table/id/column for saving and export.
 
 Weapons, weapon mods, consumables and cyberware always show a **Service** column with
 localized names and display levels. `player_balance.py:service_catalog` joins
