@@ -135,6 +135,7 @@ import static_data
 import player_balance
 import modkit
 import party_size
+import contact_limit_breaks
 
 DEFAULT_GAME_DIR = r'C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint'
 
@@ -2889,7 +2890,7 @@ def files_check_schema_reads(schemas):
     `fingerprints` uses the same list, so an overlay edited on disk between the
     browser's read and the save is detected too.
     """
-    rel = {'ckf.hardmode.cfg', player_balance.FILE, party_size.FILE}
+    rel = {'ckf.hardmode.cfg', player_balance.FILE, party_size.FILE, contact_limit_breaks.FILE}
     rel.update(overlay_paths_all(schemas))
     for sch in schemas:
         j = sch.get('targets', {}).get('json')
@@ -5334,6 +5335,8 @@ def load_settings():
                  'Cyber Knights Mod Uploader', 'WorkshopContent', 'TalentRebalance'))
     s.setdefault('partySizeProjectDir', os.path.join(os.path.dirname(game),
                  'Cyber Knights Mod Uploader', 'WorkshopContent', 'IncreasedPartySize'))
+    s.setdefault('contactBreaksProjectDir', os.path.join(os.path.dirname(game),
+                 'Cyber Knights Mod Uploader', 'WorkshopContent', 'FasterLimitBreaks'))
     return s
 
 
@@ -5494,6 +5497,8 @@ class App:
             'playerBalance': player,
             'partySize': party_size.model(cd, self.data_source(),
                                          self.settings.get('partySizeProjectDir', '')),
+            'contactBreaks': contact_limit_breaks.model(cd, self.data_source(),
+                                         self.settings.get('contactBreaksProjectDir', '')),
             'talentCatalogError': self.catalog_error,
             'navGroups': nav_groups,
             'values': model,
@@ -5542,17 +5547,32 @@ class App:
             except (OSError, ValueError) as exc:
                 return {'ok': False, 'error': str(exc)}
 
+    def api_contact_export(self, expect=None):
+        with self.lock:
+            try:
+                return contact_limit_breaks.send(config_dir_for(self.settings),
+                                       self.settings.get('contactBreaksProjectDir', ''),
+                                       self.data_source(), expect)
+            except (OSError, ValueError) as exc:
+                return {'ok': False, 'error': str(exc)}
+
     def party_edits(self, cd, edits, proposed):
-        if 'partySize' not in edits:
-            return
-        try:
-            party_size.rule(self.data_source())
-            data = party_size.encode(party_size.validate(edits['partySize']))
-            path = os.path.join(cd, party_size.FILE)
-            if not os.path.exists(path) or read_bytes(path) != data:
-                proposed[party_size.FILE] = data
-        except (ValueError, OSError) as exc:
-            raise SaveRefused({'summary': 'Party Size Mod was not saved', 'detail': str(exc)})
+        for key, module, lookup, title in (
+                ('partySize', party_size, party_size.rule, 'Party Size Mod'),
+                ('contactBreaks', contact_limit_breaks, contact_limit_breaks.rules, 'Faster Contact Limit Breaks')):
+            path = os.path.join(cd, module.FILE)
+            if os.path.exists(path):
+                proposed[module.FILE] = read_bytes(path)
+            if key not in edits:
+                continue
+            try:
+                document = module.validate(edits[key])
+                if document == module.load(cd):
+                    continue  # Preserve original bytes on a no-op, even without official data.
+                lookup(self.data_source())
+                proposed[module.FILE] = module.encode(document)
+            except (ValueError, OSError) as exc:
+                raise SaveRefused({'summary': title + ' was not saved', 'detail': str(exc)})
 
     def player_edits(self, cd, edits, proposed):
         change = edits.get('playerBalance')
@@ -5777,6 +5797,8 @@ class Handler(BaseHTTPRequestHandler):
                                                          body.get('stripReadme'),
                                                          bool(body.get('force')),
                                                          body.get('fingerprints')))
+            if path == '/api/contact-export':
+                return self._json(200, self.app.api_contact_export(body.get('fingerprints')))
             if path == '/api/party-export':
                 return self._json(200, self.app.api_party_export(body.get('fingerprints')))
             if path == '/api/talent-export':
@@ -5790,7 +5812,7 @@ class Handler(BaseHTTPRequestHandler):
                     s['configDirOverride'] = str(v) if v else None
                 if 'stripReadme' in body:
                     s['stripReadme'] = bool(body['stripReadme'])
-                for key in ('talentProjectDir', 'modkitProjectDir', 'officialDataPath', 'partySizeProjectDir'):
+                for key in ('talentProjectDir', 'modkitProjectDir', 'officialDataPath', 'partySizeProjectDir', 'contactBreaksProjectDir'):
                     if key in body:
                         s[key] = str(body[key] or '').strip()
                 save_settings(s)
@@ -10491,6 +10513,8 @@ def selftest(config_arg, frozen_exe=None, legacy_cyberware_help=False):
                 sorted(set(unit_file(u) for u in _noop['json'])
                        | set(_noop.get('overlays') or {})
                        | ({player_balance.FILE} if _noop.get('playerBalance') is not None else set())
+                       | ({party_size.FILE} if _noop.get('partySize') is not None else set())
+                       | ({contact_limit_breaks.FILE} if _noop.get('contactBreaks') is not None else set())
                        | {'ckf.hardmode.cfg'})
                 == sorted(set(owned) - set(mirrors)),
                 (sorted(set(unit_file(u) for u in _noop['json'])
@@ -12023,6 +12047,9 @@ def _edits_for(schemas, model):
         # No-op coverage includes the Workshop file without pretending its
         # catalog is readable when this harness deliberately disables static data.
         edits['playerBalance'] = {'cells': [], 'implantMultipliers': {}}
+    for key in ('partySize', 'contactBreaks'):
+        if model.get(key, {}).get('document') is not None:
+            edits[key] = model[key]['document']
     for rel, ent in (model['values'].get('overlays') or {}).items():
         if not ent.get('writable'):
             continue
@@ -12829,7 +12856,7 @@ const panel = document.querySelector('#panel');
 const txt = function (n) {
   return n.textContent.replace(/\u200b/g, '').replace(/\s+/g, ' ').trim(); };
 const navItems = function () { return nav.find(function (n) {
-  return n._cls().includes('navitem') && !n.attrs['data-player-page']; }); };
+  return n._cls().includes('navitem') && !n.attrs['data-player-page'] && !n.attrs['data-rule-mod']; }); };
 const titleOf = function (item) { return txt(item.querySelector('b')); };
 const select = function (i) { navItems()[i].fire('click'); };
 // file#section, the same unit key the server builds. Derived from the schema's
@@ -12846,9 +12873,13 @@ setTimeout(function () {
   const playerPages = (FIXTURE.playerBalance || {}).pages || [];
   ck('every Workshop page also has a nav item', nav.find(function (n) {
     return !!n.attrs['data-player-page']; }).length === playerPages.length);
-  ck('the navigation contains exactly the Hard Mode sections and Workshop pages',
+  const ruleItems=nav.find(function (n) {return !!n.attrs['data-rule-mod'];});
+  ck('both standalone rule mods have exactly one nav item',
+     JSON.stringify(ruleItems.map(function(n) {return n.attrs['data-rule-mod'];}).sort())
+       === JSON.stringify(['contactBreaks', 'partySize']));
+  ck('the navigation contains exactly the Hard Mode sections, Workshop pages and standalone rule mods',
      nav.find(function (n) {return n._cls().includes('navitem');}).length
-       === items.length + playerPages.length);
+       === items.length + playerPages.length + ruleItems.length);
 
   // 1. the master switch is the first thing on the page
   const masterSub = FIXTURE.enableIndex.filter(function (e) {
@@ -14118,7 +14149,7 @@ setTimeout(function () {
   const gi = FIXTURE.sections.findIndex(function (s) {
     return s.subsystems.indexOf(owner.subsystem) >= 0; });
   ck('the section holding the windowed matrix was found', gi >= 0, owner.subsystem);
-  nav.find(function (n) { return n._cls().includes('navitem'); })[gi].fire('click');
+  nav.find(function (n) { return n._cls().includes('navitem') && !n.attrs['data-player-page'] && !n.attrs['data-rule-mod']; })[gi].fire('click');
   const grids = panel.find(function (n) { return n.tagName === 'TABLE' && n._cls().includes('grid'); });
   const headersOf = function (g) {
     return g.querySelector('thead').find(function (n) { return n.tagName === 'TH'; }).map(txt);

@@ -1221,6 +1221,8 @@ function buildWorking() {
     w.overlays[rel] = { cells: (e.rows || []).map(function (r) {
       return (r.cells || []).slice(); }) };
   }
+  w.contactTurns = {};
+  for (const key of ['minimum', 'maximum']) w.contactTurns[key] = (MODEL.contactBreaks || {}).document ? String(MODEL.contactBreaks.document[key]) : '';
   w.partyMaximum = (MODEL.partySize || {}).document ? String(MODEL.partySize.document.maximum) : '';
   w.player = JSON.parse(JSON.stringify((MODEL.playerBalance || {}).document || {}));
   return w;
@@ -1267,6 +1269,7 @@ function dirtyPaths() {
   for (const c of playerChanges().cells) out.push(c.table + ':' + c.id + '.' + c.column);
   for (const k of Object.keys(playerChanges().implantMultipliers)) out.push('All cyberware:' + k);
   if (partyChanged()) out.push('Party Size Mod: maximum');
+  if (contactChanged()) out.push('Faster Contact Limit Breaks: turns');
   return out;
 }
 
@@ -1328,6 +1331,7 @@ function buildEdits() {
                      value: c.to === undefined || c.to === null ? '' : String(c.to) });
   }
   if (partyChanged()) edits.partySize = {format:1, maximum:Number(W.partyMaximum)};
+  if (contactChanged()) edits.contactBreaks = {format:1, minimum:Number(W.contactTurns.minimum), maximum:Number(W.contactTurns.maximum)};
   const player = playerChanges();
   if (player.cells.length || Object.keys(player.implantMultipliers).length) edits.playerBalance = player;
   return edits;
@@ -1771,10 +1775,15 @@ function renderIndex() {
   const nav = $('#index');
   nav.textContent = '';
   nav.appendChild(el('div', {class:'navitem' + (SEL === 'party-size' ? ' sel' : ''),
-    role:'button', tabindex:'0', 'data-party-size':'true',
+    role:'button', tabindex:'0', 'data-rule-mod':'partySize',
     onclick:function () {SEL='party-size';render();},
     onkeydown:function (e) {if (e.key==='Enter' || e.key===' ') {e.preventDefault();SEL='party-size';render();}}
   }, [el('div', {class:'nm'}, [el('b', {text:'Party Size Mod'})])]));
+  nav.appendChild(el('div', {class:'navitem' + (SEL === 'contact-breaks' ? ' sel' : ''),
+    role:'button', tabindex:'0', 'data-rule-mod':'contactBreaks',
+    onclick:function () {SEL='contact-breaks';render();},
+    onkeydown:function (e) {if (e.key==='Enter' || e.key===' ') {e.preventDefault();SEL='contact-breaks';render();}}
+  }, [el('div', {class:'nm'}, [el('b', {text:'Faster Contact Limit Breaks'})])]));
   const playerGroups = {};
   for (const page of ((MODEL.playerBalance || {}).pages || [])) {
     if (!playerGroups[page.group]) {
@@ -3556,10 +3565,49 @@ function renderParty(panel) {
   card.appendChild(status);
 }
 
+function contactChanged() {
+  const saved = (MODEL.contactBreaks || {}).document;
+  return ['minimum', 'maximum'].some(function (key) {return W.contactTurns[key] !== (saved ? String(saved[key]) : '');});
+}
+
+function renderContact(panel) {
+  const model = MODEL.contactBreaks || {};
+  const card = el('div', {class:'card'}, [el('h3', {text:'Faster Contact Limit Breaks'})]);
+  panel.appendChild(card);
+  if (model.error) card.appendChild(banner('err', 'Contact limit-break rules unavailable', [model.error]));
+  for (const rule of (model.rules || [])) {
+    const id='contact-' + rule.field;
+    const input=el('input', {id:id, type:'number', min:'1', max:'2147483647', step:'1', value:W.contactTurns[rule.field],
+      disabled:!!model.error, oninput:function () {W.contactTurns[rule.field]=input.value;updateDirty();}});
+    card.appendChild(el('div', {class:'field'}, [el('label', {class:'lab', for:id,
+      text:rule.field==='minimum' ? 'Minimum turns' : 'Maximum turns'}), input]));
+    card.appendChild(el('p', {class:'meta', text:'Rule ' + rule.id + ' · ' + rule.name + ' · Official value: ' + rule.baseline}));
+    card.appendChild(el('p', {class:'doc', text:rule.description}));
+  }
+  card.appendChild(el('p', {class:'doc', text:'Save the turns, then send this standalone mod to the uploader. This export updates only Rules 84 and 85.'}));
+  const folder=el('input', {id:'contact-project', type:'text', value:model.projectDir || '', spellcheck:'false'});
+  card.appendChild(el('div', {class:'field'}, [el('label', {class:'lab', for:'contact-project', text:'Modkit mod folder'}), folder]));
+  const status=el('p', {class:'small', role:'status', 'aria-live':'polite'});
+  const send=el('button', {id:'send-contact', text:'Send Faster Contact Limit Breaks to Modkit',
+    disabled:!!model.error || !model.document || !!dirtyPaths().length,
+    onclick:async function () {
+      send.disabled=true;
+      try {
+        await api('/api/settings', {contactBreaksProjectDir:folder.value.trim()});
+        MODEL.contactBreaks.projectDir=folder.value.trim();
+        const result=await api('/api/contact-export', {fingerprints:MODEL.fingerprints});
+        status.textContent=result.ok ? result.next : 'Export failed: ' + result.error;
+      } catch (e) {status.textContent='Export failed: ' + String(e);}
+      finally {updateDirty();}
+    }});
+  card.appendChild(send);card.appendChild(status);
+}
+
 function renderPanel() {
   const p = $('#panel');
   p.textContent = '';
   if (SEL === 'party-size') {renderParty(p);return;}
+  if (SEL === 'contact-breaks') {renderContact(p);return;}
   const playerPage = ((MODEL.playerBalance || {}).pages || []).find(function (page) {return SEL === 'pb:' + page.id;});
   if (playerPage) {renderPlayer(p, playerPage); return;}
   const sec = sectionOf(SEL);
@@ -3612,6 +3660,8 @@ function updateDirty() {
   $('#send-talents').title = d.length ? 'Save pending edits first.' : '';
   const partySend = $('#panel').querySelector('#send-party');
   if (partySend) partySend.disabled = !!d.length || !(MODEL.partySize || {}).document || !!(MODEL.partySize || {}).error;
+  const contactSend=$('#panel').querySelector('#send-contact');
+  if (contactSend) contactSend.disabled=!!d.length || !(MODEL.contactBreaks || {}).document || !!(MODEL.contactBreaks || {}).error;
 }
 
 function render() {
@@ -3641,7 +3691,7 @@ async function load() {
   // warning. (Under 'use strict' an assignment to an undeclared name here is a
   // ReferenceError that stops load(); undeclared_globals_in_app_html in
   // serve.py guards that.)
-  if (!SEL || (SEL !== 'party-size' && !sectionOf(SEL) && !((MODEL.playerBalance || {}).pages || []).some(function (p) {return SEL === 'pb:'+p.id;}))) SEL = MODEL.sections[0].id;
+  if (!SEL || (SEL !== 'party-size' && SEL !== 'contact-breaks' && !sectionOf(SEL) && !((MODEL.playerBalance || {}).pages || []).some(function (p) {return SEL === 'pb:'+p.id;}))) SEL = MODEL.sections[0].id;
   $('#gamedir').value = MODEL.configDirOverride || MODEL.gameDir || '';
   $('#talent-project').value = MODEL.modkit.talentProjectDir;
   $('#modkit-project').value = MODEL.modkit.modkitProjectDir;

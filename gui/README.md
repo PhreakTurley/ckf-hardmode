@@ -93,6 +93,36 @@ actual installed-parser output (reported skipped when unavailable);
 `python gui/test_party_size_ui.py` exercises the section and save payload in
 the Node DOM harness with current official data.
 
+## Faster Contact Limit Breaks
+
+**Faster Contact Limit Breaks** has its own navigation section for official
+`Rule` rows 84 and 85. `contact_limit_breaks.py:rules` selects only those two
+identities and verifies their names. The section shows both current official
+baselines and descriptions. The minimum and maximum are positive integer turn
+counts, with minimum no greater than maximum. They live only in
+`BepInEx/config/ckf.contact-limit-breaks.json`; an absent file has no implicit
+setting. A no-op save preserves both standalone mods' original bytes.
+
+Save, choose the dedicated initialized uploader mod folder, then click
+**Send Faster Contact Limit Breaks to Modkit**. Its independent
+`contactBreaksProjectDir` setting leaves the other destinations alone. The
+handoff writes `source_data/stories.manifest` and `contact-limit-breaks.json`,
+containing only two native parser updates for `RuleId` 84 and 85 and their
+`Value` fields. `rule_mod.py:send` shares guarded file handoff with Party Size
+Mod and refuses another mod's manifest. The Player Balance exporter excludes
+and rejects these two rules.
+
+Use **Prepare Mod Data** in the selected uploader project. Its `data.sql`
+contains exactly two `UPDATE Rule SET Value=... WHERE RuleId=...;` statements,
+for 84 and 85; its locale file is empty. Follow the same private upload,
+subscription, activation and in-game testing steps as [Party Size Mod](#party-size-mod).
+The two standalone data mods require no BepInEx plugin.
+
+Verification: `python gui/test_contact_limit_breaks.py` checks row scope,
+independent destinations, invalid turn ranges, no-op byte preservation and
+installed-parser output; `python gui/test_contact_limit_breaks_ui.py` exercises
+both controls and the independent save payload.
+
 ## Send talents to Modkit Uploader
 
 Open **Workshop export** above the editor. Set **Workshop

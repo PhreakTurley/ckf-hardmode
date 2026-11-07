@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 
-import modkit
+import rule_mod
 import static_data
 
 FILE = 'ckf.party-size.json'
@@ -61,46 +61,6 @@ def source_bytes(document):
 
 
 def send(config_dir, project_dir, database=None, expect=None):
-    """Copy only this mod's manifest/JSON, guarding inputs and destinations."""
-    if not str(project_dir).strip():
-        raise ValueError('Choose the initialized Party Size Mod folder.')
-    project = Path(project_dir).resolve()
-    config = Path(config_dir).resolve()
-    if project == config or config in project.parents:
-        raise ValueError('The Modkit project must be outside the live config directory.')
-    metadata = project.parent / (project.name + '.workshop.json')
-    if not metadata.is_file() or not (project / 'upload_content').is_dir():
-        raise ValueError('Choose the initialized mod folder beside its .workshop.json.')
-    tuning = config / FILE
-    database_path = static_data.database_path(database)
-    contract_path = project.parent / 'config.json'
-    inputs = {p: modkit.state(p) for p in (tuning, database_path, contract_path, metadata)}
-    if expect is not None:
-        if expect.get(FILE) != (inputs[tuning][2] if inputs[tuning] else None):
-            raise ValueError('Party Size Mod changed on disk; reload before sending.')
-        if expect.get('@official-data.db') != (inputs[database_path][2] if inputs[database_path] else None):
-            raise ValueError('Official data changed; reload before sending.')
-    document = load(config)
-    if document is None:
-        raise ValueError('Save a Party Size Mod maximum before sending.')
-    rule(database)
-    contract = json.loads(contract_path.read_text(encoding='utf-8-sig'))
-    fields = {f['name']: f for f in contract.get('Rule', {}).get('sql', {}).get('fields', [])}
-    if (contract.get('Rule', {}).get('sql', {}).get('table') != 'Rule'
-            or fields.get('RuleId', {}).get('type') != 'INTEGER'
-            or not fields.get('RuleId', {}).get('primaryKey')
-            or fields.get('Value', {}).get('type') != 'INTEGER'):
-        raise ValueError('The installed parser no longer declares Rule.RuleId / Value as expected.')
-    manifest = project / 'source_data' / 'stories.manifest'
-    manifest_bytes = b'party-size.json\n'
-    outputs = {manifest: manifest_bytes,
-               project / 'source_data' / 'party-size.json': source_bytes(document)}
-    expected = {p: modkit.state(p) for p in outputs}
-    if expected[manifest] is not None:
-        entries = [s.strip() for s in manifest.read_text(encoding='utf-8-sig').splitlines()
-                   if s.strip() and not s.lstrip().startswith('#')]
-        if entries != ['party-size.json']:
-            raise ValueError('The selected project contains another mod manifest; choose a dedicated project.')
-    written = modkit.commit_files(outputs, expected, inputs)
-    return {'ok': True, 'written': written, 'sourceDir': str(manifest.parent),
-            'next': 'In Modkit Uploader, select this mod and click Prepare Mod Data.'}
+    return rule_mod.send(config_dir, project_dir, database, expect,
+                         title='Party Size Mod', filename=FILE, source_name='party-size.json',
+                         load_document=load, lookup=rule, render=source_bytes)

@@ -60,7 +60,7 @@ class PartySizeTests(unittest.TestCase):
     def test_no_implicit_maximum_or_database_fallback(self):
         self.tuning.unlink()
         self.assertIsNone(party_size.load(self.config))
-        with self.assertRaisesRegex(ValueError, 'Save a Party'):
+        with self.assertRaisesRegex(ValueError, 'Save Party Size Mod'):
             self.send()
         self.assertIsNotNone(party_size.model(self.config, self.root / 'missing.db')['error'])
 
