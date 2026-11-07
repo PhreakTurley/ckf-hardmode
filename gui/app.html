@@ -1221,6 +1221,7 @@ function buildWorking() {
     w.overlays[rel] = { cells: (e.rows || []).map(function (r) {
       return (r.cells || []).slice(); }) };
   }
+  w.partyMaximum = (MODEL.partySize || {}).document ? String(MODEL.partySize.document.maximum) : '';
   w.player = JSON.parse(JSON.stringify((MODEL.playerBalance || {}).document || {}));
   return w;
 }
@@ -1265,6 +1266,7 @@ function dirtyPaths() {
     out.push(c.rel + ':' + c.key.join('/') + '.' + c.col);
   for (const c of playerChanges().cells) out.push(c.table + ':' + c.id + '.' + c.column);
   for (const k of Object.keys(playerChanges().implantMultipliers)) out.push('All cyberware:' + k);
+  if (partyChanged()) out.push('Party Size Mod: maximum');
   return out;
 }
 
@@ -1325,6 +1327,7 @@ function buildEdits() {
     blk.cells.push({ key: c.key, column: col.name,
                      value: c.to === undefined || c.to === null ? '' : String(c.to) });
   }
+  if (partyChanged()) edits.partySize = {format:1, maximum:Number(W.partyMaximum)};
   const player = playerChanges();
   if (player.cells.length || Object.keys(player.implantMultipliers).length) edits.playerBalance = player;
   return edits;
@@ -1767,6 +1770,11 @@ function groupEmptyWhy(g) {
 function renderIndex() {
   const nav = $('#index');
   nav.textContent = '';
+  nav.appendChild(el('div', {class:'navitem' + (SEL === 'party-size' ? ' sel' : ''),
+    role:'button', tabindex:'0', 'data-party-size':'true',
+    onclick:function () {SEL='party-size';render();},
+    onkeydown:function (e) {if (e.key==='Enter' || e.key===' ') {e.preventDefault();SEL='party-size';render();}}
+  }, [el('div', {class:'nm'}, [el('b', {text:'Party Size Mod'})])]));
   const playerGroups = {};
   for (const page of ((MODEL.playerBalance || {}).pages || [])) {
     if (!playerGroups[page.group]) {
@@ -3511,9 +3519,47 @@ function renderSubsystem(p, sch, fields) {
   if (any) p.appendChild(body);
 }
 
+function partyChanged() {
+  const saved = (MODEL.partySize || {}).document;
+  return W.partyMaximum !== (saved ? String(saved.maximum) : '');
+}
+
+function renderParty(panel) {
+  const model = MODEL.partySize || {};
+  const card = el('div', {class:'card'}, [el('h3', {text:'Party Size Mod'})]);
+  panel.appendChild(card);
+  if (model.error) card.appendChild(banner('err', 'Party Size Mod unavailable', [model.error]));
+  if (model.rule) {
+    card.appendChild(el('p', {class:'doc', text:model.rule.name + ' — ' + model.rule.description}));
+    card.appendChild(el('p', {class:'meta', text:'Rule ' + model.rule.id + ' · Official value: ' + model.rule.baseline}));
+  }
+  const maximum = el('input', {id:'party-maximum', type:'number', min:'1', max:'2147483647', step:'1', value:W.partyMaximum,
+    disabled:!!model.error, oninput:function () {W.partyMaximum=maximum.value;updateDirty();}});
+  card.appendChild(el('div', {class:'field'}, [el('label', {class:'lab', for:'party-maximum', text:'Maximum mercenaries'}), maximum]));
+  card.appendChild(el('p', {class:'doc', text:'Save your maximum, then send this standalone mod to the uploader. This export updates only Rule 83.'}));
+  const folder = el('input', {id:'party-project', type:'text', value:model.projectDir || '', spellcheck:'false'});
+  card.appendChild(el('div', {class:'field'}, [el('label', {class:'lab', for:'party-project', text:'Modkit mod folder'}), folder]));
+  const status = el('p', {class:'small', role:'status', 'aria-live':'polite'});
+  const send = el('button', {id:'send-party', text:'Send Party Size Mod to Modkit',
+    disabled:!!model.error || !model.document || !!dirtyPaths().length,
+    onclick:async function () {
+      send.disabled=true;
+      try {
+        await api('/api/settings', {partySizeProjectDir:folder.value.trim()});
+        MODEL.partySize.projectDir=folder.value.trim();
+        const result = await api('/api/party-export', {fingerprints:MODEL.fingerprints});
+        status.textContent=result.ok ? result.next : 'Export failed: ' + result.error;
+      } catch (e) {status.textContent='Export failed: ' + String(e);}
+      finally {updateDirty();}
+    }});
+  card.appendChild(send);
+  card.appendChild(status);
+}
+
 function renderPanel() {
   const p = $('#panel');
   p.textContent = '';
+  if (SEL === 'party-size') {renderParty(p);return;}
   const playerPage = ((MODEL.playerBalance || {}).pages || []).find(function (page) {return SEL === 'pb:' + page.id;});
   if (playerPage) {renderPlayer(p, playerPage); return;}
   const sec = sectionOf(SEL);
@@ -3564,6 +3610,8 @@ function updateDirty() {
   $('#send-talents').disabled = !!d.length || foldersPending || !MODEL.check.ran
     || !MODEL.modkit.talentProjectDir || !MODEL.modkit.modkitProjectDir;
   $('#send-talents').title = d.length ? 'Save pending edits first.' : '';
+  const partySend = $('#panel').querySelector('#send-party');
+  if (partySend) partySend.disabled = !!d.length || !(MODEL.partySize || {}).document || !!(MODEL.partySize || {}).error;
 }
 
 function render() {
@@ -3593,7 +3641,7 @@ async function load() {
   // warning. (Under 'use strict' an assignment to an undeclared name here is a
   // ReferenceError that stops load(); undeclared_globals_in_app_html in
   // serve.py guards that.)
-  if (!SEL || (!sectionOf(SEL) && !((MODEL.playerBalance || {}).pages || []).some(function (p) {return SEL === 'pb:'+p.id;}))) SEL = MODEL.sections[0].id;
+  if (!SEL || (SEL !== 'party-size' && !sectionOf(SEL) && !((MODEL.playerBalance || {}).pages || []).some(function (p) {return SEL === 'pb:'+p.id;}))) SEL = MODEL.sections[0].id;
   $('#gamedir').value = MODEL.configDirOverride || MODEL.gameDir || '';
   $('#talent-project').value = MODEL.modkit.talentProjectDir;
   $('#modkit-project').value = MODEL.modkit.modkitProjectDir;

@@ -25,6 +25,7 @@ MULTIPLIERS = {'Cost': 'Price', 'InstallTime': 'Installation time', 'ImplantStre
 HARDMODE_EFFECTS = {10505, 10507}
 # Enemy Balance owns its spawn-level cap, including in Workshop exports.
 ENEMY_RULES = {'82'}
+PARTY_RULES = {'83'}
 METADATA = {'Locked', 'FactionId', 'ServiceOptionId', 'Asset3DTypeId', 'ModClassId', 'ModSlot',
             'ShotVFXCount', 'WeaponClass', 'ImplantClass', 'ImplantSlot',
             'ImplantLevel', 'ImplantConflictId', 'Deactivated', 'BackstoryGroup',
@@ -224,6 +225,8 @@ def validate(doc, source, config_dir=None):
                 raise ValueError('%s %s no longer exists in the official database; review its overrides' % (table, rid))
             if rid in protected.get(table, set()):
                 raise ValueError('%s %s belongs to Hard Mode Fatigue/limit breaks' % (table, rid))
+            if table == 'Rule' and rid in PARTY_RULES:
+                raise ValueError('Rule 83 belongs to Party Size Mod; edit and export it in its own section.')
             if table == 'Rule' and rid in ENEMY_RULES:
                 raise ValueError('Rule %s belongs to Enemy Balance; it cannot be saved or exported by Player Balance' % rid)
             if not isinstance(fields, dict):
@@ -756,7 +759,7 @@ def catalog(config_dir, database):
             page('traits', 'Traits', 'Character', trait_grids, knightTraitEvidence=knight_groups)
             rule_grids = []
             for group in sorted({r['GroupId'] for r in allrows['Rule'].values()}):
-                g = grid('Rule', [r for r in allrows['Rule'].values() if r['GroupId'] == group], 'Rules', 'all')
+                g = grid('Rule', [r for r in allrows['Rule'].values() if r['GroupId'] == group and r['RuleId'] not in PARTY_RULES], 'Rules', 'all')
                 g.update(key='rules-' + group, subsection='Power level' if group == 'POWERLEVEL' else group.replace('_', ' ').title())
                 rule_grids.append(g)
             page('rules', 'Rules', 'Player Balance', rule_grids)
@@ -852,7 +855,7 @@ def augment(data, provenance, config_dir, database):
                     raise ValueError('Talent and player tuning both own %s %s %s' % (table, row[key], col))
     payload['RawSQL'] = statements
     data = encode(payload)
-    receipt['scope'] = 'player talents, weapons, cyberware, consumables, leverage, traits and rules (excluding Enemy Balance Rule 82)'
+    receipt['scope'] = 'player talents, weapons, cyberware, consumables, leverage, traits and rules (excluding Enemy Balance Rule 82 and Party Size Mod Rule 83)'
     receipt['parser_source']['sha256'] = hashlib.sha256(data).hexdigest()
     receipt['player_balance'] = {'source': FILE, 'sha256': hashlib.sha256((Path(config_dir) / FILE).read_bytes()).hexdigest(),
                                  'statements': len(statements), 'assignments': len(touched)}

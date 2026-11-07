@@ -134,6 +134,7 @@ sys.path.insert(0, SCRIPTS_DIR)
 import static_data
 import player_balance
 import modkit
+import party_size
 
 DEFAULT_GAME_DIR = r'C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint'
 
@@ -2888,7 +2889,7 @@ def files_check_schema_reads(schemas):
     `fingerprints` uses the same list, so an overlay edited on disk between the
     browser's read and the save is detected too.
     """
-    rel = {'ckf.hardmode.cfg', player_balance.FILE}
+    rel = {'ckf.hardmode.cfg', player_balance.FILE, party_size.FILE}
     rel.update(overlay_paths_all(schemas))
     for sch in schemas:
         j = sch.get('targets', {}).get('json')
@@ -5331,6 +5332,8 @@ def load_settings():
     game = s.get('gameDir') or default_game_dir()
     s.setdefault('modkitProjectDir', os.path.join(os.path.dirname(game),
                  'Cyber Knights Mod Uploader', 'WorkshopContent', 'TalentRebalance'))
+    s.setdefault('partySizeProjectDir', os.path.join(os.path.dirname(game),
+                 'Cyber Knights Mod Uploader', 'WorkshopContent', 'IncreasedPartySize'))
     return s
 
 
@@ -5489,6 +5492,8 @@ class App:
                         for s in decorate_schemas(visible_schemas)],
             'sections': visible_sections,
             'playerBalance': player,
+            'partySize': party_size.model(cd, self.data_source(),
+                                         self.settings.get('partySizeProjectDir', '')),
             'talentCatalogError': self.catalog_error,
             'navGroups': nav_groups,
             'values': model,
@@ -5528,6 +5533,27 @@ class App:
             except Exception as e:
                 return {'ok': False, 'error': str(e)}
 
+    def api_party_export(self, expect=None):
+        with self.lock:
+            try:
+                return party_size.send(config_dir_for(self.settings),
+                                       self.settings.get('partySizeProjectDir', ''),
+                                       self.data_source(), expect)
+            except (OSError, ValueError) as exc:
+                return {'ok': False, 'error': str(exc)}
+
+    def party_edits(self, cd, edits, proposed):
+        if 'partySize' not in edits:
+            return
+        try:
+            party_size.rule(self.data_source())
+            data = party_size.encode(party_size.validate(edits['partySize']))
+            path = os.path.join(cd, party_size.FILE)
+            if not os.path.exists(path) or read_bytes(path) != data:
+                proposed[party_size.FILE] = data
+        except (ValueError, OSError) as exc:
+            raise SaveRefused({'summary': 'Party Size Mod was not saved', 'detail': str(exc)})
+
     def player_edits(self, cd, edits, proposed):
         change = edits.get('playerBalance')
         path = os.path.join(cd, player_balance.FILE)
@@ -5556,6 +5582,7 @@ class App:
                 edits, notes = requires_pass(doc.schemas, doc, edits)
                 proposed, more = apply_edits(doc, extras, edits, strip_readme)
                 self.player_edits(cd, edits, proposed)
+                self.party_edits(cd, edits, proposed)
                 notes = (reformat_notes(doc) + stray_notes(doc, doc.schemas)
                          + notes + more)
             except SaveRefused as e:
@@ -5596,6 +5623,7 @@ class App:
                 edits, notes = requires_pass(doc.schemas, doc, edits)
                 proposed, more = apply_edits(doc, extras, edits, strip_readme)
                 self.player_edits(cd, edits, proposed)
+                self.party_edits(cd, edits, proposed)
                 notes = (reformat_notes(doc) + stray_notes(doc, doc.schemas)
                          + notes + more)
             except SaveRefused as e:
@@ -5749,6 +5777,8 @@ class Handler(BaseHTTPRequestHandler):
                                                          body.get('stripReadme'),
                                                          bool(body.get('force')),
                                                          body.get('fingerprints')))
+            if path == '/api/party-export':
+                return self._json(200, self.app.api_party_export(body.get('fingerprints')))
             if path == '/api/talent-export':
                 return self._json(200, self.app.api_talent_export(body.get('fingerprints')))
             if path == '/api/settings':
@@ -5760,7 +5790,7 @@ class Handler(BaseHTTPRequestHandler):
                     s['configDirOverride'] = str(v) if v else None
                 if 'stripReadme' in body:
                     s['stripReadme'] = bool(body['stripReadme'])
-                for key in ('talentProjectDir', 'modkitProjectDir', 'officialDataPath'):
+                for key in ('talentProjectDir', 'modkitProjectDir', 'officialDataPath', 'partySizeProjectDir'):
                     if key in body:
                         s[key] = str(body[key] or '').strip()
                 save_settings(s)

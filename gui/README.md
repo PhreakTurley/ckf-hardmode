@@ -59,6 +59,40 @@ keeps no persistent staging copy and no backup. To reset, re-extract
 
 Procedure: [`../docs/workflow.md`](../docs/workflow.md). Traps: [`../docs/gotchas.md`](../docs/gotchas.md).
 
+## Party Size Mod
+
+**Party Size Mod** is a separate navigation section for the single official
+`Rule` row 83, `Mission Max MercDefault`. `party_size.py:rule` queries that
+identity directly and refuses a missing or renamed row. The section reads the
+current official baseline and description. Its only tuning value is a positive
+integer maximum, stored in `BepInEx/config/ckf.party-size.json`; there is no
+implicit setting when the file is absent. Save uses the editor's guarded
+transaction. This setting is independent of Hard Mode's switches.
+
+After saving, choose the dedicated initialized uploader mod folder in this
+section and click **Send Party Size Mod to Modkit**. The separate
+`partySizeProjectDir` setting leaves the player-balance destination alone. The
+handoff writes only `source_data/stories.manifest` and `party-size.json`, with
+one native parser `Rule` update containing only `RuleId`, `Value` and
+`SQL: update`. It refuses a manifest for another mod, changed inputs or an
+incompatible parser declaration, and verifies written bytes. Rule 83 is
+excluded from the Player Balance catalog and rejected by that exporter.
+
+In the official uploader select this mod, then **Prepare Mod Data**. Inspect
+`upload_content/_data/data.sql`: it must contain one `UPDATE Rule SET Value=... WHERE RuleId=83;`
+statement; the locale file is empty. The resulting data mod requires no
+BepInEx plugin. For the first test, submit with **Private** visibility,
+subscribe, wait for Steam's download, then activate the mod in the game's Mods
+screen. Later iterations can use **Local Install Mod**. These are the
+[official setup steps](https://cyberknightswiki.tresebrothers.com/Modding_Quick_Start#Setup_Your_Mod).
+Preparation verifies the payload, not mission behavior; check the mission
+selection screen in game before publishing publicly.
+
+Verification: `python gui/test_party_size.py` checks scope, stale inputs and
+actual installed-parser output (reported skipped when unavailable);
+`python gui/test_party_size_ui.py` exercises the section and save payload in
+the Node DOM harness with current official data.
+
 ## Send talents to Modkit Uploader
 
 Open **Workshop export** above the editor. Set **Workshop
