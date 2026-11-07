@@ -1,5 +1,6 @@
 """Workshop ownership, SQL parity, and live catalog regression checks."""
 import copy
+from contextlib import closing
 import json
 from pathlib import Path
 import sqlite3
@@ -27,7 +28,7 @@ class PlayerBalanceTests(unittest.TestCase):
             self.assertEqual(doc['tables']['Weapon']['24000']['Cost'], '90')
 
     def test_negative_assignments_and_explicit_commands_match_preview_and_sql(self):
-        with static_data.StaticData() as source, sqlite3.connect(':memory:') as db:
+        with static_data.StaticData() as source, closing(sqlite3.connect(':memory:')) as db:
             db.execute('CREATE TABLE Weapon (WeaponId INTEGER PRIMARY KEY, RecoilRate1 INTEGER)')
             db.execute('INSERT INTO Weapon VALUES (24000, 50)')
             for spec, expected in [('-10', -10), (' -10 ', -10), ('-1e1', -10),
@@ -105,8 +106,21 @@ class PlayerBalanceTests(unittest.TestCase):
             for effect in pb.HARDMODE_EFFECTS:
                 with self.assertRaisesRegex(ValueError, 'Hard Mode'):
                     pb.apply_edits(doc, {'cells': [{'table': 'Effect', 'id': str(effect), 'column': 'XpBonus', 'value': '0'}]}, source)
-            with self.assertRaisesRegex(ValueError, 'Only the surprised'):
-                pb.apply_edits(doc, {'cells': [{'table': 'Rule', 'id': '23', 'column': 'Value', 'value': '4'}]}, source)
+            changed = pb.apply_edits(doc, {'cells': [{'table': 'Rule', 'id': '23', 'column': 'Value', 'value': '4'}]}, source)
+            self.assertEqual(changed['tables']['Rule'], {'23': {'Value': '4'}})
+            statements, touched = pb.sql(changed, source)
+            self.assertIn(('Rule', '23', 'Value'), touched)
+            memory = sqlite3.connect(':memory:')
+            try:
+                source.connection.backup(memory)
+                memory.executescript('\n'.join(statements))
+                self.assertEqual(memory.execute('SELECT Value FROM Rule WHERE RuleId=23').fetchone()[0], 4)
+            finally:
+                memory.close()
+            for rid, owner in [('82', 'Enemy Balance'), ('83', 'Party Size Mod'),
+                               ('84', 'Faster Contact Limit Breaks'), ('85', 'Faster Contact Limit Breaks')]:
+                with self.subTest(rule=rid), self.assertRaisesRegex(ValueError, owner):
+                    pb.apply_edits(doc, {'cells': [{'table': 'Rule', 'id': rid, 'column': 'Value', 'value': '4'}]}, source)
 
     def test_database_replacement_adds_rows_columns_and_preserves_overrides(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -158,7 +172,15 @@ class PlayerBalanceTests(unittest.TestCase):
             for grid in page['grids']:
                 for column in grid['columns']:
                     values = {row['baseline'][column['name']] for row in grid['rows']}
-                    self.assertGreater(len(values), 1, (page['id'], grid['table'], column['name']))
+                    targets = [r.get('targets', {}).get(column['name']) for r in grid['rows']]
+                    table = next((t['table'] for t in targets if t), grid['table'])
+                    if table in ('Effect', 'MatrixEffect'):
+                        # Linked bonuses have the documented nonzero policy,
+                        # even when every weapon shares the same bonus.
+                        self.assertTrue(any(v not in (None, '', '0', '0.0') for v in values),
+                                        (page['id'], table, column['name']))
+                    else:
+                        self.assertGreater(len(values), 1, (page['id'], table, column['name']))
 
     def test_gear_order_visibility_and_icon_sections(self):
         with tempfile.TemporaryDirectory() as config:
@@ -178,9 +200,9 @@ class PlayerBalanceTests(unittest.TestCase):
                             self.assertIn(col, columns, (page['id'], col))
                 order = [c for c in pb.GEAR_ORDER if c in columns] if grid['table'] in ('Weapon', 'WeaponMod') else expected
                 self.assertEqual([c for c in columns if c in order], order)
-                keys = [(r.get('icon', ''), *(float(r['baseline'][c]) for c in pb.LEADING_COLUMNS), pb.natural(r['name']))
+                keys = [(r.get('icon', ''), r.get('sectionKey', ''), *(float(r['baseline'][c]) for c in pb.LEADING_COLUMNS), pb.natural(r['name']))
                         for r in grid['rows']]
-                self.assertEqual(keys, sorted(keys, key=lambda k: (pb.natural(k[0]), *k[1:])), page['id'])
+                self.assertEqual(keys, sorted(keys, key=lambda k: (pb.natural(k[0]), pb.natural(k[1]), *k[2:])), page['id'])
         for pid in ('weapon-1', 'weapon-10'):
             grid = next(p for p in model['pages'] if p['id'] == pid)['grids'][0]
             self.assertTrue(grid['iconColumn'])
@@ -197,9 +219,35 @@ class PlayerBalanceTests(unittest.TestCase):
             shown = [r for g in grids if g['table'] == 'Trait' for r in g['rows']]
             self.assertEqual(set(traits), {r['id'] for r in shown})
             self.assertEqual(len(shown), len(traits))
+            # Independently join the official SQL tables rather than calling
+            # the catalog's classification helper to grade its own output.
+            tag_fields = ['BackstoryTrait'] + [c[1] for c in source.schema['Backstory']
+                                             if c[1].startswith(('Trait1', 'Trait2'))]
+            tags_sql = ' UNION ALL '.join('SELECT JobTypeId, NewGame, %s AS Tag FROM Backstory'
+                                         % static_data.quote(c) for c in tag_fields)
+            knight_ids = {str(row[0]) for row in source.connection.execute('''
+                WITH BackstoryTags AS (%s)
+                SELECT DISTINCT family.TraitId FROM Trait tagged
+                JOIN Trait family ON family.TraitGroup = tagged.TraitGroup
+                WHERE tagged.TagMatch <> ''
+                  AND EXISTS (SELECT 1 FROM BackstoryTags b WHERE b.Tag = tagged.TagMatch
+                              AND b.JobTypeId = 1 AND b.NewGame <> 0)
+                  AND NOT EXISTS (SELECT 1 FROM BackstoryTags b WHERE b.Tag = tagged.TagMatch
+                                  AND b.JobTypeId <> 1)
+                ''' % tags_sql)}
+            knight_grid = next(g for g in grids if g['table'] == 'Trait' and g['subsection'] == 'Cyber Knight Traits')
+            self.assertTrue(knight_ids)
+            self.assertEqual({r['id'] for r in knight_grid['rows']}, knight_ids)
             for g in grids:
                 if g['table'] == 'Trait':
-                    self.assertEqual(len({r['baseline']['TraitScore'] for r in g['rows']}), 1)
+                    if g['subsection'] == 'Cyber Knight Traits':
+                        self.assertEqual({r['id'] for r in g['rows']}, knight_ids)
+                    else:
+                        scores = {r['baseline']['TraitScore'] for r in g['rows']}
+                        self.assertEqual(len(scores), 1)
+                        score = float(next(iter(scores)))
+                        self.assertEqual(g['subsection'], 'Trait score ' + (format(score, '+g') if score else '0'))
+                        self.assertFalse(knight_ids & {r['id'] for r in g['rows']})
                 else:
                     pointer = 'EffectTypeId' if g['table'] == 'Effect' else 'MatrixEffectTypeId'
                     for r in g['rows']:
@@ -210,15 +258,26 @@ class PlayerBalanceTests(unittest.TestCase):
                         self.assertTrue(any(name in r['section'] for name in owners))
                         self.assertFalse(r['name'].startswith(('Effect.Name.', 'MatrixEffect.Name.')))
             self.assertFalse(any(r['name'].startswith('Trait.Name.') for r in shown))
-            leverage = next(p for p in model['pages'] if p['id'] == 'leverage')['grids'][0]
+            leverage_grids = next(p for p in model['pages'] if p['id'] == 'leverage')['grids']
             talents = source.read('TalentModel')[1]
-            for r in leverage['rows']:
-                if r['section'].startswith('Face talent:'):
-                    self.assertTrue(any(t['ActionId'] == r['id'] and t['TalentIsFace'] != '0'
-                                        and t['TargetType'] == 'LEVERAGE' for t in talents))
-                if r['section'].startswith('Room level '):
-                    self.assertEqual(r['section'], 'Room level ' + r['baseline']['RoomLevel'])
-            self.assertEqual(len(leverage['rows']), len(source.read('MissionAdvantageModel')[1]))
+            face_ids = {t['ActionId'] for t in talents if t['TalentIsFace'] != '0' and t['TargetType'] == 'LEVERAGE'}
+            official = {r['AdvantageTypeId']: r for r in source.read('MissionAdvantageModel')[1]}
+            shown_leverage = [r for g in leverage_grids for r in g['rows']]
+            self.assertEqual(len(shown_leverage), len(official))
+            self.assertEqual({r['id'] for r in shown_leverage}, set(official))
+            for g in leverage_grids:
+                for r in g['rows']:
+                    native = official[r['id']]
+                    expected = ('Face leverage' if r['id'] in face_ids else
+                                '0-token leverage' if float(native['TokenCost']) == 0 else
+                                'Matrix-only leverage' if float(native['AdvantageIsMatrixOnly']) != 0 else
+                                'Favor-cost leverage' if float(native['FavorCost']) != 0 else 'Other leverage')
+                    self.assertEqual(g['subsection'], expected)
+                    self.assertEqual(r['baseline']['RoomLevel'], native['RoomLevel'])
+                    if r['id'] in face_ids:
+                        self.assertTrue(any(t['TalentName'] in r['description'] for t in talents
+                                            if t['ActionId'] == r['id'] and t['TalentIsFace'] != '0'
+                                            and t['TargetType'] == 'LEVERAGE'))
 
     def test_weapon_mod_edits_export_to_sql(self):
         with static_data.StaticData() as source:
@@ -231,6 +290,75 @@ class PlayerBalanceTests(unittest.TestCase):
             self.assertEqual(memory.execute('SELECT AccuracyMod FROM WeaponMod WHERE WeaponModId=?', (rid,)).fetchone()[0], 17)
             self.assertEqual(touched, {('WeaponMod', rid, 'AccuracyMod')})
             memory.close()
+
+    def test_claws_omit_attack_range_and_preserve_stored_adjustments(self):
+        with tempfile.TemporaryDirectory() as config, static_data.StaticData() as source:
+            model = pb.catalog(config, static_data.DEFAULT_DB)
+            claws = next(p for p in model['pages'] if p['id'] == 'weapon-16')['grids'][0]
+            columns = {c['name'] for c in claws['columns'] + claws['advanced']}
+            self.assertFalse(any(c.startswith('Attack') and c.endswith('.Range') for c in columns))
+            self.assertIn('Attack.ApCost', {c['name'] for c in claws['advanced']})
+            laser = next(p for p in model['pages'] if p['id'] == 'weapon-17')['grids'][0]
+            self.assertIn('Attack.Range', {c['name'] for c in laser['columns'] + laser['advanced']})
+            # The removed control must not erase an existing saved adjustment.
+            tid = claws['rows'][0]['links']['Attack']
+            document = pb.empty()
+            document['tables'] = {'Talent': {tid: {'Range': '9', 'ApCost': '0'}}}
+            path = Path(config) / pb.FILE
+            path.write_bytes(pb.encode(document))
+            before = path.read_bytes()
+            adjusted = pb.catalog(config, static_data.DEFAULT_DB)
+            claws = next(p for p in adjusted['pages'] if p['id'] == 'weapon-16')['grids'][0]
+            self.assertFalse(any(c['name'].startswith('Attack') and c['name'].endswith('.Range')
+                                 for c in claws['columns'] + claws['advanced']))
+            self.assertIn('Attack.ApCost', {c['name'] for c in claws['columns']})
+            self.assertEqual(path.read_bytes(), before)
+            statements, touched = pb.sql(adjusted['document'], source)
+            self.assertEqual(touched, {('Talent', tid, 'Range'), ('Talent', tid, 'ApCost')})
+            with closing(sqlite3.connect(':memory:')) as memory:
+                source.connection.backup(memory)
+                memory.executescript('\n'.join(statements))
+                self.assertEqual(memory.execute('SELECT Range, ApCost FROM Talent WHERE TalentId=?',
+                                                (tid,)).fetchone(), (9, 0))
+
+    def test_weapon_mod_groups_use_visible_labels_and_distinct_thumbnail_paths(self):
+        with tempfile.TemporaryDirectory() as config, static_data.StaticData() as source:
+            database = Path(config) / 'data.db'
+            with closing(sqlite3.connect(database)) as memory:
+                source.connection.backup(memory)
+                initial = pb.catalog(config, database)
+                grids = next(p for p in initial['pages'] if p['id'] == 'weapon-mods')['grids']
+                selected = max(grids, key=lambda g: len(g['rows']))['rows'][:4]
+                self.assertEqual(len(selected), 4)
+                ids = [r['id'] for r in selected]
+                # Labels and path order disagree. Different assets can share
+                # a path; identical labels can also name different paths.
+                paths = ['ZFolder/WeaponMod_A', 'ZFolder/WeaponMod_A',
+                         'YFolder/WeaponMod_A', 'AFolder/WeaponMod_Z']
+                next_asset = memory.execute('SELECT MAX(WeaponModelId) FROM Weapon3DAsset').fetchone()[0] + 1
+                for index, (rid, thumbnail) in enumerate(zip(ids, paths)):
+                    asset = next_asset + index
+                    memory.execute('INSERT INTO Weapon3DAsset (WeaponModelId, Thumbnail) VALUES (?,?)', (asset, thumbnail))
+                    memory.execute('UPDATE WeaponMod SET Asset3DTypeId=? WHERE WeaponModId=?', (asset, rid))
+                memory.commit()
+            updated = pb.catalog(config, database)
+            self.assertIsNone(updated['error'])
+            grid = next(g for p in updated['pages'] if p['id'] == 'weapon-mods' for g in p['grids']
+                        if {r['id'] for r in g['rows']} >= set(ids))
+            records = {r['id']: r for r in grid['rows']}
+            self.assertEqual(records[ids[0]]['sectionKey'], records[ids[1]]['sectionKey'])
+            self.assertEqual(records[ids[0]]['icon'], records[ids[2]]['icon'])
+            self.assertNotEqual(records[ids[0]]['sectionKey'], records[ids[2]]['sectionKey'])
+            order = [r['id'] for r in grid['rows'] if r['id'] in ids]
+            self.assertEqual(order[0], ids[2])
+            self.assertEqual(set(order[1:3]), set(ids[:2]))
+            self.assertEqual(order[-1], ids[3])
+            closed, previous = set(), None
+            for row in grid['rows']:
+                if row['sectionKey'] != previous:
+                    self.assertNotIn(row['sectionKey'], closed)
+                    closed.add(row['sectionKey'])
+                    previous = row['sectionKey']
 
     def test_api_save_clear_noop_and_stale_database(self):
         import serve

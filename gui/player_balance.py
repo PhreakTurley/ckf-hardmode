@@ -541,7 +541,7 @@ def catalog(config_dir, database):
                     result_grid['serviceColumn'] = {'name': 'ServiceOptionId', 'options': services[table]}
                 return result_grid
 
-            def joined_grid(base_table, rows, title, base_heading, links, owners, blocks):
+            def joined_grid(base_table, rows, title, base_heading, links, owners, blocks, hidden=()):
                 joined = grid(base_table, rows, title)
                 joined['joined'] = True
                 for column in joined['columns'] + joined['advanced']:
@@ -556,9 +556,12 @@ def catalog(config_dir, database):
                     unique = {r[TABLE_KEYS[table]]: r for r in targets.values() if r}
                     if not unique:
                         continue
-                    donor = grid(table, list(unique.values()), heading, 'nonzero')
+                    policy = 'varying' if base_table == 'Weapon' and table == 'Talent' else 'nonzero'
+                    donor = grid(table, list(unique.values()), heading, policy)
                     for visibility in ('columns', 'advanced'):
                         for column in donor[visibility]:
+                            if (table, column['name']) in hidden:
+                                continue
                             name = heading + '.' + column['name']
                             joined[visibility].append(dict(column, name=name, group=heading, leading=False,
                                                            order=offset + column['order']))
@@ -621,7 +624,8 @@ def catalog(config_dir, database):
                 title = CLASS_NAMES.get(cls, next(iter(names)) if len(names) == 1 else 'Weapon class %s' % cls)
                 if cls in (16, 17):
                     weapon_links, weapon_owners, blocks = cyberweapon_links(allrows, doc, rows)
-                    weapon_grid = joined_grid('Weapon', rows, title, 'Weapon', weapon_links, weapon_owners, blocks)
+                    weapon_grid = joined_grid('Weapon', rows, title, 'Weapon', weapon_links, weapon_owners, blocks,
+                                              hidden={('Talent', 'Range')} if cls == 16 else ())
                     weapon_grid['cyberwareServiceColumn'] = {'options': services['Implant']}
                     for record in weapon_grid['rows']:
                         record['cyberwareServices'] = [
@@ -696,7 +700,7 @@ def catalog(config_dir, database):
                     record['section'] = record['icon']
                     record['sectionKey'] = path or 'Asset ' + asset_id
                 g['iconColumn'] = True
-                g['rows'].sort(key=lambda r: natural(r['sectionKey']))
+                g['rows'].sort(key=lambda r: (natural(r['icon']), natural(r['sectionKey'])))
                 mod_grids.append(g)
             page('weapon-mods', 'Weapon mods', 'Weapons', mod_grids, unresolvedMods=unresolved_mods)
             for cls in sorted({int(r['ItemClass']) for r in allrows['Item'].values()}):

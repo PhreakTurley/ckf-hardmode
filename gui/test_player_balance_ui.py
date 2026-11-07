@@ -18,11 +18,19 @@ setTimeout(async function () {
   ck('official catalogs loaded completely', MODEL.playerBalance.pages.length > 0 && !MODEL.playerBalance.error);
   const rules = MODEL.values.overlays['ckf.hardmode.d/RuleModel.csv'];
   ck('surprised accuracy is absent from the Hard Mode rule grid', !rules.rows.some(function(r) {return r.cells[0]==='22';}));
-  ck('surprised accuracy has its Workshop owner', MODEL.playerBalance.pages.find(function(p) {return p.id==='combat';}).grids[0].rows.some(function(r) {return r.id==='22';}));
+  ck('surprised accuracy has its Workshop owner', MODEL.playerBalance.pages.find(function(p) {return p.id==='rules';}).grids.some(function(g) {return g.rows.some(function(r) {return r.id==='22';});}));
   const panel = $('#panel');
   const find = function (fn) {return panel.find(fn);};
+  SEL='pb:weapon-16';render();
+  const clawAll = find(function(n) {return n.tagName==='INPUT' && n.getAttribute('type')==='checkbox';})[0];
+  clawAll.checked=true;clawAll.fire('change');
+  ck('Claws attack range is absent even with all columns shown',
+     !find(function(n) {return n.tagName==='INPUT' && /^Talent .*\.Range$/.test(n.getAttribute('data-player-target') || '');}).length);
+  ck('uniform Claws attack fields remain available in advanced columns',
+     find(function(n) {return n.tagName==='INPUT' && /^Talent .*\.ApCost$/.test(n.getAttribute('data-player-target') || '');}).length>0);
   SEL='pb:weapon-17';render();
-  ck('eye laser weapon and attack grids are separate', find(function (n) {return n.tagName==='TABLE';}).length===2);
+  ck('eye laser weapon and attack fields share one grid', find(function (n) {return n.tagName==='TABLE';}).length===1
+     && find(function(n) {return n.tagName==='TH' && n.textContent==='Attack';}).length===1);
   const input = find(function (n) {return n.tagName==='INPUT' && n.getAttribute('type')==='text';})[0];
   ck('a weapon stat can be edited', !!input);
   input.value='=0';input.fire('input');
@@ -66,7 +74,7 @@ setTimeout(async function () {
   search.value='Checked Out';search.fire('input');
   ck('fatigue rows are read-only in the Workshop trait catalog', find(function(n) {return n._cls().includes('readonly');}).length>0);
   SEL='pb:leverage';render();
-  ck('leverage has data-backed subsets', panel.textContent.includes('Face talent:') && panel.textContent.includes('Room level 2'));
+  ck('leverage has data-backed subsets', ['Other leverage','Face leverage','0-token leverage','Matrix-only leverage','Favor-cost leverage'].every(function(title) {return panel.textContent.includes(title);}));
   const leverageSearch = find(function(n) {return n.tagName==='INPUT' && n.getAttribute('type')==='search';})[0];
   leverageSearch.value='Suppressed Alarm';leverageSearch.fire('input');
   ck('leverage has readable names', panel.textContent.includes('Suppressed Alarm'));

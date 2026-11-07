@@ -188,6 +188,8 @@ Weapon mods have independent weapon/slot subsections. Within each one, rows
 group by their current `Weapon3DAsset.Thumbnail` and include an Icon column.
 The join follows each mod's `Asset3DTypeId`, including saved adjustments;
 different asset ids pointing to the same thumbnail share an icon group.
+Groups sort by their displayed icon labels, with thumbnail paths separating
+identically labelled groups. Within each group, rows default to PL, rarity, cost and name.
 `player_balance.py:mod_fitment` joins `WeaponClassMod` slot declarations to
 `WeaponMod.ModClassId`, applies `Exclusions`, and uses `Table.Column.ModType.*`
 localization for slot names and crafting integrations. Every mod displays its
@@ -237,6 +239,10 @@ appended **Cyberware Service (read-only)** column shows service names and
 option ids from implants linked through `ImplantTalentId` or `ImplantTalentId2`.
 It follows saved adjustments and pending edits made in Cyberware; it provides
 no second editable service assignment. Hover to identify the owning implant.
+Claws omits attack range from both default and advanced columns. Other uniform
+attack fields move to **Show all columns** unless explicitly overridden; linked
+effect fields retain the nonzero policy. Existing saved adjustments to omitted
+fields remain preserved and exportable.
 Missing attack/effect links remain explicit. All editable joined cells retain
 their native table/id/column for saving and export.
 
