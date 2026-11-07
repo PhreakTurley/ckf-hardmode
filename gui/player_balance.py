@@ -20,6 +20,7 @@ FILE = 'ckf.player-balance.json'
 TABLE_KEYS = {'Weapon': 'WeaponId', 'WeaponMod': 'WeaponModId', 'Armor': 'ArmorId', 'Implant': 'ImplantTypeId',
               'Talent': 'TalentId', 'Effect': 'EffectId', 'MatrixEffect': 'MatrixEffectId',
               'MissionAdvantage': 'AdvantageTypeId', 'Trait': 'TraitId', 'Rule': 'RuleId', 'Item': 'ItemTypeId'}
+MOD_CATEGORIES = ('Weapon Mods', 'Crafted Intrinsic', 'Intrinsic')
 MULTIPLIERS = {'Cost': 'Price', 'InstallTime': 'Installation time', 'ImplantStress': 'Implant stress'}
 # The limit-break edits remain exclusively in Hard Mode.
 HARDMODE_EFFECTS = {10505, 10507}
@@ -321,9 +322,12 @@ def mod_fitment(source, row, class_mods):
             title += ' · excludes ' + '+'.join(CLASS_NAMES.get(c, str(c)) for c in sorted(excluded))
     # Intrinsic and integration slot ids remain visible even where the locale
     # uses the same label as a detachable mod.
-    if not slot_match or int(modclass) >= 100:
+    numbered_slot = not slot_match or int(modclass) >= 100
+    if numbered_slot:
         title += ' · slot ' + slot
-    return {'title': title, 'key': key, 'declared': declared,
+    category = ('Intrinsic' if re.search(r'\bintrinsic\b', declared or '', re.IGNORECASE) else
+                'Crafted Intrinsic' if numbered_slot else 'Weapon Mods')
+    return {'title': title, 'category': category, 'key': key, 'declared': declared,
             'slot': slot, 'modClass': modclass, 'excluded': sorted(excluded),
             'mapped': bool(classes)}
 
@@ -682,11 +686,13 @@ def catalog(config_dir, database):
                     unresolved_mods.append({'id': row['WeaponModId'], 'modClass': fit['modClass'],
                                             'slot': fit['slot'], 'reason': 'No weapon-class mapping or localization'})
                     continue
-                mod_groups.setdefault(fit['title'], []).append((row, fit))
+                mod_groups.setdefault((fit['category'], fit['title']), []).append((row, fit))
             mod_grids = []
-            for title, members in sorted(mod_groups.items(), key=lambda item: natural(item[0])):
+            for (category, title), members in sorted(mod_groups.items(),
+                    key=lambda item: (MOD_CATEGORIES.index(item[0][0]), natural(item[0][1]))):
                 g = grid('WeaponMod', [r for r, _ in members], 'Weapon mods')
-                g.update(key='mods-' + '-'.join(r['WeaponModId'] for r, _ in members), subsection=title)
+                g.update(key='mods-' + '-'.join(r['WeaponModId'] for r, _ in members),
+                         category=category, subsection=title)
                 fits = {r['WeaponModId']: f for r, f in members}
                 for record in g['rows']:
                     fit = fits[record['id']]

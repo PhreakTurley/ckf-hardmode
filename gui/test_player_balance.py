@@ -291,6 +291,68 @@ class PlayerBalanceTests(unittest.TestCase):
             self.assertEqual(touched, {('WeaponMod', rid, 'AccuracyMod')})
             memory.close()
 
+    def test_weapon_mod_intrinsic_categories_preserve_fitment_and_export_identity(self):
+        from types import SimpleNamespace
+        cases = [('1', '1', 'Pistol/SMG Barrel', 'Weapon Mods'),
+                 ('201', '10', 'Pistol/SMG Barrel', 'Crafted Intrinsic'),
+                 ('100', '4', 'Intrinsic Melee Damage', 'Intrinsic'),
+                 ('201', '10', 'Intrinsic Barrel', 'Intrinsic')]
+        for modclass, slot, label, category in cases:
+            with self.subTest(modclass=modclass, label=label):
+                source = SimpleNamespace(locale={'Table.Column.ModType.' + modclass: label})
+                fit = pb.mod_fitment(source, {'ModClassId': modclass, 'ModSlot': slot, 'Exclusions': '0'}, [])
+                self.assertEqual(fit['category'], category)
+                self.assertEqual(fit['slot'], slot)
+                self.assertIn(label, fit['title'])
+                if category != 'Weapon Mods':
+                    self.assertIn('slot ' + slot, fit['title'])
+        with tempfile.TemporaryDirectory() as config, static_data.StaticData() as source:
+            model = pb.catalog(config, static_data.DEFAULT_DB)
+            self.assertIsNone(model['error'])
+            grids = next(p for p in model['pages'] if p['id'] == 'weapon-mods')['grids']
+            self.assertEqual(list(dict.fromkeys(g['category'] for g in grids)),
+                             ['Weapon Mods', 'Crafted Intrinsic', 'Intrinsic'])
+            native = {r['WeaponModId']: r for r in source.read('WeaponModModel')[1]}
+            classes = source.read('WeaponClassModModel')[1]
+            eligible = set()
+            for rid, row in native.items():
+                excluded = {int(v) for v in str(row['Exclusions']).split(',') if v.strip().isdigit()} - {0}
+                declared = source.locale.get('Table.Column.ModType.' + row['ModClassId'])
+                mapped = any(int(c['WeaponClassId']) not in excluded and
+                             row['ModClassId'] in [c['Slot%dModClassId' % n] for n in range(1, 7)]
+                             for c in classes)
+                if declared or mapped:
+                    eligible.add(rid)
+            displayed = [r['id'] for g in grids for r in g['rows']]
+            self.assertEqual(len(displayed), len(set(displayed)))
+            self.assertEqual(set(displayed), eligible)
+            for g in grids:
+                for r in g['rows']:
+                    row = native[r['id']]
+                    label = source.locale.get('Table.Column.ModType.' + row['ModClassId'], '')
+                    expected = ('Intrinsic' if 'intrinsic' in label.casefold() else
+                                'Crafted Intrinsic' if int(row['ModClassId']) >= 200 else 'Weapon Mods')
+                    self.assertEqual(g['category'], expected)
+                    self.assertEqual(r['fitment'], g['subsection'])
+            # A mod in each category still saves and exports to its own native row.
+            ids = [next(r['id'] for g in grids if g['category'] == category for r in g['rows'])
+                   for category in ('Weapon Mods', 'Crafted Intrinsic', 'Intrinsic')]
+            document = pb.apply_edits(pb.empty(), {'cells': [
+                {'table': 'WeaponMod', 'id': rid, 'column': 'AccuracyMod', 'value': '17'} for rid in ids]}, source)
+            path = Path(config) / pb.FILE
+            path.write_bytes(pb.encode(document))
+            before = path.read_bytes()
+            regrouped = pb.catalog(config, static_data.DEFAULT_DB)
+            self.assertEqual(path.read_bytes(), before)
+            statements, touched = pb.sql(regrouped['document'], source)
+            self.assertEqual(touched, {('WeaponMod', rid, 'AccuracyMod') for rid in ids})
+            with closing(sqlite3.connect(':memory:')) as memory:
+                source.connection.backup(memory)
+                memory.executescript('\n'.join(statements))
+                for rid in ids:
+                    self.assertEqual(memory.execute('SELECT AccuracyMod FROM WeaponMod WHERE WeaponModId=?',
+                                                    (rid,)).fetchone()[0], 17)
+
     def test_claws_omit_attack_range_and_preserve_stored_adjustments(self):
         with tempfile.TemporaryDirectory() as config, static_data.StaticData() as source:
             model = pb.catalog(config, static_data.DEFAULT_DB)

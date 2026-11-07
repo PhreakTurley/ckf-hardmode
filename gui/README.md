@@ -184,7 +184,10 @@ availability. Enemy markers include both official and local overlay references,
 so a Hard Mode repoint cannot erase a Workshop warning. This is a static
 catalog policy, not a complete trace of every story reward.
 
-Weapon mods have independent weapon/slot subsections. Within each one, rows
+Weapon mods have three top-level categories: **Weapon Mods**, **Crafted
+Intrinsic** and **Intrinsic**. Intrinsic-labelled mod classes go under Intrinsic;
+other fitments that display a numbered slot go under Crafted Intrinsic.
+Each category retains the independent weapon/slot subsections. Within each one, rows
 group by their current `Weapon3DAsset.Thumbnail` and include an Icon column.
 The join follows each mod's `Asset3DTypeId`, including saved adjustments;
 different asset ids pointing to the same thumbnail share an icon group.

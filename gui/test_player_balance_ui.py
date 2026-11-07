@@ -58,6 +58,23 @@ setTimeout(async function () {
      >playerColumnWidth({table:'WidthFixture',rows:[widthGrid.rows[0]]},{name:'value',label:'Value'})
      && playerColumnWidth(widthGrid,{name:'value',label:'An even longer title for this field'})>playerColumnWidth(widthGrid,{name:'value',label:'Value'}));
   SEL='pb:weapon-mods';render();
+  const modCategories=find(function(n) {return n._cls().includes('pb-category');});
+  ck('weapon mods have three separate categories', modCategories.map(function(n) {return n.getAttribute('data-mod-category');}).join('|')==='Weapon Mods|Crafted Intrinsic|Intrinsic');
+  ck('weapon and slot subsections stay inside each category', modCategories.every(function(n) {
+    return n.children.some(function(c) {return c.tagName==='DETAILS' && c._cls().includes('pb-subsection');});
+  }));
+  ck('each category retains icon groups and editable fields', modCategories.every(function(n) {
+    return n.find(function(c) {return c._cls().includes('pb-section');}).length>0
+      && n.find(function(c) {return c.tagName==='INPUT' && c.getAttribute('data-player-target');}).length>0;
+  }));
+  const modSearch=find(function(n) {return n.tagName==='INPUT' && n.getAttribute('type')==='search';})[0];
+  modSearch.value='Crafted Intrinsic';modSearch.fire('input');
+  ck('search can select the crafted category without mixing the others',
+     find(function(n) {return n._cls().includes('pb-category');}).length===1
+     && find(function(n) {return n._cls().includes('pb-category');})[0].getAttribute('data-mod-category')==='Crafted Intrinsic');
+  ck('search opens matching category and its fitment subsections',
+     find(function(n) {return n.tagName==='DETAILS' && n._cls().includes('pb-subsection');}).every(function(n) {return n.open;}));
+  modSearch.value='';modSearch.fire('input');
   ck('weapon mods have editable stat cells', find(function(n) {return n.tagName==='INPUT' && n.getAttribute('type')==='text';}).length > 0);
   const modInput = find(function(n) {return n.tagName==='INPUT' && n.getAttribute('type')==='text';})[0];
   modInput.value='=19';modInput.fire('input');

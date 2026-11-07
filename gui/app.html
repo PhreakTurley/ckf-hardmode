@@ -252,7 +252,9 @@ table.pb-grid th{min-width:0;max-width:none!important;white-space:nowrap;word-br
 .pb-grid .pb-icon small{display:block;font-size:11px;margin-top:3px;color:var(--dim)}
 .pb-grid td.overlay-overwrite select{background:#482326;color:#ffb5b9}
 .pb-subsection{margin:18px 0}
+.pb-category>.pb-subsection{margin:12px 0 16px 12px}
 .pb-subsection>summary{font-size:18px;font-weight:600;cursor:pointer;margin:0 0 10px}
+.pb-category>summary{font-size:20px}
 .pb-subsection h3{font-size:15px;font-weight:600;margin:14px 0 6px}
 .pb-grid .pb-name small{display:none;color:var(--faint);font-weight:400}
 body.technical .pb-grid .pb-name small{display:block}
@@ -2013,13 +2015,15 @@ function renderPlayer(panel, page) {
     const serviceViews = [];
     const query = search.value.toLocaleLowerCase();
     const subsections = {};
+    const categories = {};
+    const subsectionCounts = {};
     for (const grid of page.grids) {
       const matches = grid.rows.filter(function (r) {
         const editor = grid.iconEditor;
         const fields = ((W.player.tables || {})[grid.table] || {})[r.id] || {};
         const assetId = editor ? CKF.playerDisplayValue(fields[editor.column] || '') || r.baseline[editor.column] : '';
         const token = editor ? (editor.assets[assetId] || {}).token || '' : r.icon || '';
-        return (r.name+' '+r.id+' '+(r.section || '')+' '+token+' '+playerService(grid,r).label
+        return (r.name+' '+r.id+' '+(grid.category || '')+' '+(grid.subsection || '')+' '+(r.section || '')+' '+token+' '+playerService(grid,r).label
           +' '+(grid.cyberwareServiceColumn ? playerCyberwareService(grid,r).label : '')).toLocaleLowerCase().includes(query);
       });
       const gridKey = grid.key || grid.table;
@@ -2029,16 +2033,30 @@ function renderPlayer(panel, page) {
       const rows = playerSortedRows(grid,matches,sort).slice(number * 75, (number + 1) * 75);
       if (!matches.length && !grid.warning) continue;
       let target = grids;
-      if (grid.subsection) {
-        if (!subsections[grid.subsection]) {
-          const first = Object.keys(subsections).length === 0;
-          const det = el('details', {class:'pb-subsection',open:!!query || (openSections[grid.subsection] === undefined
-            ? (grid.subsectionOpen === undefined ? first : grid.subsectionOpen) : openSections[grid.subsection])},
-            [el('summary', {text:grid.subsection,title:grid.iconPath || ''})]);
-          det.addEventListener('toggle', function () {openSections[grid.subsection] = det.open;});
-          grids.appendChild(det);subsections[grid.subsection] = det;
+      if (grid.category) {
+        const categoryKey='category:'+grid.category;
+        if (!categories[grid.category]) {
+          const first=Object.keys(categories).length===0;
+          const det=el('details', {class:'pb-subsection pb-category', 'data-mod-category':grid.category,
+            open:!!query || (openSections[categoryKey]===undefined ? first : openSections[categoryKey])},
+            [el('summary', {text:grid.category})]);
+          det.addEventListener('toggle', function () {openSections[categoryKey]=det.open;});
+          grids.appendChild(det);categories[grid.category]=det;
         }
-        target = subsections[grid.subsection];
+        target=categories[grid.category];
+      }
+      if (grid.subsection) {
+        const subsectionKey=JSON.stringify([grid.category || '',grid.subsection]);
+        if (!subsections[subsectionKey]) {
+          const first=!subsectionCounts[grid.category || ''];
+          const det = el('details', {class:'pb-subsection',open:!!query || (openSections[subsectionKey] === undefined
+            ? (grid.subsectionOpen === undefined ? first : grid.subsectionOpen) : openSections[subsectionKey])},
+            [el('summary', {text:grid.subsection,title:grid.iconPath || ''})]);
+          det.addEventListener('toggle', function () {openSections[subsectionKey] = det.open;});
+          target.appendChild(det);subsections[subsectionKey] = det;
+          subsectionCounts[grid.category || '']=(subsectionCounts[grid.category || ''] || 0)+1;
+        }
+        target = subsections[subsectionKey];
       }
       if (grid.title !== page.title) target.appendChild(el('h3', {text:grid.title}));
       if (['Weapons','Drone weapons','Cyberware','Cyberware modules','Consumables'].includes(page.group)) {
