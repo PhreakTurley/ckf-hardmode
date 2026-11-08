@@ -137,7 +137,7 @@ class PlayerBalanceTests(unittest.TestCase):
             db = sqlite3.connect(database)
             db.execute('ALTER TABLE Weapon ADD COLUMN NewCombatField INTEGER DEFAULT 0')
             db.execute('UPDATE Weapon SET NewCombatField=7 WHERE WeaponId=24000')
-            db.execute('INSERT INTO Weapon (WeaponId, WeaponClass, Cost) VALUES (999999, 16, 17)')
+            db.execute('INSERT INTO Weapon (WeaponId, WeaponClass, Cost, ServiceOptionId) VALUES (999999, 16, 17, 1)')
             db.commit(); db.close()
             after = pb.catalog(root, database)
             self.assertIsNone(after['error'])
@@ -153,6 +153,48 @@ class PlayerBalanceTests(unittest.TestCase):
             missing = pb.catalog(root, database)
             self.assertIn('no longer exists', missing['error'])
             self.assertEqual(missing['document'], after['document'])
+
+    def test_inclusive_acquisition_keeps_explicit_story_gear_and_nonlootable_mission_blueprints(self):
+        with tempfile.TemporaryDirectory() as config:
+            model = pb.catalog(config, static_data.DEFAULT_DB)
+        self.assertIsNone(model['error'])
+        drawn = {(g['table'], r['id']): r for p in model['pages'] for g in p['grids'] for r in g['rows']}
+        for wid in ('1028', '4025'):
+            self.assertTrue(any('BlockCondition 2526 Equip' in e for e in drawn['Weapon', wid]['acquisition']))
+        self.assertIn('Blueprint 200132 via MissionLoot 9130', drawn['WeaponMod', '132']['acquisition'])
+        for key in (('Weapon', '23001'), ('WeaponMod', '5075')):
+            self.assertNotIn(key, set(drawn))
+
+    def test_other_weapon_overrides_disappear_only_after_the_last_saved_reset(self):
+        import serve
+        with tempfile.TemporaryDirectory() as config:
+            root = Path(config)
+            (root / 'ckf.hardmode.d').mkdir()
+            (root / 'ckf.hardmode.cfg').write_text('', encoding='utf-8')
+            doc = pb.empty()
+            doc['tables'] = {'Weapon': {'23001': {'Cost': '0', 'Accuracy1': '80'}},
+                             'WeaponMod': {'5075': {'Cost': '0'}}}
+            (root / pb.FILE).write_bytes(pb.encode(doc))
+            app = serve.App({'configDirOverride': config}, 'test', static_source=static_data.DEFAULT_DB)
+            model = app.api_model()
+            other = next(p for p in model['playerBalance']['pages'] if p['id'] == 'other-weapon-overrides')
+            self.assertEqual({(g['table'], r['id']) for g in other['grids'] for r in g['rows']},
+                             {('Weapon', '23001'), ('WeaponMod', '5075')})
+            self.assertTrue(all(not r['readOnly'] for g in other['grids'] for r in g['rows']))
+            for table, rid, col, remaining in [
+                    ('Weapon', '23001', 'Cost', {'Weapon', 'WeaponMod'}),
+                    ('Weapon', '23001', 'Accuracy1', {'WeaponMod'}),
+                    ('WeaponMod', '5075', 'Cost', set())]:
+                result = app.api_save({'playerBalance': {
+                    'databaseSha': model['playerBalance']['database']['sha256'],
+                    'cells': [{'table': table, 'id': rid, 'column': col, 'value': ''}]}},
+                    expect=model['fingerprints'])
+                self.assertTrue(result['ok'], result)
+                model = app.api_model()
+                other = next((p for p in model['playerBalance']['pages'] if p['id'] == 'other-weapon-overrides'), None)
+                self.assertEqual({g['table'] for g in other['grids']} if other else set(), remaining)
+                self.assertEqual(set(pb.load(config)['tables']), remaining)
+            self.assertEqual(pb.load(config), pb.empty())
 
     def test_invalid_adjustments_never_become_sql(self):
         with static_data.StaticData() as source:
@@ -313,16 +355,24 @@ class PlayerBalanceTests(unittest.TestCase):
             self.assertEqual(list(dict.fromkeys(g['category'] for g in grids)),
                              ['Weapon Mods', 'Crafted Intrinsic', 'Intrinsic'])
             native = {r['WeaponModId']: r for r in source.read('WeaponModModel')[1]}
-            classes = source.read('WeaponClassModModel')[1]
-            eligible = set()
-            for rid, row in native.items():
-                excluded = {int(v) for v in str(row['Exclusions']).split(',') if v.strip().isdigit()} - {0}
-                declared = source.locale.get('Table.Column.ModType.' + row['ModClassId'])
-                mapped = any(int(c['WeaponClassId']) not in excluded and
-                             row['ModClassId'] in [c['Slot%dModClassId' % n] for n in range(1, 7)]
-                             for c in classes)
-                if declared or mapped:
-                    eligible.add(rid)
+            # Independent SQL join checks the Python catalog against all
+            # current mod services, direct loot and obtainable blueprints.
+            eligible = {str(r[0]) for r in source.connection.execute("""
+                SELECT m.WeaponModId FROM WeaponMod m WHERE
+                  EXISTS (SELECT 1 FROM ContactService s
+                          WHERE s.ServiceFlow=3 AND s.ServiceOptionId>0
+                            AND s.ServiceOptionId=m.ServiceOptionId)
+                  OR EXISTS (SELECT 1 FROM MissionLoot l
+                             WHERE l.LootTypeId=10 AND l.LootKey=m.WeaponModId)
+                  OR EXISTS (SELECT 1 FROM Blueprint b
+                             WHERE b.BlueprintClassId=5 AND b.OutputId=m.WeaponModId
+                               AND (b.Lootable=1
+                                 OR EXISTS (SELECT 1 FROM ContactService s
+                                            WHERE s.ServiceFlow=4 AND s.ServiceOptionId>0
+                                              AND s.ServiceOptionId=b.ServiceOptionId)
+                                 OR EXISTS (SELECT 1 FROM MissionLoot l
+                                            WHERE l.LootTypeId=1 AND l.LootKey=b.BlueprintId)))
+            """)}
             displayed = [r['id'] for g in grids for r in g['rows']]
             self.assertEqual(len(displayed), len(set(displayed)))
             self.assertEqual(set(displayed), eligible)

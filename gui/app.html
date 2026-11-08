@@ -1953,6 +1953,7 @@ function playerColumnWidth(grid, column) {
 function renderPlayer(panel, page) {
   panel.appendChild(el('div', {class:'pb-heading'}, [el('h2', {text:page.title}),
     el('span', {class:'small', text:'Workshop player balance'})]));
+  if (page.description) panel.appendChild(el('p', {class:'doc',text:page.description}));
   const search = el('input', {type:'search',placeholder:'Filter by name', 'aria-label':'Filter '+page.title});
   const showAll = el('input', {type:'checkbox'});
   const toolbar = el('div', {class:'pb-tools'}, [search,
@@ -2140,7 +2141,7 @@ function renderPlayer(panel, page) {
           body.appendChild(el('tr', {class:'pb-section'}, [el('th',{colspan:String(displayCols.length+1),scope:'rowgroup',title:row.sectionEvidence || ''},
             [el('span',{class:'pb-section-name',text:row.section})])]));
         }
-        const nameCell = el('td', {class:'pb-name',title:grid.table+' '+row.id+(row.description ? '\n'+row.description : '')}, [
+        const nameCell = el('td', {class:'pb-name',title:grid.table+' '+row.id+(row.description ? '\n'+row.description : '')+(row.acquisition && row.acquisition.length ? '\nAcquisition references:\n'+row.acquisition.join('\n') : '')}, [
           document.createTextNode(row.name),el('small', {text:grid.table+' '+row.id})]);
         if (row.enemyUse) nameCell.appendChild(el('span', {class:'pb-enemy',text:'Also used by enemies',title:'Changing this weapon also affects enemies that use it.'}));
         if (row.owner) nameCell.appendChild(el('span', {class:'pb-owner',text:'Managed by '+row.owner}));

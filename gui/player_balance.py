@@ -257,29 +257,82 @@ def _effective_enemy_ids(source, config_dir, column):
     return {r.get(column) for r in rows.values()}
 
 
-def player_weapon_references(source):
-    """Positive player-content references; absence is not proof of enemy use.
+def player_gear_references(source, doc=None):
+    """Inclusive positive acquisition references, keyed by table and content id.
 
-    BlueprintClass.Weapon=1 is declared in CoreRPG_v1.dll; LootTypes.Weapon=8
-    is captured in sheets/raw/_id_constants.csv (LootTypes, Weapon).
-    Keep the table/type with the id: OutputId/LootKey alone can refer to
-    several different content tables. An unavailable, non-lootable blueprint
-    alone is not sufficient evidence of player availability.
+    BlueprintClass Weapon=1 / WeaponMod=5: CoreRPG_v1.dll, Constants.BlueprintClass.
+    LootTypes Blueprint=1 / Weapon=8 / WeaponMod=10: _id_constants.csv.
+    ContactService flow 4: official rows 12003-12012 (blueprint catalogs).
+    Story equipment: official BlockCondition 2526, Equip for
+    PCP_RetireSleep_Soldier, names Weapon 1028 and 4025 in the first two values.
+    Do not require Lootable on a blueprint explicitly present in mission loot.
+    This is a catalog policy, not a campaign reachability or probability test.
     """
-    services = {r['ServiceOptionId'] for r in source.read('ContactServiceModel', ('ServiceOptionId',))[1]
-                if int(r['ServiceOptionId']) > 0}
-    refs = {r['WeaponId'] for r in source.read('WeaponModel')[1]
-            if r['ServiceOptionId'] in services}
-    refs.update(r['OutputId'] for r in source.read('BlueprintModel', ('OutputId', 'BlueprintClassId', 'Lootable'))[1]
-                if r['BlueprintClassId'] == '1' and r['Lootable'] == '1')
-    refs.update(r['LootKey'] for r in source.read('MissionLootModel', ('LootKey', 'LootTypeId'))[1]
-                if r['LootTypeId'] == '8')
-    refs.update(r['Weapon'] for r in source.read('TalentModel')[1]
-                if r['TalentIsCyber'] == '1')
+    doc = doc or empty()
+    rows = {table: source.read(table + 'Model')[1] for table in ('Weapon', 'WeaponMod')}
+    known = {table: {r[TABLE_KEYS[table]] for r in records} for table, records in rows.items()}
+    refs = {table: {} for table in rows}
+
+    def add(table, rid, evidence):
+        if rid in known[table]:
+            entries = refs[table].setdefault(rid, [])
+            if evidence not in entries:
+                entries.append(evidence)
+
+    services = source.read('ContactServiceModel', ('ServiceTypeId', 'ServiceFlow', 'ServiceOptionId'))[1]
+    for table, records in rows.items():
+        for row in records:
+            options = {row['ServiceOptionId'], str(int(effective(doc, table, row, 'ServiceOptionId')))}
+            for service in services:
+                if (service['ServiceFlow'] == SERVICE_FLOWS[table] and
+                        int(service['ServiceOptionId']) > 0 and service['ServiceOptionId'] in options):
+                    add(table, row[TABLE_KEYS[table]], 'ContactService ' + service['ServiceTypeId'])
+
+    loot = source.read('MissionLootModel', ('MissionLootId', 'LootKey', 'LootTypeId'))[1]
+    blueprint_loot = {}
+    for row in loot:
+        if row['LootTypeId'] == '1':
+            blueprint_loot.setdefault(row['LootKey'], []).append(row['MissionLootId'])
+        for table, kind in (('Weapon', '8'), ('WeaponMod', '10')):
+            if row['LootTypeId'] == kind:
+                add(table, row['LootKey'], 'MissionLoot ' + row['MissionLootId'])
+    blueprint_services = {r['ServiceOptionId']: r['ServiceTypeId'] for r in services
+                          if r['ServiceFlow'] == '4' and int(r['ServiceOptionId']) > 0}
+    for row in source.read('BlueprintModel', ('BlueprintId', 'OutputId', 'BlueprintClassId',
+                                              'Lootable', 'ServiceOptionId'))[1]:
+        table = {'1': 'Weapon', '5': 'WeaponMod'}.get(row['BlueprintClassId'])
+        if not table:
+            continue
+        prefix = 'Blueprint ' + row['BlueprintId']
+        if row['Lootable'] == '1':
+            add(table, row['OutputId'], prefix + ' (Lootable)')
+        if row['ServiceOptionId'] in blueprint_services:
+            add(table, row['OutputId'], prefix + ' via ContactService ' +
+                blueprint_services[row['ServiceOptionId']])
+        for loot_id in blueprint_loot.get(row['BlueprintId'], []):
+            add(table, row['OutputId'], prefix + ' via MissionLoot ' + loot_id)
+
+    for row in source.read('TalentModel')[1]:
+        if row['TalentIsCyber'] == '1':
+            for wid in {row['Weapon'], str(int(effective(doc, 'Talent', row, 'Weapon')))}:
+                add('Weapon', wid, 'Cyber talent ' + row['TalentId'])
     for row in source.read('DroneChassisModel')[1]:
-        refs.update((row['WeaponType1'], row['WeaponType2']))
-    refs.update(r['Weapon'] for r in source.read('DronePrebuiltModel')[1])
-    return refs - {'', '0', '-1'}
+        for field in ('WeaponType1', 'WeaponType2'):
+            # Chassis slots declare weapon classes (e.g. row 1 names class 18),
+            # not Weapon ids. Keep every tier of a referenced class.
+            for weapon in rows['Weapon']:
+                if row[field] not in ('', '0', '-1') and weapon['WeaponClass'] == row[field]:
+                    add('Weapon', weapon['WeaponId'], 'PetChassis ' + row['DroneChassisType'] +
+                        '.' + field + ' (weapon class ' + row[field] + ')')
+    for row in source.read('DronePrebuiltModel')[1]:
+        add('Weapon', row['Weapon'], 'PetPrebuilt ' + row['DroneType'])
+    for row in source.read('BlockConditionModel', ('BlockConditionId', 'ConditionType', 'ActorId',
+                                                  'ConditionValue', 'ConditionValue2'))[1]:
+        if row['ConditionType'] == 'Equip':
+            for field in ('ConditionValue', 'ConditionValue2'):
+                add('Weapon', row[field], 'BlockCondition ' + row['BlockConditionId'] +
+                    ' Equip (' + row['ActorId'] + ')')
+    return refs
 
 
 def special_rules(source):
@@ -491,6 +544,7 @@ def catalog(config_dir, database):
                        for t in TABLE_KEYS}
             assets = {r['WeaponModelId']: r for r in source.read('Weapon3DAssetModel')[1]}
             services = service_catalog(source)
+            acquisition = player_gear_references(source, doc)
             item_links, item_owners = consumable_links(allrows, doc)
             cyberware_links, implant_owners = implant_links(allrows, doc)
             for trait in allrows['Trait'].values():
@@ -533,6 +587,8 @@ def catalog(config_dir, database):
                                     'readOnly': rid in protected.get(table, set()) or (table == 'Rule' and rid in ENEMY_RULES),
                                     'readOnlyReason': 'Managed by Enemy Balance' if table == 'Rule' and rid in ENEMY_RULES
                                                       else 'Managed by Hard Mode Fatigue / limit-break traits'})
+                    if table in ('Weapon', 'WeaponMod'):
+                        records[-1]['acquisition'] = acquisition[table].get(rid, [])
                     if table == 'Rule' and rid in ENEMY_RULES:
                         records[-1]['owner'] = 'Enemy Balance'
                 raw = {r[TABLE_KEYS[table]]: r for r in rows}
@@ -614,9 +670,7 @@ def catalog(config_dir, database):
             # repointed its local enemies to cloned weapons.
             official_enemy_weapons = {r['WeaponTypeId'] for r in source.read('MonsterTypeModel')[1]}
             enemy_weapons.update(official_enemy_weapons)
-            player_refs = player_weapon_references(source)
-            weapons = [r for r in allrows['Weapon'].values()
-                       if r['WeaponId'] not in official_enemy_weapons or r['WeaponId'] in player_refs]
+            weapons = [r for r in allrows['Weapon'].values() if r['WeaponId'] in acquisition['Weapon']]
             classes = {int(r['WeaponClass']) for r in weapons}
             order = WEAPON_ORDER + sorted(classes - set(WEAPON_ORDER) - DRONE_CLASSES) + sorted(classes & DRONE_CLASSES)
             rules = special_rules(source)
@@ -681,11 +735,12 @@ def catalog(config_dir, database):
             mod_groups = {}
             unresolved_mods = []
             for row in allrows['WeaponMod'].values():
+                if row['WeaponModId'] not in acquisition['WeaponMod']:
+                    continue
                 fit = mod_fitment(source, row, class_mods)
                 if not fit['declared'] and not fit['mapped']:
                     unresolved_mods.append({'id': row['WeaponModId'], 'modClass': fit['modClass'],
                                             'slot': fit['slot'], 'reason': 'No weapon-class mapping or localization'})
-                    continue
                 mod_groups.setdefault((fit['category'], fit['title']), []).append((row, fit))
             mod_grids = []
             for (category, title), members in sorted(mod_groups.items(),
@@ -709,6 +764,19 @@ def catalog(config_dir, database):
                 g['rows'].sort(key=lambda r: (natural(r['icon']), natural(r['sectionKey'])))
                 mod_grids.append(g)
             page('weapon-mods', 'Weapon mods', 'Weapons', mod_grids, unresolvedMods=unresolved_mods)
+            other_grids = []
+            for table, title in (('Weapon', 'Other weapons'), ('WeaponMod', 'Other weapon mods')):
+                records = [r for rid, r in allrows[table].items() if rid not in acquisition[table]
+                           and any(adjustment(v) is not None for v in doc['tables'].get(table, {}).get(rid, {}).values())]
+                if records:
+                    g = grid(table, records, title)
+                    if table == 'Weapon':
+                        for record in g['rows']:
+                            record['enemyUse'] = record['id'] in enemy_weapons
+                    other_grids.append(g)
+            if other_grids:
+                page('other-weapon-overrides', 'Other weapon overrides', 'Weapons', other_grids,
+                     description='These records have no known player acquisition reference. They remain here while they have overrides. Clear their overrides and save to remove them from this page.')
             for cls in sorted({int(r['ItemClass']) for r in allrows['Item'].values()}):
                 items = [r for r in allrows['Item'].values() if int(r['ItemClass']) == cls]
                 title = ITEM_CLASSES.get(cls, 'Item class %s' % cls)
