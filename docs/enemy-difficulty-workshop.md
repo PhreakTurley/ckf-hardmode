@@ -109,7 +109,11 @@ native source rows accidentally changed, forbidden repair clones and stale
 native preconditions. The roster verifier independently reconstructs the policy from official data,
 checks its SQL in isolation, and the combined verifier requires every merged
 roster row/field to match that verified result. Weighted pools are checked at
-every PL1–20. Corruption cases also cover the VIP/reinforcement removal gates,
+every PL1–20 using the shipped member-reader SQL and its
+[exclusive upper bounds](gotchas.md#game-data--databases). The retained below-PL1
+preservation comparison runs with
+`ckf-enemy-scaling/scripts/verify_prepared.py --include-nonpositive-pl`; default
+runs name it `NOT RUN`. Corruption cases also cover the VIP/reinforcement removal gates,
 restored legacy rows and deletion of unowned roster members. The old global native
 weapon/armor and talent-effect resolution checks remain runnable with `verify_enemy_difficulty.py --native-integrity`; default runs
 report each by name as `NOT RUN`. Authored armor-pointer validation always runs.

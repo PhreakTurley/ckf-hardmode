@@ -69,8 +69,9 @@ class EnemyDifficultyChecks(unittest.TestCase):
 
 
     def test_native_integrity_gate_remains_runnable(self):
-        with self.assertRaisesRegex(AssertionError, 'Unresolved high-PL WeaponTypeId: 30130'):
-            verify(PROJECT / 'parser_prepared/_data/data.sql', native_integrity=True)
+        result = verify(PROJECT / 'parser_prepared/_data/data.sql', native_integrity=True)
+        self.assertTrue(result['native_integrity_checks'])
+        self.assertTrue(all(status == 'PASS' for status in result['native_integrity_checks'].values()))
 
     def test_rejects_corrupted_payloads(self):
         with (PROJECT / "review/column-ledger.csv").open(encoding="utf-8-sig", newline="") as handle:
@@ -84,7 +85,7 @@ class EnemyDifficultyChecks(unittest.TestCase):
         roster = next(identity for identity, row in members.items() if "WeightedRoll" in row)
         gate = lambda group, maximum: next(identity for identity, row in members.items()
                       if row.get("MonsterGroupId") == str(group) and row.get("MaxPowerLevel") == str(maximum))
-        vip, armored, reinforcement = gate(12550, 14), gate(12600, 14), gate(12150, 19)
+        vip, armored, reinforcement = gate(12550, 15), gate(12600, 15), gate(12150, 20)
         with StaticData() as db:
             unowned = next(int(r["MonsterGroupMemberId"]) for r in db.read("MonsterGroupMemberModel")[1]
                            if int(r["MonsterGroupMemberId"]) not in members)
@@ -95,7 +96,7 @@ class EnemyDifficultyChecks(unittest.TestCase):
             ("authored armor changed", f'UPDATE Armor SET BallisticArmor=BallisticArmor+1 WHERE ArmorId={armor};', f'Row mismatch: Armor {armor}'),
             ("wrong enemy ceiling", 'UPDATE Rule SET Value=12 WHERE RuleId=82;', 'Row mismatch: Rule 82'),
             ("mission ceiling changed", 'UPDATE Rule SET Value=20 WHERE RuleId=81;', 'Row mismatch: Rule 81'),
-            ("high-level HP backslide", 'UPDATE MonsterType SET HitPoints=1 WHERE MonsterTypeId=24;', 'Row mismatch: MonsterType 24'),
+            ("high-level HP backslide", 'UPDATE MonsterType SET HitPoints=1 WHERE MonsterTypeId=24;', 'Forbidden SQL write: MonsterType.HitPoints'),
             ("authored weapon changed", 'UPDATE Weapon SET BallisticDamage1=1 WHERE WeaponId=20010;', 'Forbidden SQL write: Weapon.BallisticDamage1'),
             ("native weapon overwritten", 'UPDATE Weapon SET BallisticDamage1=1 WHERE WeaponId=20012;', 'Forbidden SQL write: Weapon.BallisticDamage1'),
             ("native effect overwritten", 'UPDATE Effect SET InitBonus=999 WHERE EffectId=64206;', 'Forbidden SQL write: Effect.InitBonus'),
@@ -106,9 +107,9 @@ class EnemyDifficultyChecks(unittest.TestCase):
             ("roster taper changed", f'UPDATE MonsterGroupMember SET WeightedRoll=9999 WHERE MonsterGroupMemberId={roster};', f'Row mismatch: MonsterGroupMember {roster}'),
             ("VIP removal gate lost", f'UPDATE MonsterGroupMember SET MaxPowerLevel=20 WHERE MonsterGroupMemberId={vip};', f'Row mismatch: MonsterGroupMember {vip}'),
             ("Armored VIP removal gate lost", f'UPDATE MonsterGroupMember SET MaxPowerLevel=20 WHERE MonsterGroupMemberId={armored};', f'Row mismatch: MonsterGroupMember {armored}'),
-            ("reinforcement removal gate lost", f'UPDATE MonsterGroupMember SET MaxPowerLevel=20 WHERE MonsterGroupMemberId={reinforcement};', f'Row mismatch: MonsterGroupMember {reinforcement}'),
+            ("reinforcement removal gate lost", f'UPDATE MonsterGroupMember SET MaxPowerLevel=21 WHERE MonsterGroupMemberId={reinforcement};', f'Row mismatch: MonsterGroupMember {reinforcement}'),
             ("unowned roster deleted", f'DELETE FROM MonsterGroupMember WHERE MonsterGroupMemberId={unowned};', 'Row identities differ: MonsterGroupMember'),
-            ("legacy roster restored", 'INSERT INTO MonsterGroupMember (MonsterGroupMemberId,MonsterGroupId,MonsterType,Slot,Faction,MinPowerLevel,MaxPowerLevel,MinSecLevel,MaxSecLevel,Exclusive,WeightedRoll) VALUES (30,100,1,1,0,0,0,0,0,0,5);', 'Row identities differ: MonsterGroupMember'),
+            ("legacy roster restored", 'UPDATE MonsterGroupMember SET MaxPowerLevel=0 WHERE MonsterGroupMemberId=30;', 'Row mismatch: MonsterGroupMember 30'),
             ("player talent changed", 'UPDATE Talent SET Range=999 WHERE TalentId=5001;', 'Forbidden SQL write: Talent.Range'),
             ("shared effect changed", 'UPDATE Effect SET Heals=999 WHERE EffectId=64192;', 'Forbidden SQL write: Effect.Heals'),
             ("effect variant ownership lost", 'UPDATE Effect SET EffectOwner=0 WHERE EffectId=960002;', 'Forbidden SQL write: Effect.EffectOwner'),
@@ -119,7 +120,7 @@ class EnemyDifficultyChecks(unittest.TestCase):
             ("native sniper source changed", 'UPDATE Weapon SET Accuracy1=1 WHERE WeaponId=6014;',
              'Row mismatch: Weapon 6014' if accuracy_reviewed else 'Forbidden SQL write: Weapon.Accuracy1'),
             ("VTOL native source changed", 'UPDATE Effect SET Stunned=0 WHERE EffectId=64175;', 'Forbidden SQL write: Effect.Stunned'),
-            ("VTOL pointer repair lost", 'UPDATE MonsterType SET EffectId=64173 WHERE MonsterTypeId=1150;', 'Row mismatch: MonsterType 1150'),
+            ("VTOL pointer repair lost", 'UPDATE MonsterType SET EffectId=64173 WHERE MonsterTypeId=1150;', 'Forbidden SQL write: MonsterType.EffectId'),
             ("sniper pointer repair lost", 'UPDATE MonsterType SET WeaponTypeId=6015 WHERE MonsterTypeId=3310;', 'Row mismatch: MonsterType 3310'),
             ("Vita-Tech group repair lost", 'UPDATE MonsterTalent SET MonsterTalentGroup=603 WHERE MonsterTalentId=603;', 'Row mismatch: MonsterTalent 603'),
             ("Rallying Cry repair lost", 'UPDATE MonsterTalent SET TargetEffect=64006 WHERE MonsterTalentId=303;', 'Row mismatch: MonsterTalent 303'),

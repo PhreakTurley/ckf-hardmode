@@ -258,7 +258,7 @@ def verify(sql_path, data_path=DEFAULT_DB, config_dir=CONFIG, native_integrity=F
                     def pool(rows):
                         values = Counter()
                         for row in rows.values():
-                            if row["MonsterGroupId"] == group and row["MinPowerLevel"] <= pl and (not row["MaxPowerLevel"] or pl <= row["MaxPowerLevel"]):
+                            if row["MonsterGroupId"] == group and row["MinPowerLevel"] <= pl and (not row["MaxPowerLevel"] or pl < row["MaxPowerLevel"]):
                                 key = tuple(row[c] for c in ("MonsterType", "Slot", "Faction", "MinSecLevel", "MaxSecLevel", "Exclusive"))
                                 values[key] += row["WeightedRoll"]
                         return values
