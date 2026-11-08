@@ -1900,9 +1900,16 @@ function playerCyberwareService(grid, row) {
     detail:'Read-only reference. Edit Service option id in Cyberware.\n'+references.map(function(r) {return r.detail;}).join('\n')};
 }
 
+function playerBlueprint(grid, row) {
+  const refs = row.blueprintDrops || [];
+  const column = grid.blueprintColumn || {};
+  return {label:refs.length ? column.label || '' : '', detail:refs.length ? refs.join('\n') : column.empty || ''};
+}
+
 function playerSortValue(grid, row, key) {
   if (key === 'name') return row.name;
   if (key === 'service') return playerService(grid,row).label;
+  if (key === 'blueprint') return (row.blueprintDrops || []).length ? 1 : 0;
   if (key === 'cyberwareService') return playerCyberwareService(grid,row).label;
   if (key === 'icon') {
     const editor = grid.iconEditor;
@@ -2025,7 +2032,8 @@ function renderPlayer(panel, page) {
         const assetId = editor ? CKF.playerDisplayValue(fields[editor.column] || '') || r.baseline[editor.column] : '';
         const token = editor ? (editor.assets[assetId] || {}).token || '' : r.icon || '';
         return (r.name+' '+r.id+' '+(grid.category || '')+' '+(grid.subsection || '')+' '+(r.section || '')+' '+token+' '+playerService(grid,r).label
-          +' '+(grid.cyberwareServiceColumn ? playerCyberwareService(grid,r).label : '')).toLocaleLowerCase().includes(query);
+          +' '+(grid.cyberwareServiceColumn ? playerCyberwareService(grid,r).label : '')
+          +' '+(grid.blueprintColumn ? playerBlueprint(grid,r).label : '')).toLocaleLowerCase().includes(query);
       });
       const gridKey = grid.key || grid.table;
       const sortId = page.id+':'+gridKey;
@@ -2064,6 +2072,7 @@ function renderPlayer(panel, page) {
         const sortBy = el('select',{'aria-label':'Sort by '+page.title+' · '+grid.title});
         const choices = [{value:'',text:'Default order'},{value:'name',text:'Name'}];
         if (grid.serviceColumn) choices.push({value:'service',text:'Service'});
+        if (grid.blueprintColumn) choices.push({value:'blueprint',text:grid.blueprintColumn.label});
         if (grid.cyberwareServiceColumn) choices.push({value:'cyberwareService',text:'Cyberware Service'});
         if (grid.iconColumn) choices.push({value:'icon',text:'Icon'});
         for (const col of grid.columns.concat(grid.advanced).slice().sort(function(a,b) {return a.order-b.order;}))
@@ -2107,6 +2116,9 @@ function renderPlayer(panel, page) {
         displayCols.splice(leading,0,{service:true,width:serviceWidth,column:{label:'Service',name:grid.serviceColumn.name}});
       }
       if (grid.iconColumn) displayCols.splice(leading+(grid.serviceColumn ? 1 : 0),0,{icon:true,width:iconWidth,column:{label:grid.iconEditor ? 'Icon / model' : 'Icon',name:'icon'}});
+      if (grid.blueprintColumn) displayCols.splice(leading+(grid.serviceColumn ? 1 : 0),0,
+        {blueprint:true,width:Math.ceil(playerTextWidth(grid.blueprintColumn.label,true)+24),
+         column:{label:grid.blueprintColumn.label,name:'blueprint'}});
       if (grid.cyberwareServiceColumn) displayCols.push({cyberwareService:true,width:250,column:{label:'Cyberware Service (read-only)',name:'Cyberware.ServiceOptionId'}});
       for (let i=0;i<displayCols.length;) {
         const group = displayCols[i].column.group;
@@ -2148,6 +2160,11 @@ function renderPlayer(panel, page) {
         if (row.fitment) nameCell.appendChild(el('small', {class:'pb-fit',text:row.fitment,title:row.fitmentSource}));
         const tr = el('tr', {'data-player-row':grid.table+' '+row.id}, [nameCell]);
         for (const item of displayCols) {
+          if (item.blueprint) {
+            const blueprint = playerBlueprint(grid,row);
+            tr.appendChild(el('td',{class:'pb-blueprint readonly',text:blueprint.label,title:blueprint.detail}));
+            continue;
+          }
           if (item.cyberwareService) {
             const service = playerCyberwareService(grid,row);
             const td = el('td',{class:'pb-service readonly',text:service.label,title:service.detail});

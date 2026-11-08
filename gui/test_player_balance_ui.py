@@ -21,6 +21,42 @@ setTimeout(async function () {
   ck('surprised accuracy has its Workshop owner', MODEL.playerBalance.pages.find(function(p) {return p.id==='rules';}).grids.some(function(g) {return g.rows.some(function(r) {return r.id==='22';});}));
   const panel = $('#panel');
   const find = function (fn) {return panel.find(fn);};
+  const beforeBlueprintView = JSON.stringify(playerChanges());
+  SEL='pb:weapon-3';render();
+  function blueprintCell(table, id) {
+    const row = find(n => n.tagName==='TR' && n.getAttribute('data-player-row')===table+' '+id)[0];
+    return row && row.find(n => n.tagName==='TD' && n._cls().includes('pb-blueprint'))[0];
+  }
+  ck('weapon blueprint column is visible by default', find(n => n.tagName==='TH' && n.textContent==='Blueprint').length===1);
+  ck('lootable weapon blueprint is labelled and cites its row', blueprintCell('Weapon','1008').textContent==='Blueprint'
+     && blueprintCell('Weapon','1008').title.includes('Blueprint 101008'));
+  ck('story-only weapon has a blank blueprint cell', blueprintCell('Weapon','1028').textContent==='');
+  ck('blueprint marker has no editable input', !blueprintCell('Weapon','1008').find(n => n.tagName==='INPUT').length);
+  const bpSort = find(n => n.tagName==='SELECT' && n.getAttribute('aria-label')==='Sort by AR · Weapon stats')[0];
+  bpSort.value='blueprint';bpSort.fire('change');
+  const bpDirection = find(n => n.tagName==='SELECT' && n.getAttribute('aria-label')==='Sort direction AR · Weapon stats')[0];
+  bpDirection.value='descending';bpDirection.fire('change');
+  const bpRows = find(n => n.tagName==='TR' && n.getAttribute('data-player-row'));
+  let blankBlueprint = false, groupedBlueprints = true;
+  for (const row of bpRows) {
+    const cell = row.find(n => n.tagName==='TD' && n._cls().includes('pb-blueprint'))[0];
+    if (!cell.textContent) blankBlueprint = true;
+    else if (blankBlueprint) groupedBlueprints = false;
+  }
+  ck('blueprint descending sort places marked rows first', groupedBlueprints && blankBlueprint);
+  const bpSearch=find(n => n.tagName==='INPUT' && n.getAttribute('type')==='search')[0];
+  bpSearch.value='Blueprint';bpSearch.fire('input');
+  ck('blueprint markers are searchable', find(n => n.tagName==='TD' && n._cls().includes('pb-blueprint')).length>0
+     && find(n => n.tagName==='TD' && n._cls().includes('pb-blueprint')).every(n => n.textContent==='Blueprint'));
+  const bpAll=find(n => n.tagName==='INPUT' && n.getAttribute('type')==='checkbox')[0];
+  bpAll.checked=true;bpAll.fire('change');
+  ck('show all columns retains exactly one blueprint column', find(n => n.tagName==='TH' && n.textContent==='Blueprint').length===1);
+  SEL='pb:weapon-mods';render();
+  const bpModSearch=find(n => n.tagName==='INPUT' && n.getAttribute('type')==='search')[0];
+  bpModSearch.value='Melee Damage 3';bpModSearch.fire('input');
+  ck('explicit blueprint loot marks a mod even when Lootable is zero', blueprintCell('WeaponMod','132').textContent==='Blueprint'
+     && blueprintCell('WeaponMod','132').title.includes('MissionLoot 9130'));
+  ck('blueprint view operations never create saved edits', JSON.stringify(playerChanges())===beforeBlueprintView);
   SEL='pb:weapon-16';render();
   const clawAll = find(function(n) {return n.tagName==='INPUT' && n.getAttribute('type')==='checkbox';})[0];
   clawAll.checked=true;clawAll.fire('change');

@@ -165,6 +165,40 @@ class PlayerBalanceTests(unittest.TestCase):
         for key in (('Weapon', '21001'), ('Weapon', '21006'), ('Weapon', '23001'), ('WeaponMod', '5075')):
             self.assertNotIn(key, set(drawn))
 
+    def test_blueprint_column_matches_typed_drop_references_and_never_enters_sql(self):
+        with tempfile.TemporaryDirectory() as config, static_data.StaticData() as source:
+            expected = {('Weapon' if int(r[0]) in (1, 7) else 'WeaponMod', str(r[1]))
+                        for r in source.connection.execute("""
+                            SELECT DISTINCT b.BlueprintClassId,b.OutputId FROM Blueprint b
+                            WHERE b.BlueprintClassId IN (1,5,7) AND
+                              (b.Lootable=1 OR EXISTS (SELECT 1 FROM MissionLoot l
+                                 WHERE l.LootTypeId=1 AND l.LootKey=b.BlueprintId))
+                        """)}
+            actual = pb.blueprint_drop_references(source)
+            self.assertEqual({(table, rid) for table, records in actual.items() for rid in records}, expected)
+            self.assertIn('Blueprint 200132 via MissionLoot 9130', actual['WeaponMod']['132'])
+            self.assertNotIn('21001', actual['Weapon'])
+            self.assertNotIn('1028', actual['Weapon'])
+            doc = pb.empty()
+            doc['tables'] = {'Weapon': {'21001': {'Cost': '0'}}, 'WeaponMod': {'5075': {'Cost': '0'}}}
+            path = Path(config) / pb.FILE
+            before = pb.encode(doc); path.write_bytes(before)
+            model = pb.catalog(config, static_data.DEFAULT_DB)
+            self.assertIsNone(model['error'])
+            for page in model['pages']:
+                for grid in page['grids']:
+                    if grid['table'] not in ('Weapon', 'WeaponMod'):
+                        self.assertNotIn('blueprintColumn', grid)
+                        continue
+                    self.assertEqual(grid['blueprintColumn']['label'], 'Blueprint')
+                    for row in grid['rows']:
+                        self.assertEqual(bool(row['blueprintDrops']), (grid['table'], row['id']) in expected)
+                    self.assertNotIn('Blueprint', [c['name'] for c in grid['columns'] + grid['advanced']])
+            self.assertEqual(path.read_bytes(), before)
+            statements, touched = pb.sql(model['document'], source)
+            self.assertEqual(touched, {('Weapon','21001','Cost'), ('WeaponMod','5075','Cost')})
+            self.assertTrue(all('Blueprint' not in stmt for stmt in statements))
+
     def test_blueprint_resale_categories_do_not_admit_wb_revolvers(self):
         with tempfile.TemporaryDirectory() as config, static_data.StaticData() as source:
             rows = source.read('WeaponModel')[1]

@@ -199,6 +199,15 @@ references does not decide player availability.
 Crafted Intrinsic mods are explicitly included as player crafting options,
 independently of item drops or blueprint availability.
 
+Every weapon and weapon-mod grid has a read-only **Blueprint** column. It
+shows **Blueprint** when a matching blueprint has `Lootable = 1` or an explicit
+`MissionLoot` blueprint reference, including when `Lootable = 0`; otherwise the
+cell is blank. Hover it to inspect the blueprint and loot-row references.
+The marker uses the same `player_balance.py:blueprint_drop_references` index
+as catalog eligibility. Resale assignments and the explicit Crafted Intrinsic
+inclusion do not set the marker. The column stays visible with uniform values,
+is searchable and sortable, and never enters saved adjustments or SQL exports.
+
 **Other weapon overrides** appears only while weapons or weapon mods without
 an acquisition reference have saved adjustments. Its separate tables retain
 editable adjustments, including explicit zero and baseline-equal values. Clearing

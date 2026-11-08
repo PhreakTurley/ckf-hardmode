@@ -257,7 +257,30 @@ def _effective_enemy_ids(source, config_dir, column):
     return {r.get(column) for r in rows.values()}
 
 
-def player_gear_references(source, doc=None):
+def blueprint_drop_references(source):
+    """Positive blueprint-drop evidence, keyed by output table and id.
+
+    Constants.BlueprintClass: Weapon=1, WeaponMod=5, PetWeapon=7.
+    LootTypes.Blueprint=1. Blueprint service assignments are not drop evidence.
+    """
+    refs = {'Weapon': {}, 'WeaponMod': {}}
+    loot = {}
+    for row in source.read('MissionLootModel', ('MissionLootId', 'LootKey', 'LootTypeId'))[1]:
+        if row['LootTypeId'] == '1':
+            loot.setdefault(row['LootKey'], []).append(row['MissionLootId'])
+    for row in source.read('BlueprintModel', ('BlueprintId', 'OutputId', 'BlueprintClassId', 'Lootable'))[1]:
+        table = {'1': 'Weapon', '5': 'WeaponMod', '7': 'Weapon'}.get(row['BlueprintClassId'])
+        if not table:
+            continue
+        prefix = 'Blueprint ' + row['BlueprintId']
+        evidence = ([prefix + ' (Lootable)'] if row['Lootable'] == '1' else [])
+        evidence.extend(prefix + ' via MissionLoot ' + rid for rid in loot.get(row['BlueprintId'], []))
+        if evidence:
+            refs[table].setdefault(row['OutputId'], []).extend(evidence)
+    return refs
+
+
+def player_gear_references(source, doc=None, blueprint_refs=None):
     """Inclusive positive acquisition references, keyed by table and content id.
 
     BlueprintClass Weapon=1 / WeaponMod=5: CoreRPG_v1.dll, Constants.BlueprintClass.
@@ -291,23 +314,16 @@ def player_gear_references(source, doc=None):
                     add(table, row[TABLE_KEYS[table]], 'ContactService ' + service['ServiceTypeId'])
 
     loot = source.read('MissionLootModel', ('MissionLootId', 'LootKey', 'LootTypeId'))[1]
-    blueprint_loot = {}
     for row in loot:
-        if row['LootTypeId'] == '1':
-            blueprint_loot.setdefault(row['LootKey'], []).append(row['MissionLootId'])
         for table, kind in (('Weapon', '8'), ('WeaponMod', '10')):
             if row['LootTypeId'] == kind:
                 add(table, row['LootKey'], 'MissionLoot ' + row['MissionLootId'])
-    for row in source.read('BlueprintModel', ('BlueprintId', 'OutputId', 'BlueprintClassId',
-                                              'Lootable'))[1]:
-        table = {'1': 'Weapon', '5': 'WeaponMod'}.get(row['BlueprintClassId'])
-        if not table:
-            continue
-        prefix = 'Blueprint ' + row['BlueprintId']
-        if row['Lootable'] == '1':
-            add(table, row['OutputId'], prefix + ' (Lootable)')
-        for loot_id in blueprint_loot.get(row['BlueprintId'], []):
-            add(table, row['OutputId'], prefix + ' via MissionLoot ' + loot_id)
+    if blueprint_refs is None:
+        blueprint_refs = blueprint_drop_references(source)
+    for table, records in blueprint_refs.items():
+        for rid, evidence in records.items():
+            for reference in evidence:
+                add(table, rid, reference)
 
     # Crafted Intrinsic is an explicit player-crafting catalog inclusion,
     # independent of a detachable-item drop or blueprint resale assignment.
@@ -559,7 +575,8 @@ def catalog(config_dir, database):
                        for t in TABLE_KEYS}
             assets = {r['WeaponModelId']: r for r in source.read('Weapon3DAssetModel')[1]}
             services = service_catalog(source)
-            acquisition = player_gear_references(source, doc)
+            blueprint_refs = blueprint_drop_references(source)
+            acquisition = player_gear_references(source, doc, blueprint_refs)
             item_links, item_owners = consumable_links(allrows, doc)
             cyberware_links, implant_owners = implant_links(allrows, doc)
             for trait in allrows['Trait'].values():
@@ -604,6 +621,7 @@ def catalog(config_dir, database):
                                                       else 'Managed by Hard Mode Fatigue / limit-break traits'})
                     if table in ('Weapon', 'WeaponMod'):
                         records[-1]['acquisition'] = acquisition[table].get(rid, [])
+                        records[-1]['blueprintDrops'] = blueprint_refs[table].get(rid, [])
                     if table == 'Rule' and rid in ENEMY_RULES:
                         records[-1]['owner'] = 'Enemy Balance'
                 raw = {r[TABLE_KEYS[table]]: r for r in rows}
@@ -612,6 +630,9 @@ def catalog(config_dir, database):
                              if table in ('Weapon', 'WeaponMod', 'Implant', 'Item') else ((), natural(r['name'])))
                 result_grid = {'table': table, 'title': title, 'columns': visible, 'advanced': advanced, 'rows': records,
                                'multipliers': doc.get('implantMultipliers', {}) if table == 'Implant' else {}}
+                if table in ('Weapon', 'WeaponMod'):
+                    result_grid['blueprintColumn'] = {'label': 'Blueprint',
+                        'empty': 'No blueprint drop reference in the selected database.'}
                 if table in services:
                     result_grid['serviceColumn'] = {'name': 'ServiceOptionId', 'options': services[table]}
                 return result_grid
