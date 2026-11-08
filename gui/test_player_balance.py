@@ -162,8 +162,39 @@ class PlayerBalanceTests(unittest.TestCase):
         for wid in ('1028', '4025'):
             self.assertTrue(any('BlockCondition 2526 Equip' in e for e in drawn['Weapon', wid]['acquisition']))
         self.assertIn('Blueprint 200132 via MissionLoot 9130', drawn['WeaponMod', '132']['acquisition'])
-        for key in (('Weapon', '23001'), ('WeaponMod', '5075')):
+        for key in (('Weapon', '21001'), ('Weapon', '21006'), ('Weapon', '23001'), ('WeaponMod', '5075')):
             self.assertNotIn(key, set(drawn))
+
+    def test_blueprint_resale_categories_do_not_admit_wb_revolvers(self):
+        with tempfile.TemporaryDirectory() as config, static_data.StaticData() as source:
+            rows = source.read('WeaponModel')[1]
+            wb_ids = {r['WeaponId'] for r in rows if r['WeaponName'] == 'WB Revolver'}
+            self.assertTrue(wb_ids)
+            blueprint_ids = {r['BlueprintId'] for r in source.read('BlueprintModel')[1]
+                             if r['BlueprintClassId'] == '1' and r['OutputId'] in wb_ids}
+            self.assertTrue(blueprint_ids)
+            refs = pb.player_gear_references(source)
+            self.assertFalse(wb_ids & refs['Weapon'].keys())
+            doc = pb.empty()
+            doc['tables'] = {'Weapon': {'21001': {'Cost': '0'}}}
+            (Path(config) / pb.FILE).write_bytes(pb.encode(doc))
+            model = pb.catalog(config, static_data.DEFAULT_DB)
+            self.assertIsNone(model['error'])
+            matches = [(p['id'], r) for p in model['pages'] for g in p['grids']
+                       if g['table'] == 'Weapon' for r in g['rows'] if r['id'] in wb_ids]
+            self.assertEqual([(pid, r['id']) for pid, r in matches], [('other-weapon-overrides', '21001')])
+
+    def test_crafted_intrinsic_remains_an_explicit_player_catalog_category(self):
+        with tempfile.TemporaryDirectory() as config, static_data.StaticData() as source:
+            expected = {r['WeaponModId'] for r in source.read('WeaponModModel')[1]
+                        if int(r['ModClassId']) >= 200}
+            self.assertTrue(expected)
+            model = pb.catalog(config, static_data.DEFAULT_DB)
+            self.assertIsNone(model['error'])
+            page = next(p for p in model['pages'] if p['id'] == 'weapon-mods')
+            crafted = {r['id']: r for g in page['grids'] if g['category'] == 'Crafted Intrinsic' for r in g['rows']}
+            self.assertEqual(set(crafted), expected)
+            self.assertTrue(all('Player crafting option (Crafted Intrinsic)' in r['acquisition'] for r in crafted.values()))
 
     def test_other_weapon_overrides_disappear_only_after_the_last_saved_reset(self):
         import serve
@@ -356,9 +387,11 @@ class PlayerBalanceTests(unittest.TestCase):
                              ['Weapon Mods', 'Crafted Intrinsic', 'Intrinsic'])
             native = {r['WeaponModId']: r for r in source.read('WeaponModModel')[1]}
             # Independent SQL join checks the Python catalog against all
-            # current mod services, direct loot and obtainable blueprints.
+            # current mod services, direct loot and lootable or loot-listed blueprints.
             eligible = {str(r[0]) for r in source.connection.execute("""
                 SELECT m.WeaponModId FROM WeaponMod m WHERE
+                  m.ModClassId>=200
+                  OR
                   EXISTS (SELECT 1 FROM ContactService s
                           WHERE s.ServiceFlow=3 AND s.ServiceOptionId>0
                             AND s.ServiceOptionId=m.ServiceOptionId)
@@ -367,9 +400,6 @@ class PlayerBalanceTests(unittest.TestCase):
                   OR EXISTS (SELECT 1 FROM Blueprint b
                              WHERE b.BlueprintClassId=5 AND b.OutputId=m.WeaponModId
                                AND (b.Lootable=1
-                                 OR EXISTS (SELECT 1 FROM ContactService s
-                                            WHERE s.ServiceFlow=4 AND s.ServiceOptionId>0
-                                              AND s.ServiceOptionId=b.ServiceOptionId)
                                  OR EXISTS (SELECT 1 FROM MissionLoot l
                                             WHERE l.LootTypeId=1 AND l.LootKey=b.BlueprintId)))
             """)}

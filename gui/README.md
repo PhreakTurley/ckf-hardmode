@@ -177,10 +177,13 @@ The weapon tabs put Melee, Pistol, Revolver, SMG, Shotgun, E-Rifle, UAR, AR,
 Sniper Rifle, Railgun, Claws and Eye Lasers first. Canine Attack Rig belongs
 with Drone weapons. Weapon and weapon-mod catalogs require a positive acquisition
 reference from the selected official database: a matching item service, direct
-mission loot, a blueprint with a matching blueprint service or `Lootable = 1`,
-or an explicit mission-loot reference to the blueprint regardless of its
-`Lootable` flag. Weapons also include cyberweapon talent references, pet
-prebuilt equipment, every weapon tier in a class named by a pet chassis, and
+mission loot, a blueprint with `Lootable = 1`, or an explicit mission-loot
+reference to the blueprint regardless of its `Lootable` flag. Blueprint
+`ServiceOptionId` assignments do not establish acquisition; a resale category
+is insufficient evidence that the player can obtain the blueprint. Weapons also
+include cyberweapon talent references, canine/feline weapon
+classes supported by player pet-owning jobs, pet prebuilt equipment, every
+weapon tier in a class named by a pet chassis, and
 the two weapon fields of explicit story `BlockCondition` `Equip` records.
 Services are matched by flow and option together. Saved service and cyberweapon
 pointer adjustments can add acquisition references; official references remain
@@ -193,6 +196,8 @@ Shared weapons remain editable and carry an **Also used by enemies** marker.
 Enemy markers include both official and local overlay references, so a Hard Mode
 repoint cannot erase a Workshop warning. The presence or absence of enemy
 references does not decide player availability.
+Crafted Intrinsic mods are explicitly included as player crafting options,
+independently of item drops or blueprint availability.
 
 **Other weapon overrides** appears only while weapons or weapon mods without
 an acquisition reference have saved adjustments. Its separate tables retain

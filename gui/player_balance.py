@@ -262,7 +262,9 @@ def player_gear_references(source, doc=None):
 
     BlueprintClass Weapon=1 / WeaponMod=5: CoreRPG_v1.dll, Constants.BlueprintClass.
     LootTypes Blueprint=1 / Weapon=8 / WeaponMod=10: _id_constants.csv.
-    ContactService flow 4: official rows 12003-12012 (blueprint catalogs).
+    Blueprint ServiceOptionId does not establish acquisition. ContactService
+    12010 carries Srv_BuyBlueprint_Weapons_PL1; Official/en-US.json,
+    BlockDesc.91079_Male, explicitly describes selling weapon blueprints.
     Story equipment: official BlockCondition 2526, Equip for
     PCP_RetireSleep_Soldier, names Weapon 1028 and 4025 in the first two values.
     Do not require Lootable on a blueprint explicitly present in mission loot.
@@ -296,26 +298,39 @@ def player_gear_references(source, doc=None):
         for table, kind in (('Weapon', '8'), ('WeaponMod', '10')):
             if row['LootTypeId'] == kind:
                 add(table, row['LootKey'], 'MissionLoot ' + row['MissionLootId'])
-    blueprint_services = {r['ServiceOptionId']: r['ServiceTypeId'] for r in services
-                          if r['ServiceFlow'] == '4' and int(r['ServiceOptionId']) > 0}
     for row in source.read('BlueprintModel', ('BlueprintId', 'OutputId', 'BlueprintClassId',
-                                              'Lootable', 'ServiceOptionId'))[1]:
+                                              'Lootable'))[1]:
         table = {'1': 'Weapon', '5': 'WeaponMod'}.get(row['BlueprintClassId'])
         if not table:
             continue
         prefix = 'Blueprint ' + row['BlueprintId']
         if row['Lootable'] == '1':
             add(table, row['OutputId'], prefix + ' (Lootable)')
-        if row['ServiceOptionId'] in blueprint_services:
-            add(table, row['OutputId'], prefix + ' via ContactService ' +
-                blueprint_services[row['ServiceOptionId']])
         for loot_id in blueprint_loot.get(row['BlueprintId'], []):
             add(table, row['OutputId'], prefix + ' via MissionLoot ' + loot_id)
+
+    # Crafted Intrinsic is an explicit player-crafting catalog inclusion,
+    # independent of a detachable-item drop or blueprint resale assignment.
+    class_mods = source.read('WeaponClassModModel')[1]
+    for row in rows['WeaponMod']:
+        if mod_fitment(source, row, class_mods)['category'] == 'Crafted Intrinsic':
+            add('WeaponMod', row['WeaponModId'], 'Player crafting option (Crafted Intrinsic)')
 
     for row in source.read('TalentModel')[1]:
         if row['TalentIsCyber'] == '1':
             for wid in {row['Weapon'], str(int(effective(doc, 'Talent', row, 'Weapon')))}:
                 add('Weapon', wid, 'Cyber talent ' + row['TalentId'])
+    # Explicit player-pet catalog policy. Constants.WeaponClass declares
+    # DogWeapon=7 and CatWeapon=8; official Job 9 owns pet type 4 (Hunder),
+    # and Job 4 owns type 5 (Assassin, with Lynx/Snow Leopard jobs 30/31).
+    pet_weapon_classes = {'4': '7', '5': '8'}
+    for job in source.read('JobModel', ('JobId', 'JobType', 'PetOwnerTypeId'))[1]:
+        weapon_class = pet_weapon_classes.get(job['PetOwnerTypeId'])
+        if job['JobType'] == '1' and weapon_class:
+            for weapon in rows['Weapon']:
+                if weapon['WeaponClass'] == weapon_class:
+                    add('Weapon', weapon['WeaponId'], 'Job ' + job['JobId'] +
+                        ' player pet (weapon class ' + weapon_class + ')')
     for row in source.read('DroneChassisModel')[1]:
         for field in ('WeaponType1', 'WeaponType2'):
             # Chassis slots declare weapon classes (e.g. row 1 names class 18),
