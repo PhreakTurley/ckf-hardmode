@@ -19,6 +19,11 @@ setTimeout(async function () {
   const rules = MODEL.values.overlays['ckf.hardmode.d/RuleModel.csv'];
   ck('surprised accuracy is absent from the Hard Mode rule grid', !rules.rows.some(function(r) {return r.cells[0]==='22';}));
   ck('surprised accuracy has its Workshop owner', MODEL.playerBalance.pages.find(function(p) {return p.id==='rules';}).grids.some(function(g) {return g.rows.some(function(r) {return r.id==='22';});}));
+  const normalImplants=MODEL.playerBalance.pages.filter(p=>p.id.startsWith('implant-')).flatMap(p=>p.grids).filter(g=>g.table==='Implant').flatMap(g=>g.rows);
+  const otherImplants=MODEL.playerBalance.pages.filter(p=>p.id==='other-cyberware-overrides').flatMap(p=>p.grids).flatMap(g=>g.rows);
+  ck('normal cyberware rows have positive acquisition references', normalImplants.length>0 && normalImplants.every(r=>r.acquisition && r.acquisition.length));
+  ck('unreachable cyberware overrides stay separate from the normal catalog', otherImplants.every(r=>!r.acquisition.length
+     && !normalImplants.some(n=>n.id===r.id)));
   const panel = $('#panel');
   const find = function (fn) {return panel.find(fn);};
   const beforeBlueprintView = JSON.stringify(playerChanges());

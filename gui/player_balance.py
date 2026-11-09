@@ -405,6 +405,68 @@ def player_gear_references(source, doc=None, blueprint_refs=None, source_kinds=N
     return refs
 
 
+def player_implant_references(source, doc=None, source_kinds=None):
+    """Inclusive cyberware policy: services, starting equipment, story candidates.
+
+    Player-job requirements retain every matching implant class, including jobs
+    not enabled in character selection. Nonzero Deactivated entries and their
+    linked variants are retained by explicit maintainer policy; this does not
+    assert an exact campaign-to-implant activation mapping.
+    """
+    doc = doc or empty()
+    rows = source.read('ImplantModel', ('ImplantTypeId', 'ServiceOptionId', 'ImplantClass',
+                                      'BackstoryGroup', 'Deactivated'))[1]
+    known = {r['ImplantTypeId'] for r in rows}
+    refs = {'Implant': {}}
+
+    def add(rid, evidence, kind):
+        if rid in known:
+            entries = refs['Implant'].setdefault(rid, [])
+            if evidence not in entries:
+                entries.append(evidence)
+            if source_kinds is not None:
+                source_kinds.setdefault('Implant', {}).setdefault(rid, set()).add(kind)
+
+    services = [r for r in contact_services(source) if r['ServiceFlow'] == SERVICE_FLOWS['Implant']
+                and r['attainable'] and int(r['ServiceOptionId']) > 0]
+    for row in rows:
+        options = {row['ServiceOptionId'], str(int(effective(doc, 'Implant', row, 'ServiceOptionId')))}
+        for service in services:
+            if service['ServiceOptionId'] in options:
+                add(row['ImplantTypeId'], 'ContactService ' + service['ServiceTypeId'], 'service')
+    backstories = source.read('BackstoryModel', ('BackstoryId', 'BackstoryGroup', 'Implant',
+                                                'Implant1', 'Implant2', 'Implant3'))[1]
+    groups = {r['BackstoryGroup'] for r in backstories} - {'', '0', '-1'}
+    for row in backstories:
+        for field in ('Implant', 'Implant1', 'Implant2', 'Implant3'):
+            add(row[field], 'Backstory %s.%s' % (row['BackstoryId'], field), 'starting')
+    for row in rows:
+        if row['BackstoryGroup'] in groups:
+            add(row['ImplantTypeId'], 'Implant %s.BackstoryGroup %s' %
+                (row['ImplantTypeId'], row['BackstoryGroup']), 'starting')
+    for job in source.read('JobModel', ('JobId', 'JobType', 'ReqCyberClass1Id'))[1]:
+        if job['JobType'] == '1' and job['ReqCyberClass1Id'] not in ('', '0', '-1'):
+            for row in rows:
+                if row['ImplantClass'] == job['ReqCyberClass1Id']:
+                    add(row['ImplantTypeId'], 'Job %s.ReqCyberClass1Id %s (inclusive class policy)' %
+                        (job['JobId'], job['ReqCyberClass1Id']), 'starting')
+    for row in source.read('DronePrebuiltModel', ('DroneType', 'CyberSlot1', 'CyberSlot2',
+                                                'CyberSlot3', 'CyberSlot4', 'CyberSlot5'))[1]:
+        for field in ('CyberSlot1', 'CyberSlot2', 'CyberSlot3', 'CyberSlot4', 'CyberSlot5'):
+            add(row[field], 'PetPrebuilt %s.%s' % (row['DroneType'], field), 'starting')
+    activations = [r['BlockConditionId'] for r in source.read('BlockConditionModel',
+                   ('BlockConditionId', 'ConditionType'))[1] if r['ConditionType'] == 'ActivateCyber']
+    story = '; ActivateCyber BlockCondition ' + ', '.join(activations) if activations else ''
+    for row in rows:
+        flag = int(row['Deactivated'] or 0)
+        if flag:
+            evidence = 'Implant %s.Deactivated %s (potential story cyberware%s)' % (row['ImplantTypeId'], flag, story)
+            add(row['ImplantTypeId'], evidence, 'story')
+            if flag > 0 and str(flag) != row['ImplantTypeId']:
+                add(str(flag), evidence + ' linked variant', 'story')
+    return refs
+
+
 def gear_service_fallbacks(source, acquisition, source_kinds):
     """Describe non-service availability; the renderer still resolves services first."""
     routes = {'Weapon': {}, 'WeaponMod': {}}
@@ -730,6 +792,7 @@ def catalog(config_dir, database):
             source_kinds = {}
             acquisition = player_gear_references(source, doc, blueprint_refs, source_kinds)
             service_fallbacks = gear_service_fallbacks(source, acquisition, source_kinds)
+            acquisition.update(player_implant_references(source, doc, source_kinds))
             service_fallbacks['Item'] = item_service_fallbacks(source)
             item_links, item_owners = consumable_links(allrows, doc)
             cyberware_links, implant_owners = implant_links(allrows, doc)
@@ -780,6 +843,8 @@ def catalog(config_dir, database):
                         records[-1]['blueprintDrops'] = blueprint_refs[table].get(rid, [])
                         records[-1]['serviceFallback'] = service_fallbacks[table].get(rid,
                             {'label': '', 'detail': 'No known player acquisition reference; retained for its overrides.'})
+                    if table == 'Implant':
+                        records[-1]['acquisition'] = acquisition['Implant'].get(rid, [])
                     if table == 'Item':
                         records[-1]['serviceFallback'] = service_fallbacks['Item'].get(rid,
                             {'label': '', 'detail': 'No known item loot or blueprint drop reference.'})
@@ -1028,13 +1093,31 @@ def catalog(config_dir, database):
                 page('consumable-%s' % cls, title, 'Consumables',
                      [joined_grid('Item', items, title, 'Item', item_links, item_owners, blocks)])
             page('implant-global', 'All cyberware', 'Cyberware', [], multipliers=MULTIPLIERS)
-            for slot in sorted({int(r['ImplantSlot']) for r in allrows['Implant'].values()},
+            player_implants = [r for r in allrows['Implant'].values() if r['ImplantTypeId'] in acquisition['Implant']]
+            for slot in sorted({int(r['ImplantSlot']) for r in player_implants},
                                key=lambda s: (SLOT_ORDER.index(s) if s in SLOT_ORDER else len(SLOT_ORDER), s)):
-                rows = [r for r in allrows['Implant'].values() if int(r['ImplantSlot']) == slot]
+                rows = [r for r in player_implants if int(r['ImplantSlot']) == slot]
                 title = SLOT_NAMES.get(slot, 'Module slot %s' % slot)
                 page('implant-%s' % slot, title, 'Cyberware modules' if slot >= 100 else 'Cyberware',
                      [joined_grid('Implant', rows, title, 'Implant', cyberware_links, implant_owners,
                                   [('Effects', 'Effect'), ('Matrix effects', 'MatrixEffect')])])
+            def implant_has_overrides(row):
+                rid = row['ImplantTypeId']
+                linked = cyberware_links[rid]
+                targets = [('Implant', rid)] + [(table, linked['ids'][heading])
+                    for heading, table in (('Effects', 'Effect'), ('Matrix effects', 'MatrixEffect'))
+                    if linked[heading] is not None]
+                return any(adjustment(value) is not None for table, target in targets
+                           for value in doc['tables'].get(table, {}).get(target, {}).values())
+            other_implants = [r for r in allrows['Implant'].values()
+                              if r['ImplantTypeId'] not in acquisition['Implant'] and implant_has_overrides(r)]
+            if other_implants:
+                page('other-cyberware-overrides', 'Other cyberware overrides', 'Cyberware',
+                     [joined_grid('Implant', other_implants, 'Other cyberware', 'Implant', cyberware_links,
+                                  implant_owners, [('Effects', 'Effect'), ('Matrix effects', 'MatrixEffect')])],
+                     description='These implants have no known player acquisition reference under the inclusive filter. '
+                                 'They remain here while the implant or its linked effects have overrides. '
+                                 'Clear those overrides and save to remove them from this page.')
             face_actions = {}
             for talent in allrows['Talent'].values():
                 if talent['TalentIsFace'] != '0' and talent['TargetType'] == 'LEVERAGE':

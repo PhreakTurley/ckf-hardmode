@@ -346,6 +346,27 @@ when every row in the table has the same effective thumbnail, even if other
 choices are available. **Show all columns** reveals them for editing. Visibility
 uses the full table, including filtered-out rows and other pages.
 
+Cyberware catalogs require a positive source reference under
+`player_balance.py:player_implant_references`: an attainable implant service,
+explicit `Backstory.Implant`/`Implant1`–`Implant3` assignment, an implant's reference
+to a defined backstory group, a player-job required implant class, or a pet
+prebuilt's `CyberSlot1`–`CyberSlot5` loadout. Job-required classes retain all tiers,
+including jobs not enabled for selection. Chassis slot compatibility alone does
+not establish acquisition.
+
+The inclusive story policy also retains every nonzero `Implant.Deactivated`
+entry and any known implant it points to. This includes self references and
+negative flags without interpreting their individual meanings. Generic
+`ActivateCyber` story conditions are cited when present; they do not identify
+specific implant ids. This policy preserves potential story equipment without
+claiming exact campaign reachability. Hover implant names for source references.
+
+Unreferenced implants leave the normal lists. **Other cyberware overrides**
+retains them while they or their linked effects have explicit adjustments.
+Clearing those adjustments and saving removes them from that page; global
+implant multipliers alone do not retain individual rows. Filtering preserves
+all tuning and export targets.
+
 Cyberware tabs follow ocular, arms, skin, skeletal, deep brain, fast brain,
 spinal, heart, lungs and legs, followed by other slots. Each slot has one table
 with one row per implant, grouping its **Implant**, **Effects** and **Matrix
