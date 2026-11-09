@@ -33,6 +33,7 @@ setTimeout(async function () {
   ck('story-only weapon has a blank blueprint cell', blueprintCell('Weapon','1028').textContent==='');
   ck('blueprint marker has no editable input', !blueprintCell('Weapon','1008').find(n => n.tagName==='INPUT').length);
   const bpSort = find(n => n.tagName==='SELECT' && n.getAttribute('aria-label')==='Sort by Assault Rifle · Weapon stats')[0];
+  ck('Cost is the selected default equipment sort', bpSort.value==='column:Cost');
   bpSort.value='blueprint';bpSort.fire('change');
   const bpDirection = find(n => n.tagName==='SELECT' && n.getAttribute('aria-label')==='Sort direction Assault Rifle · Weapon stats')[0];
   bpDirection.value='descending';bpDirection.fire('change');
@@ -64,14 +65,14 @@ setTimeout(async function () {
     for (const row of grid.rows) {
       const original=playerServiceAssignment(playerCell(grid,row,{name:grid.serviceColumn.name}),grid.serviceColumn.options);
       const shown=playerService(grid,row);
-      if (Object.prototype.hasOwnProperty.call(grid.serviceColumn.options,original.id)) {
+      if (Object.prototype.hasOwnProperty.call(grid.serviceColumn.options,original.id) && original.attainable!==false) {
         assignedServices++;
         if (JSON.stringify(original)!==JSON.stringify(shown)) unchangedServices=false;
       }
       if (shown.label==='Unassigned') noUnassigned=false;
     }
   }
-  ck('all existing weapon and mod service declarations remain unchanged', assignedServices>0 && unchangedServices);
+  ck('all attainable weapon and mod service declarations remain unchanged', assignedServices>0 && unchangedServices);
   ck('weapon and mod service cells never declare Unassigned', noUnassigned);
   SEL='pb:weapon-3';render();
   const sourceSearch=find(n=>n.tagName==='INPUT' && n.getAttribute('type')==='search')[0];
@@ -113,7 +114,7 @@ setTimeout(async function () {
   cappedSearch.value=cappedRow.name;cappedSearch.fire('input');
   const cappedCell=()=>find(n=>n.tagName==='TR' && n.getAttribute('data-player-row')==='WeaponMod '+cappedRow.id)[0]
     .find(n=>n.tagName==='TD' && n._cls().includes('pb-service'))[0];
-  ck('otherwise obtainable gear retains its unattainable service declaration', cappedCell().textContent.includes('(Unattainable)'));
+  ck('otherwise obtainable gear uses availability instead of a capped service', cappedCell().textContent===cappedRow.serviceFallback.label && !cappedCell().textContent.includes('Imported Weapon Mods'));
   ck('unattainable service tooltip cites its cap marker', cappedCell().title.includes('UpgradeReady=2') && cappedCell().title.includes('exceeds cap'));
   const cappedAll=find(n=>n.tagName==='INPUT' && n.getAttribute('type')==='checkbox')[0];
   cappedAll.checked=true;cappedAll.fire('change');
@@ -122,7 +123,7 @@ setTimeout(async function () {
   ck('pending attainable assignment clears the unattainable marker', !cappedCell().textContent.includes('Unattainable')
      && cappedCell().textContent===cappedGrid.serviceColumn.options['1'].label);
   cappedInput.value='';cappedInput.fire('input');
-  ck('reset restores the capped service declaration', cappedCell().textContent.includes('(Unattainable)'));
+  ck('reset restores availability instead of a capped service', cappedCell().textContent===cappedRow.serviceFallback.label);
   W.player=JSON.parse(cappedPlayer);
   SEL='pb:weapon-16';render();
   const clawAll = find(function(n) {return n.tagName==='INPUT' && n.getAttribute('type')==='checkbox';})[0];
@@ -134,6 +135,16 @@ setTimeout(async function () {
   SEL='pb:weapon-17';render();
   ck('eye laser weapon and attack fields share one grid', find(function (n) {return n.tagName==='TABLE';}).length===1
      && find(function(n) {return n.tagName==='TH' && n.textContent==='Attack';}).length===1);
+  const laserNames=MODEL.playerBalance.pages.find(p=>p.id==='weapon-17').grids[0];
+  const brightshot=laserNames.rows.find(r=>r.id==='25001');
+  ck('cyberweapon rows show the linked implant tier name', brightshot.name==='Brightshot Optic 2'
+     && find(n=>n.tagName==='TR' && n.getAttribute('data-player-row')==='Weapon 25001')[0].textContent.includes('Brightshot Optic 2'));
+  const cyberLabels=playerCyberwareService(laserNames,brightshot);
+  const expectedCyberLabels=Array.from(new Set(brightshot.cyberwareServices.map(ref=>
+    playerServiceAssignment(playerCell({table:'Implant'},{id:ref.id,baseline:{ServiceOptionId:ref.baseline}},{name:'ServiceOptionId'}),
+      laserNames.cyberwareServiceColumn.options).label))).join('; ');
+  ck('Cyberware Service shows only service names and keeps source ids in the tooltip', cyberLabels.label===expectedCyberLabels
+     && !cyberLabels.label.includes('(option ') && cyberLabels.detail.includes('Implant '+brightshot.cyberwareServices[0].id+'.ServiceOptionId'));
   const input = find(function (n) {return n.tagName==='INPUT' && n.getAttribute('type')==='text';})[0];
   ck('a weapon stat can be edited', !!input);
   input.value='=0';input.fire('input');
@@ -182,6 +193,8 @@ setTimeout(async function () {
   const modInput = find(function(n) {return n.tagName==='INPUT' && n.getAttribute('type')==='text';})[0];
   modInput.value='=19';modInput.fire('input');
   ck('weapon mod edits retain their table identity', buildEdits().playerBalance.cells.some(function(c) {return c.table==='WeaponMod' && c.value==='=19';}));
+  const visualAll=find(n=>n.tagName==='INPUT' && n.getAttribute('type')==='checkbox')[0];
+  visualAll.checked=true;visualAll.fire('change');
   const modGrid=MODEL.playerBalance.pages.find(p => p.id==='weapon-mods').grids.find(g => g.iconEditor);
   const modRow=modGrid.rows[0], modEditor=modGrid.iconEditor;
   const originalVisual=(((W.player.tables || {}).WeaponMod || {})[modRow.id] || {})[modEditor.column];
@@ -190,6 +203,8 @@ setTimeout(async function () {
   const modPicker=() => find(n => n.tagName==='SELECT' && n.getAttribute('aria-label')===modRow.name+' visual')[0];
   ck('multi-graphic mods have visual dropdowns without duplicate numeric controls', !!modPicker()
      && !find(n => n.tagName==='INPUT' && n.getAttribute('data-player-target')==='WeaponMod '+modRow.id+'.Asset3DTypeId').length);
+  ck('unchanged visuals use the same short label as manual choices', modPicker().children[0].textContent===modEditor.assets[baseVisual].label
+     && !modPicker().parent.find(n=>n.tagName==='SMALL').length);
   modPicker().value=newVisual.id;modPicker().fire('change');
   ck('changing a mod visual immediately moves its icon group', modRow.sectionKey===newVisual.thumbnail
      && modRow.icon===newVisual.name && modPicker().value===newVisual.id);
@@ -204,6 +219,32 @@ setTimeout(async function () {
   ck('default restores the official mod visual and group', modRow.sectionKey===modEditor.assets[baseVisual].thumbnail
      && modPicker().value==='');
   if (originalVisual!==undefined) W.player.tables.WeaponMod[modRow.id][modEditor.column]=originalVisual;
+  const iconPlayer=JSON.stringify(W.player);
+  const modPage=MODEL.playerBalance.pages.find(p=>p.id==='weapon-mods'), originalModGrids=modPage.grids;
+  const iconFixture=JSON.parse(JSON.stringify(originalModGrids.find(g=>g.iconEditor && new Set(g.rows.map(r=>r.baseline.Asset3DTypeId)).size>1)));
+  const firstIconRow=iconFixture.rows[0];
+  const secondIconRow=iconFixture.rows.find(r=>iconFixture.iconEditor.assets[r.baseline.Asset3DTypeId].thumbnail
+    !==iconFixture.iconEditor.assets[firstIconRow.baseline.Asset3DTypeId].thumbnail);
+  iconFixture.rows=[firstIconRow,secondIconRow];
+  for (const row of iconFixture.rows) {
+    const fields=(W.player.tables.WeaponMod || {})[row.id];if(fields) delete fields.Asset3DTypeId;
+  }
+  modPage.grids=[iconFixture];render();
+  const fixturePicker=()=>find(n=>n.tagName==='SELECT' && n.getAttribute('aria-label')===firstIconRow.name+' visual')[0];
+  ck('different current graphics keep the visual column visible', !!fixturePicker());
+  fixturePicker().value=String(secondIconRow.baseline.Asset3DTypeId);fixturePicker().fire('change');
+  ck('making every graphic identical automatically hides the visual column', !fixturePicker()
+     && !find(n=>n.tagName==='TH' && n.textContent==='Visual').length);
+  ck('hidden visual changes remain in the native save payload', buildEdits().playerBalance.cells.some(c=>
+     c.table==='WeaponMod' && c.id===firstIconRow.id && c.column==='Asset3DTypeId'
+     && c.value===String(secondIconRow.baseline.Asset3DTypeId)));
+  const uniformAll=find(n=>n.tagName==='INPUT' && n.getAttribute('type')==='checkbox')[0];
+  uniformAll.checked=true;uniformAll.fire('change');
+  ck('Show all reveals uniform visual pickers for editing', !!fixturePicker());
+  fixturePicker().value='';fixturePicker().fire('change');
+  uniformAll.checked=false;uniformAll.fire('change');
+  ck('restoring different graphics makes the visual column visible again', !!fixturePicker());
+  W.player=JSON.parse(iconPlayer);modPage.grids=originalModGrids;
   SEL='pb:weapon-12';render();
   const urbanGrid=MODEL.playerBalance.pages.find(p => p.id==='weapon-12').grids[0];
   ck('Urban Assault exposes the weapon icon picker', find(n => n.tagName==='H2' && n.textContent==='Urban Assault').length===1

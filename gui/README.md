@@ -250,8 +250,8 @@ horizontal scrolling. Names stay fixed while the grid scrolls horizontally;
 large catalogs are searchable and paginated. Red marks overrides or a global
 implant multiplier; yellow marks other nonzero baselines.
 
-Weapons, weapon mods and implants default to PL, rarity and cost, with those
-columns immediately after the name when visible. Melee and SMG rows first
+Weapons, weapon mods, consumables and implants default to ascending Cost.
+PL, rarity and cost columns stay immediately after the name when visible. Melee and SMG rows first
 group by `Weapon3DAsset.Thumbnail`, joined through `Asset3DTypeId`; the Icon
 column displays the thumbnail's asset name. Weapon headers group damage,
 accuracy, armor crit, crit damage, range, recoil, noise, arc, reload size and
@@ -264,7 +264,7 @@ Choose Name, Service, Icon where available, or any numeric field, including
 linked fields and fields hidden by the default view. Sorting uses current
 adjusted values and global implant multipliers, before pagination. Missing
 linked values sort last in either direction. Icon groups and weapon-mod slot
-subsections stay together. **Default order** restores the catalog order.
+subsections stay together. **Catalog order** restores the underlying catalog order.
 Each table remembers its choice while the editor is open; sorting is a view
 preference and never changes tuning or Workshop exports. After editing a sort
 field, click **Re-sort** to reorder the table without interrupting typing.
@@ -272,10 +272,11 @@ field, click **Re-sort** to reorder the table without interrupting typing.
 **Claws** and **Eye Lasers** join weapon stats, attacks and their linked self,
 target and matrix effects into one row per weapon. The join follows effective
 `Talent.Weapon` assignments and retains multiple attacks separately. The
-appended **Cyberware Service (read-only)** column shows service names and
-option ids from implants linked through `ImplantTalentId` or `ImplantTalentId2`.
-It follows saved adjustments and pending edits made in Cyberware; it provides
-no second editable service assignment. Hover to identify the owning implant.
+weapon name uses the linked implant names, including their tier suffixes.
+The **Cyberware Service** column shows deduplicated service names from those
+implants, linked through `ImplantTalentId` or `ImplantTalentId2`. Option ids and
+owning implants stay in the tooltip. It follows saved adjustments and pending
+edits made in Cyberware; it provides no second editable service assignment.
 Claws omits attack range from both default and advanced columns. Other uniform
 attack fields move to **Show all columns**; linked effect fields retain the
 nonzero policy until edits make their effective values uniform. Existing saved
@@ -291,8 +292,12 @@ items 7, implants 8), so an option id cannot pick up a service from another cata
 marker within each `(ServiceFlow, ServiceGroupId)` ladder. The lowest marked
 `ServiceLevel` is the cap, inclusive; higher internal levels are unattainable,
 regardless of their `DisplayLevel`. Ladders without a marker remain included.
-Above-cap services retain their names with **(Unattainable)** appended; hover
-for the cap and its source record. They cannot establish weapon/mod acquisition.
+Above-cap services cannot establish weapon/mod acquisition and are suppressed
+from Service labels, including options shared with an attainable service.
+Weapon/mod rows fall back to their other acquisition labels below. Consumables
+fall back to **Loot**, **Blueprint**, or both, using typed item and blueprint
+output references. Their nonpositive assignments retain **Unassigned**.
+Cap details and source records remain in tooltips.
 Another attainable service or any other supported acquisition route keeps the
 gear in its normal catalog. Otherwise only rows with saved overrides remain,
 in **Other weapon overrides**, until those overrides are cleared and saved.
@@ -314,22 +319,25 @@ Tooltips retain the matching service or acquisition references. This is display
 metadata: saving and SQL export still use the original service assignment.
 
 Shotgun, Assault Rifle and Urban Assault rows include an **Icon / model** picker.
-Each choice names the asset and an example weapon using it; the current thumbnail token and asset id
-remain visible beneath the picker. Hover for the complete icon and model paths,
-or search by the thumbnail token. Choices come from official weapon references
+Choices use short visual names; unchanged and adjusted selections use the same
+label format. The first choice restores the official visual. Hover for the asset
+id, complete icon/model paths and example weapons, or search by thumbnail token. Choices come from official weapon references
 in that class. The picker edits each weapon's `Asset3DTypeId`, so its icon and
 3D model change together; it never edits the shared `Weapon3DAsset` row.
-**Default** removes the adjustment and restores the official assignment.
-Saved assignments preview on reload and export through Workshop player tuning.
+Selecting the official visual removes its adjustment. Saved assignments preview
+on reload and export through Workshop player tuning.
 Validation rejects fractional, arithmetic and unresolved weapon asset assignments.
 
 Weapon mod and intrinsic fitments with multiple thumbnail paths include a
 **Visual** picker. Choices come from official mod references in the same category
 and fitment, including graphics with an empty model resource. Changing a visual
 moves the row into that thumbnail's group immediately, while retaining its
-category and fitment. The picker saves `WeaponMod.Asset3DTypeId`; **Default**
-restores the official assignment. In the Assault Rifle + Urban Assault + E-Rifle
-optic fitment, Scope Sowo precedes Scope Rifle.
+category and fitment. The picker saves `WeaponMod.Asset3DTypeId`; its first
+choice restores the official assignment. In the Assault Rifle + Urban Assault + E-Rifle
+optic fitment, Scope Sowo precedes Scope Rifle. Weapon and mod icon columns hide
+when every row in the table has the same effective thumbnail, even if other
+choices are available. **Show all columns** reveals them for editing. Visibility
+uses the full table, including filtered-out rows and other pages.
 
 Cyberware tabs follow ocular, arms, skin, skeletal, deep brain, fast brain,
 spinal, heart, lungs and legs, followed by other slots. Each slot has one table

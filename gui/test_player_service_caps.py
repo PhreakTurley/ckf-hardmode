@@ -49,7 +49,8 @@ class ServiceCapTests(unittest.TestCase):
         self.assertTrue(options['13']['attainable'])
         self.assertNotIn('Unattainable', options['13']['label'])
         self.assertTrue(options['14']['attainable'])
-        self.assertEqual(options['14']['label'], 'Shop 2 · L5 (Unattainable), Shop 3 · L8')
+        self.assertEqual(options['14']['label'], 'Shop 3 · L8')
+        self.assertEqual(options['15']['label'], '')
         self.assertFalse(options['15']['attainable'])
         self.assertIn('ContactService 1 has UpgradeReady=2', options['15']['detail'])
 

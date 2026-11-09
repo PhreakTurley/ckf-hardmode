@@ -1887,7 +1887,11 @@ function playerServiceAssignment(cell, options) {
 function playerService(grid, row) {
   if (!grid.serviceColumn) return {label:'',detail:''};
   const service = playerServiceAssignment(playerCell(grid,row,{name:grid.serviceColumn.name}),grid.serviceColumn.options);
-  if (row.serviceFallback && service.id !== undefined && Number(service.id) <= 0
+  if (service.attainable===false) {
+    const fallback=row.serviceFallback || {label:'',detail:''};
+    return Object.assign({},service,fallback,{detail:[fallback.detail,service.detail].filter(Boolean).join('\n')});
+  }
+  if (row.serviceFallback && grid.serviceColumn.fallbackNonpositive!==false && service.id !== undefined && Number(service.id) <= 0
       && !Object.prototype.hasOwnProperty.call(grid.serviceColumn.options,service.id))
     return Object.assign({},service,row.serviceFallback);
   return service;
@@ -1897,10 +1901,10 @@ function playerCyberwareService(grid, row) {
   const references = (row.cyberwareServices || []).map(function(ref) {
     const cell = playerCell({table:'Implant'}, {id:ref.id,baseline:{ServiceOptionId:ref.baseline}}, {name:'ServiceOptionId'});
     const service = playerServiceAssignment(cell,grid.cyberwareServiceColumn.options);
-    return {label:service.label+(service.id === undefined ? '' : ' (option '+service.id+')'),
+    return {label:service.attainable===false ? '' : service.label,
       detail:ref.name+' · Implant '+ref.id+'.ServiceOptionId\n'+service.detail};
   });
-  return {label:references.length ? references.map(function(r) {return r.label;}).join('; ') : 'No linked implant',
+  return {label:Array.from(new Set(references.map(function(r) {return r.label;}).filter(Boolean))).join('; '),
     detail:'Read-only reference. Edit Service option id in Cyberware.\n'+references.map(function(r) {return r.detail;}).join('\n')};
 }
 
@@ -1942,13 +1946,28 @@ function playerDisplayColumns(grid, showAll) {
   });
 }
 
+function playerIconAsset(grid, row) {
+  const source=grid.iconEditor || grid.iconSource;
+  if (!source) return null;
+  const value=playerEffectiveColumnValue(grid,row,{name:source.column,integer:true});
+  const id=value===null ? 'Invalid '+row.id : String(value);
+  return {id:id,asset:source.assets[id] || {}};
+}
+
+function playerIconVisible(grid, showAll) {
+  if (!grid.iconColumn) return false;
+  if (showAll) return true;
+  return new Set(grid.rows.map(function(row) {
+    const visual=playerIconAsset(grid,row);
+    return visual ? (visual.asset.thumbnail===undefined ? 'Asset '+visual.id : visual.asset.thumbnail) : row.iconPath || row.icon || '';
+  })).size>1;
+}
+
 function playerRefreshIconGroups(grid) {
-  const editor=grid.iconEditor;
+  const editor=grid.iconEditor || grid.iconSource;
   if (!editor || !editor.regroup) return;
   for (const row of grid.rows) {
-    const fields=((W.player.tables || {})[grid.table] || {})[row.id] || {};
-    const id=CKF.playerDisplayValue(fields[editor.column] || '') || String(row.baseline[editor.column]);
-    const asset=editor.assets[id] || {};
+    const visual=playerIconAsset(grid,row), id=visual.id, asset=visual.asset;
     row.icon=asset.label || row.icon;
     row.iconPath=asset.thumbnail || '';
     row.section=row.icon;
@@ -2026,7 +2045,7 @@ function renderPlayer(panel, page) {
   if (page.grids.length) panel.appendChild(toolbar);
   if (page.grids.length) panel.appendChild(el('p', {class:'doc',text:'Numbers set values, including negatives: -10 sets to -10. +10 adds 10; x1.5 multiplies by 1.5. Clearing a cell removes its adjustment.'}));
   if (page.grids.some(function(g) {return g.iconEditor;}))
-    panel.appendChild(el('p', {class:'doc',text:page.iconHelp || 'Icon / model changes the inventory icon and the weapon’s 3D model together. Choose Default to restore its official assignment. Save, then export to Modkit to apply your changes.'}));
+    panel.appendChild(el('p', {class:'doc',text:page.iconHelp || 'Icon / model changes the inventory icon and the weapon’s 3D model together. The first choice restores the official visual. Save, then export to Modkit to apply your changes.'}));
   if (page.grids.some(function(g) {return g.rows.some(function(r) {return r.enemyUse;});}))
     panel.appendChild(el('p', {class:'doc',text:'Rows marked “Also used by enemies” share a weapon record with enemies. Changing that weapon also affects enemies that use it.'}));
   if (page.multipliers) {
@@ -2044,7 +2063,7 @@ function renderPlayer(panel, page) {
   let columnRefreshPending=false;
   function refreshColumnsAfterEdit(grid, shown) {
     if (showAll.checked || columnRefreshPending) return;
-    if (JSON.stringify(playerDisplayColumns(grid,false).map(function(c) {return c.name;}))===shown) return;
+    if (JSON.stringify(playerDisplayColumns(grid,false).map(function(c) {return c.name;}))+'|'+playerIconVisible(grid,false)===shown) return;
     columnRefreshPending=true;
     setTimeout(function () {
       const active=document.activeElement;
@@ -2108,13 +2127,13 @@ function renderPlayer(panel, page) {
         const fields = ((W.player.tables || {})[grid.table] || {})[r.id] || {};
         const assetId = editor ? CKF.playerDisplayValue(fields[editor.column] || '') || r.baseline[editor.column] : '';
         const token = editor ? (editor.assets[assetId] || {}).token || '' : r.icon || '';
-        return (r.name+' '+r.id+' '+(grid.category || '')+' '+(grid.subsection || '')+' '+(r.section || '')+' '+token+' '+playerService(grid,r).label
+        return (r.name+' '+(r.weaponName || '')+' '+r.id+' '+(grid.category || '')+' '+(grid.subsection || '')+' '+(r.section || '')+' '+token+' '+playerService(grid,r).label
           +' '+(grid.cyberwareServiceColumn ? playerCyberwareService(grid,r).label : '')
           +' '+(grid.blueprintColumn ? playerBlueprint(grid,r).label : '')).toLocaleLowerCase().includes(query);
       });
       const gridKey = grid.key || grid.table;
       const sortId = page.id+':'+gridKey;
-      const sort = PLAYER_SORT[sortId] || {key:'',descending:false};
+      const sort = PLAYER_SORT[sortId] || grid.defaultSort || {key:'',descending:false};
       const number = pageNumbers[gridKey] || 0;
       const rows = playerSortedRows(grid,matches,sort).slice(number * 75, (number + 1) * 75);
       if (!matches.length && !grid.warning) continue;
@@ -2147,7 +2166,7 @@ function renderPlayer(panel, page) {
       if (grid.title !== page.title) target.appendChild(el('h3', {text:grid.title}));
       if (['Weapons','Drone weapons','Cyberware','Cyberware modules','Consumables'].includes(page.group)) {
         const sortBy = el('select',{'aria-label':'Sort by '+page.title+' · '+grid.title});
-        const choices = [{value:'',text:'Default order'},{value:'name',text:'Name'}];
+        const choices = [{value:'',text:'Catalog order'},{value:'name',text:'Name'}];
         if (grid.serviceColumn) choices.push({value:'service',text:'Service'});
         if (grid.blueprintColumn) choices.push({value:'blueprint',text:grid.blueprintColumn.label});
         if (grid.cyberwareServiceColumn) choices.push({value:'cyberwareService',text:'Cyberware Service'});
@@ -2174,7 +2193,8 @@ function renderPlayer(panel, page) {
         el('button', {text:'Next',disabled:(number + 1) * 75 >= matches.length,onclick:function () {pageNumbers[gridKey] = number + 1;paint();}})]));
       if (grid.warning) target.appendChild(el('div', {class:'banner warn',text:grid.warning}));
       const cols = playerDisplayColumns(grid,showAll.checked);
-      const shownColumns=JSON.stringify(cols.map(function(c) {return c.name;}));
+      const showIcon=playerIconVisible(grid,showAll.checked);
+      const shownColumns=JSON.stringify(cols.map(function(c) {return c.name;}))+'|'+showIcon;
       if (!rows.length) continue;
       const tbl = el('table', {class:'grid pb-grid'});
       const widths = cols.map(function (c) {return playerColumnWidth(grid, c);});
@@ -2182,22 +2202,26 @@ function renderPlayer(panel, page) {
         return Math.max(playerTextWidth(r.name,false), r.enemyUse ? playerTextWidth('Also used by enemies',false) : 0,
           r.fitment ? Math.min(320,playerTextWidth(r.fitment,false)) : 0);
       })) + 16);
-      const iconWidth = grid.iconEditor ? Math.ceil(Math.max(220, ...grid.iconEditor.choices.map(function(c) {
-        return playerTextWidth(c.name+(grid.iconEditor.showExamples===false ? '' : ' · '+c.examples[0]),false)+50;
-      }))) : grid.iconColumn ? Math.ceil(Math.max(playerTextWidth('Icon',true), ...grid.rows.map(function (r) {return playerTextWidth(r.icon || '',false);})) + 16) : 0;
+      const iconWidth = !showIcon ? 0 : grid.iconEditor ? Math.ceil(Math.max(120,
+        playerTextWidth(grid.iconEditor.label,true)+24,
+        ...grid.iconEditor.choices.map(function(c) {return playerTextWidth(c.name,false)+38;})))
+        : Math.ceil(Math.max(playerTextWidth('Icon',true), ...grid.rows.map(function(r) {return playerTextWidth(r.icon || '',false);})) + 16);
       // Icon follows the leading PL/Rarity/Cost columns. Those three always
       // remain immediately after Name when they differ in this category.
-      const leading = grid.iconColumn || grid.serviceColumn ? cols.filter(function(c) {return c.leading;}).length : 0;
+      const leading = showIcon || grid.serviceColumn ? cols.filter(function(c) {return c.leading;}).length : 0;
       const displayCols = cols.map(function(c,i) {return {column:c,width:widths[i]};});
       if (grid.serviceColumn) {
         const serviceWidth = Math.ceil(Math.min(280,Math.max(145,...grid.rows.map(function(r) {return playerTextWidth(playerService(grid,r).label,false)+16;}))));
         displayCols.splice(leading,0,{service:true,width:serviceWidth,column:{label:'Service',name:grid.serviceColumn.name}});
       }
-      if (grid.iconColumn) displayCols.splice(leading+(grid.serviceColumn ? 1 : 0),0,{icon:true,width:iconWidth,column:{label:grid.iconEditor ? grid.iconEditor.label || 'Icon / model' : 'Icon',name:'icon'}});
+      if (showIcon) displayCols.splice(leading+(grid.serviceColumn ? 1 : 0),0,{icon:true,width:iconWidth,column:{label:grid.iconEditor ? grid.iconEditor.label || 'Icon / model' : 'Icon',name:'icon'}});
       if (grid.blueprintColumn) displayCols.splice(leading+(grid.serviceColumn ? 1 : 0),0,
         {blueprint:true,width:Math.ceil(playerTextWidth(grid.blueprintColumn.label,true)+24),
          column:{label:grid.blueprintColumn.label,name:'blueprint'}});
-      if (grid.cyberwareServiceColumn) displayCols.push({cyberwareService:true,width:250,column:{label:'Cyberware Service (read-only)',name:'Cyberware.ServiceOptionId'}});
+      if (grid.cyberwareServiceColumn) displayCols.push({cyberwareService:true,
+        width:Math.ceil(Math.min(280,Math.max(playerTextWidth('Cyberware Service',true)+16,
+          ...grid.rows.map(function(r) {return playerTextWidth(playerCyberwareService(grid,r).label,false)+16;})))),
+        column:{label:'Cyberware Service',name:'Cyberware.ServiceOptionId'}});
       for (let i=0;i<displayCols.length;) {
         const group = displayCols[i].column.group;
         if (!group) {i++;continue;}
@@ -2231,7 +2255,7 @@ function renderPlayer(panel, page) {
           body.appendChild(el('tr', {class:'pb-section'}, [el('th',{colspan:String(displayCols.length+1),scope:'rowgroup',title:row.sectionEvidence || ''},
             [el('span',{class:'pb-section-name',text:row.section})])]));
         }
-        const nameCell = el('td', {class:'pb-name',title:grid.table+' '+row.id+(row.description ? '\n'+row.description : '')+(row.acquisition && row.acquisition.length ? '\nAcquisition references:\n'+row.acquisition.join('\n') : '')}, [
+        const nameCell = el('td', {class:'pb-name',title:grid.table+' '+row.id+(row.weaponName ? '\n'+row.weaponName : '')+(row.description ? '\n'+row.description : '')+(row.acquisition && row.acquisition.length ? '\nAcquisition references:\n'+row.acquisition.join('\n') : '')}, [
           document.createTextNode(row.name),el('small', {text:grid.table+' '+row.id})]);
         if (row.enemyUse) nameCell.appendChild(el('span', {class:'pb-enemy',text:'Also used by enemies',title:'Changing this weapon also affects enemies that use it.'}));
         if (row.owner) nameCell.appendChild(el('span', {class:'pb-owner',text:'Managed by '+row.owner}));
@@ -2259,22 +2283,21 @@ function renderPlayer(panel, page) {
             const editor = grid.iconEditor;
             const fields = ((W.player.tables || {})[grid.table] || {})[row.id] || {};
             const baseId = String(row.baseline[editor.column]);
-            const currentId = CKF.playerDisplayValue(fields[editor.column] || '') || baseId;
+            const currentId = playerIconAsset(grid,row).id;
             const base = editor.assets[baseId] || {};
             const td = el('td',{class:'pb-icon'});
             const select = el('select',{'aria-label':row.name+' '+(editor.controlLabel || 'icon / model')});
-            select.appendChild(el('option',{value:'',text:'Default · '+(base.token || 'No icon (asset '+baseId+')')}));
-            for (const choice of editor.choices) select.appendChild(el('option',{
-              value:choice.id,text:choice.name+(editor.showExamples===false ? '' : ' · '+choice.examples[0]),
+            select.appendChild(el('option',{value:'',text:base.label || base.token || 'No icon',
+              title:'Official visual. Choose this to clear the adjustment.'}));
+            for (const choice of editor.choices.filter(function(c) {return c.id!==baseId;})) select.appendChild(el('option',{
+              value:choice.id,text:choice.name,
               title:choice.thumbnail+'\n'+choice.resource+'\nUsed by: '+choice.examples.join(', ')}));
-            if (fields[editor.column] && !editor.choices.some(function(c) {return c.id === currentId;}))
-              select.appendChild(el('option',{value:currentId,text:(editor.assets[currentId] || {}).token || 'Asset '+currentId}));
+            if (fields[editor.column] && !editor.choices.some(function(c) {return c.id!==baseId && c.id===currentId;}))
+              select.appendChild(el('option',{value:currentId,text:(editor.assets[currentId] || {}).label || 'Asset '+currentId}));
             select.value = fields[editor.column] ? currentId : '';
-            const detail = el('small',{});
             function describe(id, changed) {
               const asset = editor.assets[id] || {};
-              detail.textContent = (asset.token || (editor.assets[id] ? 'No icon' : 'Unknown asset'))+' · '+id;
-              td.title = 'Icon: '+(asset.thumbnail || '(empty)')+'\n3D model: '+(asset.resource || '(empty)');
+              td.title = (asset.label || 'Unknown visual')+' · Asset '+id+'\nIcon: '+(asset.thumbnail || '(empty)')+'\n3D model: '+(asset.resource || '(empty)');
               td.className = 'pb-icon'+(changed ? ' overlay-overwrite' : '');
             }
             describe(currentId,!!fields[editor.column]);
@@ -2285,9 +2308,9 @@ function renderPlayer(panel, page) {
               else {delete record[editor.column];select.value = '';}
               describe(record[editor.column] || baseId,!!record[editor.column]);
               updateDirty();
-              if (editor.regroup) {playerRefreshIconGroups(grid);paint();}
+              paint();
             });
-            td.appendChild(select);td.appendChild(detail);tr.appendChild(td);continue;
+            td.appendChild(select);tr.appendChild(td);continue;
           }
           const col = item.column;
           const cell = playerCell(grid,row,col);

@@ -450,6 +450,29 @@ def gear_service_fallbacks(source, acquisition, source_kinds):
     return result
 
 
+def item_service_fallbacks(source):
+    """Non-service item drops: LootTypes.Item=2, Constants.BlueprintClass.Item=3.
+
+    BlueprintClass is declared in CoreRPG_v1.dll metadata; LootTypes is captured
+    in sheets/raw/_id_constants.csv. Keep output ids scoped to the Item table.
+    """
+    refs = {}
+    blueprint_loot = {}
+    for row in source.read('MissionLootModel', ('MissionLootId', 'LootTypeId', 'LootKey'))[1]:
+        if row['LootTypeId'] == '2':
+            refs.setdefault(row['LootKey'], {}).setdefault('Loot', []).append('MissionLoot ' + row['MissionLootId'])
+        elif row['LootTypeId'] == '1':
+            blueprint_loot.setdefault(row['LootKey'], []).append('MissionLoot ' + row['MissionLootId'])
+    for row in source.read('BlueprintModel', ('BlueprintId', 'BlueprintClassId', 'OutputId', 'Lootable'))[1]:
+        if row['BlueprintClassId'] == '3' and (row['Lootable'] == '1' or row['BlueprintId'] in blueprint_loot):
+            evidence = refs.setdefault(row['OutputId'], {}).setdefault('Blueprint', [])
+            evidence.append('Blueprint ' + row['BlueprintId'])
+            evidence.extend(blueprint_loot.get(row['BlueprintId'], []))
+    return {rid: {'label': ' / '.join(kind for kind in ('Loot', 'Blueprint') if kind in kinds),
+                  'detail': 'Availability references:\n' + '\n'.join(e for evidence in kinds.values() for e in evidence)}
+            for rid, kinds in refs.items()}
+
+
 def special_rules(source):
     """Pass game localization through, including unresolved format arguments."""
     result = {}
@@ -500,7 +523,7 @@ def mod_fitment(source, row, class_mods):
             'mapped': bool(classes)}
 
 
-def asset_picker(table, rows, pool, assets, doc, swap_scope=False):
+def asset_picker(table, rows, pool, assets, doc, swap_scope=False, multiple_only=True):
     """Offer graphics already assigned within this weapon class or mod fitment."""
     ids = {r['Asset3DTypeId'] for r in pool}
     ids.update(str(int(effective(doc, table, r, 'Asset3DTypeId'))) for r in rows)
@@ -509,7 +532,7 @@ def asset_picker(table, rows, pool, assets, doc, swap_scope=False):
 
     def display_name(path):
         token = path.rsplit('/', 1)[-1]
-        prefix = r'^(WeaponMod_|weapon_mod_)' if table == 'WeaponMod' else r'^W_(AR|ARB|Shotgun)_'
+        prefix = r'^(WeaponMod_|weapon_mod_)' if table == 'WeaponMod' else r'^W_(AR|ARB|Shotgun|Melee|Pistol)_'
         return label(re.sub(prefix, '', token).replace('_', ' ')) or 'No icon'
 
     paths = sorted({assets[rid]['Thumbnail'] for rid in ids}, key=lambda path: (natural(display_name(path)), path))
@@ -518,7 +541,7 @@ def asset_picker(table, rows, pool, assets, doc, swap_scope=False):
         if rifle in paths and sowo in paths:
             a, b = paths.index(rifle), paths.index(sowo)
             paths[a], paths[b] = paths[b], paths[a]
-    if table == 'WeaponMod' and len(paths) < 2:
+    if table == 'WeaponMod' and multiple_only and len(paths) < 2:
         return None
     ranks = {path: i for i, path in enumerate(paths)}
     choices = []
@@ -533,7 +556,7 @@ def asset_picker(table, rows, pool, assets, doc, swap_scope=False):
     return {'column': 'Asset3DTypeId', 'choices': choices,
             'label': 'Visual' if table == 'WeaponMod' else 'Icon / model',
             'controlLabel': 'visual' if table == 'WeaponMod' else 'icon / model',
-            'showExamples': table == 'Weapon', 'regroup': table == 'WeaponMod',
+            'showExamples': False, 'regroup': table == 'WeaponMod',
             'assets': {rid: {'token': a['Thumbnail'].rsplit('/', 1)[-1], 'thumbnail': a['Thumbnail'],
                              'resource': a['Resource'], 'label': display_name(a['Thumbnail']),
                              'order': ranks.get(a['Thumbnail'], len(ranks))}
@@ -573,10 +596,8 @@ def service_catalog(source):
             key = 'ContactService.Name.' + row['ServiceTypeId']
             name = source.locale.get(key, key)
             text = name + (' · L' + row['DisplayLevel'] if int(row['DisplayLevel']) > 0 else '')
-            if not row['attainable']:
-                text += ' (Unattainable)'
             entry = grouped[table].setdefault(row['ServiceOptionId'], {'labels': [], 'references': []})
-            if text not in entry['labels']:
+            if row['attainable'] and text not in entry['labels']:
                 entry['labels'].append(text)
             entry['references'].append({'id': row['ServiceTypeId'], 'flow': flow,
                 'level': row['ServiceLevel'], 'displayLevel': row['DisplayLevel'], 'locale': key,
@@ -709,6 +730,7 @@ def catalog(config_dir, database):
             source_kinds = {}
             acquisition = player_gear_references(source, doc, blueprint_refs, source_kinds)
             service_fallbacks = gear_service_fallbacks(source, acquisition, source_kinds)
+            service_fallbacks['Item'] = item_service_fallbacks(source)
             item_links, item_owners = consumable_links(allrows, doc)
             cyberware_links, implant_owners = implant_links(allrows, doc)
             for trait in allrows['Trait'].values():
@@ -758,6 +780,9 @@ def catalog(config_dir, database):
                         records[-1]['blueprintDrops'] = blueprint_refs[table].get(rid, [])
                         records[-1]['serviceFallback'] = service_fallbacks[table].get(rid,
                             {'label': '', 'detail': 'No known player acquisition reference; retained for its overrides.'})
+                    if table == 'Item':
+                        records[-1]['serviceFallback'] = service_fallbacks['Item'].get(rid,
+                            {'label': '', 'detail': 'No known item loot or blueprint drop reference.'})
                     if table == 'Rule' and rid in ENEMY_RULES:
                         records[-1]['owner'] = 'Enemy Balance'
                 raw = {r[TABLE_KEYS[table]]: r for r in rows}
@@ -766,12 +791,15 @@ def catalog(config_dir, database):
                              if table in ('Weapon', 'WeaponMod', 'Implant', 'Item') else ((), natural(r['name'])))
                 result_grid = {'table': table, 'title': title, 'columns': visible, 'advanced': advanced, 'rows': records,
                                'multipliers': doc.get('implantMultipliers', {}) if table == 'Implant' else {}}
+                if table in ('Weapon', 'WeaponMod', 'Implant', 'Item'):
+                    result_grid['defaultSort'] = {'key': 'column:Cost', 'descending': False}
                 if table in ('Weapon', 'WeaponMod'):
                     result_grid['dynamicColumns'] = True
                     result_grid['blueprintColumn'] = {'label': 'Blueprint',
                         'empty': 'No blueprint drop reference in the selected database.'}
                 if table in services:
-                    result_grid['serviceColumn'] = {'name': 'ServiceOptionId', 'options': services[table]}
+                    result_grid['serviceColumn'] = {'name': 'ServiceOptionId', 'options': services[table],
+                                                    'fallbackNonpositive': table != 'Item'}
                 return result_grid
 
             def joined_grid(base_table, rows, title, base_heading, links, owners, blocks, hidden=()):
@@ -861,13 +889,23 @@ def catalog(config_dir, database):
                     for record in weapon_grid['rows']:
                         record['cyberwareServices'] = [
                             {'id': i['ImplantTypeId'], 'name': i['ImplantName'], 'baseline': i['ServiceOptionId']}
-                            for i in weapon_links[record['id']]['implants'].values()]
+                            for i in sorted(weapon_links[record['id']]['implants'].values(),
+                                            key=lambda i: natural(i['ImplantName']))]
+                        if record['cyberwareServices']:
+                            record['weaponName'] = record['name']
+                            record['name'] = ' / '.join(dict.fromkeys(i['name'] for i in record['cyberwareServices']))
+                    weapon_grid['rows'].sort(key=lambda r: (
+                        tuple(effective(doc, 'Weapon', allrows['Weapon'][r['id']], c) for c in LEADING_COLUMNS),
+                        natural(r['name'])))
                 else:
                     weapon_grid = grid('Weapon', rows, 'Weapon stats')
                 for record in weapon_grid['rows']:
                     record['enemyUse'] = record['id'] in enemy_weapons
                 weapon_grid['specialRuleColumn'] = 'SpecialRule'
                 if cls in (1, 10):
+                    pool = [r for r in allrows['Weapon'].values() if r['WeaponClass'] == str(cls)]
+                    weapon_grid['iconSource'] = asset_picker('Weapon', rows, pool, assets, doc)
+                    weapon_grid['iconSource']['regroup'] = True
                     weapon_grid['iconColumn'] = True
                     for record in weapon_grid['rows']:
                         asset_id = allrows['Weapon'][record['id']]['Asset3DTypeId']
@@ -909,11 +947,14 @@ def catalog(config_dir, database):
                          category=category, subsection=title)
                 fits = {r['WeaponModId']: f for r, f in members}
                 editor = asset_picker('WeaponMod', [r for r, _ in members], mod_visual_pools[category, title],
-                                      assets, doc, swap_scope=any(f['modClass'] == '6' for _, f in members))
-                if editor:
+                                      assets, doc, swap_scope=any(f['modClass'] == '6' for _, f in members),
+                                      multiple_only=False)
+                if len({c['thumbnail'] for c in editor['choices']}) > 1:
                     g['iconEditor'] = editor
                     for column_set in ('columns', 'advanced'):
                         g[column_set] = [c for c in g[column_set] if c['name'] != 'Asset3DTypeId']
+                else:
+                    g['iconSource'] = editor
                 for record in g['rows']:
                     fit = fits[record['id']]
                     record['fitment'] = title
@@ -930,7 +971,7 @@ def catalog(config_dir, database):
                 g['rows'].sort(key=lambda r: (r['iconOrder'], natural(r['icon']), natural(r['sectionKey'])))
                 mod_grids.append(g)
             page('weapon-mods', 'Weapon mods', 'Weapons', mod_grids, unresolvedMods=unresolved_mods,
-                 iconHelp='Choose a visual for fitments with multiple graphics. Mods move to the selected icon group. Default restores the official assignment. Save, then export to Modkit to apply your changes.')
+                 iconHelp='Choose a visual for fitments with multiple graphics. Mods move to the selected icon group. The first choice restores the official visual. Save, then export to Modkit to apply your changes.')
             other_grids = []
             for table, title in (('Weapon', 'Other weapons'), ('WeaponMod', 'Other weapon mods')):
                 records = [r for rid, r in allrows[table].items() if rid not in acquisition[table]
