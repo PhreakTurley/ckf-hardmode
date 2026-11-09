@@ -1886,6 +1886,11 @@ function playerServiceAssignment(cell, options) {
 
 function playerService(grid, row) {
   if (!grid.serviceColumn) return {label:'',detail:''};
+  if (grid.serviceColumn.source==='cyberware') {
+    const linked=playerCyberwareService(grid,row);
+    if (linked.label || !row.serviceFallback) return linked;
+    return Object.assign({},linked,row.serviceFallback,{detail:[linked.detail,row.serviceFallback.detail].filter(Boolean).join('\n')});
+  }
   const service = playerServiceAssignment(playerCell(grid,row,{name:grid.serviceColumn.name}),grid.serviceColumn.options);
   if (service.attainable===false) {
     const fallback=row.serviceFallback || {label:'',detail:''};
@@ -1900,8 +1905,9 @@ function playerService(grid, row) {
 function playerCyberwareService(grid, row) {
   const references = (row.cyberwareServices || []).map(function(ref) {
     const cell = playerCell({table:'Implant'}, {id:ref.id,baseline:{ServiceOptionId:ref.baseline}}, {name:'ServiceOptionId'});
-    const service = playerServiceAssignment(cell,grid.cyberwareServiceColumn.options);
-    return {label:service.attainable===false ? '' : service.label,
+    const service = playerServiceAssignment(cell,grid.serviceColumn.options);
+    return {label:service.attainable===false || (Number(service.id)<=0
+        && !Object.prototype.hasOwnProperty.call(grid.serviceColumn.options,service.id)) ? '' : service.label,
       detail:ref.name+' · Implant '+ref.id+'.ServiceOptionId\n'+service.detail};
   });
   return {label:Array.from(new Set(references.map(function(r) {return r.label;}).filter(Boolean))).join('; '),
@@ -1991,7 +1997,6 @@ function playerSortValue(grid, row, key) {
   if (key === 'name') return row.name;
   if (key === 'service') return playerService(grid,row).label;
   if (key === 'blueprint') return (row.blueprintDrops || []).length ? 1 : 0;
-  if (key === 'cyberwareService') return playerCyberwareService(grid,row).label;
   if (key === 'icon') {
     const editor = grid.iconEditor;
     if (!editor) return row.icon || '';
@@ -2128,7 +2133,6 @@ function renderPlayer(panel, page) {
         const assetId = editor ? CKF.playerDisplayValue(fields[editor.column] || '') || r.baseline[editor.column] : '';
         const token = editor ? (editor.assets[assetId] || {}).token || '' : r.icon || '';
         return (r.name+' '+(r.weaponName || '')+' '+r.id+' '+(grid.category || '')+' '+(grid.subsection || '')+' '+(r.section || '')+' '+token+' '+playerService(grid,r).label
-          +' '+(grid.cyberwareServiceColumn ? playerCyberwareService(grid,r).label : '')
           +' '+(grid.blueprintColumn ? playerBlueprint(grid,r).label : '')).toLocaleLowerCase().includes(query);
       });
       const gridKey = grid.key || grid.table;
@@ -2169,7 +2173,6 @@ function renderPlayer(panel, page) {
         const choices = [{value:'',text:'Catalog order'},{value:'name',text:'Name'}];
         if (grid.serviceColumn) choices.push({value:'service',text:'Service'});
         if (grid.blueprintColumn) choices.push({value:'blueprint',text:grid.blueprintColumn.label});
-        if (grid.cyberwareServiceColumn) choices.push({value:'cyberwareService',text:'Cyberware Service'});
         if (grid.iconColumn) choices.push({value:'icon',text:'Icon'});
         for (const col of grid.columns.concat(grid.advanced).slice().sort(function(a,b) {return a.order-b.order;}))
           choices.push({value:'column:'+col.name,text:(col.group ? col.group+' · ' : '')+col.label});
@@ -2218,10 +2221,6 @@ function renderPlayer(panel, page) {
       if (grid.blueprintColumn) displayCols.splice(leading+(grid.serviceColumn ? 1 : 0),0,
         {blueprint:true,width:Math.ceil(playerTextWidth(grid.blueprintColumn.label,true)+24),
          column:{label:grid.blueprintColumn.label,name:'blueprint'}});
-      if (grid.cyberwareServiceColumn) displayCols.push({cyberwareService:true,
-        width:Math.ceil(Math.min(280,Math.max(playerTextWidth('Cyberware Service',true)+16,
-          ...grid.rows.map(function(r) {return playerTextWidth(playerCyberwareService(grid,r).label,false)+16;})))),
-        column:{label:'Cyberware Service',name:'Cyberware.ServiceOptionId'}});
       for (let i=0;i<displayCols.length;) {
         const group = displayCols[i].column.group;
         if (!group) {i++;continue;}
@@ -2267,14 +2266,8 @@ function renderPlayer(panel, page) {
             tr.appendChild(el('td',{class:'pb-blueprint readonly',text:blueprint.label,title:blueprint.detail}));
             continue;
           }
-          if (item.cyberwareService) {
-            const service = playerCyberwareService(grid,row);
-            const td = el('td',{class:'pb-service readonly',text:service.label,title:service.detail});
-            serviceViews.push(function () {const latest=playerCyberwareService(grid,row);td.textContent=latest.label;td.title=latest.detail;});
-            tr.appendChild(td);continue;
-          }
           if (item.service) {
-            const td = el('td',{class:'pb-service'});
+            const td = el('td',{class:'pb-service'+(grid.serviceColumn.readOnly ? ' readonly' : '')});
             function refreshService() {const service=playerService(grid,row);td.textContent=service.label;td.title=service.detail;}
             refreshService();serviceViews.push(refreshService);tr.appendChild(td);continue;
           }

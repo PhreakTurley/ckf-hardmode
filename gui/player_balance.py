@@ -885,7 +885,8 @@ def catalog(config_dir, database):
                     weapon_links, weapon_owners, blocks = cyberweapon_links(allrows, doc, rows)
                     weapon_grid = joined_grid('Weapon', rows, title, 'Weapon', weapon_links, weapon_owners, blocks,
                                               hidden={('Talent', 'Range')} if cls == 16 else ())
-                    weapon_grid['cyberwareServiceColumn'] = {'options': services['Implant']}
+                    weapon_grid['serviceColumn'] = {'name': 'ServiceOptionId', 'options': services['Implant'],
+                                                    'source': 'cyberware', 'readOnly': True}
                     for record in weapon_grid['rows']:
                         record['cyberwareServices'] = [
                             {'id': i['ImplantTypeId'], 'name': i['ImplantName'], 'baseline': i['ServiceOptionId']}

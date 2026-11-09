@@ -273,10 +273,12 @@ field, click **Re-sort** to reorder the table without interrupting typing.
 target and matrix effects into one row per weapon. The join follows effective
 `Talent.Weapon` assignments and retains multiple attacks separately. The
 weapon name uses the linked implant names, including their tier suffixes.
-The **Cyberware Service** column shows deduplicated service names from those
+The regular **Service** column shows deduplicated service names from those
 implants, linked through `ImplantTalentId` or `ImplantTalentId2`. Option ids and
 owning implants stay in the tooltip. It follows saved adjustments and pending
 edits made in Cyberware; it provides no second editable service assignment.
+These rows have no separate Cyberware Service column; Service sorting and
+searching use the linked implant services.
 Claws omits attack range from both default and advanced columns. Other uniform
 attack fields move to **Show all columns**; linked effect fields retain the
 nonzero policy until edits make their effective values uniform. Existing saved

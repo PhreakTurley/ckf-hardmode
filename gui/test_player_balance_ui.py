@@ -65,7 +65,7 @@ setTimeout(async function () {
     for (const row of grid.rows) {
       const original=playerServiceAssignment(playerCell(grid,row,{name:grid.serviceColumn.name}),grid.serviceColumn.options);
       const shown=playerService(grid,row);
-      if (Object.prototype.hasOwnProperty.call(grid.serviceColumn.options,original.id) && original.attainable!==false) {
+      if (grid.serviceColumn.source!=='cyberware' && Object.prototype.hasOwnProperty.call(grid.serviceColumn.options,original.id) && original.attainable!==false) {
         assignedServices++;
         if (JSON.stringify(original)!==JSON.stringify(shown)) unchangedServices=false;
       }
@@ -132,6 +132,8 @@ setTimeout(async function () {
      !find(function(n) {return n.tagName==='INPUT' && /^Talent .*\.Range$/.test(n.getAttribute('data-player-target') || '');}).length);
   ck('uniform Claws attack fields remain available in advanced columns',
      find(function(n) {return n.tagName==='INPUT' && /^Talent .*\.ApCost$/.test(n.getAttribute('data-player-target') || '');}).length>0);
+  ck('Claws keeps one regular Service column with all columns shown', find(n=>n.tagName==='TH' && n.textContent==='Service').length===1
+     && !find(n=>n.tagName==='TH' && n.textContent==='Cyberware Service').length);
   SEL='pb:weapon-17';render();
   ck('eye laser weapon and attack fields share one grid', find(function (n) {return n.tagName==='TABLE';}).length===1
      && find(function(n) {return n.tagName==='TH' && n.textContent==='Attack';}).length===1);
@@ -139,12 +141,32 @@ setTimeout(async function () {
   const brightshot=laserNames.rows.find(r=>r.id==='25001');
   ck('cyberweapon rows show the linked implant tier name', brightshot.name==='Brightshot Optic 2'
      && find(n=>n.tagName==='TR' && n.getAttribute('data-player-row')==='Weapon 25001')[0].textContent.includes('Brightshot Optic 2'));
-  const cyberLabels=playerCyberwareService(laserNames,brightshot);
+  const cyberLabels=playerService(laserNames,brightshot);
   const expectedCyberLabels=Array.from(new Set(brightshot.cyberwareServices.map(ref=>
     playerServiceAssignment(playerCell({table:'Implant'},{id:ref.id,baseline:{ServiceOptionId:ref.baseline}},{name:'ServiceOptionId'}),
-      laserNames.cyberwareServiceColumn.options).label))).join('; ');
-  ck('Cyberware Service shows only service names and keeps source ids in the tooltip', cyberLabels.label===expectedCyberLabels
+      laserNames.serviceColumn.options).label))).join('; ');
+  ck('regular Service shows cyberware service names and keeps source ids in the tooltip', cyberLabels.label===expectedCyberLabels
      && !cyberLabels.label.includes('(option ') && cyberLabels.detail.includes('Implant '+brightshot.cyberwareServices[0].id+'.ServiceOptionId'));
+  const brightshotCell=()=>find(n=>n.tagName==='TR' && n.getAttribute('data-player-row')==='Weapon 25001')[0]
+    .find(n=>n.tagName==='TD' && n._cls().includes('pb-service'));
+  ck('Eye Lasers has only the regular Service column', find(n=>n.tagName==='TH' && n.textContent==='Service').length===1
+     && !find(n=>n.tagName==='TH' && n.textContent==='Cyberware Service').length
+     && brightshotCell().length===1 && brightshotCell()[0].textContent===expectedCyberLabels);
+  const serviceSnapshot=JSON.stringify(W.player), linkedImplant=brightshot.cyberwareServices[0];
+  const nextService=Object.keys(laserNames.serviceColumn.options).find(id=>laserNames.serviceColumn.options[id].attainable
+    && laserNames.serviceColumn.options[id].label!==cyberLabels.label);
+  const implantEdits=W.player.tables.Implant || (W.player.tables.Implant={});
+  (implantEdits[linkedImplant.id] || (implantEdits[linkedImplant.id]={})).ServiceOptionId=nextService;
+  render();
+  const nextServiceName=laserNames.serviceColumn.options[nextService].label;
+  ck('pending implant service edits update the regular column and Service sort value', brightshotCell()[0].textContent===nextServiceName
+     && playerSortValue(laserNames,brightshot,'service')===nextServiceName);
+  const implantServiceSearch=find(n=>n.tagName==='INPUT' && n.getAttribute('type')==='search')[0];
+  implantServiceSearch.value=nextServiceName;implantServiceSearch.fire('input');
+  ck('service search finds cyberweapons by their linked implant service', brightshotCell().length===1);
+  ck('the consolidated display retains the native implant service save target', buildEdits().playerBalance.cells.some(c=>
+    c.table==='Implant' && c.id===linkedImplant.id && c.column==='ServiceOptionId' && c.value===nextService));
+  W.player=JSON.parse(serviceSnapshot);render();
   const input = find(function (n) {return n.tagName==='INPUT' && n.getAttribute('type')==='text';})[0];
   ck('a weapon stat can be edited', !!input);
   input.value='=0';input.fire('input');

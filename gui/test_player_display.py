@@ -58,6 +58,21 @@ class PlayerDisplayTests(unittest.TestCase):
             _, touched = pb.sql(doc, source)
             self.assertEqual(touched, {('Weapon', '25001', 'Cost')})
 
+    def test_cyberweapon_service_metadata_uses_implants_in_one_column(self):
+        with static_data.StaticData() as source:
+            services = pb.service_catalog(source)['Implant']
+        for page in self.model['pages']:
+            if page['id'] not in ('weapon-16', 'weapon-17'):
+                continue
+            grid = page['grids'][0]
+            self.assertNotIn('cyberwareServiceColumn', grid)
+            self.assertEqual(grid['serviceColumn']['source'], 'cyberware')
+            self.assertTrue(grid['serviceColumn']['readOnly'])
+            self.assertEqual(grid['serviceColumn']['options'], services)
+            for row in grid['rows']:
+                self.assertEqual(row['targets']['ServiceOptionId'],
+                                 {'table': 'Weapon', 'id': row['id'], 'column': 'ServiceOptionId'})
+
     def test_item_fallbacks_keep_loot_and_blueprint_output_types_distinct(self):
         class Source:
             def read(self, model, required=()):
