@@ -467,6 +467,15 @@ def player_implant_references(source, doc=None, source_kinds=None):
     return refs
 
 
+def implant_service_fallbacks(acquisition, source_kinds):
+    """Name the non-service sources admitted by the inclusive implant policy."""
+    return {rid: {'label': ' / '.join(label for kind, label in
+                    (('starting', 'Starting Gear'), ('story', 'Mission'))
+                    if kind in source_kinds.get('Implant', {}).get(rid, set())),
+                  'detail': 'Availability references:\n' + '\n'.join(evidence)}
+            for rid, evidence in acquisition.get('Implant', {}).items()}
+
+
 def gear_service_fallbacks(source, acquisition, source_kinds):
     """Describe non-service availability; the renderer still resolves services first."""
     routes = {'Weapon': {}, 'WeaponMod': {}}
@@ -793,6 +802,7 @@ def catalog(config_dir, database):
             acquisition = player_gear_references(source, doc, blueprint_refs, source_kinds)
             service_fallbacks = gear_service_fallbacks(source, acquisition, source_kinds)
             acquisition.update(player_implant_references(source, doc, source_kinds))
+            service_fallbacks['Implant'] = implant_service_fallbacks(acquisition, source_kinds)
             service_fallbacks['Item'] = item_service_fallbacks(source)
             item_links, item_owners = consumable_links(allrows, doc)
             cyberware_links, implant_owners = implant_links(allrows, doc)
@@ -845,6 +855,8 @@ def catalog(config_dir, database):
                             {'label': '', 'detail': 'No known player acquisition reference; retained for its overrides.'})
                     if table == 'Implant':
                         records[-1]['acquisition'] = acquisition['Implant'].get(rid, [])
+                        records[-1]['serviceFallback'] = service_fallbacks['Implant'].get(rid,
+                            {'label': '', 'detail': 'No known player acquisition reference; retained for its overrides.'})
                     if table == 'Item':
                         records[-1]['serviceFallback'] = service_fallbacks['Item'].get(rid,
                             {'label': '', 'detail': 'No known item loot or blueprint drop reference.'})
@@ -864,7 +876,7 @@ def catalog(config_dir, database):
                         'empty': 'No blueprint drop reference in the selected database.'}
                 if table in services:
                     result_grid['serviceColumn'] = {'name': 'ServiceOptionId', 'options': services[table],
-                                                    'fallbackNonpositive': table != 'Item'}
+                                                    'fallbackNonpositive': table != 'Item', 'fallbackUnavailable': table == 'Implant'}
                 return result_grid
 
             def joined_grid(base_table, rows, title, base_heading, links, owners, blocks, hidden=()):
@@ -954,7 +966,8 @@ def catalog(config_dir, database):
                                                     'source': 'cyberware', 'readOnly': True}
                     for record in weapon_grid['rows']:
                         record['cyberwareServices'] = [
-                            {'id': i['ImplantTypeId'], 'name': i['ImplantName'], 'baseline': i['ServiceOptionId']}
+                            {'id': i['ImplantTypeId'], 'name': i['ImplantName'], 'baseline': i['ServiceOptionId'],
+                             'serviceFallback': service_fallbacks['Implant'].get(i['ImplantTypeId'], {'label': '', 'detail': ''})}
                             for i in sorted(weapon_links[record['id']]['implants'].values(),
                                             key=lambda i: natural(i['ImplantName']))]
                         if record['cyberwareServices']:

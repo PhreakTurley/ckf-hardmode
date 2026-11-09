@@ -299,14 +299,19 @@ items 7, implants 8), so an option id cannot pick up a service from another cata
 marker within each `(ServiceFlow, ServiceGroupId)` ladder. The lowest marked
 `ServiceLevel` is the cap, inclusive; higher internal levels are unattainable,
 regardless of their `DisplayLevel`. Ladders without a marker remain included.
-Above-cap services cannot establish weapon/mod acquisition and are suppressed
+Above-cap services cannot establish weapon, mod or cyberware acquisition and are suppressed
 from Service labels, including options shared with an attainable service.
 Weapon/mod rows fall back to their other acquisition labels below. Consumables
 fall back to **Loot**, **Blueprint**, or both, using typed item and blueprint
 output references. Their nonpositive assignments retain **Unassigned**.
+Cyberware without an attainable service shows **Starting Gear**, **Mission**,
+or **Starting Gear / Mission**, according to its inclusive eligibility sources.
+This applies to nonpositive, unknown and above-cap assignments, and to linked
+cyberware service references on weapon rows. Actual attainable service names
+still take precedence; invalid pending assignments remain explicit.
 Cap details and source records remain in tooltips.
-Another attainable service or any other supported acquisition route keeps the
-gear in its normal catalog. Otherwise only rows with saved overrides remain,
+For weapons and mods, another attainable service or any other supported
+acquisition route keeps the gear in its normal catalog. Otherwise only rows with saved overrides remain,
 in **Other weapon overrides**, until those overrides are cleared and saved.
 This is an editor filtering policy, not a complete campaign reachability check.
 Saved and pending service adjustments affect the label; service names are
@@ -320,8 +325,8 @@ ids are declared in `player_balance.py:GENERIC_GEAR_LOOT_GROUPS` and
 `GENERIC_BLUEPRINT_LOOT_GROUPS`; `gear_service_fallbacks` owns the label policy.
 Rows supported only by other sources show **Crafting**, **Cyberware**, or **Pet**.
 Records retained solely for overrides have a blank availability label.
-Consumables and cyberware retain **Unassigned** for nonpositive assignments;
-unmatched positive options retain **Unresolved service** with the option id.
+Outside cyberware, unmatched positive options retain **Unresolved service**
+with the option id.
 Tooltips retain the matching service or acquisition references. This is display
 metadata: saving and SQL export still use the original service assignment.
 

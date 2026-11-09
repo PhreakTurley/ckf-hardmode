@@ -64,6 +64,18 @@ class ImplantCatalogTests(unittest.TestCase):
         source.data['ContactServiceModel'].append(service(103, 8, 2, 1, 2))
         self.assertIn('ContactService 103', pb.player_implant_references(source)['Implant']['2'])
 
+    def test_service_fallbacks_distinguish_starting_story_combined_and_service_only_sources(self):
+        source, kinds = Source(), {}
+        next(r for r in source.data['ImplantModel'] if r['ImplantTypeId'] == '5')['Deactivated'] = '-1'
+        refs = pb.player_implant_references(source, source_kinds=kinds)
+        labels = pb.implant_service_fallbacks(refs, kinds)
+        self.assertEqual(labels['3']['label'], 'Starting Gear')
+        self.assertEqual(labels['8']['label'], 'Mission')
+        self.assertEqual(labels['5']['label'], 'Starting Gear / Mission')
+        self.assertEqual(labels['1']['label'], '')
+        self.assertIn('Backstory 16.Implant1', labels['3']['detail'])
+        self.assertIn('Deactivated -1', labels['5']['detail'])
+
     def test_story_candidate_policy_does_not_fabricate_missing_activation_references(self):
         source = Source()
         source.data['BlockConditionModel'] = []

@@ -347,6 +347,39 @@ setTimeout(async function () {
   ck('clearing the hidden override restores default visibility', !!costInput());
   W.player=JSON.parse(savedPlayer);
   MODEL.playerBalance.pages.find(p => p.id==='weapon-12').grids=originalUrbanGrids;
+  const implantPages=MODEL.playerBalance.pages.filter(p=>p.id.startsWith('implant-'));
+  const fallbackSnapshot=JSON.stringify(W.player), cyberSearchPage=implantPages.find(p=>p.grids.some(g=>g.rows.some(r=>r.id==='904')));
+  SEL='pb:'+cyberSearchPage.id;render();
+  const fallbackGrid=cyberSearchPage.grids.find(g=>g.rows.some(r=>r.id==='904'));
+  const fallbackRow=fallbackGrid.rows.find(r=>r.id==='904');
+  const nativeImplants=W.player.tables.Implant || (W.player.tables.Implant={});
+  const fallbackRecord=nativeImplants[fallbackRow.id] || (nativeImplants[fallbackRow.id]={});
+  delete fallbackRecord.ServiceOptionId;render();
+  const fallbackCell=()=>find(n=>n.tagName==='TR' && n.getAttribute('data-player-row')==='Implant '+fallbackRow.id)[0]
+    .find(n=>n.tagName==='TD' && n._cls().includes('pb-service'))[0];
+  ck('cyberware with both eligibility sources shows Starting Gear / Mission', fallbackCell().textContent==='Starting Gear / Mission');
+  ck('Starting Gear and Mission remain independently identifiable', normalImplants.some(r=>r.serviceFallback.label==='Starting Gear')
+     && normalImplants.some(r=>r.serviceFallback.label==='Mission'));
+  const fallbackAll=find(n=>n.tagName==='INPUT' && n.getAttribute('type')==='checkbox')[0];
+  fallbackAll.checked=true;fallbackAll.fire('change');
+  const fallbackInput=find(n=>n.tagName==='INPUT' && n.getAttribute('data-player-target')==='Implant 904.ServiceOptionId')[0];
+  fallbackInput.value='1';fallbackInput.fire('input');
+  ck('an attainable cyberware service takes precedence over source labels', fallbackCell().textContent===fallbackGrid.serviceColumn.options['1'].label);
+  fallbackInput.value='999999';fallbackInput.fire('input');
+  ck('an unknown positive cyberware assignment falls back to eligibility', fallbackCell().textContent==='Starting Gear / Mission');
+  fallbackInput.value='invalid';fallbackInput.fire('input');
+  ck('invalid cyberware assignments remain visible for correction', fallbackCell().textContent==='Invalid service assignment');
+  fallbackInput.value='';fallbackInput.fire('input');
+  ck('clearing the service adjustment restores source labels immediately', fallbackCell().textContent==='Starting Gear / Mission');
+  const blockedFixture={table:'Implant',serviceColumn:{name:'ServiceOptionId',fallbackUnavailable:true,
+    options:{'2':{label:'',attainable:false,detail:'Beyond cap'}}}};
+  ck('above-cap cyberware services also use source labels', playerService(blockedFixture,{id:'fixture',baseline:{ServiceOptionId:'2'},
+    serviceFallback:{label:'Mission',detail:'Story evidence'}}).label==='Mission');
+  W.player=JSON.parse(fallbackSnapshot);
+  SEL='pb:weapon-17';render();
+  const fallbackLaser=MODEL.playerBalance.pages.find(p=>p.id==='weapon-17').grids[0];
+  const fallbackTrident=fallbackLaser.rows.find(r=>r.id==='25016');
+  ck('cyberweapon service references use the same implant availability labels', playerService(fallbackLaser,fallbackTrident).label==='Mission');
   SEL='pb:traits';render();
   ck('traits have score subsections', find(function(n) {return n.tagName==='SUMMARY' && n.textContent.startsWith('Trait score ');}).length>1);
   ck('trait effects display their owners', find(function(n) {return n._cls().includes('pb-section-name');}).length>0);

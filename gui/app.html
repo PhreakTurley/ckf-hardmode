@@ -1893,7 +1893,8 @@ function playerService(grid, row) {
     return Object.assign({},linked,row.serviceFallback,{detail:[linked.detail,row.serviceFallback.detail].filter(Boolean).join('\n')});
   }
   const service = playerServiceAssignment(playerCell(grid,row,{name:grid.serviceColumn.name}),grid.serviceColumn.options);
-  if (service.attainable===false) {
+  if (service.attainable===false || (grid.serviceColumn.fallbackUnavailable && service.id!==undefined
+      && !Object.prototype.hasOwnProperty.call(grid.serviceColumn.options,service.id))) {
     const fallback=row.serviceFallback || {label:'',detail:''};
     return Object.assign({},service,fallback,{detail:[fallback.detail,service.detail].filter(Boolean).join('\n')});
   }
@@ -1905,10 +1906,10 @@ function playerService(grid, row) {
 
 function playerCyberwareService(grid, row) {
   const references = (row.cyberwareServices || []).map(function(ref) {
-    const cell = playerCell({table:'Implant'}, {id:ref.id,baseline:{ServiceOptionId:ref.baseline}}, {name:'ServiceOptionId'});
-    const service = playerServiceAssignment(cell,grid.serviceColumn.options);
-    return {label:service.attainable===false || (Number(service.id)<=0
-        && !Object.prototype.hasOwnProperty.call(grid.serviceColumn.options,service.id)) ? '' : service.label,
+    const service = playerService({table:'Implant',serviceColumn:{name:'ServiceOptionId',
+      options:grid.serviceColumn.options,fallbackUnavailable:true}},
+      {id:ref.id,baseline:{ServiceOptionId:ref.baseline},serviceFallback:ref.serviceFallback});
+    return {label:service.label,
       detail:ref.name+' · Implant '+ref.id+'.ServiceOptionId\n'+service.detail};
   });
   return {label:Array.from(new Set(references.map(function(r) {return r.label;}).filter(Boolean))).join('; '),
