@@ -1910,6 +1910,64 @@ function playerBlueprint(grid, row) {
   return {label:refs.length ? column.label || '' : '', detail:refs.length ? refs.join('\n') : column.empty || ''};
 }
 
+function playerEffectiveColumnValue(grid, row, column) {
+  const cell = playerCell(grid,row,column);
+  if (!cell) return null;
+  const parsed = CKF.parsePlayerAdjust(cell.value);
+  if (!parsed.ok) return null;
+  const base = Number(cell.base);
+  if (!Number.isFinite(base)) return null;
+  let value = parsed.kind === 'none' ? base : parsed.kind === 'set' ? parsed.value
+    : parsed.kind === 'add' ? base+parsed.value : base*parsed.value;
+  if (column.integer !== false) value=playerRound(value);
+  value*=cell.multiplier;
+  return column.integer !== false ? playerRound(value) : value;
+}
+
+function playerDisplayColumns(grid, showAll) {
+  const all=grid.columns.concat(grid.advanced).slice().sort(function(a,b) {return a.order-b.order;});
+  if (showAll) return all;
+  if (!grid.dynamicColumns) return grid.columns.slice().sort(function(a,b) {return a.order-b.order;});
+  return all.filter(function(col) {
+    const cells=grid.rows.map(function(row) {return playerCell(grid,row,col);});
+    const overridden=cells.some(function(cell) {return cell && (cell.value.trim()!=='' || cell.multiplier!==1);});
+    const values=grid.rows.map(function(row) {return playerEffectiveColumnValue(grid,row,col);});
+    const unknown=values.some(function(v) {return v===null || !Number.isFinite(v);});
+    const varying=new Set(values).size>1;
+    if (overridden && grid.rows.length>=2 && !unknown && !varying) return false;
+    if (overridden) return true;
+    if (col.metadata) return false;
+    const policy=col.visibilityPolicy || 'varying';
+    return policy==='all' || (policy==='nonzero' ? values.some(function(v) {return v!==null && v!==0;}) : varying);
+  });
+}
+
+function playerRefreshIconGroups(grid) {
+  const editor=grid.iconEditor;
+  if (!editor || !editor.regroup) return;
+  for (const row of grid.rows) {
+    const fields=((W.player.tables || {})[grid.table] || {})[row.id] || {};
+    const id=CKF.playerDisplayValue(fields[editor.column] || '') || String(row.baseline[editor.column]);
+    const asset=editor.assets[id] || {};
+    row.icon=asset.label || row.icon;
+    row.iconPath=asset.thumbnail || '';
+    row.section=row.icon;
+    row.sectionKey=asset.thumbnail || 'Asset '+id;
+    row.iconOrder=asset.order===undefined ? 0 : asset.order;
+  }
+  const leading=grid.columns.concat(grid.advanced).filter(function(c) {return c.leading;}).sort(function(a,b) {return a.order-b.order;});
+  grid.rows.sort(function(a,b) {
+    const group=a.iconOrder-b.iconOrder || a.icon.localeCompare(b.icon,undefined,{numeric:true})
+      || a.sectionKey.localeCompare(b.sectionKey,undefined,{numeric:true});
+    if (group) return group;
+    for (const col of leading) {
+      const av=playerEffectiveColumnValue(grid,a,col), bv=playerEffectiveColumnValue(grid,b,col);
+      if (av!==bv) return av===null ? 1 : bv===null ? -1 : av-bv;
+    }
+    return a.name.localeCompare(b.name,undefined,{numeric:true});
+  });
+}
+
 function playerSortValue(grid, row, key) {
   if (key === 'name') return row.name;
   if (key === 'service') return playerService(grid,row).label;
@@ -1922,14 +1980,9 @@ function playerSortValue(grid, row, key) {
     const id = CKF.playerDisplayValue(fields[editor.column] || '') || row.baseline[editor.column];
     return (editor.assets[id] || {}).token || '';
   }
-  const cell = playerCell(grid,row,{name:key.slice(7)});
-  if (!cell) return null;
-  const parsed = CKF.parsePlayerAdjust(cell.value);
-  if (!parsed.ok) return null;
-  const base = Number(cell.base);
-  const value = parsed.kind === 'none' ? base : playerRound(parsed.kind === 'set' ? parsed.value
-    : parsed.kind === 'add' ? base + parsed.value : base * parsed.value);
-  return playerRound(value * cell.multiplier);
+  const name=key.slice(7);
+  const column=grid.columns.concat(grid.advanced).find(function(c) {return c.name===name;}) || {name:name};
+  return playerEffectiveColumnValue(grid,row,column);
 }
 
 function playerSortedRows(grid, rows, sort) {
@@ -1973,7 +2026,7 @@ function renderPlayer(panel, page) {
   if (page.grids.length) panel.appendChild(toolbar);
   if (page.grids.length) panel.appendChild(el('p', {class:'doc',text:'Numbers set values, including negatives: -10 sets to -10. +10 adds 10; x1.5 multiplies by 1.5. Clearing a cell removes its adjustment.'}));
   if (page.grids.some(function(g) {return g.iconEditor;}))
-    panel.appendChild(el('p', {class:'doc',text:'Icon / model changes the inventory icon and the weapon’s 3D model together. Choose Default to restore its official assignment. Save, then export to Modkit to apply your changes.'}));
+    panel.appendChild(el('p', {class:'doc',text:page.iconHelp || 'Icon / model changes the inventory icon and the weapon’s 3D model together. Choose Default to restore its official assignment. Save, then export to Modkit to apply your changes.'}));
   if (page.grids.some(function(g) {return g.rows.some(function(r) {return r.enemyUse;});}))
     panel.appendChild(el('p', {class:'doc',text:'Rows marked “Also used by enemies” share a weapon record with enemies. Changing that weapon also affects enemies that use it.'}));
   if (page.multipliers) {
@@ -1988,6 +2041,25 @@ function renderPlayer(panel, page) {
   const grids = el('div', {});
   const pageNumbers = {};
   const openSections = {};
+  let columnRefreshPending=false;
+  function refreshColumnsAfterEdit(grid, shown) {
+    if (showAll.checked || columnRefreshPending) return;
+    if (JSON.stringify(playerDisplayColumns(grid,false).map(function(c) {return c.name;}))===shown) return;
+    columnRefreshPending=true;
+    setTimeout(function () {
+      const active=document.activeElement;
+      const target=active && active.getAttribute ? active.getAttribute('data-player-target') : null;
+      const selection=target ? [active.selectionStart,active.selectionEnd] : null;
+      paint();columnRefreshPending=false;
+      if (target) {
+        const control=Array.from(grids.querySelectorAll('input')).find(function(n) {return n.getAttribute('data-player-target')===target;});
+        if (control && control.focus) {
+          control.focus();
+          if (selection && control.setSelectionRange && selection[0]!==null) control.setSelectionRange(selection[0],selection[1]);
+        }
+      }
+    },0);
+  }
   panel.appendChild(grids);
   const ruleNotes = el('div', {class:'pb-rule-notes'});
   if (page.specialRules) panel.appendChild(ruleNotes);
@@ -2030,6 +2102,7 @@ function renderPlayer(panel, page) {
     const categories = {};
     const subsectionCounts = {};
     for (const grid of page.grids) {
+      playerRefreshIconGroups(grid);
       const matches = grid.rows.filter(function (r) {
         const editor = grid.iconEditor;
         const fields = ((W.player.tables || {})[grid.table] || {})[r.id] || {};
@@ -2100,7 +2173,8 @@ function renderPlayer(panel, page) {
         el('span', {class:'small',text:(number * 75 + 1)+'–'+Math.min((number+1)*75,matches.length)+' of '+matches.length}),
         el('button', {text:'Next',disabled:(number + 1) * 75 >= matches.length,onclick:function () {pageNumbers[gridKey] = number + 1;paint();}})]));
       if (grid.warning) target.appendChild(el('div', {class:'banner warn',text:grid.warning}));
-      const cols = grid.columns.concat(showAll.checked ? grid.advanced : []).sort(function(a,b) {return a.order-b.order;});
+      const cols = playerDisplayColumns(grid,showAll.checked);
+      const shownColumns=JSON.stringify(cols.map(function(c) {return c.name;}));
       if (!rows.length) continue;
       const tbl = el('table', {class:'grid pb-grid'});
       const widths = cols.map(function (c) {return playerColumnWidth(grid, c);});
@@ -2109,7 +2183,7 @@ function renderPlayer(panel, page) {
           r.fitment ? Math.min(320,playerTextWidth(r.fitment,false)) : 0);
       })) + 16);
       const iconWidth = grid.iconEditor ? Math.ceil(Math.max(220, ...grid.iconEditor.choices.map(function(c) {
-        return playerTextWidth(c.name+' · '+c.examples[0],false)+50;
+        return playerTextWidth(c.name+(grid.iconEditor.showExamples===false ? '' : ' · '+c.examples[0]),false)+50;
       }))) : grid.iconColumn ? Math.ceil(Math.max(playerTextWidth('Icon',true), ...grid.rows.map(function (r) {return playerTextWidth(r.icon || '',false);})) + 16) : 0;
       // Icon follows the leading PL/Rarity/Cost columns. Those three always
       // remain immediately after Name when they differ in this category.
@@ -2119,7 +2193,7 @@ function renderPlayer(panel, page) {
         const serviceWidth = Math.ceil(Math.min(280,Math.max(145,...grid.rows.map(function(r) {return playerTextWidth(playerService(grid,r).label,false)+16;}))));
         displayCols.splice(leading,0,{service:true,width:serviceWidth,column:{label:'Service',name:grid.serviceColumn.name}});
       }
-      if (grid.iconColumn) displayCols.splice(leading+(grid.serviceColumn ? 1 : 0),0,{icon:true,width:iconWidth,column:{label:grid.iconEditor ? 'Icon / model' : 'Icon',name:'icon'}});
+      if (grid.iconColumn) displayCols.splice(leading+(grid.serviceColumn ? 1 : 0),0,{icon:true,width:iconWidth,column:{label:grid.iconEditor ? grid.iconEditor.label || 'Icon / model' : 'Icon',name:'icon'}});
       if (grid.blueprintColumn) displayCols.splice(leading+(grid.serviceColumn ? 1 : 0),0,
         {blueprint:true,width:Math.ceil(playerTextWidth(grid.blueprintColumn.label,true)+24),
          column:{label:grid.blueprintColumn.label,name:'blueprint'}});
@@ -2188,10 +2262,10 @@ function renderPlayer(panel, page) {
             const currentId = CKF.playerDisplayValue(fields[editor.column] || '') || baseId;
             const base = editor.assets[baseId] || {};
             const td = el('td',{class:'pb-icon'});
-            const select = el('select',{'aria-label':row.name+' icon / model'});
+            const select = el('select',{'aria-label':row.name+' '+(editor.controlLabel || 'icon / model')});
             select.appendChild(el('option',{value:'',text:'Default · '+(base.token || 'No icon (asset '+baseId+')')}));
             for (const choice of editor.choices) select.appendChild(el('option',{
-              value:choice.id,text:choice.name+' · '+choice.examples[0],
+              value:choice.id,text:choice.name+(editor.showExamples===false ? '' : ' · '+choice.examples[0]),
               title:choice.thumbnail+'\n'+choice.resource+'\nUsed by: '+choice.examples.join(', ')}));
             if (fields[editor.column] && !editor.choices.some(function(c) {return c.id === currentId;}))
               select.appendChild(el('option',{value:currentId,text:(editor.assets[currentId] || {}).token || 'Asset '+currentId}));
@@ -2211,6 +2285,7 @@ function renderPlayer(panel, page) {
               else {delete record[editor.column];select.value = '';}
               describe(record[editor.column] || baseId,!!record[editor.column]);
               updateDirty();
+              if (editor.regroup) {playerRefreshIconGroups(grid);paint();}
             });
             td.appendChild(select);td.appendChild(detail);tr.appendChild(td);continue;
           }
@@ -2252,6 +2327,8 @@ function renderPlayer(panel, page) {
               input.style.width = Math.max(item.width-1, Math.ceil(playerTextWidth(input.value,false)+15))+'px';
               style(input.value);updateDirty();updateRules();
             });
+            input.addEventListener('change',function () {refreshColumnsAfterEdit(grid,shownColumns);});
+            input.addEventListener('keydown',function(e) {if (e.key==='Enter') refreshColumnsAfterEdit(grid,shownColumns);});
             td.appendChild(input);
           }
           tr.appendChild(td);

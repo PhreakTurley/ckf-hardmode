@@ -63,9 +63,9 @@ LABELS = {'ApCost': 'AP cost', 'CritMultiBase': 'Crit damage', 'CritMultiStealth
           'Accuracy1': 'Accuracy · 1', 'Accuracy2': 'Accuracy · 2',
           'TargetEffectDuration': 'Target duration', 'RechargeTurns': 'Recharge',
           'MaxCharges': 'Charges', 'EffectTypeId': 'Effect', 'MatrixEffectTypeId': 'Matrix effect'}
-CLASS_NAMES = {1: 'Melee', 2: 'Pistol', 3: 'AR', 4: 'Shotgun',
+CLASS_NAMES = {1: 'Melee', 2: 'Pistol', 3: 'Assault Rifle', 4: 'Shotgun',
                5: 'E-Rifle', 6: 'Sniper Rifle', 7: 'Canine Attack Rig', 9: 'Drone assault rifles',
-               10: 'SMG', 11: 'Revolver', 12: 'UAR', 14: 'Railgun',
+               10: 'SMG', 11: 'Revolver', 12: 'Urban Assault', 14: 'Railgun',
                16: 'Claws', 17: 'Eye Lasers', 18: 'Drone SMGs', 19: 'Drone energy rifles'}
 WEAPON_ORDER = [1, 2, 11, 10, 4, 5, 12, 3, 6, 14, 16, 17]
 DRONE_CLASSES = {7, 9, 18, 19}
@@ -469,6 +469,46 @@ def mod_fitment(source, row, class_mods):
             'mapped': bool(classes)}
 
 
+def asset_picker(table, rows, pool, assets, doc, swap_scope=False):
+    """Offer graphics already assigned within this weapon class or mod fitment."""
+    ids = {r['Asset3DTypeId'] for r in pool}
+    ids.update(str(int(effective(doc, table, r, 'Asset3DTypeId'))) for r in rows)
+    ids = {rid for rid in ids if assets.get(rid, {}).get('Thumbnail')
+           and (table == 'WeaponMod' or assets[rid].get('Resource'))}
+
+    def display_name(path):
+        token = path.rsplit('/', 1)[-1]
+        prefix = r'^(WeaponMod_|weapon_mod_)' if table == 'WeaponMod' else r'^W_(AR|ARB|Shotgun)_'
+        return label(re.sub(prefix, '', token).replace('_', ' ')) or 'No icon'
+
+    paths = sorted({assets[rid]['Thumbnail'] for rid in ids}, key=lambda path: (natural(display_name(path)), path))
+    if swap_scope:
+        rifle, sowo = 'CosmeticIcon/WeaponMod_Scope Rifle', 'CosmeticIcon/WeaponMod_Scope_Sowo'
+        if rifle in paths and sowo in paths:
+            a, b = paths.index(rifle), paths.index(sowo)
+            paths[a], paths[b] = paths[b], paths[a]
+    if table == 'WeaponMod' and len(paths) < 2:
+        return None
+    ranks = {path: i for i, path in enumerate(paths)}
+    choices = []
+    for rid in sorted(ids, key=lambda rid: (ranks[assets[rid]['Thumbnail']], int(rid))):
+        a = assets[rid]
+        owners = [r for r in pool if r['Asset3DTypeId'] == rid]
+        examples = [r for r in rows if r['Asset3DTypeId'] == rid] or owners or rows
+        namekey = 'WeaponName' if table == 'Weapon' else 'ModName'
+        choices.append({'id': rid, 'name': display_name(a['Thumbnail']),
+                        'token': a['Thumbnail'].rsplit('/', 1)[-1], 'thumbnail': a['Thumbnail'],
+                        'resource': a['Resource'], 'examples': [r[namekey] for r in examples[:3]]})
+    return {'column': 'Asset3DTypeId', 'choices': choices,
+            'label': 'Visual' if table == 'WeaponMod' else 'Icon / model',
+            'controlLabel': 'visual' if table == 'WeaponMod' else 'icon / model',
+            'showExamples': table == 'Weapon', 'regroup': table == 'WeaponMod',
+            'assets': {rid: {'token': a['Thumbnail'].rsplit('/', 1)[-1], 'thumbnail': a['Thumbnail'],
+                             'resource': a['Resource'], 'label': display_name(a['Thumbnail']),
+                             'order': ranks.get(a['Thumbnail'], len(ranks))}
+                       for rid, a in assets.items()}}
+
+
 def knight_trait_groups(source):
     """Join creation backstory tags to Trait.TagMatch, then TraitGroup levels.
 
@@ -648,7 +688,9 @@ def catalog(config_dir, database):
                     interesting = policy == 'all' or (len(values) > 1 if policy == 'varying'
                                    else any(v not in ('', '0', '0.0') for v in values))
                     target = visible if has_override or (interesting and col not in METADATA) else advanced
-                    target.append({'name': col, 'label': label(col), **column_presentation(table, col)})
+                    target.append({'name': col, 'label': label(col), 'visibilityPolicy': policy,
+                                   'metadata': col in METADATA, 'integer': 'INT' in cols[col].upper(),
+                                   **column_presentation(table, col)})
                 order = GEAR_ORDER if table in ('Weapon', 'WeaponMod') else LEADING_COLUMNS
                 for columns in (visible, advanced):
                     for column in columns:
@@ -688,6 +730,7 @@ def catalog(config_dir, database):
                 result_grid = {'table': table, 'title': title, 'columns': visible, 'advanced': advanced, 'rows': records,
                                'multipliers': doc.get('implantMultipliers', {}) if table == 'Implant' else {}}
                 if table in ('Weapon', 'WeaponMod'):
+                    result_grid['dynamicColumns'] = True
                     result_grid['blueprintColumn'] = {'label': 'Blueprint',
                         'empty': 'No blueprint drop reference in the selected database.'}
                 if table in services:
@@ -799,26 +842,10 @@ def catalog(config_dir, database):
                         record['iconPath'] = path
                         record['section'] = record['icon']
                     weapon_grid['rows'].sort(key=lambda r: natural(r['icon']))
-                if cls in (3, 4):
-                    # Keep the pointer per weapon: editing the shared asset's
-                    # Thumbnail would change every weapon referencing it.
-                    choices = []
-                    for asset_id, asset in assets.items():
-                        owners = [r for r in allrows['Weapon'].values()
-                                  if r['WeaponClass'] == str(cls) and r['Asset3DTypeId'] == asset_id]
-                        if not owners or not asset['Thumbnail'] or not asset['Resource']:
-                            continue
-                        examples = [r for r in rows if r['Asset3DTypeId'] == asset_id] or owners
-                        token = asset['Thumbnail'].rsplit('/', 1)[-1]
-                        choices.append({'id': asset_id, 'name': label(re.sub(r'^W_(AR|Shotgun)_', '', token).replace('_', ' ')),
-                                        'token': token, 'thumbnail': asset['Thumbnail'], 'resource': asset['Resource'],
-                                        'examples': [r['WeaponName'] for r in examples[:3]]})
-                    choices.sort(key=lambda c: natural(c['name']))
+                if cls in (3, 4, 12):
+                    pool = [r for r in allrows['Weapon'].values() if r['WeaponClass'] == str(cls)]
                     weapon_grid['iconColumn'] = True
-                    weapon_grid['iconEditor'] = {'column': 'Asset3DTypeId', 'choices': choices,
-                        'assets': {aid: {'token': a['Thumbnail'].rsplit('/', 1)[-1],
-                                         'thumbnail': a['Thumbnail'], 'resource': a['Resource']}
-                                   for aid, a in assets.items()}}
+                    weapon_grid['iconEditor'] = asset_picker('Weapon', rows, pool, assets, doc)
                     for column_set in ('columns', 'advanced'):
                         weapon_grid[column_set] = [c for c in weapon_grid[column_set] if c['name'] != 'Asset3DTypeId']
                 page('weapon-%s' % cls, title, 'Drone weapons' if cls in DRONE_CLASSES else 'Weapons', [weapon_grid,
@@ -826,11 +853,13 @@ def catalog(config_dir, database):
 
             class_mods = source.read('WeaponClassModModel')[1]
             mod_groups = {}
+            mod_visual_pools = {}
             unresolved_mods = []
             for row in allrows['WeaponMod'].values():
+                fit = mod_fitment(source, row, class_mods)
+                mod_visual_pools.setdefault((fit['category'], fit['title']), []).append(row)
                 if row['WeaponModId'] not in acquisition['WeaponMod']:
                     continue
-                fit = mod_fitment(source, row, class_mods)
                 if not fit['declared'] and not fit['mapped']:
                     unresolved_mods.append({'id': row['WeaponModId'], 'modClass': fit['modClass'],
                                             'slot': fit['slot'], 'reason': 'No weapon-class mapping or localization'})
@@ -842,6 +871,12 @@ def catalog(config_dir, database):
                 g.update(key='mods-' + '-'.join(r['WeaponModId'] for r, _ in members),
                          category=category, subsection=title)
                 fits = {r['WeaponModId']: f for r, f in members}
+                editor = asset_picker('WeaponMod', [r for r, _ in members], mod_visual_pools[category, title],
+                                      assets, doc, swap_scope=any(f['modClass'] == '6' for _, f in members))
+                if editor:
+                    g['iconEditor'] = editor
+                    for column_set in ('columns', 'advanced'):
+                        g[column_set] = [c for c in g[column_set] if c['name'] != 'Asset3DTypeId']
                 for record in g['rows']:
                     fit = fits[record['id']]
                     record['fitment'] = title
@@ -853,10 +888,12 @@ def catalog(config_dir, database):
                     record['iconPath'] = path
                     record['section'] = record['icon']
                     record['sectionKey'] = path or 'Asset ' + asset_id
+                    record['iconOrder'] = editor['assets'].get(asset_id, {}).get('order', 0) if editor else 0
                 g['iconColumn'] = True
-                g['rows'].sort(key=lambda r: (natural(r['icon']), natural(r['sectionKey'])))
+                g['rows'].sort(key=lambda r: (r['iconOrder'], natural(r['icon']), natural(r['sectionKey'])))
                 mod_grids.append(g)
-            page('weapon-mods', 'Weapon mods', 'Weapons', mod_grids, unresolvedMods=unresolved_mods)
+            page('weapon-mods', 'Weapon mods', 'Weapons', mod_grids, unresolvedMods=unresolved_mods,
+                 iconHelp='Choose a visual for fitments with multiple graphics. Mods move to the selected icon group. Default restores the official assignment. Save, then export to Modkit to apply your changes.')
             other_grids = []
             for table, title in (('Weapon', 'Other weapons'), ('WeaponMod', 'Other weapon mods')):
                 records = [r for rid, r in allrows[table].items() if rid not in acquisition[table]

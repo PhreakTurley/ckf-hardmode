@@ -173,8 +173,8 @@ The preview, sorting and SQL export use this grammar. The legacy importer
 translates old `-N` subtraction into `+-N` to preserve its effect. The Hard Mode
 expanded-sheet grammar below remains a separate format.
 
-The weapon tabs put Melee, Pistol, Revolver, SMG, Shotgun, E-Rifle, UAR, AR,
-Sniper Rifle, Railgun, Claws and Eye Lasers first. Canine Attack Rig belongs
+The weapon tabs put Melee, Pistol, Revolver, SMG, Shotgun, E-Rifle, Urban Assault,
+Assault Rifle, Sniper Rifle, Railgun, Claws and Eye Lasers first. Canine Attack Rig belongs
 with Drone weapons. Weapon and weapon-mod catalogs require a positive acquisition
 reference from the selected official database: a matching item service, direct
 mission loot, a blueprint with `Lootable = 1`, or an explicit mission-loot
@@ -237,10 +237,14 @@ unsaved adjustments. Missing descriptions and game-supplied format arguments
 remain explicit. These strings describe the game's rules; the editor does not
 infer gameplay from assembly method names.
 
-The default view hides uniform columns.
-Leverage and linked bonus grids show fields with at least one nonzero baseline.
-Explicit overrides always remain visible, including zero. **Show all columns**
-reveals the remaining numeric fields. Weapon and weapon-mod tables grow with
+The default view hides uniform columns. Weapon and weapon-mod tables recalculate
+visibility from effective values across the whole table when an edit is finished
+(leave the cell or press Enter). A column whose values become equal hides even
+if it has overrides. Invalid entries and single-row overrides remain editable.
+**Show all columns** reveals hidden fields and their saved or pending overrides;
+clearing those overrides restores the original visibility. Other catalogs retain
+explicit overrides, including zero. Leverage and linked bonus grids show fields
+with at least one nonzero baseline. Weapon and weapon-mod tables grow with
 the page instead of using an inner vertical scrollbar; wide tables retain
 horizontal scrolling. Names stay fixed while the grid scrolls horizontally;
 large catalogs are searchable and paginated. Red marks overrides or a global
@@ -273,9 +277,9 @@ option ids from implants linked through `ImplantTalentId` or `ImplantTalentId2`.
 It follows saved adjustments and pending edits made in Cyberware; it provides
 no second editable service assignment. Hover to identify the owning implant.
 Claws omits attack range from both default and advanced columns. Other uniform
-attack fields move to **Show all columns** unless explicitly overridden; linked
-effect fields retain the nonzero policy. Existing saved adjustments to omitted
-fields remain preserved and exportable.
+attack fields move to **Show all columns**; linked effect fields retain the
+nonzero policy until edits make their effective values uniform. Existing saved
+adjustments to omitted fields remain preserved and exportable.
 Missing attack/effect links remain explicit. All editable joined cells retain
 their native table/id/column for saving and export.
 
@@ -299,15 +303,23 @@ unmatched positive options retain **Unresolved service** with the option id.
 Tooltips retain the matching service or acquisition references. This is display
 metadata: saving and SQL export still use the original service assignment.
 
-Shotgun and AR rows include an **Icon / model** picker. Each choice names the
-asset and an example weapon using it; the current thumbnail token and asset id
+Shotgun, Assault Rifle and Urban Assault rows include an **Icon / model** picker.
+Each choice names the asset and an example weapon using it; the current thumbnail token and asset id
 remain visible beneath the picker. Hover for the complete icon and model paths,
 or search by the thumbnail token. Choices come from official weapon references
 in that class. The picker edits each weapon's `Asset3DTypeId`, so its icon and
 3D model change together; it never edits the shared `Weapon3DAsset` row.
 **Default** removes the adjustment and restores the official assignment.
 Saved assignments preview on reload and export through Workshop player tuning.
-Validation rejects fractional, arithmetic and unresolved asset assignments.
+Validation rejects fractional, arithmetic and unresolved weapon asset assignments.
+
+Weapon mod and intrinsic fitments with multiple thumbnail paths include a
+**Visual** picker. Choices come from official mod references in the same category
+and fitment, including graphics with an empty model resource. Changing a visual
+moves the row into that thumbnail's group immediately, while retaining its
+category and fitment. The picker saves `WeaponMod.Asset3DTypeId`; **Default**
+restores the official assignment. In the Assault Rifle + Urban Assault + E-Rifle
+optic fitment, Scope Sowo precedes Scope Rifle.
 
 Cyberware tabs follow ocular, arms, skin, skeletal, deep brain, fast brain,
 spinal, heart, lungs and legs, followed by other slots. Each slot has one table

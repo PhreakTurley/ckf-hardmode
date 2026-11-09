@@ -32,9 +32,9 @@ setTimeout(async function () {
      && blueprintCell('Weapon','1008').title.includes('Blueprint 101008'));
   ck('story-only weapon has a blank blueprint cell', blueprintCell('Weapon','1028').textContent==='');
   ck('blueprint marker has no editable input', !blueprintCell('Weapon','1008').find(n => n.tagName==='INPUT').length);
-  const bpSort = find(n => n.tagName==='SELECT' && n.getAttribute('aria-label')==='Sort by AR · Weapon stats')[0];
+  const bpSort = find(n => n.tagName==='SELECT' && n.getAttribute('aria-label')==='Sort by Assault Rifle · Weapon stats')[0];
   bpSort.value='blueprint';bpSort.fire('change');
-  const bpDirection = find(n => n.tagName==='SELECT' && n.getAttribute('aria-label')==='Sort direction AR · Weapon stats')[0];
+  const bpDirection = find(n => n.tagName==='SELECT' && n.getAttribute('aria-label')==='Sort direction Assault Rifle · Weapon stats')[0];
   bpDirection.value='descending';bpDirection.fire('change');
   const bpRows = find(n => n.tagName==='TR' && n.getAttribute('data-player-row'));
   let blankBlueprint = false, groupedBlueprints = true;
@@ -158,6 +158,76 @@ setTimeout(async function () {
   const modInput = find(function(n) {return n.tagName==='INPUT' && n.getAttribute('type')==='text';})[0];
   modInput.value='=19';modInput.fire('input');
   ck('weapon mod edits retain their table identity', buildEdits().playerBalance.cells.some(function(c) {return c.table==='WeaponMod' && c.value==='=19';}));
+  const modGrid=MODEL.playerBalance.pages.find(p => p.id==='weapon-mods').grids.find(g => g.iconEditor);
+  const modRow=modGrid.rows[0], modEditor=modGrid.iconEditor;
+  const originalVisual=(((W.player.tables || {}).WeaponMod || {})[modRow.id] || {})[modEditor.column];
+  const baseVisual=String(modRow.baseline[modEditor.column]);
+  const newVisual=modEditor.choices.find(c => c.thumbnail!==modEditor.assets[baseVisual].thumbnail);
+  const modPicker=() => find(n => n.tagName==='SELECT' && n.getAttribute('aria-label')===modRow.name+' visual')[0];
+  ck('multi-graphic mods have visual dropdowns without duplicate numeric controls', !!modPicker()
+     && !find(n => n.tagName==='INPUT' && n.getAttribute('data-player-target')==='WeaponMod '+modRow.id+'.Asset3DTypeId').length);
+  modPicker().value=newVisual.id;modPicker().fire('change');
+  ck('changing a mod visual immediately moves its icon group', modRow.sectionKey===newVisual.thumbnail
+     && modRow.icon===newVisual.name && modPicker().value===newVisual.id);
+  const visualRow=find(n => n.tagName==='TR' && n.getAttribute('data-player-row')==='WeaponMod '+modRow.id)[0];
+  const sectionRows=visualRow.parent.children;
+  let visualHeading=null;
+  for (const r of sectionRows) {if (r===visualRow) break;if (r._cls().includes('pb-section')) visualHeading=r;}
+  ck('moved mod appears beneath the selected visual heading', visualHeading && visualHeading.textContent.includes(newVisual.name));
+  ck('visual change preserves the native mod save identity', buildEdits().playerBalance.cells.some(c =>
+     c.table==='WeaponMod' && c.id===modRow.id && c.column==='Asset3DTypeId' && c.value===newVisual.id));
+  modPicker().value='';modPicker().fire('change');
+  ck('default restores the official mod visual and group', modRow.sectionKey===modEditor.assets[baseVisual].thumbnail
+     && modPicker().value==='');
+  if (originalVisual!==undefined) W.player.tables.WeaponMod[modRow.id][modEditor.column]=originalVisual;
+  SEL='pb:weapon-12';render();
+  const urbanGrid=MODEL.playerBalance.pages.find(p => p.id==='weapon-12').grids[0];
+  ck('Urban Assault exposes the weapon icon picker', find(n => n.tagName==='H2' && n.textContent==='Urban Assault').length===1
+     && find(n => n.tagName==='SELECT' && n.getAttribute('aria-label')===urbanGrid.rows[0].name+' icon / model').length===1);
+  const savedPlayer=JSON.stringify(W.player);
+  const fixtureCol={name:'Cost',label:'Cost',order:0,integer:true,visibilityPolicy:'varying'};
+  const fixture={table:'VisibilityFixture',dynamicColumns:true,columns:[fixtureCol],advanced:[],
+    rows:[{id:'1',name:'First',baseline:{Cost:'10'}},{id:'2',name:'Second',baseline:{Cost:'20'}}]};
+  ck('a varying column starts visible', playerDisplayColumns(fixture,false).length===1);
+  W.player.tables.VisibilityFixture={'1':{Cost:'=20'}};
+  ck('equal effective values hide an overridden column', playerDisplayColumns(fixture,false).length===0);
+  ck('Show all retains hidden overrides', playerDisplayColumns(fixture,true).length===1
+     && playerCell(fixture,fixture.rows[0],fixtureCol).value==='20');
+  W.player.tables.VisibilityFixture['1'].Cost='x0';W.player.tables.VisibilityFixture['2']={Cost:'x0'};
+  ck('multiplication can collapse a column to zero', playerDisplayColumns(fixture,false).length===0);
+  W.player.tables.VisibilityFixture['1'].Cost='invalid';
+  ck('invalid edits stay visible for correction', playerDisplayColumns(fixture,false).length===1);
+  W.player.tables.VisibilityFixture={};
+  ck('clearing overrides restores varying columns', playerDisplayColumns(fixture,false).length===1);
+  fixtureCol.integer=false;fixture.rows[0].baseline.Cost='1.1';fixture.rows[1].baseline.Cost='1.2';
+  ck('different fractional values are not rounded into uniformity', playerDisplayColumns(fixture,false).length===1);
+  fixture.rows=fixture.rows.slice(0,1);W.player.tables.VisibilityFixture['1']={Cost:'=3'};
+  ck('single-row overrides remain editable', playerDisplayColumns(fixture,false).length===1);
+  W.player=JSON.parse(savedPlayer);
+  // Exercise blur/Enter repainting with two actual weapon records in the DOM.
+  const originalUrbanGrids=MODEL.playerBalance.pages.find(p => p.id==='weapon-12').grids;
+  const editGrid=JSON.parse(JSON.stringify(urbanGrid));
+  editGrid.rows=editGrid.rows.slice(0,2);editGrid.columns=[fixtureCol];editGrid.advanced=[];
+  editGrid.rows[0].baseline.Cost='10';editGrid.rows[1].baseline.Cost='20';
+  for (const row of editGrid.rows) {
+    const record=(W.player.tables.Weapon || {})[row.id];if (record) delete record.Cost;
+  }
+  MODEL.playerBalance.pages.find(p => p.id==='weapon-12').grids=[editGrid];render();
+  const costInput=() => find(n => n.tagName==='INPUT' && n.getAttribute('data-player-target')==='Weapon '+editGrid.rows[0].id+'.Cost')[0];
+  costInput().value='=20';costInput().fire('input');
+  ck('a column stays present while typing', !!costInput());
+  costInput().fire('change');await new Promise(resolve => setTimeout(resolve,0));
+  ck('finishing an edit automatically hides the now uniform column', !costInput());
+  ck('hidden column edits remain in the save payload', buildEdits().playerBalance.cells.some(c =>
+     c.table==='Weapon' && c.id===editGrid.rows[0].id && c.column==='Cost' && c.value==='=20'));
+  const editAll=find(n => n.tagName==='INPUT' && n.getAttribute('type')==='checkbox')[0];
+  editAll.checked=true;editAll.fire('change');
+  ck('Show all exposes the hidden edited column', costInput() && costInput().value==='20');
+  costInput().value='';costInput().fire('input');costInput().fire('change');
+  editAll.checked=false;editAll.fire('change');
+  ck('clearing the hidden override restores default visibility', !!costInput());
+  W.player=JSON.parse(savedPlayer);
+  MODEL.playerBalance.pages.find(p => p.id==='weapon-12').grids=originalUrbanGrids;
   SEL='pb:traits';render();
   ck('traits have score subsections', find(function(n) {return n.tagName==='SUMMARY' && n.textContent.startsWith('Trait score ');}).length>1);
   ck('trait effects display their owners', find(function(n) {return n._cls().includes('pb-section-name');}).length>0);

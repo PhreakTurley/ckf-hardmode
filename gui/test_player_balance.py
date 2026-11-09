@@ -335,9 +335,9 @@ class PlayerBalanceTests(unittest.TestCase):
                             self.assertIn(col, columns, (page['id'], col))
                 order = [c for c in pb.GEAR_ORDER if c in columns] if grid['table'] in ('Weapon', 'WeaponMod') else expected
                 self.assertEqual([c for c in columns if c in order], order)
-                keys = [(r.get('icon', ''), r.get('sectionKey', ''), *(float(r['baseline'][c]) for c in pb.LEADING_COLUMNS), pb.natural(r['name']))
+                keys = [(r.get('iconOrder', 0), r.get('icon', ''), r.get('sectionKey', ''), *(float(r['baseline'][c]) for c in pb.LEADING_COLUMNS), pb.natural(r['name']))
                         for r in grid['rows']]
-                self.assertEqual(keys, sorted(keys, key=lambda k: (pb.natural(k[0]), pb.natural(k[1]), *k[2:])), page['id'])
+                self.assertEqual(keys, sorted(keys, key=lambda k: (k[0], pb.natural(k[1]), pb.natural(k[2]), *k[3:])), page['id'])
         for pid in ('weapon-1', 'weapon-10'):
             grid = next(p for p in model['pages'] if p['id'] == pid)['grids'][0]
             self.assertTrue(grid['iconColumn'])
