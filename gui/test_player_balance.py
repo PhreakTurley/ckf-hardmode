@@ -449,14 +449,19 @@ class PlayerBalanceTests(unittest.TestCase):
                              ['Weapon Mods', 'Crafted Intrinsic', 'Intrinsic'])
             native = {r['WeaponModId']: r for r in source.read('WeaponModModel')[1]}
             # Independent SQL join checks the Python catalog against all
-            # current mod services, direct loot and lootable or loot-listed blueprints.
+            # attainable mod services, direct loot and lootable or loot-listed blueprints.
             eligible = {str(r[0]) for r in source.connection.execute("""
                 SELECT m.WeaponModId FROM WeaponMod m WHERE
                   m.ModClassId>=200
                   OR
                   EXISTS (SELECT 1 FROM ContactService s
                           WHERE s.ServiceFlow=3 AND s.ServiceOptionId>0
-                            AND s.ServiceOptionId=m.ServiceOptionId)
+                            AND s.ServiceOptionId=m.ServiceOptionId
+                            AND NOT EXISTS (SELECT 1 FROM ContactService cap
+                                            WHERE cap.ServiceFlow=s.ServiceFlow
+                                              AND cap.ServiceGroupId=s.ServiceGroupId
+                                              AND cap.UpgradeReady=2
+                                              AND cap.ServiceLevel<s.ServiceLevel))
                   OR EXISTS (SELECT 1 FROM MissionLoot l
                              WHERE l.LootTypeId=10 AND l.LootKey=m.WeaponModId)
                   OR EXISTS (SELECT 1 FROM Blueprint b

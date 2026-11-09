@@ -100,6 +100,30 @@ setTimeout(async function () {
   ck('unresolved positive service assignments retain their declaration', playerService(sourceGrid,sourceRow).label==='Unresolved service 999');
   sourceRow.baseline.Option='-1';delete sourceRow.serviceFallback;
   ck('other catalog service behavior remains unchanged', playerService(sourceGrid,sourceRow).label==='Unassigned');
+  const cappedPlayer=JSON.stringify(W.player);
+  SEL='pb:weapon-mods';render();
+  const cappedGrid=MODEL.playerBalance.pages.find(p=>p.id==='weapon-mods').grids.find(g=>g.rows.some(r=>
+    g.serviceColumn.options[r.baseline.ServiceOptionId] && g.serviceColumn.options[r.baseline.ServiceOptionId].attainable===false));
+  const cappedRow=cappedGrid.rows.find(r=>cappedGrid.serviceColumn.options[r.baseline.ServiceOptionId]
+    && cappedGrid.serviceColumn.options[r.baseline.ServiceOptionId].attainable===false);
+  const cappedRecords=W.player.tables.WeaponMod || (W.player.tables.WeaponMod={});
+  const cappedRecord=cappedRecords[cappedRow.id] || (cappedRecords[cappedRow.id]={});
+  delete cappedRecord.ServiceOptionId;
+  const cappedSearch=find(n=>n.tagName==='INPUT' && n.getAttribute('type')==='search')[0];
+  cappedSearch.value=cappedRow.name;cappedSearch.fire('input');
+  const cappedCell=()=>find(n=>n.tagName==='TR' && n.getAttribute('data-player-row')==='WeaponMod '+cappedRow.id)[0]
+    .find(n=>n.tagName==='TD' && n._cls().includes('pb-service'))[0];
+  ck('otherwise obtainable gear retains its unattainable service declaration', cappedCell().textContent.includes('(Unattainable)'));
+  ck('unattainable service tooltip cites its cap marker', cappedCell().title.includes('UpgradeReady=2') && cappedCell().title.includes('exceeds cap'));
+  const cappedAll=find(n=>n.tagName==='INPUT' && n.getAttribute('type')==='checkbox')[0];
+  cappedAll.checked=true;cappedAll.fire('change');
+  const cappedInput=find(n=>n.tagName==='INPUT' && n.getAttribute('data-player-target')==='WeaponMod '+cappedRow.id+'.ServiceOptionId')[0];
+  cappedInput.value='1';cappedInput.fire('input');
+  ck('pending attainable assignment clears the unattainable marker', !cappedCell().textContent.includes('Unattainable')
+     && cappedCell().textContent===cappedGrid.serviceColumn.options['1'].label);
+  cappedInput.value='';cappedInput.fire('input');
+  ck('reset restores the capped service declaration', cappedCell().textContent.includes('(Unattainable)'));
+  W.player=JSON.parse(cappedPlayer);
   SEL='pb:weapon-16';render();
   const clawAll = find(function(n) {return n.tagName==='INPUT' && n.getAttribute('type')==='checkbox';})[0];
   clawAll.checked=true;clawAll.fire('change');

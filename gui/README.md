@@ -176,7 +176,7 @@ expanded-sheet grammar below remains a separate format.
 The weapon tabs put Melee, Pistol, Revolver, SMG, Shotgun, E-Rifle, Urban Assault,
 Assault Rifle, Sniper Rifle, Railgun, Claws and Eye Lasers first. Canine Attack Rig belongs
 with Drone weapons. Weapon and weapon-mod catalogs require a positive acquisition
-reference from the selected official database: a matching item service, direct
+reference from the selected official database: an attainable item service, direct
 mission loot, a blueprint with `Lootable = 1`, or an explicit mission-loot
 reference to the blueprint regardless of its `Lootable` flag. Blueprint
 `ServiceOptionId` assignments do not establish acquisition; a resale category
@@ -287,6 +287,16 @@ Weapons, weapon mods, consumables and cyberware always show a **Service** column
 localized names and display levels. `player_balance.py:service_catalog` joins
 `ServiceOptionId` within `ContactService.ServiceFlow` (weapons 1, mods 3,
 items 7, implants 8), so an option id cannot pick up a service from another catalog.
+`player_balance.py:contact_services` treats `UpgradeReady = 2` as the terminal
+marker within each `(ServiceFlow, ServiceGroupId)` ladder. The lowest marked
+`ServiceLevel` is the cap, inclusive; higher internal levels are unattainable,
+regardless of their `DisplayLevel`. Ladders without a marker remain included.
+Above-cap services retain their names with **(Unattainable)** appended; hover
+for the cap and its source record. They cannot establish weapon/mod acquisition.
+Another attainable service or any other supported acquisition route keeps the
+gear in its normal catalog. Otherwise only rows with saved overrides remain,
+in **Other weapon overrides**, until those overrides are cleared and saved.
+This is an editor filtering policy, not a complete campaign reachability check.
 Saved and pending service adjustments affect the label; service names are
 searchable. Matched service names always take precedence. For weapon and
 weapon-mod grids, nonpositive assignments instead show their availability:

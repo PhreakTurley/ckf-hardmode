@@ -286,6 +286,37 @@ def blueprint_drop_references(source):
     return refs
 
 
+def contact_services(source):
+    """Apply the editor's cap policy within each (flow, group) service ladder.
+
+    UpgradeReady=2 is terminal under the editor's acquisition policy. The first
+    such ServiceLevel caps the ladder; DisplayLevel is only a presentation label.
+    Ladders without a terminal marker retain their existing inclusive behavior.
+    """
+    rows = source.read('ContactServiceModel', ('ServiceTypeId', 'ServiceFlow', 'ServiceOptionId',
+                      'ServiceGroupId', 'ServiceLevel', 'DisplayLevel', 'UpgradeReady'))[1]
+    caps = {}
+    for row in rows:
+        if row['UpgradeReady'] == '2':
+            key = row['ServiceFlow'], row['ServiceGroupId']
+            level = int(row['ServiceLevel'])
+            previous = caps.get(key)
+            if previous is None or level < previous['level']:
+                caps[key] = {'level': level, 'ids': [row['ServiceTypeId']]}
+            elif level == previous['level']:
+                previous['ids'].append(row['ServiceTypeId'])
+    result = []
+    for row in rows:
+        cap = caps.get((row['ServiceFlow'], row['ServiceGroupId']))
+        attainable = cap is None or int(row['ServiceLevel']) <= cap['level']
+        reason = '' if attainable else (
+            'Unattainable: ServiceLevel %s exceeds cap %s for ServiceFlow %s, ServiceGroupId %s; '
+            'ContactService %s has UpgradeReady=2.' %
+            (row['ServiceLevel'], cap['level'], row['ServiceFlow'], row['ServiceGroupId'], ', '.join(cap['ids'])))
+        result.append(dict(row, attainable=attainable, cap=cap, unattainableReason=reason))
+    return result
+
+
 def player_gear_references(source, doc=None, blueprint_refs=None, source_kinds=None):
     """Inclusive positive acquisition references, keyed by table and content id.
 
@@ -312,12 +343,12 @@ def player_gear_references(source, doc=None, blueprint_refs=None, source_kinds=N
             if source_kinds is not None:
                 source_kinds.setdefault(table, {}).setdefault(rid, set()).add(kind)
 
-    services = source.read('ContactServiceModel', ('ServiceTypeId', 'ServiceFlow', 'ServiceOptionId'))[1]
+    services = contact_services(source)
     for table, records in rows.items():
         for row in records:
             options = {row['ServiceOptionId'], str(int(effective(doc, table, row, 'ServiceOptionId')))}
             for service in services:
-                if (service['ServiceFlow'] == SERVICE_FLOWS[table] and
+                if (service['attainable'] and service['ServiceFlow'] == SERVICE_FLOWS[table] and
                         int(service['ServiceOptionId']) > 0 and service['ServiceOptionId'] in options):
                     add(table, row[TABLE_KEYS[table]], 'ContactService ' + service['ServiceTypeId'], 'service')
 
@@ -535,21 +566,27 @@ def knight_trait_groups(source):
 def service_catalog(source):
     """Localized assignments keyed by (flow, option), never option alone."""
     grouped = {table: {} for table in SERVICE_FLOWS}
-    for row in source.read('ContactServiceModel')[1]:
+    for row in contact_services(source):
         for table, flow in SERVICE_FLOWS.items():
             if row['ServiceFlow'] != flow:
                 continue
             key = 'ContactService.Name.' + row['ServiceTypeId']
             name = source.locale.get(key, key)
             text = name + (' · L' + row['DisplayLevel'] if int(row['DisplayLevel']) > 0 else '')
+            if not row['attainable']:
+                text += ' (Unattainable)'
             entry = grouped[table].setdefault(row['ServiceOptionId'], {'labels': [], 'references': []})
             if text not in entry['labels']:
                 entry['labels'].append(text)
             entry['references'].append({'id': row['ServiceTypeId'], 'flow': flow,
-                                        'level': row['ServiceLevel'], 'displayLevel': row['DisplayLevel'], 'locale': key})
+                'level': row['ServiceLevel'], 'displayLevel': row['DisplayLevel'], 'locale': key,
+                'attainable': row['attainable'], 'cap': row['cap'], 'unattainableReason': row['unattainableReason']})
     return {table: {option: {'label': ', '.join(entry['labels']), 'references': entry['references'],
+                            'attainable': any(r['attainable'] for r in entry['references']),
                             'detail': 'ServiceOptionId %s; ServiceFlow %s; ContactService %s' %
-                                      (option, SERVICE_FLOWS[table], ', '.join(r['id'] for r in entry['references']))}
+                                      (option, SERVICE_FLOWS[table], ', '.join(r['id'] for r in entry['references']))
+                                      + ''.join('\n' + r['unattainableReason'] for r in entry['references']
+                                                if not r['attainable'])}
                     for option, entry in options.items()} for table, options in grouped.items()}
 
 
