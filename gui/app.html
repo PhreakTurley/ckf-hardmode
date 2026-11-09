@@ -1866,8 +1866,9 @@ function playerCell(grid, row, column) {
   const target = row.targets ? row.targets[column.name] : {table:grid.table,id:row.id,column:column.name};
   if (!target) return null;
   const fields = ((W.player.tables || {})[target.table] || {})[target.id] || {};
-  const multipliers = grid.table === 'Implant' ? (W.player.implantMultipliers || grid.multipliers || {}) : (grid.multipliers || {});
-  const multiplier = multipliers[column.name] === undefined ? 1 : multipliers[column.name];
+  const multipliers = target.table === 'Implant' ? (W.player.implantMultipliers || grid.multipliers || {}) : (grid.multipliers || {});
+  const multiplierColumn = target.table === 'Implant' ? target.column : column.name;
+  const multiplier = multipliers[multiplierColumn] === undefined ? 1 : multipliers[multiplierColumn];
   return {target:target,value:CKF.playerDisplayValue(fields[target.column] || ''),
     base:row.baseline[column.name],multiplier:multiplier,readOnly:target.readOnly || row.readOnly,
     readOnlyReason:target.readOnlyReason || row.readOnlyReason};

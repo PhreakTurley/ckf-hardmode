@@ -273,6 +273,11 @@ field, click **Re-sort** to reorder the table without interrupting typing.
 target and matrix effects into one row per weapon. The join follows effective
 `Talent.Weapon` assignments and retains multiple attacks separately. The
 weapon name uses the linked implant names, including their tier suffixes.
+The **Cost** column and Cost sorting use the linked implant's price, including
+its individual adjustments and global Price multiplier. Editing Cost here edits
+that implant's `Cost`; existing weapon-cost adjustments remain preserved in
+Workshop tuning. A missing or ambiguous implant link leaves Cost unavailable
+and reports the link problem.
 The regular **Service** column shows deduplicated service names from those
 implants, linked through `ImplantTalentId` or `ImplantTalentId2`. Option ids and
 owning implants stay in the tooltip. It follows saved adjustments and pending

@@ -167,6 +167,33 @@ setTimeout(async function () {
   ck('the consolidated display retains the native implant service save target', buildEdits().playerBalance.cells.some(c=>
     c.table==='Implant' && c.id===linkedImplant.id && c.column==='ServiceOptionId' && c.value===nextService));
   W.player=JSON.parse(serviceSnapshot);render();
+  const priceSnapshot=JSON.stringify(W.player), priceTarget=brightshot.targets.Cost;
+  const priceColumn=laserNames.columns.concat(laserNames.advanced).find(c=>c.name==='Cost');
+  W.player.implantMultipliers.Cost=2;
+  const priceImplants=W.player.tables.Implant || (W.player.tables.Implant={});
+  (priceImplants[priceTarget.id] || (priceImplants[priceTarget.id]={})).Cost='+50';
+  const priceWeapons=W.player.tables.Weapon || (W.player.tables.Weapon={});
+  (priceWeapons[brightshot.id] || (priceWeapons[brightshot.id]={})).Cost='999999';
+  render();
+  const priceInput=()=>find(n=>n.tagName==='INPUT' && n.getAttribute('data-player-target')==='Implant '+priceTarget.id+'.Cost')[0];
+  ck('cyberweapon Cost binds to the linked implant and includes its Price multiplier', !!priceInput()
+     && brightshot.baseline.Cost==='250' && priceInput().value==='+50' && String(priceInput().placeholder)==='500'
+     && playerCell(laserNames,brightshot,priceColumn).target.table==='Implant'
+     && playerEffectiveColumnValue(laserNames,brightshot,priceColumn)===600);
+  ck('Cost sorting uses implant price instead of the legacy weapon price', playerSortValue(laserNames,brightshot,'column:Cost')===600);
+  const displayedPrices=find(n=>n.tagName==='TR' && n.getAttribute('data-player-row')).map(n=>{
+    const id=n.getAttribute('data-player-row').split(' ')[1];
+    return playerEffectiveColumnValue(laserNames,laserNames.rows.find(r=>r.id===id),priceColumn);
+  });
+  ck('default rows are ordered by current implant prices', displayedPrices.every((v,i)=>i===0 || v>=displayedPrices[i-1]));
+  priceInput().value='=7';priceInput().fire('input');
+  ck('editing cyberweapon Cost saves to the native implant without replacing a weapon override', buildEdits().playerBalance.cells.some(c=>
+     c.table==='Implant' && c.id===priceTarget.id && c.column==='Cost' && c.value==='=7')
+     && W.player.tables.Weapon[brightshot.id].Cost==='999999' && playerSortValue(laserNames,brightshot,'column:Cost')===14);
+  priceInput().value='';priceInput().fire('input');
+  ck('clearing the implant price override restores its baseline times the Price multiplier', playerSortValue(laserNames,brightshot,'column:Cost')===500);
+  W.player=JSON.parse(priceSnapshot);render();
+
   const input = find(function (n) {return n.tagName==='INPUT' && n.getAttribute('type')==='text';})[0];
   ck('a weapon stat can be edited', !!input);
   input.value='=0';input.fire('input');

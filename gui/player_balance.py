@@ -895,9 +895,40 @@ def catalog(config_dir, database):
                         if record['cyberwareServices']:
                             record['weaponName'] = record['name']
                             record['name'] = ' / '.join(dict.fromkeys(i['name'] for i in record['cyberwareServices']))
-                    weapon_grid['rows'].sort(key=lambda r: (
-                        tuple(effective(doc, 'Weapon', allrows['Weapon'][r['id']], c) for c in LEADING_COLUMNS),
-                        natural(r['name'])))
+                    cost_implants = {i['ImplantTypeId']: i for linked in weapon_links.values()
+                                     if len(linked['implants']) == 1 for i in linked['implants'].values()}
+                    cost_grid = grid('Implant', list(cost_implants.values()), 'Cyberware cost')
+                    cost_column = next(c for c in weapon_grid['columns'] + weapon_grid['advanced'] if c['name'] == 'Cost')
+                    for columns in ('columns', 'advanced'):
+                        weapon_grid[columns] = [c for c in weapon_grid[columns] if c['name'] != 'Cost']
+                    if cost_grid:
+                        donor = next(c for c in cost_grid['columns'] + cost_grid['advanced'] if c['name'] == 'Cost')
+                        cost_column.update(integer=donor['integer'], visibilityPolicy=donor['visibilityPolicy'])
+                    cost_column['group'] = 'Cyberware'
+                    visible = cost_grid and any(c['name'] == 'Cost' for c in cost_grid['columns'])
+                    weapon_grid['columns' if visible else 'advanced'].append(cost_column)
+                    for columns in ('columns', 'advanced'):
+                        weapon_grid[columns].sort(key=lambda c: c['order'])
+                    for record in weapon_grid['rows']:
+                        implants = weapon_links[record['id']]['implants']
+                        record['baseline']['Cost'] = None
+                        record['targets'].pop('Cost', None)
+                        if len(implants) == 1:
+                            iid, implant = next(iter(implants.items()))
+                            record['baseline']['Cost'] = implant['Cost']
+                            record['targets']['Cost'] = {'table': 'Implant', 'id': iid, 'column': 'Cost',
+                                'readOnly': iid in protected.get('Implant', set()),
+                                'sharedWith': [r['name'] for r in weapon_grid['rows'] if r['id'] != record['id']
+                                               and iid in weapon_links[r['id']]['implants']]}
+                        else:
+                            warning = 'Weapon %s: Cost requires one linked implant; found %s.' % (record['id'], len(implants))
+                            weapon_grid['warning'] = '; '.join(filter(None, (weapon_grid.get('warning'), warning)))
+                            weapon_grid['joinsComplete'] = False
+                    def cyber_order(record):
+                        targets = [record['targets'].get(c) for c in LEADING_COLUMNS]
+                        return (tuple(effective(doc, t['table'], allrows[t['table']][t['id']], t['column'])
+                                      if t else float('inf') for t in targets), natural(record['name']))
+                    weapon_grid['rows'].sort(key=cyber_order)
                 else:
                     weapon_grid = grid('Weapon', rows, 'Weapon stats')
                 for record in weapon_grid['rows']:
