@@ -48,6 +48,12 @@ ITEM_CLASSES = {1: 'Medical', 2: 'Grenades', 3: 'Devices', 4: 'Chems', 6: 'Sploi
 # ContactService.ServiceFlow scopes the option id: for example the official
 # ContactService rows 1, 4 and 7 use option 1 for different catalogs.
 SERVICE_FLOWS = {'Weapon': '1', 'WeaponMod': '3', 'Item': '7', 'Implant': '8'}
+# Generic-pool classification policy. Named MissionLootGroupIds captured in
+# _id_constants.csv: WeaponDeprecated, Weapon, WeaponMod, BlueprintWeapon,
+# BlueprintWeaponMod and BlueprintWeaponModIntrinsic. Other explicit loot
+# references alone do not establish a general loot route.
+GENERIC_GEAR_LOOT_GROUPS = {'Weapon': {'7000', '100000'}, 'WeaponMod': {'8000'}}
+GENERIC_BLUEPRINT_LOOT_GROUPS = {'Weapon': {'50000'}, 'WeaponMod': {'60000', '60001'}}
 LABELS = {'ApCost': 'AP cost', 'CritMultiBase': 'Crit damage', 'CritMultiStealth': 'Stealth crit damage',
           'ImplantStress': 'Stress', 'InstallTime': 'Install time', 'BaseCost': 'Price',
           'BallisticDamage1': 'Ballistic · 1', 'BallisticDamage2': 'Ballistic · 2',
@@ -280,7 +286,7 @@ def blueprint_drop_references(source):
     return refs
 
 
-def player_gear_references(source, doc=None, blueprint_refs=None):
+def player_gear_references(source, doc=None, blueprint_refs=None, source_kinds=None):
     """Inclusive positive acquisition references, keyed by table and content id.
 
     BlueprintClass Weapon=1 / WeaponMod=5: CoreRPG_v1.dll, Constants.BlueprintClass.
@@ -298,11 +304,13 @@ def player_gear_references(source, doc=None, blueprint_refs=None):
     known = {table: {r[TABLE_KEYS[table]] for r in records} for table, records in rows.items()}
     refs = {table: {} for table in rows}
 
-    def add(table, rid, evidence):
+    def add(table, rid, evidence, kind):
         if rid in known[table]:
             entries = refs[table].setdefault(rid, [])
             if evidence not in entries:
                 entries.append(evidence)
+            if source_kinds is not None:
+                source_kinds.setdefault(table, {}).setdefault(rid, set()).add(kind)
 
     services = source.read('ContactServiceModel', ('ServiceTypeId', 'ServiceFlow', 'ServiceOptionId'))[1]
     for table, records in rows.items():
@@ -311,31 +319,31 @@ def player_gear_references(source, doc=None, blueprint_refs=None):
             for service in services:
                 if (service['ServiceFlow'] == SERVICE_FLOWS[table] and
                         int(service['ServiceOptionId']) > 0 and service['ServiceOptionId'] in options):
-                    add(table, row[TABLE_KEYS[table]], 'ContactService ' + service['ServiceTypeId'])
+                    add(table, row[TABLE_KEYS[table]], 'ContactService ' + service['ServiceTypeId'], 'service')
 
     loot = source.read('MissionLootModel', ('MissionLootId', 'LootKey', 'LootTypeId'))[1]
     for row in loot:
         for table, kind in (('Weapon', '8'), ('WeaponMod', '10')):
             if row['LootTypeId'] == kind:
-                add(table, row['LootKey'], 'MissionLoot ' + row['MissionLootId'])
+                add(table, row['LootKey'], 'MissionLoot ' + row['MissionLootId'], 'loot')
     if blueprint_refs is None:
         blueprint_refs = blueprint_drop_references(source)
     for table, records in blueprint_refs.items():
         for rid, evidence in records.items():
             for reference in evidence:
-                add(table, rid, reference)
+                add(table, rid, reference, 'blueprint')
 
     # Crafted Intrinsic is an explicit player-crafting catalog inclusion,
     # independent of a detachable-item drop or blueprint resale assignment.
     class_mods = source.read('WeaponClassModModel')[1]
     for row in rows['WeaponMod']:
         if mod_fitment(source, row, class_mods)['category'] == 'Crafted Intrinsic':
-            add('WeaponMod', row['WeaponModId'], 'Player crafting option (Crafted Intrinsic)')
+            add('WeaponMod', row['WeaponModId'], 'Player crafting option (Crafted Intrinsic)', 'crafting')
 
     for row in source.read('TalentModel')[1]:
         if row['TalentIsCyber'] == '1':
             for wid in {row['Weapon'], str(int(effective(doc, 'Talent', row, 'Weapon')))}:
-                add('Weapon', wid, 'Cyber talent ' + row['TalentId'])
+                add('Weapon', wid, 'Cyber talent ' + row['TalentId'], 'cyberware')
     # Explicit player-pet catalog policy. Constants.WeaponClass declares
     # DogWeapon=7 and CatWeapon=8; official Job 9 owns pet type 4 (Hunder),
     # and Job 4 owns type 5 (Assassin, with Lynx/Snow Leopard jobs 30/31).
@@ -346,7 +354,7 @@ def player_gear_references(source, doc=None, blueprint_refs=None):
             for weapon in rows['Weapon']:
                 if weapon['WeaponClass'] == weapon_class:
                     add('Weapon', weapon['WeaponId'], 'Job ' + job['JobId'] +
-                        ' player pet (weapon class ' + weapon_class + ')')
+                        ' player pet (weapon class ' + weapon_class + ')', 'pet')
     for row in source.read('DroneChassisModel')[1]:
         for field in ('WeaponType1', 'WeaponType2'):
             # Chassis slots declare weapon classes (e.g. row 1 names class 18),
@@ -354,16 +362,61 @@ def player_gear_references(source, doc=None, blueprint_refs=None):
             for weapon in rows['Weapon']:
                 if row[field] not in ('', '0', '-1') and weapon['WeaponClass'] == row[field]:
                     add('Weapon', weapon['WeaponId'], 'PetChassis ' + row['DroneChassisType'] +
-                        '.' + field + ' (weapon class ' + row[field] + ')')
+                        '.' + field + ' (weapon class ' + row[field] + ')', 'pet')
     for row in source.read('DronePrebuiltModel')[1]:
-        add('Weapon', row['Weapon'], 'PetPrebuilt ' + row['DroneType'])
+        add('Weapon', row['Weapon'], 'PetPrebuilt ' + row['DroneType'], 'pet')
     for row in source.read('BlockConditionModel', ('BlockConditionId', 'ConditionType', 'ActorId',
                                                   'ConditionValue', 'ConditionValue2'))[1]:
         if row['ConditionType'] == 'Equip':
             for field in ('ConditionValue', 'ConditionValue2'):
                 add('Weapon', row[field], 'BlockCondition ' + row['BlockConditionId'] +
-                    ' Equip (' + row['ActorId'] + ')')
+                    ' Equip (' + row['ActorId'] + ')', 'mission')
     return refs
+
+
+def gear_service_fallbacks(source, acquisition, source_kinds):
+    """Describe non-service availability; the renderer still resolves services first."""
+    routes = {'Weapon': {}, 'WeaponMod': {}}
+
+    def route(table, rid):
+        return routes[table].setdefault(rid, {'loot': False, 'blueprint': False, 'generic': False})
+
+    blueprint_outputs = {}
+    for row in source.read('BlueprintModel', ('BlueprintId', 'OutputId', 'BlueprintClassId', 'Lootable'))[1]:
+        table = {'1': 'Weapon', '5': 'WeaponMod', '7': 'Weapon'}.get(row['BlueprintClassId'])
+        if not table:
+            continue
+        blueprint_outputs[row['BlueprintId']] = table, row['OutputId']
+        if row['Lootable'] == '1':
+            entry = route(table, row['OutputId'])
+            entry.update(blueprint=True, generic=True)
+    for row in source.read('MissionLootModel', ('LootTypeId', 'LootKey', 'LootGroupId'))[1]:
+        table = {'8': 'Weapon', '10': 'WeaponMod'}.get(row['LootTypeId'])
+        if table:
+            entry = route(table, row['LootKey'])
+            entry['loot'] = True
+            entry['generic'] |= row['LootGroupId'] in GENERIC_GEAR_LOOT_GROUPS[table]
+        elif row['LootTypeId'] == '1' and row['LootKey'] in blueprint_outputs:
+            table, rid = blueprint_outputs[row['LootKey']]
+            entry = route(table, rid)
+            entry['blueprint'] = True
+            entry['generic'] |= row['LootGroupId'] in GENERIC_BLUEPRINT_LOOT_GROUPS[table]
+
+    result = {'Weapon': {}, 'WeaponMod': {}}
+    other_labels = (('crafting', 'Crafting'), ('cyberware', 'Cyberware'), ('pet', 'Pet'))
+    for table, records in acquisition.items():
+        for rid, evidence in records.items():
+            entry = routes[table].get(rid, {})
+            kinds = source_kinds.get(table, {}).get(rid, set())
+            other = [label for kind, label in other_labels if kind in kinds]
+            drops = [label for key, label in (('loot', 'Loot'), ('blueprint', 'Blueprint')) if entry.get(key)]
+            if (drops or 'mission' in kinds) and not entry.get('generic') and not other:
+                labels = ['Mission']
+            else:
+                labels = drops or other or (['Mission'] if 'mission' in kinds else [])
+            result[table][rid] = {'label': ' / '.join(labels),
+                                  'detail': 'Availability references:\n' + '\n'.join(evidence)}
+    return result
 
 
 def special_rules(source):
@@ -576,7 +629,9 @@ def catalog(config_dir, database):
             assets = {r['WeaponModelId']: r for r in source.read('Weapon3DAssetModel')[1]}
             services = service_catalog(source)
             blueprint_refs = blueprint_drop_references(source)
-            acquisition = player_gear_references(source, doc, blueprint_refs)
+            source_kinds = {}
+            acquisition = player_gear_references(source, doc, blueprint_refs, source_kinds)
+            service_fallbacks = gear_service_fallbacks(source, acquisition, source_kinds)
             item_links, item_owners = consumable_links(allrows, doc)
             cyberware_links, implant_owners = implant_links(allrows, doc)
             for trait in allrows['Trait'].values():
@@ -622,6 +677,8 @@ def catalog(config_dir, database):
                     if table in ('Weapon', 'WeaponMod'):
                         records[-1]['acquisition'] = acquisition[table].get(rid, [])
                         records[-1]['blueprintDrops'] = blueprint_refs[table].get(rid, [])
+                        records[-1]['serviceFallback'] = service_fallbacks[table].get(rid,
+                            {'label': '', 'detail': 'No known player acquisition reference; retained for its overrides.'})
                     if table == 'Rule' and rid in ENEMY_RULES:
                         records[-1]['owner'] = 'Enemy Balance'
                 raw = {r[TABLE_KEYS[table]]: r for r in rows}

@@ -199,6 +199,34 @@ class PlayerBalanceTests(unittest.TestCase):
             self.assertEqual(touched, {('Weapon','21001','Cost'), ('WeaponMod','5075','Cost')})
             self.assertTrue(all('Blueprint' not in stmt for stmt in statements))
 
+    def test_service_fallbacks_distinguish_generic_pools_from_mission_only_sources(self):
+        class Source:
+            def read(self, model, *args):
+                if model == 'BlueprintModel':
+                    specs = [('103','1','3','1'), ('104','1','4','1'), ('105','1','5','0'),
+                             ('106','1','6','0'), ('108','1','8','1'), ('109','1','9','0'),
+                             ('114','2','14','1'), ('115','1','15','0'),
+                             ('502','5','2','1'), ('503','5','3','0'), ('506','5','6','0')]
+                    return [], [dict(zip(('BlueprintId','BlueprintClassId','OutputId','Lootable'), r)) for r in specs]
+                specs = [('8','1','9000'), ('8','2','9000'), ('8','2','100000'),
+                         ('8','4','100000'), ('1','105','9000'), ('1','106','50000'),
+                         ('8','8','9000'), ('8','9','100000'), ('1','109','9000'),
+                         ('8','13','9000'), ('1','115','9000'), ('8','16','7000'),
+                         ('10','1','8000'), ('10','2','8000'), ('1','503','9000'), ('1','506','60001')]
+                return [], [dict(zip(('LootTypeId','LootKey','LootGroupId'), r)) for r in specs]
+        expected = {'Weapon': {'1':'Mission','2':'Loot','3':'Blueprint','4':'Loot / Blueprint',
+                              '5':'Mission','6':'Blueprint','8':'Loot / Blueprint','9':'Loot / Blueprint',
+                              '10':'Cyberware','11':'Pet','12':'Mission','13':'Loot','14':'',
+                              '15':'Blueprint','16':'Loot'},
+                    'WeaponMod': {'1':'Loot','2':'Loot / Blueprint','3':'Mission','4':'Crafting','5':'', '6':'Blueprint'}}
+        kinds = {'Weapon': {'10': {'cyberware'}, '11': {'pet'}, '12': {'mission'},
+                            '13': {'pet'}, '14': {'service'}, '15': {'pet'}},
+                 'WeaponMod': {'4': {'crafting'}, '5': {'service'}}}
+        refs = {t: {rid: [t + ' evidence ' + rid] for rid in ids} for t, ids in expected.items()}
+        actual = pb.gear_service_fallbacks(Source(), refs, kinds)
+        self.assertEqual({t: {rid: r['label'] for rid, r in records.items()} for t, records in actual.items()}, expected)
+        self.assertTrue(all('evidence' in r['detail'] for records in actual.values() for r in records.values()))
+
     def test_blueprint_resale_categories_do_not_admit_wb_revolvers(self):
         with tempfile.TemporaryDirectory() as config, static_data.StaticData() as source:
             rows = source.read('WeaponModel')[1]

@@ -1885,8 +1885,12 @@ function playerServiceAssignment(cell, options) {
 }
 
 function playerService(grid, row) {
-  return grid.serviceColumn ? playerServiceAssignment(playerCell(grid,row,{name:grid.serviceColumn.name}),grid.serviceColumn.options)
-    : {label:'',detail:''};
+  if (!grid.serviceColumn) return {label:'',detail:''};
+  const service = playerServiceAssignment(playerCell(grid,row,{name:grid.serviceColumn.name}),grid.serviceColumn.options);
+  if (row.serviceFallback && service.id !== undefined && Number(service.id) <= 0
+      && !Object.prototype.hasOwnProperty.call(grid.serviceColumn.options,service.id))
+    return Object.assign({},service,row.serviceFallback);
+  return service;
 }
 
 function playerCyberwareService(grid, row) {

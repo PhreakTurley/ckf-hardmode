@@ -57,6 +57,49 @@ setTimeout(async function () {
   ck('explicit blueprint loot marks a mod even when Lootable is zero', blueprintCell('WeaponMod','132').textContent==='Blueprint'
      && blueprintCell('WeaponMod','132').title.includes('MissionLoot 9130'));
   ck('blueprint view operations never create saved edits', JSON.stringify(playerChanges())===beforeBlueprintView);
+  const beforeServiceView=JSON.stringify(playerChanges());
+  let unchangedServices=true, assignedServices=0, noUnassigned=true;
+  for (const page of MODEL.playerBalance.pages) for (const grid of page.grids) {
+    if (!grid.blueprintColumn) continue;
+    for (const row of grid.rows) {
+      const original=playerServiceAssignment(playerCell(grid,row,{name:grid.serviceColumn.name}),grid.serviceColumn.options);
+      const shown=playerService(grid,row);
+      if (Object.prototype.hasOwnProperty.call(grid.serviceColumn.options,original.id)) {
+        assignedServices++;
+        if (JSON.stringify(original)!==JSON.stringify(shown)) unchangedServices=false;
+      }
+      if (shown.label==='Unassigned') noUnassigned=false;
+    }
+  }
+  ck('all existing weapon and mod service declarations remain unchanged', assignedServices>0 && unchangedServices);
+  ck('weapon and mod service cells never declare Unassigned', noUnassigned);
+  SEL='pb:weapon-3';render();
+  const sourceSearch=find(n=>n.tagName==='INPUT' && n.getAttribute('type')==='search')[0];
+  sourceSearch.value='Whaler';sourceSearch.fire('input');
+  function whalerServiceCell() {
+    const row=find(n=>n.tagName==='TR' && n.getAttribute('data-player-row')==='Weapon 1028')[0];
+    return row && row.find(n=>n.tagName==='TD' && n._cls().includes('pb-service'))[0];
+  }
+  ck('story equipment shows Mission in Service', whalerServiceCell().textContent==='Mission');
+  const sourceAll=find(n=>n.tagName==='INPUT' && n.getAttribute('type')==='checkbox')[0];
+  sourceAll.checked=true;sourceAll.fire('change');
+  const sourceInput=find(n=>n.tagName==='INPUT' && n.getAttribute('data-player-target')==='Weapon 1028.ServiceOptionId')[0];
+  const previousServiceValue=sourceInput.value;
+  sourceInput.value='1';sourceInput.fire('input');
+  const arGrid=MODEL.playerBalance.pages.find(p=>p.id==='weapon-3').grids[0];
+  ck('a pending real service assignment takes precedence immediately', whalerServiceCell().textContent===arGrid.serviceColumn.options['1'].label);
+  sourceInput.value=previousServiceValue;sourceInput.fire('input');
+  ck('clearing the pending service edit restores Mission', whalerServiceCell().textContent==='Mission');
+  ck('availability display never creates saved edits', JSON.stringify(playerChanges())===beforeServiceView);
+  const sourceGrid={table:'ServiceFixture',serviceColumn:{name:'Option',options:{'1':{label:'Shop',detail:'original service'}}}};
+  const sourceRow={id:'1',baseline:{Option:'-1'},serviceFallback:{label:'Loot / Blueprint',detail:'sources'}};
+  ck('unassigned service uses combined availability', playerService(sourceGrid,sourceRow).label==='Loot / Blueprint');
+  sourceRow.baseline.Option='1';
+  ck('matched service details are preserved as well as its label', playerService(sourceGrid,sourceRow).detail==='original service');
+  sourceRow.baseline.Option='999';
+  ck('unresolved positive service assignments retain their declaration', playerService(sourceGrid,sourceRow).label==='Unresolved service 999');
+  sourceRow.baseline.Option='-1';delete sourceRow.serviceFallback;
+  ck('other catalog service behavior remains unchanged', playerService(sourceGrid,sourceRow).label==='Unassigned');
   SEL='pb:weapon-16';render();
   const clawAll = find(function(n) {return n.tagName==='INPUT' && n.getAttribute('type')==='checkbox';})[0];
   clawAll.checked=true;clawAll.fire('change');

@@ -284,9 +284,20 @@ localized names and display levels. `player_balance.py:service_catalog` joins
 `ServiceOptionId` within `ContactService.ServiceFlow` (weapons 1, mods 3,
 items 7, implants 8), so an option id cannot pick up a service from another catalog.
 Saved and pending service adjustments affect the label; service names are
-searchable. Nonpositive assignments show **Unassigned**, and unmatched positive
-options show **Unresolved service** with the option id. Tooltips retain the
-ContactService row ids and flow used by the join.
+searchable. Matched service names always take precedence. For weapon and
+weapon-mod grids, nonpositive assignments instead show their availability:
+**Mission** only when explicit loot/story references are the sole route;
+otherwise **Loot**, **Blueprint**, or **Loot / Blueprint** according to item and
+blueprint sources. Membership in a generic item or blueprint pool, or a
+`Lootable = 1` blueprint, rules out Mission-only classification. Generic pool
+ids are declared in `player_balance.py:GENERIC_GEAR_LOOT_GROUPS` and
+`GENERIC_BLUEPRINT_LOOT_GROUPS`; `gear_service_fallbacks` owns the label policy.
+Rows supported only by other sources show **Crafting**, **Cyberware**, or **Pet**.
+Records retained solely for overrides have a blank availability label.
+Consumables and cyberware retain **Unassigned** for nonpositive assignments;
+unmatched positive options retain **Unresolved service** with the option id.
+Tooltips retain the matching service or acquisition references. This is display
+metadata: saving and SQL export still use the original service assignment.
 
 Shotgun and AR rows include an **Icon / model** picker. Each choice names the
 asset and an example weapon using it; the current thumbnail token and asset id
