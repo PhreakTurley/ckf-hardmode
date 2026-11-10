@@ -841,6 +841,7 @@ let SEL = null;        // selected section id (one subsystem, or a group of them
 let LAST_SAVE = null;
 const PLAYER_NAV_OPEN = {};
 const PLAYER_SORT = {}; // View preferences only; never saved as tuning.
+const PLAYER_PREVIEW_STATE = {revision:0,error:'',destination:null,promise:null};
 // What the requires enforcement did to the working copy since the last
 // load: the keys one flip turned on, and the flip that was refused. Both
 // are drawn as banners, because an auto-enable nobody is told about is a
@@ -2040,10 +2041,85 @@ function playerColumnWidth(grid, column) {
   return Math.ceil(width + 16);
 }
 
+function refreshConsumableViews(destination) {
+  destination=destination || PLAYER_PREVIEW_STATE.destination;
+  const revision=++PLAYER_PREVIEW_STATE.revision, from=SEL;
+  const change=playerChanges(), stamp=JSON.stringify(change);
+  PLAYER_PREVIEW_STATE.error='';PLAYER_PREVIEW_STATE.destination=destination;
+  PLAYER_PREVIEW_STATE.promise=(async function() {
+    try {
+      const result=await api('/api/player-preview',{playerBalance:change,fingerprints:MODEL.fingerprints});
+      if (revision!==PLAYER_PREVIEW_STATE.revision) return false;
+      if (!result.ok) throw new Error(result.error || 'The consumable view could not be updated.');
+      if (JSON.stringify(playerChanges())!==stamp) return refreshConsumableViews(destination);
+      const pages=[];let inserted=false;
+      for (const page of MODEL.playerBalance.pages) {
+        if (page.group==='Consumables') {
+          if (!inserted) {pages.push(...result.pages);inserted=true;}
+        } else pages.push(page);
+      }
+      MODEL.playerBalance.pages=pages;
+      if (destination && SEL===from && pages.some(function(p) {return p.id===destination;})) SEL='pb:'+destination;
+      PLAYER_PREVIEW_STATE.destination=null;render();return true;
+    } catch(error) {
+      if (revision===PLAYER_PREVIEW_STATE.revision) {PLAYER_PREVIEW_STATE.error=error.message;render();}
+      return false;
+    }
+  })();
+  return PLAYER_PREVIEW_STATE.promise;
+}
+
+function consumableSelect(grid, row, kind) {
+  const editor=grid.consumableEditor, item=row.consumable, talent=item.talent;
+  if (kind!=='tag' && kind!=='model' && !talent) return el('td',{class:'readonly',text:'—',title:'This item has no linked talent.'});
+  const pool=editor.families[item.family] || {icons:[],models:[],extras:[]};
+  const isTag=kind==='tag', isIcon=kind==='icon', isModel=kind==='model';
+  const table=isTag || isModel ? grid.table : editor.talentTable;
+  const id=isTag || isModel ? row.id : talent.id;
+  const column=isTag ? editor.tagColumn : isModel ? editor.modelColumn : isIcon ? editor.iconColumn : editor.talentAssetColumn;
+  const base=isTag ? item.classBase : isModel ? item.modelBase : isIcon ? talent.iconBase : talent.assetBase;
+  const fields=((W.player.tables || {})[table] || {})[id] || {};
+  const value=fields[column] || '';
+  const current=isIcon ? value || base : String(playerEffectiveColumnValue({table:table},{id:id,baseline:{[column]:base}},{name:column,integer:true}));
+  const choices=isTag ? editor.tags : isIcon ? pool.icons : isModel ? pool.models : pool.extras;
+  function describe(key) {
+    let found=choices.find(function(c) {return c.id===key;});
+    if (!found && isIcon) for (const theme of Object.values(editor.families)) {
+      found=theme.icons.find(function(c) {return c.id===key;});if (found) break;
+    }
+    return found || (!isTag && !isIcon && editor.modelAssets[key]) || {name:key || 'None',detail:key};
+  }
+  const caption=isTag ? 'tag' : isIcon ? 'talent icon' : isModel ? 'item model' : 'talent asset';
+  const select=el('select',{'aria-label':row.name+' '+caption});
+  const original=describe(base);
+  select.appendChild(el('option',{value:'',text:original.name,title:'Official assignment. Choose this to clear the adjustment.'}));
+  for (const choice of choices) if (choice.id!==base) select.appendChild(el('option',{value:choice.id,text:choice.name,title:choice.detail || choice.name}));
+  if (value && !choices.some(function(c) {return c.id!==base && c.id===current;}))
+    select.appendChild(el('option',{value:current,text:describe(current).name,title:describe(current).detail || ''}));
+  select.value=value ? current : '';
+  select.disabled=select.children.length<2 && !value;
+  const td=el('td',{class:'pb-icon'+(value ? ' overlay-overwrite' : ''),title:table+' '+id+'.'+column+'\n'+(describe(current).detail || '')
+    + ((!isTag && !isModel && talent.sharedWith.length) ? '\nShared with: '+talent.sharedWith.join(', ') : '')},[select]);
+  select.addEventListener('change',function() {
+    const records=W.player.tables[table] || (W.player.tables[table]={});
+    const record=records[id] || (records[id]={});
+    if (select.value && select.value!==base) record[column]=select.value;else delete record[column];
+    select.disabled=true;updateDirty();
+    refreshConsumableViews(isTag ? 'consumable-'+(record[column] || base) : null);
+  });
+  return td;
+}
+
 function renderPlayer(panel, page) {
   panel.appendChild(el('div', {class:'pb-heading'}, [el('h2', {text:page.title}),
     el('span', {class:'small', text:'Workshop player balance'})]));
   if (page.description) panel.appendChild(el('p', {class:'doc',text:page.description}));
+  if (page.group==='Consumables') {
+    panel.appendChild(el('p',{class:'doc',text:'Tag changes move items to their matching section. Medical and drug visuals share a pool; grenade visuals stay separate. Talent icon, item model and extra talent asset can be changed independently. The first choice restores the official assignment. Save, then export to Modkit to apply changes.'}));
+    if (PLAYER_PREVIEW_STATE.error) panel.appendChild(el('div',{class:'banner err'},[
+      el('span',{text:PLAYER_PREVIEW_STATE.error+' Pending edits are preserved. '}),
+      el('button',{text:'Retry view update',onclick:function() {refreshConsumableViews(PLAYER_PREVIEW_STATE.destination);}})]));
+  }
   const search = el('input', {type:'search',placeholder:'Filter by name', 'aria-label':'Filter '+page.title});
   const showAll = el('input', {type:'checkbox'});
   const toolbar = el('div', {class:'pb-tools'}, [search,
@@ -2223,6 +2299,15 @@ function renderPlayer(panel, page) {
       if (grid.blueprintColumn) displayCols.splice(leading+(grid.serviceColumn ? 1 : 0),0,
         {blueprint:true,width:Math.ceil(playerTextWidth(grid.blueprintColumn.label,true)+24),
          column:{label:grid.blueprintColumn.label,name:'blueprint'}});
+      if (grid.consumableEditor) {
+        const selectors=[{kind:'tag',label:'Tag'},{kind:'icon',label:'Talent icon'},{kind:'model',label:'Item model'}];
+        if (showAll.checked || grid.rows.some(function(r) {return r.consumable.talent &&
+            (r.consumable.talent.assetCurrent!=='0' || ((grid.consumableEditor.families[r.consumable.family] || {}).extras || []).length>1);}))
+          selectors.push({kind:'extra',label:'Talent asset'});
+        displayCols.splice(leading+(grid.serviceColumn ? 1 : 0),0,...selectors.map(function(c) {
+          return {consumable:c.kind,width:c.kind==='tag' ? 155 : 170,column:{label:c.label,name:c.kind}};
+        }));
+      }
       for (let i=0;i<displayCols.length;) {
         const group = displayCols[i].column.group;
         if (!group) {i++;continue;}
@@ -2263,6 +2348,7 @@ function renderPlayer(panel, page) {
         if (row.fitment) nameCell.appendChild(el('small', {class:'pb-fit',text:row.fitment,title:row.fitmentSource}));
         const tr = el('tr', {'data-player-row':grid.table+' '+row.id}, [nameCell]);
         for (const item of displayCols) {
+          if (item.consumable) {tr.appendChild(consumableSelect(grid,row,item.consumable));continue;}
           if (item.blueprint) {
             const blueprint = playerBlueprint(grid,row);
             tr.appendChild(el('td',{class:'pb-blueprint readonly',text:blueprint.label,title:blueprint.detail}));
@@ -3816,7 +3902,7 @@ function renderProbe() {
 
 async function load() {
   MODEL = await api('/api/model');
-  W = buildWorking();
+  W = buildWorking();PLAYER_PREVIEW_STATE.error='';PLAYER_PREVIEW_STATE.destination=null;PLAYER_PREVIEW_STATE.revision++;
   // Both belong to one working copy. A fresh read is a fresh copy, and after a
   // save the server's own notes (LAST_SAVE.notes) are the record of what it
   // wrote — keeping these would show the same fact twice, in the past tense.

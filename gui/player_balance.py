@@ -1,8 +1,8 @@
 """Workshop-owned player tuning and fresh official-data catalogs.
 
-Only sparse adjustments live in config. Catalog rows, joins and numeric
-declarations are read from Official/data.db on every request. No save database
-is opened. SQL is emitted in the same order as the former implant rules:
+Only sparse adjustments live in config. Catalog rows, joins and numeric field
+declarations are read from Official/data.db on every request. The explicitly
+declared talent-icon field accepts literal keys. No save database is opened. SQL is emitted in the same order as the former implant rules:
 individual adjustments first, then the global implant multipliers.
 """
 import copy
@@ -45,6 +45,9 @@ METADATA.update({'EffectTypeId', 'MatrixEffectTypeId', 'ImplantEffectId', 'Impla
                  'SelfEffect', 'MatrixEffect', 'Token'})
 METADATA.update({'ItemClass', 'LeverageClass', 'TalentId'})
 ITEM_CLASSES = {1: 'Medical', 2: 'Grenades', 3: 'Devices', 4: 'Chems', 6: 'Sploitkits', 7: 'Matrix'}
+ITEM_TAG_LOCALES = {1: 'Medical', 2: 'Demolition', 3: 'Tech', 4: 'Drugs', 6: 'Leverage', 7: 'HackingDrugs'}
+# Explicit text-assignment declaration; other fields keep the numeric grammar.
+TEXT_FIELDS = {'Talent': {'IconPng'}}
 # ContactService.ServiceFlow scopes the option id: for example the official
 # ContactService rows 1, 4 and 7 use option 1 for different catalogs.
 SERVICE_FLOWS = {'Weapon': '1', 'WeaponMod': '3', 'Item': '7', 'Implant': '8'}
@@ -194,7 +197,8 @@ def declarations(source, table):
     if table not in TABLE_KEYS or table not in source.schema:
         raise ValueError('Unsupported/missing content table: %s' % table)
     return {r[1]: r[2] for r in source.schema[table] if not r[5] and
-            any(t in r[2].upper() for t in ('INT', 'REAL', 'NUM', 'FLOAT', 'DOUBLE'))}
+            (any(t in r[2].upper() for t in ('INT', 'REAL', 'NUM', 'FLOAT', 'DOUBLE'))
+             or r[1] in TEXT_FIELDS.get(table, set()))}
 
 
 def protected_rows(config_dir, source):
@@ -223,6 +227,8 @@ def validate(doc, source, config_dir=None):
             raise ValueError('Invalid implant multiplier: %s' % col)
     protected = protected_rows(config_dir, source)
     weapon_assets = None
+    known_icons = None
+    item_classes = None
     for table, records in doc['tables'].items():
         columns = declarations(source, table)
         rows = {r[TABLE_KEYS[table]]: r for r in source.read(table + 'Model')[1]}
@@ -242,8 +248,19 @@ def validate(doc, source, config_dir=None):
                 raise ValueError('Invalid fields for %s %s' % (table, rid))
             for col, value in fields.items():
                 if col not in columns:
-                    raise ValueError('%s.%s is no longer a numeric content field' % (table, col))
+                    raise ValueError('%s.%s is not an editable content field' % (table, col))
+                if col in TEXT_FIELDS.get(table, set()):
+                    if known_icons is None:
+                        known_icons = {r['IconPng'] for r in source.read('TalentModel', ('IconPng',))[1] if r['IconPng']}
+                    if not isinstance(value, str) or (value and value not in known_icons):
+                        raise ValueError('Talent %s: choose an existing talent icon' % rid)
+                    continue
                 parsed = adjustment(value)
+                if table == 'Item' and col == 'ItemClass' and parsed is not None:
+                    if item_classes is None:
+                        item_classes = set(map(str, ITEM_CLASSES)) | {r['ItemClass'] for r in source.read('ItemModel')[1]}
+                    if str(int(effective(doc, table, rows[rid], col))) not in item_classes:
+                        raise ValueError('Item %s: choose an existing consumable tag' % rid)
                 if table == 'Weapon' and col == 'Asset3DTypeId' and parsed is not None:
                     if weapon_assets is None:
                         weapon_assets = {r['WeaponModelId'] for r in source.read('Weapon3DAssetModel')[1]}
@@ -634,6 +651,73 @@ def asset_picker(table, rows, pool, assets, doc, swap_scope=False, multiple_only
                        for rid, a in assets.items()}}
 
 
+def consumable_editors(source, allrows, assets, doc, owners):
+    """Themed item models, linked talent icons/assets, and gameplay category tags."""
+    items, talents = allrows['Item'], allrows['Talent']
+    tags = {str(c): source.locale.get('Gear.Item.Class.' + ITEM_TAG_LOCALES[c], ITEM_CLASSES[c]) for c in ITEM_CLASSES}
+    for item in items.values():
+        tags.setdefault(item['ItemClass'], 'Item class ' + item['ItemClass'])
+    grenade_assets = {r['Asset3DTypeId'] for r in items.values() if r['ItemClass'] == '2'}
+    grenade_assets.update(talents.get(r['TalentId'], {}).get('ExtraAsset', '0')
+                         for r in items.values() if r['ItemClass'] == '2')
+    grenade_assets.discard('0')
+
+    def family(cls):
+        return 'medical-drugs' if cls in ('1', '4', '7') else 'grenades' if cls == '2' else 'class-' + cls
+
+    def official_family(item):
+        talent = talents.get(item['TalentId'], {})
+        return 'grenades' if (item['Asset3DTypeId'] in grenade_assets or talent.get('ExtraAsset') in grenade_assets) else family(item['ItemClass'])
+
+    def icon_name(value):
+        token = re.sub(r'^talent_item_', '', value).replace('_', ' ')
+        token = re.sub(r'^combatdrug', 'Combat Drug ', token, flags=re.I)
+        return label(token).strip().title()
+
+    def model_choice(aid):
+        asset = assets.get(aid, {})
+        path = asset.get('Resource', '')
+        return {'id': aid, 'name': label(path.rsplit('/', 1)[-1].replace('_', ' ')) if path else ('None' if aid == '0' else 'Asset ' + aid),
+                'detail': 'Asset %s\nModel: %s\nIcon: %s' % (aid, path or '(none)', asset.get('Thumbnail', '') or '(none)')}
+
+    pools = {}
+    for item in items.values():
+        pool = pools.setdefault(official_family(item), {'icons': set(), 'models': set(), 'extras': {'0'}})
+        if assets.get(item['Asset3DTypeId'], {}).get('Resource'):
+            pool['models'].add(item['Asset3DTypeId'])
+        talent = talents.get(item['TalentId'])
+        if talent:
+            if talent['IconPng']:
+                pool['icons'].add(talent['IconPng'])
+            extra = talent['ExtraAsset']
+            if extra == '0' or assets.get(extra, {}).get('Resource'):
+                pool['extras'].add(extra)
+    families = {name: {'icons': [{'id': value, 'name': icon_name(value), 'detail': value} for value in sorted(pool['icons'], key=natural)],
+                       'models': [model_choice(aid) for aid in sorted(pool['models'], key=int)],
+                       'extras': [model_choice(aid) for aid in sorted(pool['extras'], key=int)]}
+                for name, pool in pools.items()}
+    records = {}
+    for item in items.values():
+        rid = item['ItemTypeId']
+        cls = str(int(effective(doc, 'Item', item, 'ItemClass')))
+        theme = official_family(item) if cls == item['ItemClass'] else family(cls)
+        tid = str(int(effective(doc, 'Item', item, 'TalentId')))
+        talent = talents.get(tid)
+        record = {'classBase': item['ItemClass'], 'classCurrent': cls, 'family': theme,
+                  'modelBase': item['Asset3DTypeId'], 'modelCurrent': str(int(effective(doc, 'Item', item, 'Asset3DTypeId'))),
+                  'talent': None}
+        if talent:
+            record['talent'] = {'id': tid, 'iconBase': talent['IconPng'],
+                'iconCurrent': doc['tables'].get('Talent', {}).get(tid, {}).get('IconPng', talent['IconPng']),
+                'assetBase': talent['ExtraAsset'], 'assetCurrent': str(int(effective(doc, 'Talent', talent, 'ExtraAsset'))),
+                'sharedWith': [name for oid, name in owners.get(('Talent', tid), {}).items() if oid != rid]}
+        records[rid] = record
+    return {'controls': {'tagColumn': 'ItemClass', 'modelColumn': 'Asset3DTypeId', 'iconColumn': 'IconPng',
+                'talentAssetColumn': 'ExtraAsset', 'talentTable': 'Talent',
+                'tags': [{'id': key, 'name': value.split(' (', 1)[0], 'detail': value} for key, value in sorted(tags.items(), key=lambda p: int(p[0]))],
+                'families': families, 'modelAssets': {aid: model_choice(aid) for aid in assets}}, 'rows': records}
+
+
 def knight_trait_groups(source):
     """Join creation backstory tags to Trait.TagMatch, then TraitGroup levels.
 
@@ -778,10 +862,10 @@ def cyberweapon_links(allrows, doc, weapons):
     return links, owners, blocks
 
 
-def catalog(config_dir, database):
+def catalog(config_dir, database, document=None):
     """Build rows and visible columns from a fresh, complete official read."""
     try:
-        doc = load(config_dir)
+        doc = load(config_dir) if document is None else copy.deepcopy(document)
     except (ValueError, OSError) as exc:
         return {'document': empty(), 'file': FILE, 'pages': [], 'error': str(exc), 'database': None}
     result = {'document': doc, 'file': FILE, 'pages': [], 'error': None, 'database': None}
@@ -815,6 +899,8 @@ def catalog(config_dir, database):
                 overrides = doc['tables'].get(table, {})
                 visible, advanced = [], []
                 for col in cols:
+                    if col in TEXT_FIELDS.get(table, set()):
+                        continue
                     values = {r.get(col, '') for r in rows}
                     has_override = any(overrides.get(r[TABLE_KEYS[table]], {}).get(col, '') != '' for r in rows)
                     interesting = policy == 'all' or (len(values) > 1 if policy == 'varying'
@@ -1095,16 +1181,28 @@ def catalog(config_dir, database):
             if other_grids:
                 page('other-weapon-overrides', 'Other weapon overrides', 'Weapons', other_grids,
                      description='These records have no known player acquisition reference. They remain here while they have overrides. Clear their overrides and save to remove them from this page.')
-            for cls in sorted({int(r['ItemClass']) for r in allrows['Item'].values()}):
-                items = [r for r in allrows['Item'].values() if int(r['ItemClass']) == cls]
+            item_editors = consumable_editors(source, allrows, assets, doc, item_owners)
+            item_classes = {int(r['ItemClass']) for r in allrows['Item'].values()}
+            item_classes.update(int(effective(doc, 'Item', r, 'ItemClass')) for r in allrows['Item'].values())
+            for cls in sorted(item_classes):
+                items = [r for r in allrows['Item'].values() if int(effective(doc, 'Item', r, 'ItemClass')) == cls]
                 title = ITEM_CLASSES.get(cls, 'Item class %s' % cls)
+                if not items:
+                    page('consumable-%s' % cls, title, 'Consumables', [], description='No items currently use this tag.')
+                    continue
                 separate_effects = any(len({item_links[r['ItemTypeId']]['ids'][name]
                                             for name in ('Self effect', 'Target effect')} - {'0', '-1', ''}) > 1 for r in items)
                 blocks = [('Action', 'Talent')]
                 blocks += [('Self effect', 'Effect'), ('Target effect', 'Effect')] if separate_effects else [('Effects', 'Effect')]
                 blocks += [('Matrix effects', 'MatrixEffect')]
-                page('consumable-%s' % cls, title, 'Consumables',
-                     [joined_grid('Item', items, title, 'Item', item_links, item_owners, blocks)])
+                item_grid = joined_grid('Item', items, title, 'Item', item_links, item_owners, blocks)
+                item_grid['consumableEditor'] = item_editors['controls']
+                for columns in ('columns', 'advanced'):
+                    item_grid[columns] = [c for c in item_grid[columns] if c['name'] not in
+                        ('ItemClass', 'Asset3DTypeId', 'Action.ExtraAsset')]
+                for record in item_grid['rows']:
+                    record['consumable'] = item_editors['rows'][record['id']]
+                page('consumable-%s' % cls, title, 'Consumables', [item_grid])
             page('implant-global', 'All cyberware', 'Cyberware', [], multipliers=MULTIPLIERS)
             player_implants = [r for r in allrows['Implant'].values() if r['ImplantTypeId'] in acquisition['Implant']]
             for slot in sorted({int(r['ImplantSlot']) for r in player_implants},
@@ -1191,10 +1289,12 @@ def apply_edits(doc, edits, source, config_dir=None):
         result.setdefault('implantMultipliers', {})[col] = value
     for cell in edits.get('cells', []):
         table, rid, col = cell['table'], str(cell['id']), cell['column']
-        value = normalize_adjustment(cell.get('value', ''))
+        literal = col in TEXT_FIELDS.get(table, set())
+        value = str(cell.get('value', '')).strip() if literal else normalize_adjustment(cell.get('value', ''))
         fields = result['tables'].setdefault(table, {}).setdefault(rid, {})
         if value:
-            adjustment(value)
+            if not literal:
+                adjustment(value)
             fields[col] = value
         else:
             fields.pop(col, None)
@@ -1222,6 +1322,11 @@ def sql(doc, source, config_dir=None):
         for rid, fields in sorted(records.items(), key=lambda x: int(x[0])):
             assignments = []
             for col, value in sorted(fields.items()):
+                if col in TEXT_FIELDS.get(table, set()):
+                    if value:
+                        assignments.append('%s=\'%s\'' % (static_data.quote(col), value.replace("'", "''")))
+                        touched.add((table, rid, col))
+                    continue
                 parsed = adjustment(value)
                 if parsed is None:
                     continue

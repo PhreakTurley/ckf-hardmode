@@ -169,7 +169,8 @@ negative numbers: `-10` sets to -10. `+10` adds 10 and `x1.5` multiplies by 1.5.
 `=N` remains an accepted input alias; the editor displays and saves assignments
 without that prefix. `=+10` becomes `10`, preserving assignment rather than
 turning it into addition. `+-10` explicitly subtracts 10.
-The preview, sorting and SQL export use this grammar. The legacy importer
+The preview, sorting and SQL export use this grammar. Consumable talent icons
+use literal icon keys instead of numeric adjustments. The legacy importer
 translates old `-N` subtraction into `+-N` to preserve its effect. The Hard Mode
 expanded-sheet grammar below remains a separate format.
 
@@ -414,8 +415,22 @@ the [Enemy Balance workflow](../docs/enemy-difficulty-workshop.md).
 **Consumables** has a page per `ItemClass`: Medical, Grenades, Devices, Chems,
 Sploitkits and Matrix, plus explicitly named pages for new classes. Each page
 joins item stats, actions, effects and matrix effects into one table with one
-row per item and grouped column headings. Saved item/action pointers determine
-the join. Separate self/target effects get separate column groups when needed;
+row per item and grouped column headings. **Tag** selects the gameplay category
+(Medical, Combat Drug and the other official tags). Changing it immediately
+moves the item to its destination section, carrying pending stat and visual
+edits with it. This view update writes nothing until **Save**; a refused update
+keeps pending edits and offers **Retry view update**.
+
+**Talent icon** edits the linked `Talent.IconPng`; **Item model** edits
+`Item.Asset3DTypeId`. **Talent asset** separately edits `Talent.ExtraAsset`
+where applicable. Medical and drug choices share a themed pool; thrown
+grenades use their own pool, including healing grenades. Other item families
+keep their own choices. Original and current assignments remain available for
+resetting. Shared talent visuals use one stored adjustment and identify other
+items using the record in their tooltips.
+
+Saved and pending item/action pointers determine the join. Separate self/target
+effects get separate column groups when needed;
 a common target is represented once. Missing targets are named as unresolved,
 and absent links have no editable cells. Each cell retains its native
 table/id/column address for saving. Shared actions and effects keep one stored

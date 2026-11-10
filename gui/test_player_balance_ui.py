@@ -11,6 +11,17 @@ model = serve.App({'gameDir': '', 'configDirOverride': str(config), 'stripReadme
 laser = next(p for p in model['playerBalance']['pages'] if p['id'] == 'weapon-17')['grids'][0]
 model['playerBalance']['document']['tables'].setdefault('Weapon', {}).setdefault(laser['rows'][0]['id'], {})[laser['columns'][0]['name']] = '=7'
 
+# Read-only view fixtures let the Node DOM test exercise asynchronous tag moves.
+with serve.static_data.StaticData() as preview_source:
+    preview_doc = serve.player_balance.apply_edits(model['playerBalance']['document'], {'cells': [
+        {'table': 'Item', 'id': '9', 'column': 'ItemClass', 'value': '1'}]}, preview_source, config)
+preview_catalog = serve.player_balance.catalog(config, serve.static_data.DEFAULT_DB, document=preview_doc)
+assert not preview_catalog['error'], preview_catalog['error']
+model['_consumablePreviews'] = {
+    'original': [p for p in model['playerBalance']['pages'] if p['group'] == 'Consumables'],
+    'moved': [p for p in preview_catalog['pages'] if p['group'] == 'Consumables'],
+}
+
 ASSERTIONS = r'''
 setTimeout(async function () {
   let passed = 0;
@@ -380,6 +391,51 @@ setTimeout(async function () {
   const fallbackLaser=MODEL.playerBalance.pages.find(p=>p.id==='weapon-17').grids[0];
   const fallbackTrident=fallbackLaser.rows.find(r=>r.id==='25016');
   ck('cyberweapon service references use the same implant availability labels', playerService(fallbackLaser,fallbackTrident).label==='Mission');
+  const consumableSnapshot=JSON.stringify(W.player), originalPlayerPages=MODEL.playerBalance.pages, originalApi=api;
+  const itemNine=MODEL.playerBalance.pages.filter(p=>p.group==='Consumables').flatMap(p=>p.grids).flatMap(g=>g.rows).find(r=>r.id==='9');
+  let previewFailure=false;
+  api=async function(path,body) {
+    if(path!=='/api/player-preview') return originalApi(path,body);
+    if(previewFailure) return {ok:false,error:'Fixture view update refused'};
+    const moved=body.playerBalance.cells.some(c=>c.table==='Item' && c.id==='9' && c.column==='ItemClass' && c.value==='1');
+    return {ok:true,pages:JSON.parse(JSON.stringify(MODEL._consumablePreviews[moved ? 'moved' : 'original']))};
+  };
+  SEL='pb:consumable-4';render();
+  const itemSelector=(suffix)=>find(n=>n.tagName==='SELECT' && n.getAttribute('aria-label')===itemNine.name+' '+suffix)[0];
+  ck('consumables expose a category selector and linked talent icon and item model', !!itemSelector('tag') && !!itemSelector('talent icon') && !!itemSelector('item model'));
+  const pendingItemCost=find(n=>n.tagName==='INPUT' && n.getAttribute('data-player-target')==='Item 9.Cost')[0];
+  pendingItemCost.value='17';pendingItemCost.fire('input');
+  itemSelector('tag').value='1';itemSelector('tag').fire('change');await PLAYER_PREVIEW_STATE.promise;
+  ck('changing a consumable tag immediately moves it to the new section', SEL==='pb:consumable-1'
+    && find(n=>n.tagName==='TR' && n.getAttribute('data-player-row')==='Item 9').length===1);
+  ck('a tag move preserves pending native item stat edits', W.player.tables.Item['9'].Cost==='17'
+    && buildEdits().playerBalance.cells.some(c=>c.table==='Item' && c.id==='9' && c.column==='ItemClass' && c.value==='1'));
+  ck('Medical and Combat Drug menus do not mix in grenade icons or models', !itemSelector('talent icon').children.some(n=>n.value==='talent_item_grenade')
+    && !itemSelector('item model').children.some(n=>['25','26'].includes(n.value)));
+  itemSelector('talent icon').value='talent_item_bandage';itemSelector('talent icon').fire('change');await PLAYER_PREVIEW_STATE.promise;
+  ck('talent icon edits keep a literal value and the linked native talent id', buildEdits().playerBalance.cells.some(c=>
+    c.table==='Talent' && c.id==='75014' && c.column==='IconPng' && c.value==='talent_item_bandage'));
+  itemSelector('item model').value='1001';itemSelector('item model').fire('change');await PLAYER_PREVIEW_STATE.promise;
+  ck('item model edits retain their native item address', buildEdits().playerBalance.cells.some(c=>
+    c.table==='Item' && c.id==='9' && c.column==='Asset3DTypeId' && c.value==='1001'));
+  itemSelector('tag').value='';itemSelector('tag').fire('change');await PLAYER_PREVIEW_STATE.promise;
+  ck('resetting a tag returns the item without discarding its other edits', SEL==='pb:consumable-4'
+    && W.player.tables.Item['9'].Cost==='17' && W.player.tables.Talent['75014'].IconPng==='talent_item_bandage'
+    && itemSelector('item model').value==='1001');
+  previewFailure=true;itemSelector('tag').value='1';itemSelector('tag').fire('change');await PLAYER_PREVIEW_STATE.promise;
+  ck('a refused view update preserves the pending tag and gives a retry', W.player.tables.Item['9'].ItemClass==='1'
+    && panel.textContent.includes('Fixture view update refused') && find(n=>n.tagName==='BUTTON' && n.textContent==='Retry view update').length===1);
+  previewFailure=false;find(n=>n.tagName==='BUTTON' && n.textContent==='Retry view update')[0].fire('click');await PLAYER_PREVIEW_STATE.promise;
+  ck('retry rebuilds the correct destination without losing pending edits', SEL==='pb:consumable-1' && itemSelector('talent icon').value==='talent_item_bandage');
+  SEL='pb:consumable-2';render();
+  const grenadeGrid=MODEL.playerBalance.pages.find(p=>p.id==='consumable-2').grids[0], grenadeRow=grenadeGrid.rows.find(r=>r.id==='3');
+  const grenadeAsset=find(n=>n.tagName==='SELECT' && n.getAttribute('aria-label')===grenadeRow.name+' talent asset')[0];
+  ck('grenade talents expose a separate asset picker with grenade models', !!grenadeAsset
+    && grenadeAsset.children.some(n=>n.value==='25') && !grenadeAsset.children.some(n=>n.value==='1001'));
+  grenadeAsset.value='25';grenadeAsset.fire('change');await PLAYER_PREVIEW_STATE.promise;
+  ck('extra talent assets save separately from inventory models', buildEdits().playerBalance.cells.some(c=>
+    c.table==='Talent' && c.id==='75000' && c.column==='ExtraAsset' && c.value==='25'));
+  W.player=JSON.parse(consumableSnapshot);MODEL.playerBalance.pages=originalPlayerPages;api=originalApi;PLAYER_PREVIEW_STATE.error='';
   SEL='pb:traits';render();
   ck('traits have score subsections', find(function(n) {return n.tagName==='SUMMARY' && n.textContent.startsWith('Trait score ');}).length>1);
   ck('trait effects display their owners', find(function(n) {return n._cls().includes('pb-section-name');}).length>0);

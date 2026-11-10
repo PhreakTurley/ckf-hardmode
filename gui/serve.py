@@ -5592,6 +5592,29 @@ class App:
         except (ValueError, OSError, static_data.DataError) as exc:
             raise SaveRefused({'summary': 'Player tuning was not saved', 'detail': str(exc)})
 
+    def api_player_preview(self, change, expect=None):
+        """Rebuild consumable views from pending tuning without writing config."""
+        with self.lock:
+            cd = config_dir_for(self.settings)
+            if self.static_source is False:
+                return {'ok': False, 'error': 'Official data is required to update consumable views.'}
+            if expect:
+                now = self.current_fingerprints(cd)
+                moved = sorted(k for k, value in expect.items() if k in now and now[k] != value)
+                if moved:
+                    return {'ok': False, 'error': 'The config changed on disk; reload before updating the view.', 'stale': moved}
+            try:
+                with static_data.StaticData(self.data_source()) as source:
+                    if change.get('databaseSha') != player_balance.identity(source)['sha256']:
+                        raise ValueError('Official data changed; reload before updating the view.')
+                    draft = player_balance.apply_edits(player_balance.load(cd), change, source, cd)
+                catalog = player_balance.catalog(cd, self.data_source(), document=draft)
+                if catalog['error']:
+                    raise ValueError(catalog['error'])
+                return {'ok': True, 'pages': [p for p in catalog['pages'] if p['group'] == 'Consumables']}
+            except (ValueError, OSError, static_data.DataError) as exc:
+                return {'ok': False, 'error': str(exc)}
+
     def api_validate(self, edits, strip_readme=None):
         with self.lock:
             doc, model, extras, cd, _rec = self.snapshot()
@@ -5789,6 +5812,8 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(body, dict):
             return self._json(400, {'error': 'body must be an object'})
         try:
+            if path == '/api/player-preview':
+                return self._json(200, self.app.api_player_preview(body.get('playerBalance') or {}, body.get('fingerprints')))
             if path == '/api/validate':
                 return self._json(200, self.app.api_validate(body.get('edits') or {},
                                                              body.get('stripReadme')))
