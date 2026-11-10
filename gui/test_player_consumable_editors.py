@@ -43,6 +43,43 @@ class ConsumableEditorTests(unittest.TestCase):
             self.assertFalse({'ItemClass', 'Asset3DTypeId', 'Action.ExtraAsset', 'Action.IconPng'} &
                              {c['name'] for c in grid['columns'] + grid['advanced']})
 
+    def test_consumable_source_metadata_uses_drop_flags_and_story_grants(self):
+        with static_data.StaticData() as source:
+            expected = {str(r[0]) for r in source.connection.execute("""
+                SELECT DISTINCT OutputId FROM Blueprint b WHERE BlueprintClassId=3
+                AND (Lootable=1 OR EXISTS (SELECT 1 FROM MissionLoot l
+                     WHERE l.LootTypeId=1 AND l.LootKey=b.BlueprintId))""")}
+        rows = item_rows(self.model)
+        self.assertEqual({rid for rid, (_, _, r) in rows.items() if r['blueprintDrops']}, expected)
+        for _, grid, _ in rows.values():
+            self.assertEqual(grid['blueprintColumn']['label'], 'Blueprint')
+            self.assertTrue(grid['serviceColumn']['fallbackNonpositive'])
+            self.assertTrue(grid['serviceColumn']['fallbackUnavailable'])
+        self.assertEqual(rows['1100'][2]['serviceFallback']['label'], 'Mission')
+        self.assertIn('BlockCondition 875 AddItem', rows['1100'][2]['serviceFallback']['detail'])
+
+    def test_item_sources_follow_the_weapon_mission_only_policy(self):
+        class Source:
+            def read(self, model, required=()):
+                if model == 'BlueprintModel':
+                    specs = [('11','3','1','0'), ('12','3','2','0'), ('13','3','3','1'),
+                             ('14','3','4','0'), ('15','3','5','0'), ('16','1','6','1')]
+                    return [], [dict(zip(('BlueprintId','BlueprintClassId','OutputId','Lootable'), r)) for r in specs]
+                if model == 'BlockConditionModel':
+                    specs = [('101','AddItem','7'), ('102','Item','8'), ('103','AddItem','9')]
+                    return [], [dict(zip(('BlockConditionId','ConditionType','ConditionValue'), r)) for r in specs]
+                specs = [('1','1','11','9000'), ('2','1','12','2002'), ('3','2','4','9000'),
+                         ('4','2','5','9000'), ('5','2','5','1009'), ('6','1','15','9000'),
+                         ('7','8','6','1000'), ('8','2','9','1003')]
+                return [], [dict(zip(('MissionLootId','LootTypeId','LootKey','LootGroupId'), r)) for r in specs]
+        actual = pb.item_service_fallbacks(Source())
+        self.assertEqual({rid: value['label'] for rid, value in actual.items()},
+                         {'1':'Mission', '2':'Blueprint', '3':'Blueprint', '4':'Mission',
+                          '5':'Loot / Blueprint', '7':'Mission', '9':'Loot'})
+        refs = pb.blueprint_drop_references(Source(), ('Item',))['Item']
+        self.assertEqual(set(refs), {'1','2','3','5'})
+        self.assertIn('Blueprint 11 via MissionLoot 1', refs['1'])
+
     def test_pending_tag_and_visuals_regroup_without_changing_saved_tuning(self):
         with tempfile.TemporaryDirectory() as config, static_data.StaticData() as source:
             doc = pb.apply_edits(pb.empty(), {'cells': [

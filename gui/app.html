@@ -2069,6 +2069,22 @@ function refreshConsumableViews(destination) {
   return PLAYER_PREVIEW_STATE.promise;
 }
 
+function consumableVisualValue(grid, row, kind) {
+  const editor=grid.consumableEditor, item=row.consumable, talent=item.talent;
+  if (kind!=='model' && !talent) return null;
+  const table=kind==='model' ? grid.table : editor.talentTable;
+  const id=kind==='model' ? row.id : talent.id;
+  const column=kind==='model' ? editor.modelColumn : kind==='icon' ? editor.iconColumn : editor.talentAssetColumn;
+  const base=kind==='model' ? item.modelBase : kind==='icon' ? talent.iconBase : talent.assetBase;
+  if (kind==='icon') return ((((W.player.tables || {})[table] || {})[id] || {})[column]) || base;
+  return playerEffectiveColumnValue({table:table},{id:id,baseline:{[column]:base}},{name:column,integer:true});
+}
+
+function consumableVisualVisible(grid, kind, showAll) {
+  if (showAll) return true;
+  return new Set(grid.rows.map(function(row) {return consumableVisualValue(grid,row,kind);})).size>1;
+}
+
 function consumableSelect(grid, row, kind) {
   const editor=grid.consumableEditor, item=row.consumable, talent=item.talent;
   if (kind!=='tag' && kind!=='model' && !talent) return el('td',{class:'readonly',text:'—',title:'This item has no linked talent.'});
@@ -2300,10 +2316,9 @@ function renderPlayer(panel, page) {
         {blueprint:true,width:Math.ceil(playerTextWidth(grid.blueprintColumn.label,true)+24),
          column:{label:grid.blueprintColumn.label,name:'blueprint'}});
       if (grid.consumableEditor) {
-        const selectors=[{kind:'tag',label:'Tag'},{kind:'icon',label:'Talent icon'},{kind:'model',label:'Item model'}];
-        if (showAll.checked || grid.rows.some(function(r) {return r.consumable.talent &&
-            (r.consumable.talent.assetCurrent!=='0' || ((grid.consumableEditor.families[r.consumable.family] || {}).extras || []).length>1);}))
-          selectors.push({kind:'extra',label:'Talent asset'});
+        const selectors=[{kind:'tag',label:'Tag'}];
+        for (const control of [{kind:'icon',label:'Talent icon'},{kind:'model',label:'Item model'},{kind:'extra',label:'Talent asset'}])
+          if (consumableVisualVisible(grid,control.kind,showAll.checked)) selectors.push(control);
         displayCols.splice(leading+(grid.serviceColumn ? 1 : 0),0,...selectors.map(function(c) {
           return {consumable:c.kind,width:c.kind==='tag' ? 155 : 170,column:{label:c.label,name:c.kind}};
         }));

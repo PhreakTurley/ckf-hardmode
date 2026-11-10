@@ -137,11 +137,14 @@ class PlayerDisplayTests(unittest.TestCase):
                     specs = [('11', '3', '1', '1'), ('12', '1', '2', '1'), ('13', '3', '3', '0'),
                              ('14', '3', '4', '0')]
                     return [], [dict(zip(('BlueprintId', 'BlueprintClassId', 'OutputId', 'Lootable'), r)) for r in specs]
-                specs = [('1', '2', '1'), ('2', '2', '2'), ('3', '1', '13'), ('4', '8', '4'), ('5', '10', '5')]
-                return [], [dict(zip(('MissionLootId', 'LootTypeId', 'LootKey'), r)) for r in specs]
+                if model == 'BlockConditionModel':
+                    return [], []
+                specs = [('1', '2', '1', '1000'), ('2', '2', '2', '1000'), ('3', '1', '13', '9000'),
+                         ('4', '8', '4', '1000'), ('5', '10', '5', '1000')]
+                return [], [dict(zip(('MissionLootId', 'LootTypeId', 'LootKey', 'LootGroupId'), r)) for r in specs]
         actual = pb.item_service_fallbacks(Source())
         self.assertEqual({rid: r['label'] for rid, r in actual.items()},
-                         {'1': 'Loot / Blueprint', '2': 'Loot', '3': 'Blueprint'})
+                         {'1': 'Loot / Blueprint', '2': 'Loot', '3': 'Mission'})
         self.assertIn('MissionLoot 3', actual['3']['detail'])
 
 

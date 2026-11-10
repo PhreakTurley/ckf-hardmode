@@ -435,6 +435,50 @@ setTimeout(async function () {
   grenadeAsset.value='25';grenadeAsset.fire('change');await PLAYER_PREVIEW_STATE.promise;
   ck('extra talent assets save separately from inventory models', buildEdits().playerBalance.cells.some(c=>
     c.table==='Talent' && c.id==='75000' && c.column==='ExtraAsset' && c.value==='25'));
+  SEL='pb:consumable-1';render();
+  const medicalGrid=MODEL.playerBalance.pages.find(p=>p.id==='consumable-1').grids[0];
+  const cloud=medicalGrid.rows.find(r=>r.id==='27');
+  ck('consumables show a read-only Blueprint column with native source details', blueprintCell('Item','27').textContent==='Blueprint'
+     && blueprintCell('Item','27').title.includes('Blueprint 27') && !blueprintCell('Item','27').find(n=>n.tagName==='INPUT').length);
+  ck('nonpositive consumable services use loot and blueprint availability', playerService(medicalGrid,cloud).label==='Loot / Blueprint');
+  const itemServiceSnapshot=JSON.stringify(W.player);
+  W.player.tables.Item['27']={...(W.player.tables.Item['27'] || {}),ServiceOptionId:'999999'};
+  ck('unknown consumable services fall back to availability', playerService(medicalGrid,cloud).label==='Loot / Blueprint');
+  const cappedItemGrid={...medicalGrid,serviceColumn:{...medicalGrid.serviceColumn,options:{'999999':{label:'Hidden shop',attainable:false,detail:'Beyond cap'}}}};
+  ck('capped consumable services are suppressed in favor of other sources', playerService(cappedItemGrid,cloud).label==='Loot / Blueprint');
+  const realItemService=Object.keys(medicalGrid.serviceColumn.options).find(k=>Number(k)>0 && medicalGrid.serviceColumn.options[k].attainable!==false);
+  W.player.tables.Item['27'].ServiceOptionId=realItemService;
+  ck('attainable consumable service names take precedence', playerService(medicalGrid,cloud).label===medicalGrid.serviceColumn.options[realItemService].label);
+  W.player=JSON.parse(itemServiceSnapshot);
+  SEL='pb:consumable-4';render();
+  const chemsGrid=MODEL.playerBalance.pages.find(p=>p.id==='consumable-4').grids[0];
+  const storyItem=chemsGrid.rows.find(r=>r.id==='1100');
+  ck('explicit story consumables show Mission without inventing loot or blueprint availability', playerService(chemsGrid,storyItem).label==='Mission'
+     && !playerBlueprint(chemsGrid,storyItem).label);
+  const visualPlayerSnapshot=JSON.stringify(W.player);
+  const consumableVisualRow=chemsGrid.rows.find(r=>r.consumable.talent);
+  const visualSelector=suffix=>find(n=>n.tagName==='SELECT' && n.getAttribute('aria-label')===consumableVisualRow.name+' '+suffix)[0];
+  for (const row of chemsGrid.rows) {
+    const item=W.player.tables.Item[row.id] || (W.player.tables.Item[row.id]={});item.Asset3DTypeId='1001';
+    const talent=row.consumable.talent;if(!talent) continue;
+    const fields=W.player.tables.Talent[talent.id] || (W.player.tables.Talent[talent.id]={});
+    fields.IconPng='talent_item_bandage';fields.ExtraAsset='0';
+  }
+  render();
+  ck('uniform consumable icons and both model assignments hide automatically after edits', !visualSelector('talent icon') && !visualSelector('item model')
+     && !visualSelector('talent asset'));
+  ck('hidden consumable visuals keep their native pending edits', buildEdits().playerBalance.cells.some(c=>
+     c.table==='Talent' && c.id===consumableVisualRow.consumable.talent.id && c.column==='IconPng' && c.value==='talent_item_bandage'));
+  const consumableAll=find(n=>n.tagName==='INPUT' && n.getAttribute('type')==='checkbox')[0];
+  consumableAll.checked=true;consumableAll.fire('change');
+  ck('Show all exposes uniform consumable visuals for further editing', !!visualSelector('talent icon') && !!visualSelector('item model') && !!visualSelector('talent asset'));
+  W.player.tables.Item[consumableVisualRow.id].Asset3DTypeId='1002';W.player.tables.Talent[consumableVisualRow.consumable.talent.id].IconPng='combatdrug10';
+  consumableAll.checked=false;consumableAll.fire('change');
+  ck('different pending consumable visuals make the columns visible again', !!visualSelector('talent icon') && !!visualSelector('item model') && !visualSelector('talent asset'));
+  W.player=JSON.parse(visualPlayerSnapshot);
+  SEL='pb:consumable-6';render();
+  ck('a uniform no-talent consumable table hides empty icons and repeated models', !find(n=>n.tagName==='TH' && ['Talent icon','Item model','Talent asset'].includes(n.textContent)).length);
+  ck('consumable display changes do not create blueprint overrides', !buildEdits().playerBalance.cells.some(c=>c.column==='Blueprint'));
   W.player=JSON.parse(consumableSnapshot);MODEL.playerBalance.pages=originalPlayerPages;api=originalApi;PLAYER_PREVIEW_STATE.error='';
   SEL='pb:traits';render();
   ck('traits have score subsections', find(function(n) {return n.tagName==='SUMMARY' && n.textContent.startsWith('Trait score ');}).length>1);

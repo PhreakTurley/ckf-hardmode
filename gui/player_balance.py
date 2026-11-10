@@ -55,8 +55,11 @@ SERVICE_FLOWS = {'Weapon': '1', 'WeaponMod': '3', 'Item': '7', 'Implant': '8'}
 # _id_constants.csv: WeaponDeprecated, Weapon, WeaponMod, BlueprintWeapon,
 # BlueprintWeaponMod and BlueprintWeaponModIntrinsic. Other explicit loot
 # references alone do not establish a general loot route.
-GENERIC_GEAR_LOOT_GROUPS = {'Weapon': {'7000', '100000'}, 'WeaponMod': {'8000'}}
-GENERIC_BLUEPRINT_LOOT_GROUPS = {'Weapon': {'50000'}, 'WeaponMod': {'60000', '60001'}}
+GENERIC_GEAR_LOOT_GROUPS = {'Weapon': {'7000', '100000'}, 'WeaponMod': {'8000'},
+                            'Item': {'1000', '1001', '1002', '1003', '1009'}}
+GENERIC_BLUEPRINT_LOOT_GROUPS = {'Weapon': {'50000'}, 'WeaponMod': {'60000', '60001'},
+                                 'Item': {'2000', '2001', '2002', '2003'}}
+BLUEPRINT_OUTPUT_TABLES = {'1': 'Weapon', '3': 'Item', '5': 'WeaponMod', '7': 'Weapon'}
 LABELS = {'ApCost': 'AP cost', 'CritMultiBase': 'Crit damage', 'CritMultiStealth': 'Stealth crit damage',
           'ImplantStress': 'Stress', 'InstallTime': 'Install time', 'BaseCost': 'Price',
           'BallisticDamage1': 'Ballistic · 1', 'BallisticDamage2': 'Ballistic · 2',
@@ -280,20 +283,20 @@ def _effective_enemy_ids(source, config_dir, column):
     return {r.get(column) for r in rows.values()}
 
 
-def blueprint_drop_references(source):
+def blueprint_drop_references(source, tables=('Weapon', 'WeaponMod')):
     """Positive blueprint-drop evidence, keyed by output table and id.
 
-    Constants.BlueprintClass: Weapon=1, WeaponMod=5, PetWeapon=7.
+    Constants.BlueprintClass: Weapon=1, Item=3, WeaponMod=5, PetWeapon=7.
     LootTypes.Blueprint=1. Blueprint service assignments are not drop evidence.
     """
-    refs = {'Weapon': {}, 'WeaponMod': {}}
+    refs = {table: {} for table in tables}
     loot = {}
     for row in source.read('MissionLootModel', ('MissionLootId', 'LootKey', 'LootTypeId'))[1]:
         if row['LootTypeId'] == '1':
             loot.setdefault(row['LootKey'], []).append(row['MissionLootId'])
     for row in source.read('BlueprintModel', ('BlueprintId', 'OutputId', 'BlueprintClassId', 'Lootable'))[1]:
-        table = {'1': 'Weapon', '5': 'WeaponMod', '7': 'Weapon'}.get(row['BlueprintClassId'])
-        if not table:
+        table = BLUEPRINT_OUTPUT_TABLES.get(row['BlueprintClassId'])
+        if table not in refs:
             continue
         prefix = 'Blueprint ' + row['BlueprintId']
         evidence = ([prefix + ' (Lootable)'] if row['Lootable'] == '1' else [])
@@ -376,8 +379,8 @@ def player_gear_references(source, doc=None, blueprint_refs=None, source_kinds=N
                 add(table, row['LootKey'], 'MissionLoot ' + row['MissionLootId'], 'loot')
     if blueprint_refs is None:
         blueprint_refs = blueprint_drop_references(source)
-    for table, records in blueprint_refs.items():
-        for rid, evidence in records.items():
+    for table in rows:
+        for rid, evidence in blueprint_refs[table].items():
             for reference in evidence:
                 add(table, rid, reference, 'blueprint')
 
@@ -495,23 +498,23 @@ def implant_service_fallbacks(acquisition, source_kinds):
 
 def gear_service_fallbacks(source, acquisition, source_kinds):
     """Describe non-service availability; the renderer still resolves services first."""
-    routes = {'Weapon': {}, 'WeaponMod': {}}
+    routes = {table: {} for table in acquisition}
 
     def route(table, rid):
         return routes[table].setdefault(rid, {'loot': False, 'blueprint': False, 'generic': False})
 
     blueprint_outputs = {}
     for row in source.read('BlueprintModel', ('BlueprintId', 'OutputId', 'BlueprintClassId', 'Lootable'))[1]:
-        table = {'1': 'Weapon', '5': 'WeaponMod', '7': 'Weapon'}.get(row['BlueprintClassId'])
-        if not table:
+        table = BLUEPRINT_OUTPUT_TABLES.get(row['BlueprintClassId'])
+        if table not in routes:
             continue
         blueprint_outputs[row['BlueprintId']] = table, row['OutputId']
         if row['Lootable'] == '1':
             entry = route(table, row['OutputId'])
             entry.update(blueprint=True, generic=True)
     for row in source.read('MissionLootModel', ('LootTypeId', 'LootKey', 'LootGroupId'))[1]:
-        table = {'8': 'Weapon', '10': 'WeaponMod'}.get(row['LootTypeId'])
-        if table:
+        table = {'8': 'Weapon', '10': 'WeaponMod', '2': 'Item'}.get(row['LootTypeId'])
+        if table in routes:
             entry = route(table, row['LootKey'])
             entry['loot'] = True
             entry['generic'] |= row['LootGroupId'] in GENERIC_GEAR_LOOT_GROUPS[table]
@@ -521,7 +524,7 @@ def gear_service_fallbacks(source, acquisition, source_kinds):
             entry['blueprint'] = True
             entry['generic'] |= row['LootGroupId'] in GENERIC_BLUEPRINT_LOOT_GROUPS[table]
 
-    result = {'Weapon': {}, 'WeaponMod': {}}
+    result = {table: {} for table in acquisition}
     other_labels = (('crafting', 'Crafting'), ('cyberware', 'Cyberware'), ('pet', 'Pet'))
     for table, records in acquisition.items():
         for rid, evidence in records.items():
@@ -538,27 +541,28 @@ def gear_service_fallbacks(source, acquisition, source_kinds):
     return result
 
 
-def item_service_fallbacks(source):
-    """Non-service item drops: LootTypes.Item=2, Constants.BlueprintClass.Item=3.
+def item_service_fallbacks(source, blueprint_refs=None):
+    """Use the weapon source policy for typed item drops and blueprints.
 
-    BlueprintClass is declared in CoreRPG_v1.dll metadata; LootTypes is captured
-    in sheets/raw/_id_constants.csv. Keep output ids scoped to the Item table.
+    LootTypes.Item=2 and the generic Item/BlueprintItem groups are captured in
+    sheets/raw/_id_constants.csv. BlueprintClass.Item=3 is declared in
+    CoreRPG_v1.dll metadata. Output ids remain scoped to the Item table.
     """
-    refs = {}
-    blueprint_loot = {}
+    if blueprint_refs is None:
+        blueprint_refs = blueprint_drop_references(source, ('Item',))['Item']
+    refs = copy.deepcopy(blueprint_refs)
     for row in source.read('MissionLootModel', ('MissionLootId', 'LootTypeId', 'LootKey'))[1]:
         if row['LootTypeId'] == '2':
-            refs.setdefault(row['LootKey'], {}).setdefault('Loot', []).append('MissionLoot ' + row['MissionLootId'])
-        elif row['LootTypeId'] == '1':
-            blueprint_loot.setdefault(row['LootKey'], []).append('MissionLoot ' + row['MissionLootId'])
-    for row in source.read('BlueprintModel', ('BlueprintId', 'BlueprintClassId', 'OutputId', 'Lootable'))[1]:
-        if row['BlueprintClassId'] == '3' and (row['Lootable'] == '1' or row['BlueprintId'] in blueprint_loot):
-            evidence = refs.setdefault(row['OutputId'], {}).setdefault('Blueprint', [])
-            evidence.append('Blueprint ' + row['BlueprintId'])
-            evidence.extend(blueprint_loot.get(row['BlueprintId'], []))
-    return {rid: {'label': ' / '.join(kind for kind in ('Loot', 'Blueprint') if kind in kinds),
-                  'detail': 'Availability references:\n' + '\n'.join(e for evidence in kinds.values() for e in evidence)}
-            for rid, kinds in refs.items()}
+            refs.setdefault(row['LootKey'], []).append('MissionLoot ' + row['MissionLootId'])
+    kinds = {}
+    # Explicit story grant: official BlockCondition 875 names Item 1100;
+    # Dialog.D_PGen_Amnesia_M1_Intro.10 describes the carried EPI-X injectors.
+    for row in source.read('BlockConditionModel', ('BlockConditionId', 'ConditionType', 'ConditionValue'))[1]:
+        if row['ConditionType'] == 'AddItem':
+            rid = row['ConditionValue']
+            refs.setdefault(rid, []).append('BlockCondition ' + row['BlockConditionId'] + ' AddItem')
+            kinds.setdefault(rid, set()).add('mission')
+    return gear_service_fallbacks(source, {'Item': refs}, {'Item': kinds})['Item']
 
 
 def special_rules(source):
@@ -881,13 +885,13 @@ def catalog(config_dir, database, document=None):
                        for t in TABLE_KEYS}
             assets = {r['WeaponModelId']: r for r in source.read('Weapon3DAssetModel')[1]}
             services = service_catalog(source)
-            blueprint_refs = blueprint_drop_references(source)
+            blueprint_refs = blueprint_drop_references(source, ('Weapon', 'WeaponMod', 'Item'))
             source_kinds = {}
             acquisition = player_gear_references(source, doc, blueprint_refs, source_kinds)
             service_fallbacks = gear_service_fallbacks(source, acquisition, source_kinds)
             acquisition.update(player_implant_references(source, doc, source_kinds))
             service_fallbacks['Implant'] = implant_service_fallbacks(acquisition, source_kinds)
-            service_fallbacks['Item'] = item_service_fallbacks(source)
+            service_fallbacks['Item'] = item_service_fallbacks(source, blueprint_refs['Item'])
             item_links, item_owners = consumable_links(allrows, doc)
             cyberware_links, implant_owners = implant_links(allrows, doc)
             for trait in allrows['Trait'].values():
@@ -944,6 +948,7 @@ def catalog(config_dir, database, document=None):
                         records[-1]['serviceFallback'] = service_fallbacks['Implant'].get(rid,
                             {'label': '', 'detail': 'No known player acquisition reference; retained for its overrides.'})
                     if table == 'Item':
+                        records[-1]['blueprintDrops'] = blueprint_refs['Item'].get(rid, [])
                         records[-1]['serviceFallback'] = service_fallbacks['Item'].get(rid,
                             {'label': '', 'detail': 'No known item loot or blueprint drop reference.'})
                     if table == 'Rule' and rid in ENEMY_RULES:
@@ -958,11 +963,12 @@ def catalog(config_dir, database, document=None):
                     result_grid['defaultSort'] = {'key': 'column:Cost', 'descending': False}
                 if table in ('Weapon', 'WeaponMod'):
                     result_grid['dynamicColumns'] = True
+                if table in ('Weapon', 'WeaponMod', 'Item'):
                     result_grid['blueprintColumn'] = {'label': 'Blueprint',
                         'empty': 'No blueprint drop reference in the selected database.'}
                 if table in services:
                     result_grid['serviceColumn'] = {'name': 'ServiceOptionId', 'options': services[table],
-                                                    'fallbackNonpositive': table != 'Item', 'fallbackUnavailable': table == 'Implant'}
+                                                    'fallbackNonpositive': True, 'fallbackUnavailable': table in ('Implant', 'Item')}
                 return result_grid
 
             def joined_grid(base_table, rows, title, base_heading, links, owners, blocks, hidden=()):

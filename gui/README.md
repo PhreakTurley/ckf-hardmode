@@ -302,9 +302,12 @@ marker within each `(ServiceFlow, ServiceGroupId)` ladder. The lowest marked
 regardless of their `DisplayLevel`. Ladders without a marker remain included.
 Above-cap services cannot establish weapon, mod or cyberware acquisition and are suppressed
 from Service labels, including options shared with an attainable service.
-Weapon/mod rows fall back to their other acquisition labels below. Consumables
-fall back to **Loot**, **Blueprint**, or both, using typed item and blueprint
-output references. Their nonpositive assignments retain **Unassigned**.
+Weapon/mod and consumable rows fall back to their other acquisition labels
+below. Consumables use typed item and blueprint output references, including
+explicit story `AddItem` grants. Nonpositive, unknown and above-cap consumable
+service assignments use **Mission**, **Loot**, **Blueprint**, or both drop labels
+according to those references; rows without a known source have a blank label
+and an explanatory tooltip.
 Cyberware without an attainable service shows **Starting Gear**, **Mission**,
 or **Starting Gear / Mission**, according to its inclusive eligibility sources.
 This applies to nonpositive, unknown and above-cap assignments, and to linked
@@ -316,8 +319,9 @@ acquisition route keeps the gear in its normal catalog. Otherwise only rows with
 in **Other weapon overrides**, until those overrides are cleared and saved.
 This is an editor filtering policy, not a complete campaign reachability check.
 Saved and pending service adjustments affect the label; service names are
-searchable. Matched service names always take precedence. For weapon and
-weapon-mod grids, nonpositive assignments instead show their availability:
+searchable. Matched service names always take precedence. For weapon,
+weapon-mod and consumable grids, nonpositive assignments instead show their
+availability:
 **Mission** only when explicit loot/story references are the sole route;
 otherwise **Loot**, **Blueprint**, or **Loot / Blueprint** according to item and
 blueprint sources. Membership in a generic item or blueprint pool, or a
@@ -426,8 +430,12 @@ keeps pending edits and offers **Retry view update**.
 where applicable. Medical and drug choices share a themed pool; thrown
 grenades use their own pool, including healing grenades. Other item families
 keep their own choices. Original and current assignments remain available for
-resetting. Shared talent visuals use one stored adjustment and identify other
-items using the record in their tooltips.
+resetting. Uniform talent-icon, item-model and talent-asset columns hide
+automatically, including when pending edits make them identical. **Show all
+columns** reveals them for editing. Consumables also show the read-only
+**Blueprint** drop marker used by weapons and mods. Shared talent visuals use
+one stored adjustment and identify other items using the record in their
+tooltips.
 
 Saved and pending item/action pointers determine the join. Separate self/target
 effects get separate column groups when needed;
