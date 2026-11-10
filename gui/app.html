@@ -235,6 +235,11 @@ body:not(.technical) table.grid .technical-key{display:none}
 .pb-heading h2{font-size:23px;margin:0;font-weight:600}
 .pb-tools{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:10px 0}
 .pb-tools input[type=search]{width:26ch}
+table.class-grid{min-width:0}
+table.class-grid th{max-width:none;white-space:nowrap;overflow-wrap:normal}
+table.class-grid td input{min-width:0;font-variant-numeric:tabular-nums}
+table.grid.class-grid td.annotation{min-width:0}
+.class-grid .node-name{white-space:nowrap}
 table.pb-grid{min-width:0;table-layout:fixed}
 table.pb-grid th{min-width:0;max-width:none!important;white-space:nowrap;word-break:normal}
 .pb-grid td input{font-variant-numeric:tabular-nums;min-width:0}
@@ -3229,6 +3234,16 @@ function overlayInput(ov, rel, ri, ci, opts) {
   return inp;
 }
 
+function overlayContentWidth(ov, rel, rows, column, heading) {
+  let width=playerTextWidth(heading,true);
+  for (const row of rows) {
+    const value=W.overlays[rel].cells[row.i][column.i] || '';
+    const ship=((ov.shipped || {})[String(row.i)] || {})[column.c.name];
+    width=Math.max(width,playerTextWidth(value,false),playerTextWidth(ship===undefined ? '—' : String(ship),false));
+  }
+  return Math.ceil(width+16);
+}
+
 function overlayBlock(sch, rel, sectionTitle) {
   const ov = overlayEntry(rel);
   const block = el('div', { class: 'field', style: 'grid-template-columns:1fr' });
@@ -3354,8 +3369,19 @@ function overlayBlock(sch, rel, sectionTitle) {
 
   const wrap = el('div', { class: 'grid-wrap' });
   const tbl = el('table', { class: 'grid' });
-  const leadComments = (ov.groupOrder || []).length
-    ? ctlCols.filter(function (v) {return v.c.annotation;}) : [];
+  const fitColumns=(ov.groupOrder || []).length>0;
+  if (fitColumns) tbl.classList.add('class-grid');
+  const leadComments = fitColumns ? ctlCols.filter(function (v) {return v.c.annotation;}) : [];
+  const annotationWidths={};
+  for (const v of leadComments) {
+    let width=playerTextWidth('Node & details',true);
+    for (const row of gridRows) {
+      const lines=String(row.cells[v.i] || '').split(/\n| \| /);
+      width=Math.max(width,playerTextWidth(lines[0],false),
+        ...lines.slice(1).flatMap(function(line) {return line.split(/\s+/).map(function(word) {return playerTextWidth(word,false);});}));
+    }
+    annotationWidths[v.i]=Math.ceil(width+20);
+  }
   const head = [el('th', {class:leadComments.length ? 'technical-key' : '', text: ov.keyColumn + ' (key)' })];
   const tailControls = ctlCols.filter(function (v) {return leadComments.indexOf(v) < 0;});
   for (const v of leadComments)
@@ -3376,16 +3402,24 @@ function overlayBlock(sch, rel, sectionTitle) {
   const labelOf = function (n) {
     const l = (ov.labels || {})[n];
     return l ? l.label : n; };
+  const valueHeaders={},valueInputs={};
+  function resizeColumn(v) {
+    const header=valueHeaders[v.i];
+    const width=overlayContentWidth(ov,rel,gridRows,v,header.textContent);
+    header.setAttribute('style','width:'+width+'px');
+    for (const input of valueInputs[v.i]) input.setAttribute('style','width:'+width+'px');
+  }
   for (const v of valCols) {
     const l = (ov.labels || {})[v.c.name];
-    head.push(el('th', { class: v.flat ? 'constant' : '',
+    const header=el('th', { class: v.flat ? 'constant' : '',
                          text: CKF.softWrap(labelOf(v.c.name))
                                + (v.c.op === 'set' ? '' : ' [' + v.c.op + ']'),
                          title: v.c.name + ' — ' + v.c.op
                                 + (l ? '; here it is ' + l.why : '')
                                 + '; an empty cell leaves the column alone'
                                 + (v.flat ? '; it holds one value on every row '
-                                            + 'and is normally collapsed' : '') }));
+                                            + 'and is normally collapsed' : '') });
+    head.push(header);valueHeaders[v.i]=header;valueInputs[v.i]=[];
   }
   for (const v of tailControls)
     head.push(el('th', { class: v.flat ? 'constant' : '',
@@ -3413,7 +3447,8 @@ function overlayBlock(sch, rel, sectionTitle) {
         r.suffix ? el('span', { class: 'pill na', text: r.suffix }) : null]));
       for (const v of leadComments) {
         const lines = String(r.cells[v.i] || '').split(/\n| \| /);
-        tr.appendChild(el('td', {class: 'ro annotation'}, lines.map(function (text, i) {
+        tr.appendChild(el('td', {class: 'ro annotation',
+          style:'width:'+annotationWidths[v.i]+'px;max-width:'+annotationWidths[v.i]+'px'}, lines.map(function (text, i) {
           return el('span', {class: i ? 'node-detail' : 'node-name', text: text});
         })));
       }
@@ -3440,6 +3475,10 @@ function overlayBlock(sch, rel, sectionTitle) {
             host: td, width: null,
             baseClass: 'editable' + (v.flat ? ' constant' : '')
                        + (mark ? ' shared' : '') });
+          if (fitColumns) {
+            valueInputs[v.i].push(inp);
+            inp.addEventListener('input',function() {resizeColumn(v);});
+          }
           td.appendChild(inp);
           if (mark) {
             const who2 = (mark.others || []).map(function (o) {
@@ -3490,6 +3529,7 @@ function overlayBlock(sch, rel, sectionTitle) {
     }
   }
   tbl.appendChild(tb);
+  if (fitColumns) for (const v of valCols) resizeColumn(v);
   wrap.appendChild(tbl);
   block.appendChild(wrap);
   // STAYS ON SCREEN: an expander mark, and the warning that shared-row marking

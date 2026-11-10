@@ -565,7 +565,11 @@ The `_node_kind` control classifies JobNodes as class roots, base talents,
 upgrades or attribute nodes using the dump's JobModel and SubTree references.
 These controls are not editable or exported as SQL fields.
 Comments appear beside node ids; `_shipped` supplies the placeholders. The installed editor
-reads this information from the live sheets and requires no dump.
+reads this information from the live sheets and requires no dump. Class grids
+size columns from their headings, shipped values and current edits, without
+stretching to fill the panel. Typing a longer value grows its column; clearing
+it restores the width required by the remaining values. Node names fit their
+column and their descriptions wrap beneath them.
 
 An explicit override is red, including zero and a value equal to its baseline.
 Blank cells use the **ships N** placeholder. Numeric shipped values other than
