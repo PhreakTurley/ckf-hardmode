@@ -32,6 +32,10 @@ setTimeout(async function () {
   ck('surprised accuracy has its Workshop owner', MODEL.playerBalance.pages.find(function(p) {return p.id==='rules';}).grids.some(function(g) {return g.rows.some(function(r) {return r.id==='22';});}));
   const normalImplants=MODEL.playerBalance.pages.filter(p=>p.id.startsWith('implant-')).flatMap(p=>p.grids).filter(g=>g.table==='Implant').flatMap(g=>g.rows);
   const otherImplants=MODEL.playerBalance.pages.filter(p=>p.id==='other-cyberware-overrides').flatMap(p=>p.grids).flatMap(g=>g.rows);
+  const normalConsumables=MODEL.playerBalance.pages.filter(p=>p.group==='Consumables' && p.id!=='other-consumable-overrides').flatMap(p=>p.grids).flatMap(g=>g.rows);
+  const otherConsumables=MODEL.playerBalance.pages.filter(p=>p.id==='other-consumable-overrides').flatMap(p=>p.grids).flatMap(g=>g.rows);
+  ck('normal consumable tables contain only items with positive acquisition references', normalConsumables.length>0 && normalConsumables.every(r=>r.acquisition.length));
+  ck('unreachable consumable overrides are kept out of normal tables', otherConsumables.every(r=>!r.acquisition.length && !normalConsumables.some(n=>n.id===r.id)));
   ck('normal cyberware rows have positive acquisition references', normalImplants.length>0 && normalImplants.every(r=>r.acquisition && r.acquisition.length));
   ck('unreachable cyberware overrides stay separate from the normal catalog', otherImplants.every(r=>!r.acquisition.length
      && !normalImplants.some(n=>n.id===r.id)));

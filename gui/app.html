@@ -2121,7 +2121,8 @@ function consumableSelect(grid, row, kind) {
     const record=records[id] || (records[id]={});
     if (select.value && select.value!==base) record[column]=select.value;else delete record[column];
     select.disabled=true;updateDirty();
-    refreshConsumableViews(isTag ? 'consumable-'+(record[column] || base) : null);
+    refreshConsumableViews(isTag ? ((row.acquisition || []).length
+      ? 'consumable-'+(record[column] || base) : 'other-consumable-overrides') : null);
   });
   return td;
 }
@@ -2131,7 +2132,7 @@ function renderPlayer(panel, page) {
     el('span', {class:'small', text:'Workshop player balance'})]));
   if (page.description) panel.appendChild(el('p', {class:'doc',text:page.description}));
   if (page.group==='Consumables') {
-    panel.appendChild(el('p',{class:'doc',text:'Tag changes move items to their matching section. Medical and drug visuals share a pool; grenade visuals stay separate. Talent icon, item model and extra talent asset can be changed independently. The first choice restores the official assignment. Save, then export to Modkit to apply changes.'}));
+    panel.appendChild(el('p',{class:'doc',text:(page.id==='other-consumable-overrides' ? 'Tag changes keep unavailable items in this section. ' : 'Tag changes move items to their matching section. ')+'Medical and drug visuals share a pool; grenade visuals stay separate. Talent icon, item model and extra talent asset can be changed independently. The first choice restores the official assignment. Save, then export to Modkit to apply changes.'}));
     if (PLAYER_PREVIEW_STATE.error) panel.appendChild(el('div',{class:'banner err'},[
       el('span',{text:PLAYER_PREVIEW_STATE.error+' Pending edits are preserved. '}),
       el('button',{text:'Retry view update',onclick:function() {refreshConsumableViews(PLAYER_PREVIEW_STATE.destination);}})]));

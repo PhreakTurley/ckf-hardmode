@@ -417,12 +417,25 @@ Balance refuses to save or export an override for it. Its export owner remains
 the [Enemy Balance workflow](../docs/enemy-difficulty-workshop.md).
 
 **Consumables** has a page per `ItemClass`: Medical, Grenades, Devices, Chems,
-Sploitkits and Matrix, plus explicitly named pages for new classes. Each page
-joins item stats, actions, effects and matrix effects into one table with one
+Sploitkits and Matrix, plus explicitly named pages for new classes. Normal
+tables include only items with a positive player acquisition reference: an
+attainable item service (official or adjusted), direct item loot, a droppable
+or explicitly looted item blueprint, or an explicit story item grant. Story
+grants include `AddItem` and positive `Item` rewards with `OptionId = 7`;
+other item types and removal conditions do not qualify.
+
+**Other consumable overrides** retains items without those sources while the
+item or its linked talent/effects have adjustments, including literal icon
+assignments and explicit zeroes. Clear those adjustments and save to remove
+the rows; unsaved view updates keep existing saved rows available for review.
+The remaining tuning is preserved.
+
+Each table joins item stats, actions, effects and matrix effects with one
 row per item and grouped column headings. **Tag** selects the gameplay category
-(Medical, Combat Drug and the other official tags). Changing it immediately
-moves the item to its destination section, carrying pending stat and visual
-edits with it. This view update writes nothing until **Save**; a refused update
+(Medical, Combat Drug and the other official tags). For obtainable items,
+changing it immediately moves the item to its destination section, carrying
+pending stat and visual edits with it. Unavailable items stay in the override
+section when their tag changes. This view update writes nothing until **Save**; a refused update
 keeps pending edits and offers **Retry view update**.
 
 **Talent icon** edits the linked `Talent.IconPng`; **Item model** edits

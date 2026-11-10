@@ -541,8 +541,8 @@ def gear_service_fallbacks(source, acquisition, source_kinds):
     return result
 
 
-def item_service_fallbacks(source, blueprint_refs=None):
-    """Use the weapon source policy for typed item drops and blueprints.
+def item_drop_references(source, blueprint_refs=None):
+    """Typed item drops, blueprints and explicit story grants.
 
     LootTypes.Item=2 and the generic Item/BlueprintItem groups are captured in
     sheets/raw/_id_constants.csv. BlueprintClass.Item=3 is declared in
@@ -557,11 +557,38 @@ def item_service_fallbacks(source, blueprint_refs=None):
     kinds = {}
     # Explicit story grant: official BlockCondition 875 names Item 1100;
     # Dialog.D_PGen_Amnesia_M1_Intro.10 describes the carried EPI-X injectors.
-    for row in source.read('BlockConditionModel', ('BlockConditionId', 'ConditionType', 'ConditionValue'))[1]:
-        if row['ConditionType'] == 'AddItem':
+    # BlockCondition 596 grants three Item 1000 with OptionId=7;
+    # Dialog.D_Carnivore_SploitWin.3 names the three Sigma 6 Sploitkits.
+    for row in source.read('BlockConditionModel', ('BlockConditionId', 'ConditionType', 'ConditionValue',
+                                                  'OptionId', 'ConditionCount'))[1]:
+        if row['ConditionType'] == 'AddItem' or (row['ConditionType'] == 'Item' and
+                row['OptionId'] == '7' and int(row['ConditionCount']) > 0):
             rid = row['ConditionValue']
-            refs.setdefault(rid, []).append('BlockCondition ' + row['BlockConditionId'] + ' AddItem')
+            refs.setdefault(rid, []).append('BlockCondition ' + row['BlockConditionId'] + ' ' + row['ConditionType'])
             kinds.setdefault(rid, set()).add('mission')
+    return refs, kinds
+
+
+def player_item_references(source, doc=None, blueprint_refs=None):
+    """Inclusive positive item sources, including official and tuned services."""
+    doc = doc or empty()
+    rows = source.read('ItemModel')[1]
+    known = {r['ItemTypeId'] for r in rows}
+    drops, _ = item_drop_references(source, blueprint_refs)
+    refs = {rid: evidence for rid, evidence in drops.items() if rid in known}
+    services = [r for r in contact_services(source) if r['ServiceFlow'] == SERVICE_FLOWS['Item']
+                and r['attainable'] and int(r['ServiceOptionId']) > 0]
+    for row in rows:
+        options = {row['ServiceOptionId'], str(int(effective(doc, 'Item', row, 'ServiceOptionId')))}
+        for service in services:
+            if service['ServiceOptionId'] in options:
+                refs.setdefault(row['ItemTypeId'], []).append('ContactService ' + service['ServiceTypeId'])
+    return {'Item': refs}
+
+
+def item_service_fallbacks(source, blueprint_refs=None):
+    """Use the weapon source-label policy for non-service item references."""
+    refs, kinds = item_drop_references(source, blueprint_refs)
     return gear_service_fallbacks(source, {'Item': refs}, {'Item': kinds})['Item']
 
 
@@ -869,7 +896,8 @@ def cyberweapon_links(allrows, doc, weapons):
 def catalog(config_dir, database, document=None):
     """Build rows and visible columns from a fresh, complete official read."""
     try:
-        doc = load(config_dir) if document is None else copy.deepcopy(document)
+        saved_doc = load(config_dir)
+        doc = saved_doc if document is None else copy.deepcopy(document)
     except (ValueError, OSError) as exc:
         return {'document': empty(), 'file': FILE, 'pages': [], 'error': str(exc), 'database': None}
     result = {'document': doc, 'file': FILE, 'pages': [], 'error': None, 'database': None}
@@ -892,6 +920,7 @@ def catalog(config_dir, database, document=None):
             acquisition.update(player_implant_references(source, doc, source_kinds))
             service_fallbacks['Implant'] = implant_service_fallbacks(acquisition, source_kinds)
             service_fallbacks['Item'] = item_service_fallbacks(source, blueprint_refs['Item'])
+            acquisition.update(player_item_references(source, doc, blueprint_refs['Item']))
             item_links, item_owners = consumable_links(allrows, doc)
             cyberware_links, implant_owners = implant_links(allrows, doc)
             for trait in allrows['Trait'].values():
@@ -948,9 +977,10 @@ def catalog(config_dir, database, document=None):
                         records[-1]['serviceFallback'] = service_fallbacks['Implant'].get(rid,
                             {'label': '', 'detail': 'No known player acquisition reference; retained for its overrides.'})
                     if table == 'Item':
+                        records[-1]['acquisition'] = acquisition['Item'].get(rid, [])
                         records[-1]['blueprintDrops'] = blueprint_refs['Item'].get(rid, [])
                         records[-1]['serviceFallback'] = service_fallbacks['Item'].get(rid,
-                            {'label': '', 'detail': 'No known item loot or blueprint drop reference.'})
+                            {'label': '', 'detail': 'No known player acquisition reference; retained for its overrides.'})
                     if table == 'Rule' and rid in ENEMY_RULES:
                         records[-1]['owner'] = 'Enemy Balance'
                 raw = {r[TABLE_KEYS[table]]: r for r in rows}
@@ -1188,14 +1218,7 @@ def catalog(config_dir, database, document=None):
                 page('other-weapon-overrides', 'Other weapon overrides', 'Weapons', other_grids,
                      description='These records have no known player acquisition reference. They remain here while they have overrides. Clear their overrides and save to remove them from this page.')
             item_editors = consumable_editors(source, allrows, assets, doc, item_owners)
-            item_classes = {int(r['ItemClass']) for r in allrows['Item'].values()}
-            item_classes.update(int(effective(doc, 'Item', r, 'ItemClass')) for r in allrows['Item'].values())
-            for cls in sorted(item_classes):
-                items = [r for r in allrows['Item'].values() if int(effective(doc, 'Item', r, 'ItemClass')) == cls]
-                title = ITEM_CLASSES.get(cls, 'Item class %s' % cls)
-                if not items:
-                    page('consumable-%s' % cls, title, 'Consumables', [], description='No items currently use this tag.')
-                    continue
+            def consumable_grid(items, title):
                 separate_effects = any(len({item_links[r['ItemTypeId']]['ids'][name]
                                             for name in ('Self effect', 'Target effect')} - {'0', '-1', ''}) > 1 for r in items)
                 blocks = [('Action', 'Talent')]
@@ -1208,7 +1231,35 @@ def catalog(config_dir, database, document=None):
                         ('ItemClass', 'Asset3DTypeId', 'Action.ExtraAsset')]
                 for record in item_grid['rows']:
                     record['consumable'] = item_editors['rows'][record['id']]
-                page('consumable-%s' % cls, title, 'Consumables', [item_grid])
+                return item_grid
+
+            player_items = [r for r in allrows['Item'].values() if r['ItemTypeId'] in acquisition['Item']]
+            item_classes = {int(r['ItemClass']) for r in player_items}
+            item_classes.update(int(effective(doc, 'Item', r, 'ItemClass')) for r in player_items)
+            for cls in sorted(item_classes):
+                items = [r for r in player_items if int(effective(doc, 'Item', r, 'ItemClass')) == cls]
+                title = ITEM_CLASSES.get(cls, 'Item class %s' % cls)
+                page('consumable-%s' % cls, title, 'Consumables', [consumable_grid(items, title)] if items else [],
+                     description='' if items else 'No obtainable items currently use this tag.')
+
+            def item_has_overrides(row):
+                rid = row['ItemTypeId']
+                linked = item_links[rid]
+                targets = [('Item', rid)] + [(table, linked['ids'][heading])
+                    for heading, table in (('Action', 'Talent'), ('Self effect', 'Effect'),
+                                           ('Target effect', 'Effect'), ('Matrix effects', 'MatrixEffect'))
+                    if linked[heading] is not None]
+                return any(str(value).strip() for tuning in (doc, saved_doc) for table, target in targets
+                           for value in tuning['tables'].get(table, {}).get(target, {}).values())
+
+            other_items = [r for r in allrows['Item'].values()
+                           if r['ItemTypeId'] not in acquisition['Item'] and item_has_overrides(r)]
+            if other_items:
+                page('other-consumable-overrides', 'Other consumable overrides', 'Consumables',
+                     [consumable_grid(other_items, 'Other consumables')],
+                     description='These items have no known player acquisition reference. '
+                                 'They remain here while the item or its linked talent/effects have overrides. '
+                                 'Clear those overrides and save to remove them from this page.')
             page('implant-global', 'All cyberware', 'Cyberware', [], multipliers=MULTIPLIERS)
             player_implants = [r for r in allrows['Implant'].values() if r['ImplantTypeId'] in acquisition['Implant']]
             for slot in sorted({int(r['ImplantSlot']) for r in player_implants},
