@@ -1443,6 +1443,15 @@ def sql(doc, source, config_dir=None):
     return statements, touched
 
 
+def validate_native_updates(payload):
+    """An UPDATE needs an assignment in addition to its identity and metadata."""
+    for table, key in TABLE_KEYS.items():
+        for row in payload.get(table, []):
+            if str(row.get('SQL', '')).lower() == 'update' and not set(row) - {key, 'SQL', '#'}:
+                raise ValueError('%s %s: SQL update needs at least one field to set beyond %s.' %
+                                 (table, row.get(key, '?'), key))
+
+
 def augment(data, provenance, config_dir, database):
     """Append Workshop data without modifying the native talent assignments."""
     payload, receipt = json.loads(data), json.loads(provenance)
@@ -1471,15 +1480,28 @@ def augment(data, provenance, config_dir, database):
             row.pop('Icon')
     if manual_icons:
         receipt['manual_attribute_icon_nodes'] = manual_icons
+    # Replacing an automatic icon can consume the record's only assignment.
+    # Its manual replacement is already in RawSQL; the empty native UPDATE is
+    # not a second edit and is rejected by the official parser.
+    omitted = [r['JobNodeId'] for r in payload.get('JobNode', [])
+               if str(r['JobNodeId']) in manual_icons and not set(r) - {'JobNodeId', 'SQL', '#'}]
+    if omitted:
+        payload['JobNode'] = [r for r in payload['JobNode'] if r['JobNodeId'] not in omitted]
+        receipt['omitted_native_icon_updates'] = omitted
     for table, key in TABLE_KEYS.items():
         for row in payload.get(table, []):
             for col in row:
                 if (table, str(row[key]), aliases.get(table, {}).get(col, col)) in touched:
                     raise ValueError('Talent and player tuning both own %s %s %s' % (table, row[key], col))
     payload['RawSQL'] = statements
+    validate_native_updates(payload)
     data = encode(payload)
     receipt['scope'] = 'player talents, weapons, cyberware, consumables, leverage, traits and rules (excluding Enemy Balance Rule 82 and standalone Rules 83-85)'
     receipt['parser_source']['sha256'] = hashlib.sha256(data).hexdigest()
+    receipt['parser_source']['records'] = sum(len(payload.get(table, [])) for table in TABLE_KEYS)
+    if 'merged_update_records_by_table' in receipt:
+        for table in receipt['merged_update_records_by_table']:
+            receipt['merged_update_records_by_table'][table] = len(payload.get(table, []))
     receipt['player_balance'] = {'source': FILE, 'sha256': hashlib.sha256((Path(config_dir) / FILE).read_bytes()).hexdigest(),
                                  'statements': len(statements), 'assignments': len(touched)}
     return data, encode(receipt), receipt

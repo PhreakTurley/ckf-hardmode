@@ -14,11 +14,12 @@ values happen to agree. The editor writes the live files and keeps no backup.
 
 | File | Role |
 |---|---|
-| `serve.py` | Stdlib-only server. Does all file I/O and all validation. |
+| `serve.py` | Stdlib-only server, guarded saves, and validation coordination. |
 | `app.html` | The page. No CDN, no build step. Names no file, field, column or cfg key. |
 | `settings.json` | Per-machine game/config paths, `stripReadme`, and optional Modkit paths. Not committed. |
 | `modkit.py` | Guarded handoff of talent and player-balance sources to Modkit. |
 | `player_balance.py` | Workshop tuning, official-data catalogs, and SQL generation. |
+| `enemy_armor.py` | Enemy armor catalog, shared authoring-sheet edits, and preparation handoff. |
 | `ckf-config-editor.spec` | PyInstaller spec used by `scripts/make_release.py`. |
 
 ## Run the editor from source
@@ -154,7 +155,12 @@ mapped enum numbers to the parser's named values, and validates the final native
 records against its field, type and value-mapping declarations. Unknown or
 ambiguous mappings refuse the handoff before replacing any output. The contract
 is fingerprinted with the other inputs and its hash is recorded in provenance.
-Preparing SQL, installing locally, and submitting remain uploader actions.
+The handoff rejects native updates containing only an ID. An explicit icon
+override replaces the automatic icon assignment without leaving an empty update.
+Before replacing any output, the editor also runs the installed Modkit parser
+with the selected contract in a temporary directory. This requires PowerShell 7
+and the installed Mod Uploader. Preparing the upload directory, installing
+locally, and submitting remain uploader actions.
 
 ### Workshop player catalogs
 
@@ -491,6 +497,35 @@ guards and verifies a batch that imports legacy cyberware adjustments, clears
 their old cells, neutralizes the old global settings, and clears the two moved
 or retired combat-rule cells. It refuses to overwrite existing player tuning.
 
+## Enemy armors
+
+**Enemy Gear → Enemy Armors** shows shipped armor referenced by enemies and
+all authored armor rows, including clones. Each row says **Shipped** or
+**Clone**, with the clone's donor ID. An **Also used by players** marker identifies
+positive contact-service, mission-loot or player-pet references; its tooltip
+lists the references. This is a catalog check, not a calculation of campaign
+availability.
+
+Saving writes stat cells to the existing live `ckf.hardmode.d/ArmorModel.csv`
+(or its parked `.disabled` file). Empty cells inherit: shipped rows use Official
+data, while clones use their donor after authored donor adjustments. Clone
+identities and controls remain unchanged. The page shares this authoring source
+with the [Enemy Difficulty exporter](../docs/enemy-difficulty-workshop.md).
+
+After saving, **Prepare Hard Mode + Workshop** prepares one payload for both
+Hard Mode's bundled Enemy Rebalance and the selected Enemy Difficulty Modkit
+project. It runs the installed parser, the independent enemy verifier and the
+player/enemy application-order check before guarded writes. It updates the
+bundle receipt and the Modkit project's sources and prepared SQL/locales.
+Use the uploader to install locally or publish; preparation does not activate mods.
+
+Set **Source checkout** to this repository and **Enemy Difficulty
+Modkit folder** to its initialized `WorkshopContent/EnemyDifficulty` directory.
+These paths persist as `enemySourceDir` and `enemyModkitProjectDir` in the editor's
+settings. Preparation requires the maintainer checkout and its roster-policy
+inputs, Python, PowerShell 7 and the installed Mod Uploader. A normal Hard Mode
+installation uses the prepared bundle without these tools.
+
 ## What it edits
 
 Every file a schema names in `targets`, all under `BepInEx/config/`:
@@ -501,7 +536,10 @@ Every file a schema names in `targets`, all under `BepInEx/config/`:
 | `ckf.hardmode.d/*.json` | Ten settings documents stamped `4.1.0` (`difficulty`, `elapse`, `fatigue`, `implants-global`, `missions`, `modelrules`, `powerlevel`, `rewardcurve`, `selfcheck`, `teampl`), plus `MissionPowerLevelModel.generated.json`, which the editor regenerates from `teampl.json` and never edits directly. |
 | `ckf.hardmode.d/*.csv` | The overlay and lever sheets a schema lists in `targets.overlays`. Only lever cells are editable. |
 
-Not opened: `ArmorModel.csv`, `WeaponModel.csv` and `MonsterTypeModel.csv`, the generated enemy-gear overlays, which no schema claims. The nav's *Enemy Gear* group says so. `ckf.hardmode.selfcheck.csv` is not edited either.
+The dedicated [Enemy Armors](#enemy-armors) page reads `ArmorModel.csv` and
+`MonsterTypeModel.csv` outside the generic schema overlay grids. It edits only
+armor stat cells. `WeaponModel.csv`, monster rows, and `ckf.hardmode.selfcheck.csv`
+are not edited.
 
 ## How editing works
 
@@ -751,7 +789,7 @@ python gui\serve.py --selftest --frozen-exe dist\CKF-Config-Editor.exe
 ```
 
 - The output is a single file; nothing is installed on the player's machine.
-- Run the spec from the repo root. It bundles `gui/app.html`, `schema/*.schema.json`, `schema/check_schema.py`, `scripts/gen_teampl_labels.py` and `docs/mission-reference.json`. `check_schema` and `gen_teampl_labels` are both hidden imports and data files. Keep `check_schema.py` as a data file: together with the `--schema` that `run_check_schema_entry` adds when the caller names none, it is what lets the frozen checker find the schemas. Remove both and the exe validates nothing.
+- Run the spec from the repo root. It bundles `gui/app.html`, `schema/*.schema.json`, `schema/check_schema.py`, `scripts/gen_teampl_labels.py`, the Modkit parser runner `scripts/prepare_enemy_difficulty.ps1`, and `docs/mission-reference.json`. `check_schema` and `gen_teampl_labels` are both hidden imports and data files. Keep `check_schema.py` as a data file: together with the `--schema` that `run_check_schema_entry` adds when the caller names none, it is what lets the frozen checker find the schemas. Remove both and the exe validates nothing.
 - `console=True`, so the listening URL and any traceback stay visible. `upx=False`, because UPX-packed exes get flagged by antivirus.
 - The bundle keeps the repo layout (`gui/`, `schema/`, `scripts/`, `docs/`) under `sys._MEIPASS`, so `serve.py` derives every path the same way it does in a checkout.
 - Frozen, settings are written beside the exe as `CKF-Config-Editor.settings.json`, which after install is the game root. `_MEIPASS` is deleted when the exe exits.

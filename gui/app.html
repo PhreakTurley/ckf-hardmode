@@ -265,6 +265,7 @@ table.pb-grid th{min-width:0;max-width:none!important;white-space:nowrap;word-br
 body.technical .pb-grid .pb-name small{display:block}
 .pb-grid .pb-name small.pb-fit{display:block;color:var(--dim);white-space:normal;line-height:1.4;margin-top:3px}
 .pb-grid .pb-name .pb-enemy{display:block;color:#f4c17b;font-size:11px;font-weight:600;margin-top:4px}
+.pb-grid .pb-name .pb-origin{display:table;margin-top:4px}
 .pb-grid .pb-name .pb-owner{display:block;color:var(--dim);font-size:11px;margin-top:4px}
 .pb-rule-notes{max-width:80ch;margin-top:24px}
 .pb-rule{margin:16px 0}
@@ -1231,6 +1232,7 @@ function buildWorking() {
   w.contactTurns = {};
   for (const key of ['minimum', 'maximum']) w.contactTurns[key] = (MODEL.contactBreaks || {}).document ? String(MODEL.contactBreaks.document[key]) : '';
   w.partyMaximum = (MODEL.partySize || {}).document ? String(MODEL.partySize.document.maximum) : '';
+  w.enemyArmor = JSON.parse(JSON.stringify((MODEL.enemyArmor || {}).values || {}));
   w.player = JSON.parse(JSON.stringify((MODEL.playerBalance || {}).document || {}));
   return w;
 }
@@ -1273,6 +1275,7 @@ function dirtyPaths() {
   }
   for (const c of overlayDirtyCells())
     out.push(c.rel + ':' + c.key.join('/') + '.' + c.col);
+  for (const c of enemyArmorChanges().cells) out.push('Enemy armor '+c.id+'.'+c.column);
   for (const c of playerChanges().cells) out.push(c.table + ':' + c.id + '.' + c.column);
   if (playerChanges().removedJobNodes) out.push('Removed job nodes');
   for (const k of Object.keys(playerChanges().implantMultipliers)) out.push('All cyberware:' + k);
@@ -1340,6 +1343,8 @@ function buildEdits() {
   }
   if (partyChanged()) edits.partySize = {format:1, maximum:Number(W.partyMaximum)};
   if (contactChanged()) edits.contactBreaks = {format:1, minimum:Number(W.contactTurns.minimum), maximum:Number(W.contactTurns.maximum)};
+  const enemy=enemyArmorChanges();
+  if (enemy.cells.length) edits.enemyArmor=enemy;
   const player = playerChanges();
   if (player.cells.length || Object.keys(player.implantMultipliers).length || player.removedJobNodes) edits.playerBalance = player;
   return edits;
@@ -1815,6 +1820,15 @@ function playerRound(value) {
   return value - floor === 0.5 ? (floor % 2 === 0 ? floor : floor + 1) : Math.round(value);
 }
 
+function enemyArmorChanges() {
+  const out={cells:[],databaseSha:(((MODEL.enemyArmor || {}).database || {}).sha256)};
+  for (const id in (W.enemyArmor || {})) for (const column in W.enemyArmor[id]) {
+    const before=(((MODEL.enemyArmor || {}).values || {})[id] || {})[column] || '';
+    if (W.enemyArmor[id][column]!==before) out.cells.push({id:id,column:column,value:W.enemyArmor[id][column]});
+  }
+  return out;
+}
+
 function playerChanges() {
   const out = {cells:[], implantMultipliers:{}, databaseSha:((MODEL.playerBalance || {}).database || {}).sha256};
   const old = (MODEL.playerBalance || {}).document || {};
@@ -1849,6 +1863,8 @@ function playerCell(grid, row, column) {
   const target = row.targets ? row.targets[column.name] : {table:grid.table,id:row.id,column:column.name};
   if (!target) return null;
   const fields = ((W.player.tables || {})[target.table] || {})[target.id] || {};
+  if (target.enemyArmor) return {target:target,value:(W.enemyArmor[target.id] || {})[target.column] || '',
+    base:row.baseline[column.name],multiplier:1,readOnly:false};
   if (target.generated!==undefined) return {target:target,value:'',base:target.generated,multiplier:1,
     readOnly:true,readOnlyReason:target.readOnlyReason};
   if (target.overlay) return {target:target,value:W.overlays[target.overlay].cells[target.row][target.ci] || '',
@@ -2120,7 +2136,7 @@ function consumableSelect(grid, row, kind) {
 
 function renderPlayer(panel, page) {
   panel.appendChild(el('div', {class:'pb-heading'}, [el('h2', {text:page.title}),
-    el('span', {class:'small', text:page.talents ? 'Talent balance' : 'Workshop player balance'})]));
+    el('span', {class:'small', text:page.enemyArmor ? 'Enemy balance' : page.talents ? 'Talent balance' : 'Workshop player balance'})]));
   if (page.gateSchema) panel.appendChild(gateControl(page.gateSchema,entryOf(page.gateSchema.subsystem)));
   if (page.description) panel.appendChild(el('p', {class:'doc',text:page.description}));
   if (page.group==='Consumables') {
@@ -2135,7 +2151,7 @@ function renderPlayer(panel, page) {
     el('label', {class:'small'}, [showAll,document.createTextNode(' Show all columns')]),
     el('span', {class:'small',text:'Red: override · Yellow: nonzero baseline'})]);
   if (page.grids.length) panel.appendChild(toolbar);
-  if (page.grids.length) panel.appendChild(el('p', {class:'doc',text:page.talents ? 'Numbers set values. Clear a cell to restore its baseline. Choose an icon or effect from the field’s suggestions. Save, then send to Modkit.' : 'A number sets the value, including negatives. +10 adds 10; x1.5 multiplies by 1.5. Clear a cell to restore its baseline.'}));
+  if (page.grids.length) panel.appendChild(el('p', {class:'doc',text:page.enemyArmor ? 'Enter whole numbers. Clear a cell to restore its baseline. Save, then Prepare Hard Mode + Workshop to apply changes.' : page.talents ? 'Numbers set values. Clear a cell to restore its baseline. Choose an icon or effect from the field’s suggestions. Save, then send to Modkit.' : 'A number sets the value, including negatives. +10 adds 10; x1.5 multiplies by 1.5. Clear a cell to restore its baseline.'}));
   if (page.grids.some(function(g) {return g.iconEditor;}))
     panel.appendChild(el('p', {class:'doc',text:page.iconHelp || 'Icon / model changes both visuals. The first choice restores the official assignment. Save, then send to Modkit.'}));
   if (page.grids.some(function(g) {return g.rows.some(function(r) {return r.enemyUse;});}))
@@ -2236,7 +2252,8 @@ function renderPlayer(panel, page) {
         const assetId = editor ? CKF.playerDisplayValue(fields[editor.column] || '') || r.baseline[editor.column] : '';
         const token = editor ? (editor.assets[assetId] || {}).token || '' : r.icon || '';
         return (r.name+' '+(r.weaponName || '')+' '+r.id+' '+(grid.category || '')+' '+(grid.subsection || '')+' '+(r.section || '')+' '+token+' '+playerService(grid,r).label
-          +' '+(grid.blueprintColumn ? playerBlueprint(grid,r).label : '')).toLocaleLowerCase().includes(query);
+          +' '+(grid.blueprintColumn ? playerBlueprint(grid,r).label : '')+' '+(r.origin || '')+' '+(r.cloneOf || '')
+          +' '+(r.playerUse ? 'Also used by players' : '')).toLocaleLowerCase().includes(query);
       });
       const gridKey = grid.key || grid.table;
       const sortId = page.id+':'+gridKey;
@@ -2272,7 +2289,7 @@ function renderPlayer(panel, page) {
         target = subsections[subsectionKey];
       }
       if (grid.title !== page.title) target.appendChild(el('h3', {text:grid.title}));
-      if (['Weapons','Drone weapons','Cyberware','Cyberware modules','Consumables'].includes(page.group)) {
+      if (['Weapons','Drone weapons','Cyberware','Cyberware modules','Consumables','Enemy Gear'].includes(page.group)) {
         const sortBy = el('select',{'aria-label':'Sort by '+page.title+' · '+grid.title});
         const choices = [{value:'',text:'Catalog order'},{value:'name',text:'Name'}];
         if (grid.serviceColumn) choices.push({value:'service',text:'Service'});
@@ -2315,6 +2332,7 @@ function renderPlayer(panel, page) {
       }
       const nameWidth = Math.ceil(Math.max(playerTextWidth('Name',true), ...grid.rows.map(function (r) {
         return Math.max(playerTextWidth(r.name,false), r.enemyUse ? playerTextWidth('Also used by enemies',false) : 0,
+          r.cloneOf ? playerTextWidth('Clone '+r.id+' (from '+r.cloneOf+')',false) : 0,
           r.fitment ? Math.min(320,playerTextWidth(r.fitment,false)) : 0);
       })) + 16);
       const iconWidth = !showIcon ? 0 : grid.iconEditor ? Math.ceil(Math.max(120,
@@ -2382,6 +2400,9 @@ function renderPlayer(panel, page) {
             W.player.removedJobNodes=Array.from(new Set((W.player.removedJobNodes || []).concat(row.nodeId)));
             paint();updateDirty();
           }}));
+        if (row.origin) nameCell.appendChild(el('span',{class:'pill pb-origin '+(row.cloneOf ? 'unknown pb-clone' : 'na'),
+          text:row.cloneOf ? 'Clone '+row.id+' (from '+row.cloneOf+')' : row.origin+' '+row.id}));
+        if (row.playerUse) nameCell.appendChild(el('span',{class:'pb-enemy',text:'Also used by players',title:(row.acquisition || []).join('\n')}));
         if (row.enemyUse) nameCell.appendChild(el('span', {class:'pb-enemy',text:'Also used by enemies',title:'Changing this weapon also affects enemies that use it.'}));
         if (row.owner) nameCell.appendChild(el('span', {class:'pb-owner',text:'Managed by '+row.owner}));
         if (row.fitment) nameCell.appendChild(el('small', {class:'pb-fit',text:row.fitment,title:row.fitmentSource}));
@@ -2464,7 +2485,8 @@ function renderPlayer(panel, page) {
             if (!cellViews.has(cellKey)) cellViews.set(cellKey,[]);
             cellViews.get(cellKey).push({input:input,style:style});
             input.addEventListener('input', function () {
-              if (targetCell.overlay) W.overlays[targetCell.overlay].cells[targetCell.row][targetCell.ci]=input.value;
+              if (targetCell.enemyArmor) W.enemyArmor[targetCell.id][targetCell.column]=input.value;
+              else if (targetCell.overlay) W.overlays[targetCell.overlay].cells[targetCell.row][targetCell.ci]=input.value;
               else {
                 const table = W.player.tables[targetCell.table] || (W.player.tables[targetCell.table] = {});
                 const record = table[targetCell.id] || (table[targetCell.id] = {});
@@ -3894,9 +3916,37 @@ function renderContact(panel) {
   card.appendChild(send);card.appendChild(status);
 }
 
+function renderEnemyArmor(panel) {
+  const model=MODEL.enemyArmor || {};
+  if (!model.page || model.error) {
+    panel.appendChild(el('h3',{text:'Enemy Armors'}));
+    panel.appendChild(banner('warn','Enemy armors unavailable',[model.error || 'Select the official content database.']));return;
+  }
+  if ((model.unresolvedShipped || []).length) panel.appendChild(banner('warn','Unresolved armor references',[model.unresolvedShipped.join(', ')]));
+  renderPlayer(panel,model.page);
+  const source=el('input',{type:'text',value:model.sourceDir || '',spellcheck:'false','aria-label':'Enemy balance source checkout'});
+  const folder=el('input',{type:'text',value:model.modkitDir || '',spellcheck:'false','aria-label':'Enemy Difficulty Modkit folder'});
+  panel.appendChild(el('div',{class:'field'},[el('label',{class:'lab',text:'Source checkout'}),source]));
+  panel.appendChild(el('div',{class:'field'},[el('label',{class:'lab',text:'Enemy Difficulty Modkit folder'}),folder]));
+  const status=el('p',{class:'small',role:'status','aria-live':'polite'});
+  const prepare=el('button',{id:'prepare-enemy',text:'Prepare Hard Mode + Workshop',disabled:!!dirtyPaths().length,
+    onclick:async function() {
+      prepare.disabled=true;status.textContent='Preparing enemy balance…';
+      try {
+        await api('/api/settings',{enemySourceDir:source.value.trim(),enemyModkitProjectDir:folder.value.trim()});
+        MODEL.enemyArmor.sourceDir=source.value.trim();MODEL.enemyArmor.modkitDir=folder.value.trim();
+        const result=await api('/api/enemy-prepare',{fingerprints:MODEL.fingerprints});
+        status.textContent=result.ok ? result.message : 'Preparation failed: '+result.error;
+      } catch(e) {status.textContent='Preparation failed: '+String(e);}
+      finally {updateDirty();}
+    }});
+  panel.appendChild(prepare);panel.appendChild(status);
+}
+
 function renderPanelContents() {
   const p = $('#panel');
   p.textContent = '';
+  if (SEL === (MODEL.enemyArmor || {}).sectionId) {renderEnemyArmor(p);return;}
   if (SEL === 'party-size') {renderParty(p);return;}
   if (SEL === 'contact-breaks') {renderContact(p);return;}
   const playerPage = ((MODEL.playerBalance || {}).pages || []).find(function (page) {return SEL === 'pb:' + page.id;});
@@ -3968,6 +4018,8 @@ function renderPanel() {
 // ---------------------------------------------------------------------------
 
 function updateDirty() {
+  const prepareEnemy=$('#prepare-enemy',$('#panel'));
+  if (prepareEnemy) prepareEnemy.disabled=!!dirtyPaths().length;
   const d = dirtyPaths();
   $('#dirty').textContent = d.length
     ? d.length + ' change(s) pending'

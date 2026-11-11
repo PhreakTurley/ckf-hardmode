@@ -20,6 +20,7 @@ This document is the single destination for the settings prose. A fact that is n
 | [CyberweaponsLasers](#cyberweaponslasers) | Eye Laser Cyberweapons | — | 1 | 1 | 1 |
 | [Difficulty](#difficulty) | Custom Difficulty Slider Range | `ckf.hardmode.d/difficulty.json` | 1 | 2 | 1 |
 | [Elapse](#elapse) | Mission Elapse Penalty | `ckf.hardmode.d/elapse.json` | 1 | 13 | 1 + 2 per-field gate(s) |
+| [EnemyArmor](#enemyarmor) | Enemy Armors | — | 0 | 0 | 0 |
 | [EnemyRebalance](#enemyrebalance) | Bundled Enemy Rebalance | — | 1 | 1 | 1 |
 | [Fatigue](#fatigue) | Mission Fatigue | `ckf.hardmode.d/fatigue.json` | 1 | 10 | 1 + 1 per-field gate(s) |
 | [GearClasses](#gearclasses) | Player Weapon Classes | — | 1 | 1 | 1 |
@@ -60,7 +61,7 @@ This document is the single destination for the settings prose. A fact that is n
 | [TalentsWraith](#talentswraith) | Wireghost Talent Balance | — | 1 | 1 | 1 |
 | [Progression](#progression) | Team Power Level Award | `ckf.hardmode.d/teampl.json` | 1 | 3 | 1 |
 
-49 subsystems, 49 cfg keys, 90 fields in total.
+50 subsystems, 49 cfg keys, 90 fields in total.
 
 ## Retroactive controls — read before changing these
 
@@ -943,6 +944,48 @@ On disk this is a JSON **array** of row objects. Sorted by `minPowerLevel`.
 | `minPowerLevel` | `int` | `0` to `25` |
 | `mercCount` | `int` | `0` to `12` |
 | `stressAmount` | `int` | `0` to `100` |
+
+### Invariants
+
+None declared.
+
+---
+
+## EnemyArmor
+
+**Enemy Armors** &nbsp;·&nbsp; no file of its own &nbsp;·&nbsp; declared in `schema/enemyarmor.schema.json`
+
+Edits the shared ArmorModel.csv authoring input for bundled Enemy Rebalance and Enemy Difficulty Workshop preparation. The catalog joins the selected official armor rows with authored clones and preserves their identities and clone controls.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Shipped enemy armor and authored clones. Save edits, then prepare both distributions.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+(no enable block declared in this schema)
+```
+
+**No gate of its own.** `enemyarmor.schema.json` declares no `enable` block, so this document can cite no per-subsystem switch for it.
+
+Outside every chain in this document sits `[General] Enabled`, the master switch in `ckf.hardmode.cfg`. Its bail-out in `Plugin.Load()` sits above every subsystem init, so `Enabled = false` stops every subsystem.
+
+### Fields
+
+0 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
 
 ### Invariants
 

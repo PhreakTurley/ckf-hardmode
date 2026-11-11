@@ -38,8 +38,9 @@ BepInEx/config/ckf.hardmode.rebalances/
 
 These are build outputs, not a second tuning source. Edit the live authoring
 files using the [balance editor](../gui/README.md#workshop-player-catalogs),
-then regenerate. The native SQL/locale packages are not edited by the frozen
-editor. Their authoring and parser toolchain is a maintainer requirement;
+then regenerate. The editor's [Enemy Armors preparation action](../gui/README.md#enemy-armors)
+regenerates the enemy package and the Enemy Difficulty Modkit payload together.
+The authoring and parser toolchain is a maintainer requirement;
 ordinary installation requires neither the Mod Uploader nor Workshop
 subscriptions.
 

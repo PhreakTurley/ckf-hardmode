@@ -2,16 +2,51 @@
 
 The standalone repository owns native talent mappings; player_balance owns
 the additional SQL. This module checks inputs and commits verified sources.
-It never prepares SQL, installs a mod, or submits a Workshop item.
+It preflights SQL in a temporary directory, never installs a mod or submits a Workshop item.
 """
 
 import hashlib
 import importlib.util
+import json
 import os
 from pathlib import Path
 import subprocess
+import shutil
+import sys
 import tempfile
 import player_balance
+
+
+def preflight_parser(data, mod, parser_config):
+    """Run the installed parser before a handoff; nothing is installed."""
+    root = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parents[1]))
+    script = root / 'scripts/prepare_enemy_difficulty.ps1'
+    engine = Path(mod).parent.parent
+    dll_name = 'CyberKnightsModkit_Data/Managed/DataParserNETStandard.dll'
+    if not (engine / dll_name).is_file():
+        engine = Path(r'C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Mod Uploader')
+    if not (engine / dll_name).is_file() or not script.is_file() or not shutil.which('pwsh'):
+        raise ValueError('Player export requires the installed Modkit parser and PowerShell 7 for validation.')
+    inputs = {path: state(path) for path in (script, engine / dll_name, Path(parser_config))}
+    with tempfile.TemporaryDirectory(prefix='ckf-player-parser-') as directory:
+        directory = Path(directory)
+        source = directory / 'source'
+        source.mkdir()
+        (source / 'stories.manifest').write_text('talent-balance.json\n', encoding='utf-8')
+        (source / 'talent-balance.json').write_bytes(data)
+        result = subprocess.run(['pwsh', '-NoProfile', '-File', str(script), '-SourceContent', str(source),
+            '-OutputDirectory', str(directory / '_data'), '-ModkitDirectory', str(engine),
+            '-SchemaPath', str(parser_config)], capture_output=True, text=True, timeout=180,
+            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+        if result.returncode:
+            raise ValueError('Modkit parser rejected player balance; nothing was sent. ' +
+                             (result.stderr or result.stdout)[-4000:].strip())
+        if not (directory / '_data/data.sql').is_file() or not (directory / '_data/en-US.json').is_file():
+            raise ValueError('Modkit parser produced an incomplete result; nothing was sent.')
+    for path, expected in inputs.items():
+        if state(path) != expected:
+            raise ValueError('Parser input changed during validation: ' + str(path))
+    return inputs
 
 
 def state(path):
@@ -176,8 +211,9 @@ def send(config_dir, project_dir, mod_dir, database=None):
     data, provenance, metadata = exporter.build_export(live, source_commit(project), parser_config=parser_config)
     if inputs[player_path] is not None:
         data, provenance, receipt = player_balance.augment(data, provenance, config_dir, database)
-        metadata['player_balance'] = receipt['player_balance']
+        metadata = receipt
     exporter.validate_parser_source(data, parser_config)
+    player_balance.validate_native_updates(json.loads(data))
     if (inputs[parser_config] is None or state(parser_config) != inputs[parser_config]
             or inputs[parser_config][2] != metadata['parser_contract']['sha256']):
         raise ValueError('The official Modkit parser contract changed during export; nothing was sent.')
@@ -187,6 +223,10 @@ def send(config_dir, project_dir, mod_dir, database=None):
             raise ValueError('%s moved before it could be exported' % filename)
     if inputs[cfg][2] != metadata['switch_file']['sha256']:
         raise ValueError('The talent switches changed during export.')
+    for path, checked in preflight_parser(data, mod, parser_config).items():
+        if path in inputs and inputs[path] != checked:
+            raise ValueError('The parser contract changed during validation; nothing was sent.')
+        inputs[path] = checked
     outputs = dict(zip(paths, [data, provenance, manifest_bytes, data]))
     written = commit_files(outputs, expected, inputs)
     return {'ok': True, 'records': metadata['parser_source']['records'],

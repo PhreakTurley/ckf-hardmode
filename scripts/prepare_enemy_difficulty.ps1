@@ -1,7 +1,8 @@
 param(
     [string]$SourceContent = (Join-Path $PSScriptRoot '..\ckf-enemy-difficulty\source_content'),
     [string]$OutputDirectory = (Join-Path $PSScriptRoot '..\ckf-enemy-difficulty\parser_prepared\_data'),
-    [string]$ModkitDirectory = 'C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Mod Uploader'
+    [string]$ModkitDirectory = 'C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Mod Uploader',
+    [string]$SchemaPath = ''
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -11,7 +12,9 @@ Set-StrictMode -Version Latest
 $SourceContent = [IO.Path]::GetFullPath($SourceContent)
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 $taskManifest = Join-Path $SourceContent 'stories.manifest'
-$taskSchema = Join-Path $ModkitDirectory 'CyberKnightsModkit_Data\StreamingAssets\config.json'
+$taskSchema = if ($SchemaPath) { [IO.Path]::GetFullPath($SchemaPath) } else {
+    Join-Path $ModkitDirectory 'CyberKnightsModkit_Data\StreamingAssets\config.json'
+}
 $taskDll = Join-Path $ModkitDirectory 'CyberKnightsModkit_Data\Managed\DataParserNETStandard.dll'
 $taskSources = @($taskManifest, $taskSchema, $taskDll)
 foreach ($taskLine in [IO.File]::ReadAllLines($taskManifest)) {

@@ -1,5 +1,8 @@
 # Prepare Enemy Difficulty for Workshop
 
+For armor edits and preparation to both Hard Mode and this Modkit project,
+use the editor's [Enemy Armors page](../gui/README.md#enemy-armors).
+
 Enemy Difficulty applies authored enemy armor and armor assignments, sets
 `Rule82.Value` to 20, and applies reviewed surgical native corrections from a
 separate Workshop authoring document, and includes the reviewed PL1–20 Patrol,

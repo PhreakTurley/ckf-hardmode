@@ -1,0 +1,8 @@
+{
+  "subsystem": "EnemyArmor",
+  "title": "Enemy Armors",
+  "targets": {},
+  "doc": ["Edits the shared ArmorModel.csv authoring input for bundled Enemy Rebalance and Enemy Difficulty Workshop preparation. The catalog joins the selected official armor rows with authored clones and preserves their identities and clone controls."],
+  "uiDoc": ["Shipped enemy armor and authored clones. Save edits, then prepare both distributions."],
+  "fields": []
+}

@@ -118,11 +118,27 @@ class FieldTests(unittest.TestCase):
             receipt = {'parser_source': {}, 'automatic_attribute_icons': [
                 {'node_id': 7400, 'icon': 'Tech', 'previous_icon_override': None}]}
             data, _, result = pb.augment(pb.encode(payload), pb.encode(receipt), folder, serve.static_data.DEFAULT_DB)
-            self.assertNotIn('Icon', json.loads(data)['JobNode'][0])
+            self.assertEqual(json.loads(data)['JobNode'], [])
+            self.assertTrue(any('"IconPng"=\'Strength\'' in sql and '"JobNodeId"=7400' in sql
+                                for sql in json.loads(data)['RawSQL']))
             self.assertEqual(result['manual_attribute_icon_nodes'], ['7400'])
+            self.assertEqual(result['omitted_native_icon_updates'], [7400])
+            self.assertEqual(result['parser_source']['records'], 0)
+            with_cost = {'JobNode': [dict(payload['JobNode'][0], Cost=2)]}
+            cost_data, _, _ = pb.augment(pb.encode(with_cost), pb.encode(receipt), folder, serve.static_data.DEFAULT_DB)
+            self.assertEqual(json.loads(cost_data)['JobNode'][0]['Cost'], 2)
+            self.assertNotIn('Icon', json.loads(cost_data)['JobNode'][0])
             receipt['automatic_attribute_icons'][0]['previous_icon_override'] = 'Will'
             with self.assertRaisesRegex(ValueError, 'both own'):
                 pb.augment(pb.encode(payload), pb.encode(receipt), folder, serve.static_data.DEFAULT_DB)
+
+    def test_empty_native_updates_are_refused_but_explicit_zero_is_valid(self):
+        pb = serve.player_balance
+        for table, key in [('JobNode','JobNodeId'), ('Talent','TalentId'),
+                           ('Effect','EffectId'), ('MatrixEffect','MatrixEffectId')]:
+            with self.subTest(table=table), self.assertRaisesRegex(ValueError, 'at least one field'):
+                pb.validate_native_updates({table: [{key:1, '#':'comment', 'SQL':'update'}]})
+        pb.validate_native_updates({'Talent':[{'TalentId':1, 'AP':0, 'SQL':'update'}]})
 
 
 UI = r'''
