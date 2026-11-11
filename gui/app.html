@@ -93,9 +93,9 @@ section#panel{flex:1;min-width:0;padding:12px 16px 80px}
 .pill.unknown{color:var(--unknown);border-color:var(--unknown)}
 .pill.na{color:var(--faint);border-color:var(--faint)}
 .pill.retro{color:var(--danger);border-color:var(--danger)}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:7px;
+.card,.page-instructions{background:var(--panel);border:1px solid var(--line);border-radius:7px;
   padding:10px 13px;margin:0 0 10px}
-.card>h3{margin:0 0 4px;font-size:15px;display:flex;gap:8px;align-items:center;
+.card>h3,.page-instructions>h3{margin:0 0 4px;font-size:15px;display:flex;gap:8px;align-items:center;
   flex-wrap:wrap}
 .doc{color:var(--dim);margin:6px 0 0;font-size:13.5px;max-width:96ch}
 p.doc{margin:6px 0 0}
@@ -305,8 +305,6 @@ button:focus-visible,summary:focus-visible,.navitem:focus-visible{outline:2px so
 
 <details class="card" style="margin:0 16px 10px" id="modkit-export">
   <summary>Workshop export</summary>
-  <p class="doc">Save your edits, then send player balance to your Modkit project.
-    In Modkit, use Prepare Mod Data, then Local Install Mod.</p>
   <div class="field">
     <label class="lab" for="talent-project">Workshop source repository</label>
     <input id="talent-project" type="text" spellcheck="false">
@@ -324,6 +322,7 @@ button:focus-visible,summary:focus-visible,.navitem:focus-visible{outline:2px so
     <button id="send-talents" class="primary">Send player balance to Modkit</button>
     <span id="modkit-status" class="small" role="status" aria-live="polite"></span>
   </div>
+  <p class="doc">Save, then send to Modkit. In Modkit, choose Prepare Mod Data, then Local Install Mod.</p>
 </details>
 
 <main>
@@ -1275,6 +1274,7 @@ function dirtyPaths() {
   for (const c of overlayDirtyCells())
     out.push(c.rel + ':' + c.key.join('/') + '.' + c.col);
   for (const c of playerChanges().cells) out.push(c.table + ':' + c.id + '.' + c.column);
+  if (playerChanges().removedJobNodes) out.push('Removed job nodes');
   for (const k of Object.keys(playerChanges().implantMultipliers)) out.push('All cyberware:' + k);
   if (partyChanged()) out.push('Party Size Mod: maximum');
   if (contactChanged()) out.push('Faster Contact Limit Breaks: turns');
@@ -1341,7 +1341,7 @@ function buildEdits() {
   if (partyChanged()) edits.partySize = {format:1, maximum:Number(W.partyMaximum)};
   if (contactChanged()) edits.contactBreaks = {format:1, minimum:Number(W.contactTurns.minimum), maximum:Number(W.contactTurns.maximum)};
   const player = playerChanges();
-  if (player.cells.length || Object.keys(player.implantMultipliers).length) edits.playerBalance = player;
+  if (player.cells.length || Object.keys(player.implantMultipliers).length || player.removedJobNodes) edits.playerBalance = player;
   return edits;
 }
 
@@ -1429,9 +1429,7 @@ function renderBanners() {
     box.appendChild(banner(p.state === 'missing' ? 'warn' : 'err',
       'BepInEx/config is not writable (' + p.state + ')',
       [MODEL.configDir, p.detail,
-       'Nothing has been written. That path is normally under Program Files and this '
-       + 'tool does not assume either way — the line above is the result of an actual '
-       + 'create-and-delete probe, not a guess.']));
+       'The write probe failed. Nothing was saved.']));
   }
 
   if (MODEL.recovery && MODEL.recovery.found) {
@@ -1446,8 +1444,7 @@ function renderBanners() {
   if (!MODEL.check.ran) {
     box.appendChild(banner('err', 'check_schema could not run — validation is unavailable',
       [MODEL.check.error || 'no detail',
-       'A save is refused while this is true. Silence from a check that did not run is '
-       + 'not a clean result.']));
+       'Saving is blocked until validation runs.']));
   } else if (MODEL.check.problems.length) {
     const b = banner('warn', 'check_schema reports ' + MODEL.check.problems.length
       + ' problem(s) with what is on disk now', []);
@@ -1466,11 +1463,7 @@ function renderBanners() {
     box.appendChild(banner('warn',
       unresolved.length + ' linked switch(es) name a key this build does not carry',
       [unresolved.join(', '),
-       'Ticking one switch of a linked group is supposed to move the rest with '
-       + 'it. These keys resolve to nothing, so they will not move, and the '
-       + 'save is refused by the INVARIANT check rather than writing half a '
-       + 'group. Nothing here is wrong on disk — the keys are declared by a '
-       + 'schema and are not in the file yet.']));
+       'These linked keys are missing. Saving is blocked until the group can be updated together.']));
   }
 
   // The same shape for requires: a key that resolves to nothing is a
@@ -1481,10 +1474,7 @@ function renderBanners() {
     box.appendChild(banner('warn',
       reqGone.length + ' dependency key(s) name something this build does not carry',
       [reqGone.join(', '),
-       'A requires declaration naming one of these cannot be enforced here in '
-       + 'either direction: nothing is turned on for it and nothing is refused '
-       + 'because of it. The declaration is stale, or the key belongs to a '
-       + 'schema this build does not have.']));
+       'These dependencies cannot be enforced because their keys are unavailable.']));
   }
 
   // A violation standing right now, whoever made it. check_schema grades this
@@ -1499,9 +1489,7 @@ function renderBanners() {
       reqBad.map(function (v) {
         return reqName(v.dep) + ' is on and needs ' + reqName(v.need)
              + ', which is off. ' + v.reason;
-      }).concat(['Turning either one is what fixes this: turn the dependency on, '
-                 + 'or turn the slice that needs it off. Nothing has been changed '
-                 + 'for you — this state was not made by a switch on this page.'])));
+      }).concat(['Enable the required switch or disable the slice that needs it.'])));
   }
 
   if (REQ_REFUSAL) {
@@ -1511,10 +1499,7 @@ function renderBanners() {
         + ' enabled slice(s) still need it',
       r.blockers.map(function (b) {
         return reqName(b.dep) + ' needs ' + reqName(b.need) + '. ' + b.reason;
-      }).concat(['Nothing was changed, and the switch is back where it was. '
-                 + 'Turning a slice on is a widening and this page does it for '
-                 + 'you; turning one off underneath something that needs it is '
-                 + 'a breakage. Turn the slice that needs it off first.'])));
+      }).concat(['The switch is unchanged. Disable the dependent slices first.'])));
   }
 
   if (REQ_NOTES.length) {
@@ -1529,9 +1514,7 @@ function renderBanners() {
             + 'saving adds it)') + '. ' + c.reason);
     box.appendChild(banner('info',
       lines.length + ' switch(es) were turned on for you by a dependency',
-      lines.concat(['These are in the pending changes and go to disk with the '
-                    + 'next save. Turning a slice on is a widening, so it is '
-                    + 'done for you rather than refused — but never silently.'])));
+      lines.concat(['These required switches are pending until Save.'])));
   }
 
   // Top-level keys the files carry that no schema declares. The checker's own
@@ -1547,12 +1530,7 @@ function renderBanners() {
     box.appendChild(banner('info',
       n + ' key(s) in ' + strayFiles.length + ' file(s) are not declared by any schema',
       strayFiles.map(function (f) { return f + ': ' + stray[f].join(', '); })
-        .concat(['These are read, given no control on this page, and written '
-                 + 'back exactly as they are — which is what a key an older '
-                 + 'version left behind needs, and also what a misspelled key '
-                 + 'looks like. Nothing on disk tells the two apart, so nothing '
-                 + 'here calls any of them wrong. Check the spelling against '
-                 + 'the setting you meant.'])));
+        .concat(['Unrecognized keys are preserved. Check their spelling if they were intended as settings.'])));
   }
 
   for (const name in MODEL.sidecarErrors)
@@ -1563,9 +1541,7 @@ function renderBanners() {
   if (MODEL.missionReference.state !== 'loaded') {
     box.appendChild(banner('info', 'docs/mission-reference.json: ' + MODEL.missionReference.state,
       [MODEL.missionReference.detail || '',
-       'The game\'s own values are not shown beside the slot editor while this is '
-       + 'missing. '
-       + 'That is an absent file, not an empty one.']));
+       'Official reference values are unavailable in the slot editor.']));
   }
 
   if (LAST_SAVE) {
@@ -1843,6 +1819,7 @@ function playerChanges() {
   const out = {cells:[], implantMultipliers:{}, databaseSha:((MODEL.playerBalance || {}).database || {}).sha256};
   const old = (MODEL.playerBalance || {}).document || {};
   const cur = W.player || {};
+  if (!CKF.deepEqual(old.removedJobNodes || [],cur.removedJobNodes || [])) out.removedJobNodes=cur.removedJobNodes || [];
   for (const table of new Set(Object.keys(old.tables || {}).concat(Object.keys(cur.tables || {})))) {
     const a = (old.tables || {})[table] || {}, b = (cur.tables || {})[table] || {};
     for (const id of new Set(Object.keys(a).concat(Object.keys(b)))) {
@@ -1872,6 +1849,10 @@ function playerCell(grid, row, column) {
   const target = row.targets ? row.targets[column.name] : {table:grid.table,id:row.id,column:column.name};
   if (!target) return null;
   const fields = ((W.player.tables || {})[target.table] || {})[target.id] || {};
+  if (target.generated!==undefined) return {target:target,value:'',base:target.generated,multiplier:1,
+    readOnly:true,readOnlyReason:target.readOnlyReason};
+  if (target.overlay) return {target:target,value:W.overlays[target.overlay].cells[target.row][target.ci] || '',
+    base:row.baseline[column.name],multiplier:1,readOnly:target.readOnly || row.readOnly};
   const multipliers = target.table === 'Implant' ? (W.player.implantMultipliers || grid.multipliers || {}) : (grid.multipliers || {});
   const multiplierColumn = target.table === 'Implant' ? target.column : column.name;
   const multiplier = multipliers[multiplierColumn] === undefined ? 1 : multipliers[multiplierColumn];
@@ -1952,6 +1933,11 @@ function playerDisplayColumns(grid, showAll) {
     const values=grid.rows.map(function(row) {return playerEffectiveColumnValue(grid,row,col);});
     const unknown=values.some(function(v) {return v===null || !Number.isFinite(v);});
     const varying=new Set(values).size>1;
+    if (grid.talents) {
+      if (overridden || col.always) return true;
+      if (col.defaultExcluded || col.metadata) return false;
+      return values.some(function(v) {return v!==null && v!==0;});
+    }
     if (overridden && grid.rows.length>=2 && !unknown && !varying) return false;
     if (overridden) return true;
     if (col.metadata) return false;
@@ -2134,10 +2120,11 @@ function consumableSelect(grid, row, kind) {
 
 function renderPlayer(panel, page) {
   panel.appendChild(el('div', {class:'pb-heading'}, [el('h2', {text:page.title}),
-    el('span', {class:'small', text:'Workshop player balance'})]));
+    el('span', {class:'small', text:page.talents ? 'Talent balance' : 'Workshop player balance'})]));
+  if (page.gateSchema) panel.appendChild(gateControl(page.gateSchema,entryOf(page.gateSchema.subsystem)));
   if (page.description) panel.appendChild(el('p', {class:'doc',text:page.description}));
   if (page.group==='Consumables') {
-    panel.appendChild(el('p',{class:'doc',text:(page.id==='other-consumable-overrides' ? 'Tag changes keep unavailable items in this section. ' : 'Tag changes move items to their matching section. ')+'Medical and drug visuals share a pool; grenade visuals stay separate. Talent icon, item model and extra talent asset can be changed independently. The first choice restores the official assignment. Save, then export to Modkit to apply changes.'}));
+    panel.appendChild(el('p',{class:'doc',text:(page.id==='other-consumable-overrides' ? 'Tag changes keep unavailable items in this section. ' : 'Tag changes move items to their matching section. ')+'Edit the talent icon, item model and talent asset separately. Medical and drug visuals share a pool; grenades use their own. The first choice restores the official visual. Save, then send to Modkit.'}));
     if (PLAYER_PREVIEW_STATE.error) panel.appendChild(el('div',{class:'banner err'},[
       el('span',{text:PLAYER_PREVIEW_STATE.error+' Pending edits are preserved. '}),
       el('button',{text:'Retry view update',onclick:function() {refreshConsumableViews(PLAYER_PREVIEW_STATE.destination);}})]));
@@ -2148,11 +2135,11 @@ function renderPlayer(panel, page) {
     el('label', {class:'small'}, [showAll,document.createTextNode(' Show all columns')]),
     el('span', {class:'small',text:'Red: override · Yellow: nonzero baseline'})]);
   if (page.grids.length) panel.appendChild(toolbar);
-  if (page.grids.length) panel.appendChild(el('p', {class:'doc',text:'Numbers set values, including negatives: -10 sets to -10. +10 adds 10; x1.5 multiplies by 1.5. Clearing a cell removes its adjustment.'}));
+  if (page.grids.length) panel.appendChild(el('p', {class:'doc',text:page.talents ? 'Numbers set values. Clear a cell to restore its baseline. Choose an icon or effect from the field’s suggestions. Save, then send to Modkit.' : 'A number sets the value, including negatives. +10 adds 10; x1.5 multiplies by 1.5. Clear a cell to restore its baseline.'}));
   if (page.grids.some(function(g) {return g.iconEditor;}))
-    panel.appendChild(el('p', {class:'doc',text:page.iconHelp || 'Icon / model changes the inventory icon and the weapon’s 3D model together. The first choice restores the official visual. Save, then export to Modkit to apply your changes.'}));
+    panel.appendChild(el('p', {class:'doc',text:page.iconHelp || 'Icon / model changes both visuals. The first choice restores the official assignment. Save, then send to Modkit.'}));
   if (page.grids.some(function(g) {return g.rows.some(function(r) {return r.enemyUse;});}))
-    panel.appendChild(el('p', {class:'doc',text:'Rows marked “Also used by enemies” share a weapon record with enemies. Changing that weapon also affects enemies that use it.'}));
+    panel.appendChild(el('p', {class:'doc',text:'Edits to rows marked “Also used by enemies” affect those enemies too.'}));
   if (page.multipliers) {
     panel.appendChild(el('p', {class:'doc',text:'Applied to every implant after individual adjustments.'}));
     for (const col in page.multipliers) {
@@ -2162,6 +2149,8 @@ function renderPlayer(panel, page) {
       panel.appendChild(el('div', {class:'pb-multiplier'}, [el('label', {text:page.multipliers[col]}),input,el('span',{class:'small',text:'×'})]));
     }
   }
+  const removedTools=el('div',{class:'pb-tools'});
+  if (page.talents) panel.appendChild(removedTools);
   const grids = el('div', {});
   const pageNumbers = {};
   const openSections = {};
@@ -2225,9 +2214,23 @@ function renderPlayer(panel, page) {
     const subsections = {};
     const categories = {};
     const subsectionCounts = {};
+    const requested=W.player.removedJobNodes || [];
+    const removed=new Set(requested);
+    if (page.talents) {
+      removedTools.textContent='';
+      for (const grid of page.grids) for (const row of grid.rows)
+        if (row.nodeId && requested.includes(row.nodeId)) {
+          for (const id of row.removalIds) removed.add(id);
+          if (Array.from(removedTools.children).some(function(n) {return n.getAttribute('data-restore-node')===row.nodeId;})) continue;
+          removedTools.appendChild(el('button',{text:'Restore '+row.name,'data-restore-node':row.nodeId,onclick:function() {
+            W.player.removedJobNodes=requested.filter(function(id) {return id!==row.nodeId;});paint();updateDirty();
+          }}));
+        }
+    }
     for (const grid of page.grids) {
       playerRefreshIconGroups(grid);
       const matches = grid.rows.filter(function (r) {
+        if (r.nodeId && removed.has(r.nodeId)) return false;
         const editor = grid.iconEditor;
         const fields = ((W.player.tables || {})[grid.table] || {})[r.id] || {};
         const assetId = editor ? CKF.playerDisplayValue(fields[editor.column] || '') || r.baseline[editor.column] : '';
@@ -2239,7 +2242,8 @@ function renderPlayer(panel, page) {
       const sortId = page.id+':'+gridKey;
       const sort = PLAYER_SORT[sortId] || grid.defaultSort || {key:'',descending:false};
       const number = pageNumbers[gridKey] || 0;
-      const rows = playerSortedRows(grid,matches,sort).slice(number * 75, (number + 1) * 75);
+      const rows = grid.unpaginated ? playerSortedRows(grid,matches,sort)
+        : playerSortedRows(grid,matches,sort).slice(number * 75, (number + 1) * 75);
       if (!matches.length && !grid.warning) continue;
       let target = grids;
       if (grid.category) {
@@ -2290,7 +2294,7 @@ function renderPlayer(panel, page) {
           el('button',{text:'Re-sort',disabled:!sort.key,'aria-label':'Re-sort '+page.title+' · '+grid.title,onclick:changeSort}),
           ...(grid.rows.some(function(r) {return r.section;}) ? [el('span',{class:'small',text:'Within each icon group'})] : [])]));
       }
-      if (matches.length > 75) target.appendChild(el('div', {class:'pb-tools'}, [
+      if (!grid.unpaginated && matches.length > 75) target.appendChild(el('div', {class:'pb-tools'}, [
         el('button', {text:'Previous',disabled:number === 0,onclick:function () {pageNumbers[gridKey] = number - 1;paint();}}),
         el('span', {class:'small',text:(number * 75 + 1)+'–'+Math.min((number+1)*75,matches.length)+' of '+matches.length}),
         el('button', {text:'Next',disabled:(number + 1) * 75 >= matches.length,onclick:function () {pageNumbers[gridKey] = number + 1;paint();}})]));
@@ -2300,7 +2304,15 @@ function renderPlayer(panel, page) {
       const shownColumns=JSON.stringify(cols.map(function(c) {return c.name;}))+'|'+showIcon;
       if (!rows.length) continue;
       const tbl = el('table', {class:'grid pb-grid'});
-      const widths = cols.map(function (c) {return playerColumnWidth(grid, c);});
+      const widths = cols.map(function (c) {return c.options ? 190 : playerColumnWidth(grid, c);});
+      for (const col of cols.filter(function(c) {return c.options;})) {
+        const listId='choices-'+encodeURIComponent([page.id,gridKey,col.name].join('|'));
+        grids.appendChild(el('datalist',{id:listId},col.options.map(function(option) {
+          return el('option',{value:option.value,label:option.label});
+        })));
+        for (const id in (col.rowOptions || {})) grids.appendChild(el('datalist',{id:listId+'-'+id},
+          col.rowOptions[id].map(function(option) {return el('option',{value:option.value,label:option.label});})));
+      }
       const nameWidth = Math.ceil(Math.max(playerTextWidth('Name',true), ...grid.rows.map(function (r) {
         return Math.max(playerTextWidth(r.name,false), r.enemyUse ? playerTextWidth('Also used by enemies',false) : 0,
           r.fitment ? Math.min(320,playerTextWidth(r.fitment,false)) : 0);
@@ -2364,6 +2376,12 @@ function renderPlayer(panel, page) {
         }
         const nameCell = el('td', {class:'pb-name',title:grid.table+' '+row.id+(row.weaponName ? '\n'+row.weaponName : '')+(row.description ? '\n'+row.description : '')+(row.acquisition && row.acquisition.length ? '\nAcquisition references:\n'+row.acquisition.join('\n') : '')}, [
           document.createTextNode(row.name),el('small', {text:grid.table+' '+row.id})]);
+        if (row.nodeId) nameCell.appendChild(el('button',{class:'rowbtn',text:'Remove',
+          'aria-label':'Remove Job Node '+row.nodeId, title:'Remove this upgrade and reconnect its dependents.',
+          onclick:function() {
+            W.player.removedJobNodes=Array.from(new Set((W.player.removedJobNodes || []).concat(row.nodeId)));
+            paint();updateDirty();
+          }}));
         if (row.enemyUse) nameCell.appendChild(el('span', {class:'pb-enemy',text:'Also used by enemies',title:'Changing this weapon also affects enemies that use it.'}));
         if (row.owner) nameCell.appendChild(el('span', {class:'pb-owner',text:'Managed by '+row.owner}));
         if (row.fitment) nameCell.appendChild(el('small', {class:'pb-fit',text:row.fitment,title:row.fitmentSource}));
@@ -2425,7 +2443,8 @@ function renderPlayer(panel, page) {
           // edited before it, matching the SQL operation order.
           const displayBase = multiplier === 1 ? base : String(playerRound(Number(base) * multiplier));
           const td = el('td', {});
-          function style(v) {td.className = v.trim() !== '' || multiplier !== 1 ? 'overlay-overwrite' : Number(base) !== 0 ? 'shipped-interesting' : '';}
+          function style(v) {td.className = v.trim() !== '' || multiplier !== 1 ? 'overlay-overwrite'
+            : col.literal || col.baselinePlain || String(base)===col.plainBaseline ? '' : Number(base) !== 0 ? 'shipped-interesting' : '';}
           style(value);
           if (cell.readOnly) {
             td.className = 'readonly';td.textContent = base;
@@ -2436,17 +2455,22 @@ function renderPlayer(panel, page) {
             const input = el('input', {type:'text',value:value,placeholder:displayBase,spellcheck:'false',
               style:'width:'+(item.width-1)+'px',
               'aria-label':controlLabel,'data-player-target':source,
+              ...(col.options ? {list:'choices-'+encodeURIComponent([page.id,gridKey,col.name].join('|'))
+                + (col.rowOptions && col.rowOptions[row.id] ? '-'+row.id : '')} : {}),
               title:col.label+' · baseline '+base+'\n'+source
                 + ((targetCell.sharedWith || []).length ? '\nShared with: '+targetCell.sharedWith.join(', ') : '')
                 + (multiplier !== 1 ? ' · global ×'+multiplier+' after individual adjustments' : '')});
-            const cellKey = JSON.stringify([targetCell.table,targetCell.id,targetCell.column]);
+            const cellKey = JSON.stringify([targetCell.overlay || targetCell.table,targetCell.id,targetCell.column]);
             if (!cellViews.has(cellKey)) cellViews.set(cellKey,[]);
             cellViews.get(cellKey).push({input:input,style:style});
             input.addEventListener('input', function () {
-              const table = W.player.tables[targetCell.table] || (W.player.tables[targetCell.table] = {});
-              const record = table[targetCell.id] || (table[targetCell.id] = {});
-              if (input.value.trim()) record[targetCell.column] = input.value;
-              else delete record[targetCell.column];
+              if (targetCell.overlay) W.overlays[targetCell.overlay].cells[targetCell.row][targetCell.ci]=input.value;
+              else {
+                const table = W.player.tables[targetCell.table] || (W.player.tables[targetCell.table] = {});
+                const record = table[targetCell.id] || (table[targetCell.id] = {});
+                if (input.value.trim()) record[targetCell.column] = input.value;
+                else delete record[targetCell.column];
+              }
               for (const view of cellViews.get(cellKey)) {view.input.value=input.value;view.style(input.value);}
               for (const refresh of serviceViews) refresh();
               input.style.width = Math.max(item.width-1, Math.ceil(playerTextWidth(input.value,false)+15))+'px';
@@ -2703,9 +2727,8 @@ function gridFor(sch, f, opts) {
   const anyAdjust = cols.some(function (c) { return (t.formats[c.name] || '') === 'adjust'; });
   box.appendChild(el('div', { class: 'legend' }, [
     el('span', { class: 'sw unset' }), document.createTextNode(
-      'Hatched: no key in the file. An empty box means absent; a typed 0 is a real zero.'
-      + (anyAdjust ? ' Clearing an adjustment cell turns that slot off — to the '
-                     + 'plugin, an empty slot and no slot are the same thing.' : '')),
+      'Hatched: unset. Blank removes the value; 0 sets an explicit zero.'
+      + (anyAdjust ? ' Clear an adjustment to turn that slot off.' : '')),
   ]));
   return box;
 }
@@ -3205,13 +3228,13 @@ function overlayInput(ov, rel, ri, ci, opts) {
     inp.placeholder = v === '' ? (ship === undefined ? '—' : String(ship)) : '';
     const why = [col.name + ' — ' + col.op + (lab ? '; here it is ' + lab.why : '')];
     why.push(ship === undefined
-      ? 'an empty box leaves the game\'s own column alone'
+      ? 'Blank restores the baseline'
       : 'Official value: ' + ship + '; an empty box leaves that alone');
     if (highlight) why.push(highlight === 'overlay-overwrite'
       ? 'red: an override is set' : 'yellow: an atypical shipped value');
     const p = CKF.overlayCellProblem(ov, ci, v);
-    if (p && p.bad) { cls.push('bad'); why.push('THE SAVE WILL REFUSE THIS: ' + p.bad); }
-    else if (p && p.warn) why.push('NOT CHECKED AGAINST A SCHEMA: ' + p.warn);
+    if (p && p.bad) { cls.push('bad'); why.push('Cannot save: ' + p.bad); }
+    else if (p && p.warn) why.push('Not schema-checked: ' + p.warn);
     if (v !== orig) {
       cls.push('dirty');
       why.push('changed from ' + (orig || '(blank)') + ' — pending until Save');
@@ -3219,8 +3242,7 @@ function overlayInput(ov, rel, ri, ci, opts) {
     const ref = refusalMark(ov, rel, ci, ri);
     if (ref) {
       cls.push('refused');
-      why.push('the last save was refused over this cell, and nothing was '
-               + 'written: ' + ref);
+      why.push('Last save refused this cell: ' + ref);
     }
     host.className = cls.filter(Boolean).join(' ');
     inp.title = why.join('. ');
@@ -3548,9 +3570,7 @@ function overlayBlock(sch, rel, sectionTitle) {
   }
   if (ov.sharedSource) {
     block.appendChild(el('div', { class: 'legend', text:
-      'Shared rows are not marked in this build (' + ov.sharedSource
-      + '). An unmarked row here means the check did not run, not that nothing '
-      + 'is shared.' }));
+      'Shared-row check unavailable: ' + ov.sharedSource }));
   }
 
   // GOES BEHIND ONE CLICK: the sheet's own notes, the shared-row explanation,
@@ -3561,13 +3581,9 @@ function overlayBlock(sch, rel, sectionTitle) {
   const notes = [];
   notes.push(el('div', { class: 'legend', text:
     'Shape: ' + shape + ' '
-    + (canWrite
-        ? nEdit + ' of its column(s) take an edit; the key, the identity '
-          + 'columns and the control columns do not. The server decides which, '
-          + 'per column, and this page asks it rather than judging a name.'
-        : 'It takes no edit at all: ' + (ov.writableWhy || 'no reason given'))
-    + ' Nothing here is validated against a schema — check_schema.py declares '
-    + 'no columns for the lever sheets.' }));
+    + (canWrite ? nEdit + ' editable columns; keys and metadata are read-only.'
+        : 'Read-only: ' + (ov.writableWhy || 'no reason given'))
+    + ' Lever sheets are checked for grammar and row identity, not against a schema.' }));
   // COLLAPSED COLUMNS ARE NAMED, COUNTED AND RESTORABLE. Hiding is never
   // dropping: every one of these is still in the payload, still in the working
   // copy, and still written by a save — this fold is the whole of what was
@@ -3702,8 +3718,7 @@ function gateControl(sch, ent) {
   const right = el('div', {});
   if (!g) {
     right.appendChild(el('div', { class: 'meta', text:
-      'This page declares no switch, so nothing here can be turned off. It is '
-      + 'applied whenever the mod is.' }));
+      'Applies whenever the mod is enabled.' }));
   }
   // The master is a different statement and gets its own mark. It does not
   // move the box: the box is this page's own key, which is what a save writes.
@@ -3712,8 +3727,7 @@ function gateControl(sch, ent) {
       el('span', { class: 'pill off', text: 'off (master)' }),
       document.createTextNode(' '),
       el('span', { class: 'small', text:
-        'the master switch is off, so this page is not applied whatever this '
-        + 'box says' }),
+        'Enable the master switch to apply this page.' }),
     ]));
   }
   if (ent && (ent.gates.length || ent.blocks.length)) {
@@ -3755,7 +3769,7 @@ function renderSubsystem(p, sch, fields) {
     el('h3', { text: sch.title || sch.subsystem }),
   ]);
   const prose = docParas(sch);
-  if (prose.length) head.appendChild(el('details', {class:'disc'}, [
+  if (prose.length) head.appendChild(el('details', {class:'disc page-help'}, [
     el('summary', {text:'Details'}), el('div', {class:'discbody'}, prose.map(function (para) {
       return el('p', {class:'doc',text:para});
     }))]));
@@ -3822,7 +3836,7 @@ function renderParty(panel) {
   const maximum = el('input', {id:'party-maximum', type:'number', min:'1', max:'2147483647', step:'1', value:W.partyMaximum,
     disabled:!!model.error, oninput:function () {W.partyMaximum=maximum.value;updateDirty();}});
   card.appendChild(el('div', {class:'field'}, [el('label', {class:'lab', for:'party-maximum', text:'Maximum mercenaries'}), maximum]));
-  card.appendChild(el('p', {class:'doc', text:'Save your maximum, then send this standalone mod to the uploader. This export updates only Rule 83.'}));
+  card.appendChild(el('p', {class:'doc', text:'Save, then send this mod to Modkit. It updates Rule 83.'}));
   const folder = el('input', {id:'party-project', type:'text', value:model.projectDir || '', spellcheck:'false'});
   card.appendChild(el('div', {class:'field'}, [el('label', {class:'lab', for:'party-project', text:'Modkit mod folder'}), folder]));
   const status = el('p', {class:'small', role:'status', 'aria-live':'polite'});
@@ -3861,7 +3875,7 @@ function renderContact(panel) {
     card.appendChild(el('p', {class:'meta', text:'Rule ' + rule.id + ' · ' + rule.name + ' · Official value: ' + rule.baseline}));
     card.appendChild(el('p', {class:'doc', text:rule.description}));
   }
-  card.appendChild(el('p', {class:'doc', text:'Save the turns, then send this standalone mod to the uploader. This export updates only Rules 84 and 85.'}));
+  card.appendChild(el('p', {class:'doc', text:'Save, then send this mod to Modkit. It updates Rules 84 and 85.'}));
   const folder=el('input', {id:'contact-project', type:'text', value:model.projectDir || '', spellcheck:'false'});
   card.appendChild(el('div', {class:'field'}, [el('label', {class:'lab', for:'contact-project', text:'Modkit mod folder'}), folder]));
   const status=el('p', {class:'small', role:'status', 'aria-live':'polite'});
@@ -3880,7 +3894,7 @@ function renderContact(panel) {
   card.appendChild(send);card.appendChild(status);
 }
 
-function renderPanel() {
+function renderPanelContents() {
   const p = $('#panel');
   p.textContent = '';
   if (SEL === 'party-size') {renderParty(p);return;}
@@ -3889,6 +3903,17 @@ function renderPanel() {
   if (playerPage) {renderPlayer(p, playerPage); return;}
   const sec = sectionOf(SEL);
   if (!sec) return;
+  const talentSchema=schemasOf(sec).find(function(s) {return overlaysOf(s).some(function(rel) {return (overlayEntry(rel) || {}).catalogOrder===1;});});
+  if (talentSchema && MODEL.talentBalance) {
+    if (MODEL.talentBalance.error) p.appendChild(banner('err','Talent editor unavailable',[MODEL.talentBalance.error]));
+    else {
+      const rel=overlaysOf(talentSchema).find(function(r) {return (overlayEntry(r) || {}).catalogOrder===1;});
+      const page=MODEL.talentBalance.pages[rel.split('.').slice(-2)[0]];
+      if (page) {
+        renderPlayer(p,Object.assign({},page,{title:sec.title,gateSchema:talentSchema}));return;
+      }
+    }
+  }
   const schs = schemasOf(sec);
   if (!schs.length) return;
 
@@ -3919,6 +3944,25 @@ function renderPanel() {
     for (const r of reference) card.appendChild(fieldBlock(r.sch, r.field));
     p.appendChild(card);
   }
+}
+
+function renderPanel() {
+  renderPanelContents();
+  const panel=$('#panel'), notes=[];
+  function visit(node) {
+    for (const child of Array.from(node.children || [])) {
+      const classes=child.className || '';
+      // Per-table reference folds retain their column controls beside the grid.
+      if (child.tagName==='DETAILS' && !String(classes).split(/\s+/).includes('page-help')) continue;
+      const howTo=/(?:\bSave(?:,|\s+(?:your|edits|changes|then|the|first))|\bClearing\b|\bclear a cell\b|\bfirst choice\b|\bempty (?:box|cell)\b|\btyped 0\b|^(?:Click|Type|Enter|Use) )/i.test(child.textContent || '');
+      if (String(classes).split(/\s+/).includes('page-help')
+          || (String(classes).split(/\s+/).some(function(c) {return c==='doc' || c==='legend';}) && howTo)) {
+        (child.parentNode || child.parent).removeChild(child);notes.push(child);
+      } else visit(child);
+    }
+  }
+  visit(panel);
+  if (notes.length) panel.appendChild(el('footer',{class:'page-instructions'},[el('h3',{text:'Editing help'}),...notes]));
 }
 
 // ---------------------------------------------------------------------------

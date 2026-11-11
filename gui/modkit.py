@@ -168,6 +168,11 @@ def send(config_dir, project_dir, mod_dir, database=None):
     expected = {p: state(p) for p in paths}
     if any(Path(config_dir).resolve() in p.resolve().parents for p in paths):
         raise ValueError('Export destinations must be outside the live config directory.')
+    # Native-sheet-only exports need the same tree gate as Workshop tuning.
+    if inputs[player_path] is None:
+        import talent_tree
+        with player_balance.static_data.StaticData(database) as source:
+            talent_tree.validate(player_balance.empty(), source, config_dir)
     data, provenance, metadata = exporter.build_export(live, source_commit(project), parser_config=parser_config)
     if inputs[player_path] is not None:
         data, provenance, receipt = player_balance.augment(data, provenance, config_dir, database)

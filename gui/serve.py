@@ -133,6 +133,7 @@ sys.path.insert(0, GUI_DIR)
 sys.path.insert(0, SCRIPTS_DIR)
 import static_data
 import player_balance
+import talent_editor
 import modkit
 import party_size
 import contact_limit_breaks
@@ -5500,6 +5501,10 @@ class App:
             'contactBreaks': contact_limit_breaks.model(cd, self.data_source(),
                                          self.settings.get('contactBreaksProjectDir', '')),
             'talentCatalogError': self.catalog_error,
+            'talentBalance': {'pages': {}, 'error': player['error']} if player['error'] else talent_editor.catalog(model['overlays'],
+                False if self.static_source is False else self.data_source(),
+                ATTRIBUTE_EFFECT_COLUMNS, ATTRIBUTE_EFFECT_ALWAYS, TALENT_EFFECT_EXCLUDED,
+                player['document'], cd),
             'navGroups': nav_groups,
             'values': model,
             'enableIndex': enable_index(doc, model),
@@ -5579,7 +5584,7 @@ class App:
         path = os.path.join(cd, player_balance.FILE)
         if os.path.exists(path):
             proposed[player_balance.FILE] = read_bytes(path)
-        if change is None or (not change.get('cells') and not change.get('implantMultipliers')):
+        if change is None or (not change.get('cells') and not change.get('implantMultipliers') and 'removedJobNodes' not in change):
             return
         try:
             with static_data.StaticData(self.data_source()) as source:
@@ -5615,6 +5620,25 @@ class App:
             except (ValueError, OSError, static_data.DataError) as exc:
                 return {'ok': False, 'error': str(exc)}
 
+    def validate_talent_tree(self, cd, proposed):
+        if self.static_source is False:
+            return
+        # Ordinary Hard Mode editing remains available without maintainer data.
+        if not static_data.database_path(self.data_source()).is_file():
+            talent_paths = {rel for sch in self.schemas if sch['subsystem'].startswith('Talents')
+                            for rel in overlay_paths(sch)}
+            if not talent_paths.intersection(proposed):
+                return
+        try:
+            import talent_tree
+            raw = proposed.get(player_balance.FILE)
+            tuning = json.loads(raw.decode('utf-8-sig')) if raw is not None else player_balance.load(cd)
+            with static_data.StaticData(self.data_source()) as source:
+                player_balance.validate(tuning, source, cd)
+                talent_tree.validate(tuning, source, cd, proposed)
+        except (ValueError, OSError, static_data.DataError) as exc:
+            raise SaveRefused({'summary':'Talent tree is not navigable', 'detail':str(exc)})
+
     def api_validate(self, edits, strip_readme=None):
         with self.lock:
             doc, model, extras, cd, _rec = self.snapshot()
@@ -5626,6 +5650,7 @@ class App:
                 proposed, more = apply_edits(doc, extras, edits, strip_readme)
                 self.player_edits(cd, edits, proposed)
                 self.party_edits(cd, edits, proposed)
+                self.validate_talent_tree(cd, proposed)
                 notes = (reformat_notes(doc) + stray_notes(doc, doc.schemas)
                          + notes + more)
             except SaveRefused as e:
@@ -5667,6 +5692,7 @@ class App:
                 proposed, more = apply_edits(doc, extras, edits, strip_readme)
                 self.player_edits(cd, edits, proposed)
                 self.party_edits(cd, edits, proposed)
+                self.validate_talent_tree(cd, proposed)
                 notes = (reformat_notes(doc) + stray_notes(doc, doc.schemas)
                          + notes + more)
             except SaveRefused as e:

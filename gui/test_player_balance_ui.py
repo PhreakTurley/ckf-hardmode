@@ -11,6 +11,9 @@ model = serve.App({'gameDir': '', 'configDirOverride': str(config), 'stripReadme
 laser = next(p for p in model['playerBalance']['pages'] if p['id'] == 'weapon-17')['grids'][0]
 model['playerBalance']['document']['tables'].setdefault('Weapon', {}).setdefault(laser['rows'][0]['id'], {})[laser['columns'][0]['name']] = '=7'
 
+# Keep the visual-picker assertion independent of uniform shipped item models.
+model['playerBalance']['document']['tables'].setdefault('Item', {}).setdefault('11', {})['Asset3DTypeId'] = '1001'
+
 # Read-only view fixtures let the Node DOM test exercise asynchronous tag moves.
 with serve.static_data.StaticData() as preview_source:
     preview_doc = serve.player_balance.apply_edits(model['playerBalance']['document'], {'cells': [

@@ -540,55 +540,70 @@ The server grades each column (`serve.py:overlay_roles`, `overlay_editable`) and
 `talent_catalog.py` is the guarded annotation pass used when official data changes. It adds missing
 class JobNode rows and related records to the already declared talent sheets,
 leaves all new override cells blank, and preserves existing override cells.
-Class ownership comes from `JobNodeModel.JobId`, including every captured
+Class ownership comes from `JobNodeModel.JobId`, including every declared
 version; ids are never assigned to a class by their digit prefix.
 
 Comments show the node name. Attribute nodes
 keep Left/Center/Right names in the EffectModel table, where their comments
 list connections without claiming a required path through them. Numeric tuning
-belongs in editable cells, with **ships N**
-placeholders. Comments omit tuning numbers, old balance notes, and repeated ids.
+belongs in editable cells, with numeric baseline placeholders. Comments omit tuning numbers, old balance notes, and repeated ids.
 The `_shipped` JSON control cell carries the complete editable baselines,
-including zeros and the JobNode IconPng text field, without displaying them as prose. It comes from the supplied
-Data Dump. The pass adds declared node tuning and all numeric Effect fields
-from the Modkit parser contract, excluding keys and text asset fields,
-creating the Hacker effect and Wireghost talent sheets when needed. It checks dump
-coverage and refuses ambiguous or missing references, then compares the
+including zeros and the JobNode IconPng text field, without displaying them as prose.
+The pass reads the selected official content database and also accepts explicit
+historical captures with coverage checks. It adds declared node tuning and all
+numeric Effect fields from the Modkit parser contract, excluding keys and text
+asset fields, creating the Hacker effect and Wireghost talent sheets when needed.
+It refuses ambiguous or missing references, then compares the
 exported assignments before writing so a catalog update cannot change tuning.
 Attribute EffectModel rows also carry `_attribute_nodes`, a hidden list of
 directly linked JobNode ids. The Modkit exporter uses those captured links for
 automatic attribute icons; it does not join records by their display names.
 
-The `_group` control column becomes section headings in the editor, separating
-**Talents and upgrades** from **Attribute nodes** across the class's sheets.
-The `_node_kind` control classifies JobNodes as class roots, base talents,
-upgrades or attribute nodes using the dump's JobModel and SubTree references.
-These controls are not editable or exported as SQL fields.
-Comments appear beside node ids; `_shipped` supplies the placeholders. The installed editor
-reads this information from the live sheets and requires no dump. Class grids
-size columns from their headings, shipped values and current edits, without
-stretching to fill the panel. Typing a longer value grows its column; clearing
-it restores the width required by the remaining values. Node names fit their
-column and their descriptions wrap beneath them.
+The `_group` and `_node_kind` controls record section and node classifications
+for the legacy sheet renderer. The joined view reads the official node links
+directly. These controls are not editable or exported as SQL fields.
+`talent_editor.py:catalog` builds the class pages from the selected official
+content database. The first table joins JobNode and Talent fields on each node;
+effect and matrix-effect tables follow. Attributes join node and effect fields,
+ordered Left, Center, Right, with Extra Item Carry and its carry upgrades last.
+Class roots stay hidden; base talents remain visible. Every table scrolls with
+the page. Filtering and **Show all columns** follow the weapon editor's layout.
+Zero-only and metadata columns are omitted by default; explicit overrides,
+icons, effect pointers and the declared always-visible attribute fields remain
+available. **Show all columns** exposes the remaining declared fields.
 
-An explicit override is red, including zero and a value equal to its baseline.
-Blank cells use the **ships N** placeholder. Numeric shipped values other than
-zero are yellow, except that JobNode BuyCost 1 is plain. TalentModel defaults
-stay plain, and text baselines receive no numeric coloring. Clearing an override
-restores its baseline styling; color does not change whether the cell is editable.
+Each cell retains its native table/id/column address. Existing sheet columns
+save through the byte-preserving sheet writer. Newly exposed fields use sparse
+Workshop tuning in `ckf.player-balance.json`. Clearing a cell restores its official
+baseline. Icon fields offer existing `IconPng` or `IconAsset` values; effect
+pointers offer the appropriate table's ids. Saved pointers determine the next
+loaded view. A manual Workshop node icon takes precedence over an automatically
+derived attribute icon; conflicting authored native assignments still refuse export.
 
-TalentModel appears first. JobNodeModel groups each base node with its attached
-upgrades, ordered by name with numeric suffixes compared numerically. EffectModel
-and MatrixEffectModel use the same family order and names from directly linked
-JobNodes; effects shared through a talent use its base node name. Attribute
-effects are ordered Left, Center, Right, with numeric suffixes compared numerically.
-The class root is hidden. Base JobNodes are hidden only when both their measured
-baselines and effective values are BuyCost 1 and zero in the other lever cells.
-Nonzero tuning, a changed cost or icon override, or an unknown baseline keeps
-the base visible. An unchanged icon path does not make a base interesting. Attribute
-JobNode grids are omitted when their measured values and overrides are only
-BuyCost 1 and zero for the other editable fields; changed or unknown values
-keep the grid visible. All rows remain in the files and save model.
+Explicit overrides are red. Nonzero numeric baselines are yellow, except that
+JobNode BuyCost 1 and Talent baselines stay plain. Text baselines stay plain.
+
+**Remove** is available only on upgrade nodes with a positive `SubTree`.
+Base talents and class roots cannot be removed. **Restore** undoes a removal.
+The requested ids are stored as `removedJobNodes` in Workshop tuning.
+`talent_tree.py:plan` replaces incoming prerequisites with the removed upgrades'
+nearest surviving prerequisites, preserving all slots and refusing overflow
+beyond three. Export applies those repairs before deleting the selected rows.
+Surviving upgrades are retained, and clearing a removal restores their original
+connections on the next export.
+
+Save, Validate and Workshop export check structural reachability from each
+class's declared default nodes, following directed `NodeReq1`–`NodeReq3` edges.
+This is a graph check, not a claim about the game's purchase conditions.
+Per David's policy, unreachable nodes and dangling requirements already present
+in the selected shipped database are exempt; newly unreachable nodes or dangling
+requirements block the operation. Exemptions are recomputed from that database,
+not stored in a tolerance list. Checks use proposed sheet edits and Workshop
+adjustments together. No save database is opened or written.
+
+Page-level details and usage instructions appear in **Editing help**, after
+the controls and tables. Short field descriptions and blocking errors stay
+beside the controls they explain.
 
 To refresh the annotations from an independently captured stock dump:
 

@@ -18,7 +18,7 @@ import gear_classes
 
 FILE = 'ckf.player-balance.json'
 TABLE_KEYS = {'Weapon': 'WeaponId', 'WeaponMod': 'WeaponModId', 'Armor': 'ArmorId', 'Implant': 'ImplantTypeId',
-              'Talent': 'TalentId', 'Effect': 'EffectId', 'MatrixEffect': 'MatrixEffectId',
+              'Talent': 'TalentId', 'JobNode': 'JobNodeId', 'Effect': 'EffectId', 'MatrixEffect': 'MatrixEffectId',
               'MissionAdvantage': 'AdvantageTypeId', 'Trait': 'TraitId', 'Rule': 'RuleId', 'Item': 'ItemTypeId'}
 MOD_CATEGORIES = ('Weapon Mods', 'Crafted Intrinsic', 'Intrinsic')
 MULTIPLIERS = {'Cost': 'Price', 'InstallTime': 'Installation time', 'ImplantStress': 'Implant stress'}
@@ -47,7 +47,8 @@ METADATA.update({'ItemClass', 'LeverageClass', 'TalentId'})
 ITEM_CLASSES = {1: 'Medical', 2: 'Grenades', 3: 'Devices', 4: 'Chems', 6: 'Sploitkits', 7: 'Matrix'}
 ITEM_TAG_LOCALES = {1: 'Medical', 2: 'Demolition', 3: 'Tech', 4: 'Drugs', 6: 'Leverage', 7: 'HackingDrugs'}
 # Explicit text-assignment declaration; other fields keep the numeric grammar.
-TEXT_FIELDS = {'Talent': {'IconPng'}}
+TEXT_FIELDS = {'Talent': {'IconPng'}, 'JobNode': {'IconPng'},
+               'Effect': {'IconAsset'}, 'MatrixEffect': {'IconAsset'}}
 # ContactService.ServiceFlow scopes the option id: for example the official
 # ContactService rows 1, 4 and 7 use option 1 for different catalogs.
 SERVICE_FLOWS = {'Weapon': '1', 'WeaponMod': '3', 'Item': '7', 'Implant': '8'}
@@ -223,15 +224,23 @@ def protected_rows(config_dir, source):
 
 
 def validate(doc, source, config_dir=None):
-    if doc.get('format') != 1 or set(doc) - {'format', 'implantMultipliers', 'tables'}:
+    if doc.get('format') != 1 or set(doc) - {'format', 'implantMultipliers', 'tables', 'removedJobNodes'}:
         raise ValueError('Unsupported player tuning document')
+    removed = doc.get('removedJobNodes', [])
+    if not isinstance(removed, list) or any(not isinstance(n, str) or not n.isdigit() for n in removed) or len(set(removed)) != len(removed):
+        raise ValueError('Removed job nodes must be unique numeric ids.')
     for col, value in doc.get('implantMultipliers', {}).items():
         if col not in MULTIPLIERS or isinstance(value, bool) or not isinstance(value, (float, int)) or not math.isfinite(value) or not 0 <= value <= 10:
             raise ValueError('Invalid implant multiplier: %s' % col)
     protected = protected_rows(config_dir, source)
     weapon_assets = None
-    known_icons = None
+    known_icons = {}
     item_classes = None
+    pointer_rows = {}
+    pointer_fields = {'Talent': {'TargetEffect':'Effect', 'SelfEffect':'Effect', 'MatrixEffect':'MatrixEffect'},
+                      'JobNode': {'NodeEffect1Id':'Effect', 'MatrixEffect1Id':'MatrixEffect',
+                                  'NodeTalent1Id':'Talent', 'NodeTalentAdjustmentId':'Talent',
+                                  'NodeTalentTriggerId':'Talent', 'NodeTalentTriggerEffect':'Effect'}}
     for table, records in doc['tables'].items():
         columns = declarations(source, table)
         rows = {r[TABLE_KEYS[table]]: r for r in source.read(table + 'Model')[1]}
@@ -253,12 +262,24 @@ def validate(doc, source, config_dir=None):
                 if col not in columns:
                     raise ValueError('%s.%s is not an editable content field' % (table, col))
                 if col in TEXT_FIELDS.get(table, set()):
-                    if known_icons is None:
-                        known_icons = {r['IconPng'] for r in source.read('TalentModel', ('IconPng',))[1] if r['IconPng']}
-                    if not isinstance(value, str) or (value and value not in known_icons):
-                        raise ValueError('Talent %s: choose an existing talent icon' % rid)
+                    if col not in known_icons:
+                        known_icons[col] = {r[col] for t, fields in TEXT_FIELDS.items() if col in fields
+                                            for r in source.read(t + 'Model', (col,))[1] if r[col]}
+                    if not isinstance(value, str) or (value and value not in known_icons[col]):
+                        raise ValueError('%s %s: choose an existing icon' % (table, rid))
                     continue
                 parsed = adjustment(value)
+                if parsed is not None and col in pointer_fields.get(table, {}):
+                    target = pointer_fields[table][col]
+                    if col == 'NodeTalentTriggerEffect':
+                        trigger = str(int(effective(doc, table, rows[rid], 'NodeTalentTriggerId')))
+                        talent = next((r for r in source.read('TalentModel')[1] if r['TalentId']==trigger), {})
+                        if talent.get('TalentIsMatrixOnly') == '1': target = 'MatrixEffect'
+                    if target not in pointer_rows:
+                        pointer_rows[target] = {r[TABLE_KEYS[target]] for r in source.read(target + 'Model')[1]}
+                    pointer = effective(doc, table, rows[rid], col)
+                    if pointer > 0 and str(int(pointer)) not in pointer_rows[target]:
+                        raise ValueError('%s %s.%s: missing %s %s' % (table, rid, col, target, pointer))
                 if table == 'Item' and col == 'ItemClass' and parsed is not None:
                     if item_classes is None:
                         item_classes = set(map(str, ITEM_CLASSES)) | {r['ItemClass'] for r in source.read('ItemModel')[1]}
@@ -270,6 +291,9 @@ def validate(doc, source, config_dir=None):
                     op, number = parsed
                     if op != 'set' or not number.is_integer() or str(int(number)) not in weapon_assets:
                         raise ValueError('Weapon %s: choose an existing icon / model assignment' % rid)
+    if removed:
+        import talent_tree
+        talent_tree.plan(doc, source, config_dir)
 
 
 def _effective_enemy_ids(source, config_dir, column):
@@ -1342,6 +1366,9 @@ def catalog(config_dir, database, document=None):
 
 def apply_edits(doc, edits, source, config_dir=None):
     result = copy.deepcopy(doc)
+    if 'removedJobNodes' in edits:
+        if edits['removedJobNodes']: result['removedJobNodes'] = edits['removedJobNodes']
+        else: result.pop('removedJobNodes', None)
     for col, value in edits.get('implantMultipliers', {}).items():
         result.setdefault('implantMultipliers', {})[col] = value
     for cell in edits.get('cells', []):
@@ -1411,6 +1438,8 @@ def sql(doc, source, config_dir=None):
     if global_assignments:
         # Deliberately unscoped: includes every implant/module, even future rows.
         statements.append('UPDATE "Implant" SET %s;' % ', '.join(global_assignments))
+    import talent_tree
+    statements.extend(talent_tree.sql(doc, source, config_dir))
     return statements, touched
 
 
@@ -1425,7 +1454,23 @@ def augment(data, provenance, config_dir, database):
     # would silently choose an owner, so refuse instead.
     aliases = {'Talent': {'AP': 'ApCost', 'Charges': 'MaxCharges', 'Recharge': 'RechargeTurns',
                          'AoE': 'RangeAoE', 'TargetDuration': 'TargetEffectDuration'},
-               'Effect': {'MoveDebuff': 'MoveSpeedDebuff', 'HealType': 'EffectHealType'}}
+               'Effect': {'MoveDebuff': 'MoveSpeedDebuff', 'HealType': 'EffectHealType'},
+               'JobNode': {'Cost': 'BuyCost', 'Icon': 'IconPng', 'Charges': 'MaxCharges',
+                           'Recharge': 'RechargeTurns', 'AP': 'TalentAp', 'Range': 'TalentRange',
+                           'Damage': 'TalentDamage', 'Duration': 'TalentDuration', 'AoE': 'TalentRangeAoE',
+                           'MaxUses': 'TurnMaxUses', 'Healing': 'TalentHealing', 'Count': 'TalentCount', 'Limit': 'TalentLimit'}}
+    # An explicit icon choice supersedes the exporter's derived attribute icon.
+    # Native authored assignments still use the overlap refusal below.
+    automatic = {(str(c['node_id']), c['icon']) for c in receipt.get('automatic_attribute_icons', [])
+                 if not c.get('previous_icon_override')}
+    manual_icons = []
+    for row in payload.get('JobNode', []):
+        rid = str(row['JobNodeId'])
+        if ('JobNode', rid, 'IconPng') in touched and (rid, row.get('Icon')) in automatic:
+            manual_icons.append(rid)
+            row.pop('Icon')
+    if manual_icons:
+        receipt['manual_attribute_icon_nodes'] = manual_icons
     for table, key in TABLE_KEYS.items():
         for row in payload.get(table, []):
             for col in row:
