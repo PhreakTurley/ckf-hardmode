@@ -569,8 +569,11 @@ ordered Left, Center, Right, with Extra Item Carry and its carry upgrades last.
 Class roots stay hidden; base talents remain visible. Every table scrolls with
 the page. Filtering and **Show all columns** follow the weapon editor's layout.
 Zero-only and metadata columns are omitted by default; explicit overrides,
-icons, effect pointers and the declared always-visible attribute fields remain
-available. **Show all columns** exposes the remaining declared fields.
+node icons, effect pointers and the declared always-visible attribute fields remain
+available. The Talents and upgrades table omits the Talent self/target/matrix
+effect pointers and Talent icon; the Effects table omits its icon. These view
+choices also apply with **Show all columns** and preserve stored adjustments.
+**Show all columns** exposes the remaining declared fields.
 
 Each cell retains its native table/id/column address. Existing sheet columns
 save through the byte-preserving sheet writer. Newly exposed fields use sparse

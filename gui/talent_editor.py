@@ -7,6 +7,11 @@ import talent_catalog as tc
 POINTERS = {'JobNode': {'NodeEffect1Id': 'Effect', 'MatrixEffect1Id': 'MatrixEffect',
                        'NodeTalentTriggerEffect': 'Effect'},
             'Talent': {'SelfEffect': 'Effect', 'TargetEffect': 'Effect', 'MatrixEffect': 'MatrixEffect'}}
+# Presentation only: stored adjustments and export fields remain available.
+OMITTED_COLUMNS = {
+    ('Talents and upgrades', 'Talent'): {'SelfEffect', 'TargetEffect', 'MatrixEffect', 'IconPng'},
+    ('Effects', 'Effect'): {'IconAsset'},
+}
 NODE_METADATA = {'JobVersion', 'JobId', 'DisplayCol', 'DisplayRow', 'NodeReq1', 'NodeReq2',
                  'NodeReq3', 'SubTree', 'SubQuad', 'ImplantClass', 'ImplantLevel', 'Locked',
                  'NodeTalent1Id', 'NodeTalentTriggerId', 'NodeTalentTriggerType',
@@ -60,7 +65,7 @@ def catalog(overlays, database, attribute_columns, attribute_always, talent_excl
                                  if table == 'Talent' else ['IconAsset'])
                         names.sort(key=lambda n: first.index(n) if n in first else len(first))
                         for name in names:
-                            if name not in declared:
+                            if name not in declared or name in OMITTED_COLUMNS.get((title, table), set()):
                                 continue
                             col = {'name': table + '.' + name, 'sourceColumn': name, 'sourceTable': table,
                                    'label': pb.label(name), 'group': heading, 'order': len(g['columns']),
