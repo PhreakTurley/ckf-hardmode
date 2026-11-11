@@ -9,6 +9,7 @@ POINTERS = {'JobNode': {'NodeEffect1Id': 'Effect', 'MatrixEffect1Id': 'MatrixEff
             'Talent': {'SelfEffect': 'Effect', 'TargetEffect': 'Effect', 'MatrixEffect': 'MatrixEffect'}}
 # Presentation only: stored adjustments and export fields remain available.
 OMITTED_COLUMNS = {
+    ('Talents and upgrades', 'JobNode'): {'NodeEffect1Id', 'MatrixEffect1Id'},
     ('Talents and upgrades', 'Talent'): {'SelfEffect', 'TargetEffect', 'MatrixEffect', 'IconPng'},
     ('Effects', 'Effect'): {'IconAsset'},
 }

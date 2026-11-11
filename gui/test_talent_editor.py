@@ -139,7 +139,7 @@ setTimeout(function() {
  ck('talent grids scroll with the page', find(n=>n._cls().includes('grid-wrap')).every(n=>n._cls().includes('page-grid-wrap')));
  ck('base talents cannot be removed', !find(n=>n.tagName==='BUTTON' && n.getAttribute('aria-label')==='Remove Job Node 7020').length);
  ck('upgrade removal is available', find(n=>n.tagName==='BUTTON' && n.getAttribute('aria-label')==='Remove Job Node 7021').length===1);
- ck('icons and effect pointers have choices', ['JobNode 7021.IconPng','JobNode 7021.NodeEffect1Id'].every(target=>
+ ck('node icon and attribute effect pointer have choices', ['JobNode 7021.IconPng','JobNode 7500.NodeEffect1Id'].every(target=>
    find(n=>n.tagName==='INPUT' && n.getAttribute('data-player-target')===target && n.getAttribute('list')).length>0));
  const all=find(n=>n.tagName==='INPUT' && n.type==='checkbox' && !n.getAttribute('aria-label'))[0];
  const count=find(n=>n.tagName==='TH').length;all.checked=true;all.fire('change');
