@@ -21,7 +21,32 @@ class ArmorTests(unittest.TestCase):
                     b'22000,,,45,source adjustment\r\n'
                     b'990001,22000,never,,fixture clone\r\n')
         self.path.write_bytes(self.raw)
+        (self.config / armor.MONSTERS).write_bytes(b'MonsterTypeId,ArmorTypeId\n1,990001\n1100,22511\n')
+
+    def test_validation_uses_replaced_assignments_and_reports_unmodified_native_defects(self):
+        view = armor.validate(self.config, serve.static_data.DEFAULT_DB)
+        self.assertEqual(view['unresolvedAssignments'], [])
         (self.config / armor.MONSTERS).write_bytes(b'MonsterTypeId,ArmorTypeId\n1,990001\n')
+        view = armor.model(self.config, serve.static_data.DEFAULT_DB, {})
+        self.assertIn({'monsterId':'1100', 'name':'Hover Tank', 'powerLevel':'1', 'armorId':'22510'},
+                      view['unresolvedAssignments'])
+        with self.assertRaisesRegex(ValueError, 'MonsterType 1100 -> Armor 22510'):
+            armor.validate(self.config, serve.static_data.DEFAULT_DB)
+
+    def test_proposed_missing_pointer_is_refused_before_save(self):
+        proposed = {armor.MONSTERS:b'MonsterTypeId,ArmorTypeId\n1100,999999\n'}
+        with self.assertRaisesRegex(ValueError, 'MonsterType 1100 -> Armor 999999'):
+            armor.validate(self.config, serve.static_data.DEFAULT_DB, proposed)
+
+    def test_authored_names_use_the_effective_level_and_natural_sort(self):
+        self.path.write_bytes(b'ArmorId,_clone,PowerLevel\n990001,135,9\n990002,135,10\n22104,,5\n')
+        view = armor.validate(self.config, serve.static_data.DEFAULT_DB)
+        rows = {r['id']:r for r in view['page']['grids'][0]['rows']}
+        self.assertEqual(rows['990001']['name'], 'Drone Infantry (PL 9)')
+        self.assertEqual(rows['990002']['name'], 'Drone Infantry (PL 10)')
+        self.assertEqual(rows['22104']['name'], 'Sniper Guard (PL 5)')
+        order = [r['id'] for r in view['page']['grids'][0]['rows']]
+        self.assertLess(order.index('990001'), order.index('990002'))
 
     def test_clones_inherit_the_authored_source_and_keep_distinct_identity(self):
         view = armor.model(self.config, serve.static_data.DEFAULT_DB, {})

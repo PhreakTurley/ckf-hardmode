@@ -15,10 +15,10 @@ For the first-party SQL port of authored enemy changes, use
 [Enemy Difficulty preparation](enemy-difficulty-workshop.md).
 
 The live files are under `BepInEx\config\ckf.hardmode.d\`; inspect them directly
-for current values. Tier ids per block are in
-`overlays/_reference/gear-blocks.md`;
-which ids are enemy-facing is in
-`overlays/_reference/player-vs-enemy-gear.md`.
+for current values and tier identities. Use the [Enemy Armors editor](../gui/README.md#enemy-armors)
+for effective armor rows and assignments, and [armour families](armour-groups.md)
+for the distinction between armor tiers and enemy PL. The private indexes under
+`overlays/_reference/` describe the historical overlay layout.
 
 | To change | Where |
 |---|---|

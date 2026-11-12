@@ -44,14 +44,15 @@ class EnemyDifficultyChecks(unittest.TestCase):
                 guarded_write(directory / f'MonsterGroupMemberModel.spawn-{tag}.csv',
                               b'MonsterGroupMemberId,InvalidLegacyColumn\n30,999999\n')
             monster = 'MonsterTypeId,ArmorTypeId,HitPoints,WeaponTypeId,MonsterTalentGroup\n'
-            monster += ''.join(f'{identity},,1,999999,999999\n' for identity in ids)
+            monster += ''.join(f'{identity},{"22511" if identity == "1100" else ""},1,999999,999999\n' for identity in ids)
             guarded_write(directory / 'MonsterTypeModel.csv', monster.encode())
             artifacts, _ = build(config_dir=directory)
             import json
             payload = json.loads(artifacts['source_content/enemy-difficulty.json'])
             non_roster = [statement for statement in payload['RawSQL'] if 'MonsterGroupMember' not in statement]
-            self.assertEqual(len(non_roster), 1)
+            self.assertEqual(len(non_roster), 2)
             self.assertIn('WHERE "RuleId"=82', non_roster[0])
+            self.assertIn('WHERE "MonsterTypeId"=1100', non_roster[1])
             self.assertTrue(any(statement.startswith('DELETE FROM "MonsterGroupMember"') for statement in payload['RawSQL']))
             self.assertFalse(any('spawn-' in path for path in artifacts['review/SOURCE.json'].decode().splitlines()))
             self.assertEqual(payload['RawText']['Generic'], {})

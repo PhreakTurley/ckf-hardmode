@@ -21,7 +21,8 @@
    should not scroll sideways inside a pane narrower than itself. Base is 14.5px
    and the nav is 244px. */
 *{box-sizing:border-box}
-html,body{margin:0;height:100%}
+html{height:100%}
+body{margin:0;min-height:100%}
 body{background:var(--bg);color:var(--ink);
   font:14.5px/1.45 ui-sans-serif,system-ui,"Segoe UI",Roboto,sans-serif}
 code,.mono{font-family:ui-monospace,"Cascadia Mono",Consolas,monospace}
@@ -129,6 +130,8 @@ code.loc span{display:block}
 .retrobox h4{margin:0 0 4px;color:#f0a196;font-size:13.75px}
 .grid-wrap{overflow:auto;max-height:72vh;border:1px solid var(--line);border-radius:6px}
 .grid-wrap.page-grid-wrap{max-height:none}
+.page-grid-wrap table.grid thead{position:relative;z-index:5}
+.page-grid-wrap table.grid thead th{position:relative;top:auto}
 table.grid{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%}
 table.grid th,table.grid td{border-bottom:1px solid var(--line);
   border-right:1px solid var(--line);padding:0;white-space:nowrap}
@@ -825,6 +828,32 @@ const CKF = (function () {
 'use strict';
 const TOKEN = '__CKF_TOKEN__';
 const $ = function (s, r) { return (r || document).querySelector(s); };
+
+// An overflow wrapper keeps horizontal scrolling local, but prevents CSS sticky
+// headers from following the page. Move the real header inside its own table so
+// it retains column widths and remains aligned while scrolling horizontally.
+function pinPageTableHeaders() {
+  const header=document.querySelector('body > header');
+  const top=header ? Math.max(0,header.getBoundingClientRect().bottom) : 0;
+  for (const table of document.querySelectorAll('.page-grid-wrap table.grid')) {
+    const head=table.querySelector('thead');
+    if (!head) continue;
+    const rect=table.getBoundingClientRect();
+    const distance=Math.max(0,Math.min(top-rect.top,rect.height-head.offsetHeight));
+    head.style.transform='translateY('+distance+'px)';
+  }
+}
+let pinHeadersPending=false;
+function schedulePinnedHeaders() {
+  if (pinHeadersPending || !window.requestAnimationFrame) return;
+  pinHeadersPending=true;
+  window.requestAnimationFrame(function() {pinHeadersPending=false;pinPageTableHeaders();});
+}
+if (window.addEventListener) {
+  window.addEventListener('scroll',schedulePinnedHeaders,{passive:true,capture:true});
+  window.addEventListener('resize',schedulePinnedHeaders,{passive:true});
+  if (window.ResizeObserver) new ResizeObserver(schedulePinnedHeaders).observe(document.body);
+}
 const el = function (tag, attrs, kids) {
   const n = document.createElement(tag);
   for (const k in (attrs || {})) {
@@ -2510,6 +2539,7 @@ function renderPlayer(panel, page) {
       target.appendChild(el('div', {class:'grid-wrap' + (grid.scrollWithPage ? ' page-grid-wrap' : '')}, [tbl]));
     }
     updateRules();
+    schedulePinnedHeaders();
   }
   search.addEventListener('input',function () {for (const key in pageNumbers) delete pageNumbers[key];paint();});
   showAll.addEventListener('change',paint);paint();
@@ -3922,7 +3952,8 @@ function renderEnemyArmor(panel) {
     panel.appendChild(el('h3',{text:'Enemy Armors'}));
     panel.appendChild(banner('warn','Enemy armors unavailable',[model.error || 'Select the official content database.']));return;
   }
-  if ((model.unresolvedShipped || []).length) panel.appendChild(banner('warn','Unresolved armor references',[model.unresolvedShipped.join(', ')]));
+  if ((model.unresolvedAssignments || []).length) panel.appendChild(banner('err','Unresolved effective armor assignments',
+    model.unresolvedAssignments.map(function(r) {return r.name+' · MonsterType '+r.monsterId+' · enemy PL '+r.powerLevel+' → Armor '+r.armorId;})));
   renderPlayer(panel,model.page);
   const source=el('input',{type:'text',value:model.sourceDir || '',spellcheck:'false','aria-label':'Enemy balance source checkout'});
   const folder=el('input',{type:'text',value:model.modkitDir || '',spellcheck:'false','aria-label':'Enemy Difficulty Modkit folder'});

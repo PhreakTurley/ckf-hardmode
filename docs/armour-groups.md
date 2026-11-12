@@ -1,30 +1,27 @@
-# Armour-group split reference
+# Armour families and enemy assignments
 
-Use this reference when changing how enemy armour PowerGroups share ladders. It
-records the shipped pointer patterns and the row/pointer cost of restoring those
-patterns after normalisation. It is not a tuning recommendation.
+An armor tier and an enemy power level are separate values. `MonsterType.ArmorTypeId`
+selects a row by `Armor.ArmorId`; the armor's `PowerLevel` does not select it.
+Authoring and validation are described in the [Enemy Armors editor guide](../gui/README.md#enemy-armors).
 
-The PL 1–20 armour retune collapsed each of those two blocks onto one ladder: PL
-n → tier n for every PowerGroup, each tier carrying the larger of the curve value
-and the best value any PowerGroup in the block had at that PL in the shipped
-game.
+To construct a twenty-tier family, reuse its shipped ladder rows and clone only
+additional tiers above that ladder. A blank stat cell on a shipped row restores
+Official data; a blank clone cell inherits its donor after authored edits.
+Keep the source row's identity, and author the tier's `PowerLevel` explicitly
+when the native metadata or name does not match its position in the ladder.
 
-`heavy` lost nothing: all 25 of its PowerGroups walked one identical pattern in
-the shipped game. Neither did the other six armour blocks, which were already one
-row per power level.
-
-## What normalisation removed
-
-Two blocks shipped with their PowerGroups at different offsets into one id run.
-The offset was how the designers made one enemy a weaker Guard than another.
-After normalising, every PowerGroup in the block reads identically at all 20
-levels.
+The shipped lower tiers need not map one to one to enemy PL. Preserve those
+native assignments when restoring the native opening progression. Higher-level
+assignments are explicit authoring choices: unused intermediate armor tiers are
+valid, while an enemy pointing to an absent armor row is not. Changing shared
+shipped armor also changes any singleton enemies referencing it.
 
 ## Shipped pointer runs
 
-From the dump's `MonsterTypeModel.csv` [measured]. Values at these ids come from
-the dump's `ArmorModel.csv`. Read them from the dump, not from
-`ckf.hardmode.d/ArmorModel.csv`, which holds retuned values for the shipped ids.
+These captured native `MonsterTypeModel` pointer runs are historical evidence
+[measured, `sheets/raw/MonsterTypeModel.csv`]. For current shipped pointers and
+armor values, read `Official/data.db` through `scripts/static_data.py`; never
+use the authored overlay as a native baseline.
 
 ### `guard-standard`: 3 patterns, 24 PowerGroups
 
@@ -48,39 +45,25 @@ The 10-PowerGroup pattern is the strongest, not the most common:
 
 PowerGroup 300's PL 11–20 run alternates 22205 and 22206.
 
-## What a split costs
+## Validation and naming
 
-One pattern per block keeps the canonical run it has (`22000`–`22019` for
-`guard-standard`, `901000`–`901019` for `adaptive`); the others need private
-runs:
+The editor resolves authored armor replacements before validating every effective
+enemy assignment. It also accounts for the exporter's matched higher-level
+extensions to newly shipped ladders. Warnings identify the enemy and missing
+armor ID; replaced native references are not reported as unresolved. The exporter
+and independent verifier check every effective enemy armor reference as well.
 
-- `guard-standard`: 2 private runs = 40 new rows, 240 `ArmorTypeId` cells
-  repointed.
-- `adaptive`: 3 private runs = 60 new rows, 240 cells repointed.
-
-Total: 100 new `ArmorModel` rows and 480 pointer cells. No id range is reserved
-here; inspect the live overlay before assigning ids.
-
-The runs must be private: the shipped runs overlap (guard-standard pattern 1's
-PL 3 row is pattern 2's PL 1 row), so they cannot be left pointing at shipped
-ids and retuned in place.
-
-## Recompute inputs
-
-For each pattern, feed the retune curve that pattern's own shipped PL 1–10 value
-sequence (the dump values at its PL 1–10 rows above) instead of the block-wide
-maximum across PowerGroups.
-
-The 25 single-power-level enemies still point at shipped rows including
-`21999`, `22001`, `22200` and `22202`; editing those rows moves them
-(`overlays/_reference/gear-blocks.md`, "The 25 PowerGroups with no ladder").
+Authored shipped rows and clones receive names using their effective armor PL.
+The source name's trailing PL/Lvl suffix is replaced, so a clone does not carry
+two different levels in its name. See [Workshop preparation](enemy-difficulty-workshop.md)
+for the SQL and locale handoff.
 
 ## Open questions
 
-- [unverified] Whether PowerGroup 300's alternating PL 11–20 pointers are
+- [unverified] Whether PowerGroup 300's alternating native PL11–20 pointers are
   deliberate or incidental.
 
 ## Related
 
-- [`tuning-enemies.md`](tuning-enemies.md#armour)
-- [`cloning-rows.md`](cloning-rows.md)
+- [Enemy tuning surfaces](tuning-enemies.md#armour)
+- [Cloning rows](cloning-rows.md)

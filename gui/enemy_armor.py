@@ -3,6 +3,7 @@ import csv
 import io
 import json
 import math
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -16,6 +17,17 @@ CORE_COLUMNS = ('PowerLevel', 'BallisticArmor', 'PhysicalArmor', 'BallisticArmor
                 'PhysicalArmorDegraded', 'MaxArmorPoints', 'InitPenalty', 'MovementRate', 'CarryCapacity')
 
 
+def armor_name(label, level):
+    """Replace a donor's level suffix with the effective authored level."""
+    family = re.sub(r'\s*(?:\(PL\s*\d+\)|(?:PL|Lvl)\s*\d+)\s*$', '', label, flags=re.I)
+    return '%s (PL %s)' % (family, level)
+
+
+def natural_key(value):
+    return tuple(int(part) if part.isdigit() else part.casefold()
+                 for part in re.split(r'(\d+)', value))
+
+
 def sheet_path(config, relative):
     choices = [p for p in (Path(config) / relative, Path(config) / (relative + '.disabled')) if p.is_file()]
     if len(choices) != 1:
@@ -23,8 +35,8 @@ def sheet_path(config, relative):
     return choices[0]
 
 
-def read_sheet(path):
-    raw = path.read_bytes()
+def read_sheet(path, raw=None):
+    raw = path.read_bytes() if raw is None else raw
     reader = csv.DictReader(io.StringIO(raw.decode('utf-8-sig'), newline=''))
     header = list(reader.fieldnames or [])
     rows = []
@@ -70,7 +82,8 @@ def player_references(source, armors):
     return refs
 
 
-def model(config, database, settings):
+def model(config, database, settings, proposed=None):
+    proposed = proposed or {}
     result = {'error': None, 'page': None, 'values': {},
               'sourceDir': settings.get('enemySourceDir', ''),
               'modkitDir': settings.get('enemyModkitProjectDir', '')}
@@ -80,7 +93,8 @@ def model(config, database, settings):
         with static_data.StaticData(database) as source:
             result['database'] = pb.identity(source)
             path = sheet_path(config, SHEET)
-            _, header, authored = read_sheet(path)
+            relative = str(path.relative_to(config)).replace('\\', '/')
+            _, header, authored = read_sheet(path, proposed.get(relative))
             declared = pb.declarations(source, 'Armor')
             unknown = set(c for c in header if not c.startswith('_')) - set(declared) - {'ArmorId'}
             if unknown:
@@ -102,11 +116,51 @@ def model(config, database, settings):
                     effective[row['ArmorId']] = {**effective[donor], 'ArmorId': row['ArmorId'],
                         **{k: v for k, v in row.items() if k in declared and v.strip()}}
             monsters = {r['MonsterTypeId']: r for r in source.read('MonsterTypeModel')[1]}
-            enemy_ids = {r['ArmorTypeId'] for r in monsters.values()}
             monster_path = sheet_path(config, MONSTERS)
-            for row in csv.DictReader(io.StringIO(monster_path.read_text(encoding='utf-8-sig'))):
+            authored_monsters = set()
+            relative = str(monster_path.relative_to(config)).replace('\\', '/')
+            monster_bytes = proposed[relative] if relative in proposed else monster_path.read_bytes()
+            for row in csv.DictReader(io.StringIO(monster_bytes.decode('utf-8-sig'))):
+                identity = row['MonsterTypeId'].strip()
+                if identity not in monsters or identity in authored_monsters:
+                    raise ValueError('Missing or duplicate shipped MonsterType: ' + identity)
+                authored_monsters.add(identity)
                 if row.get('ArmorTypeId', '').strip():
-                    enemy_ids.add(row['ArmorTypeId'].strip())
+                    monsters[identity]['ArmorTypeId'] = row['ArmorTypeId'].strip()
+            # Catalog and validation use the assignments that will be exported,
+            # including matching newly shipped ladders absent from the sheet.
+            native = source.read('MonsterTypeModel')[1]
+            groups = {}
+            for row in native:
+                levels = groups.setdefault(row['PowerGroupId'], {})
+                level = int(row['PowerLevel'])
+                if level in levels:
+                    levels[level] = None
+                else:
+                    levels[level] = row
+            complete = {pg: levels for pg, levels in groups.items()
+                        if set(levels) == set(range(1, 21)) and all(levels.values())}
+            for pg, levels in complete.items():
+                if any(r['MonsterTypeId'] in authored_monsters for r in levels.values()):
+                    continue
+                signature = tuple(levels[p]['ArmorTypeId'] for p in range(1, 11))
+                donors = [lv for lv in complete.values()
+                          if all(r['MonsterTypeId'] in authored_monsters for r in lv.values())
+                          and tuple(lv[p]['ArmorTypeId'] for p in range(1, 11)) == signature]
+                tails = {tuple(monsters[lv[p]['MonsterTypeId']]['ArmorTypeId'] for p in range(11, 21))
+                         for lv in donors}
+                if not donors:
+                    continue
+                if len(tails) != 1:
+                    raise ValueError('Missing or ambiguous armor ladder for PowerGroup ' + pg)
+                for level, pointer in zip(range(11, 21), next(iter(tails))):
+                    monsters[levels[level]['MonsterTypeId']]['ArmorTypeId'] = pointer
+            enemy_ids = {r['ArmorTypeId'] for r in monsters.values()}
+            result['unresolvedAssignments'] = [
+                {'monsterId': r['MonsterTypeId'], 'name': r['MonsterName'],
+                 'powerLevel': r['PowerLevel'], 'armorId': r['ArmorTypeId']}
+                for r in monsters.values()
+                if r['ArmorTypeId'] not in effective and r['ArmorTypeId'] not in ('0', '-1', '')]
             enemy_ids.update(r['ArmorId'] for r in authored)
             refs = player_references(source, stock)
             by_id = {r['ArmorId']: r for r in authored}
@@ -121,29 +175,39 @@ def model(config, database, settings):
                 baseline = effective[donor] if donor else stock[rid]
                 fields = {k: by_id.get(rid, {}).get(k, '').strip() for k in declared}
                 result['values'][rid] = fields
-                records.append({'id': rid, 'name': stock[donor or rid]['ArmorName'], 'baseline': baseline,
+                name = armor_name(stock[donor or rid]['ArmorName'], effective[rid]['PowerLevel']) if rid in by_id else stock[rid]['ArmorName']
+                records.append({'id': rid, 'name': name, 'baseline': baseline,
                     'cloneOf': donor, 'origin': 'Clone' if donor else 'Shipped',
                     'playerUse': bool(refs.get(rid)), 'acquisition': refs.get(rid, []),
                     'targets': {name: {'table': 'Armor', 'id': rid, 'column': name, 'enemyArmor': True}
                                 for name in declared}})
-            records.sort(key=lambda r: (r['name'].casefold(), int(r['baseline']['PowerLevel']), bool(r['cloneOf']), int(r['id'])))
+            records.sort(key=lambda r: (natural_key(r['name']), int(r['id'])))
             result['page'] = {'id': 'enemy-armors', 'title': 'Enemy Armors', 'group': 'Enemy Gear', 'enemyArmor': True,
                 'grids': [{'key': 'enemy-armors', 'table': 'Armor', 'title': 'Enemy Armors',
                            'columns': columns, 'advanced': [], 'rows': records, 'dynamicColumns': True,
                            'scrollWithPage': True, 'unpaginated': True}]}
             result['path'] = str(path.relative_to(config)).replace('\\', '/')
-            result['unresolvedShipped'] = sorted(enemy_ids - effective.keys() - {'0', '-1', ''}, key=int)
+            result['unresolvedShipped'] = sorted({r['armorId'] for r in result['unresolvedAssignments']}, key=int)
     except (ValueError, OSError, static_data.DataError) as exc:
         result['error'] = str(exc)
     return result
 
 
+def validate(config, database, proposed=None):
+    view = model(Path(config), database, {}, proposed)
+    if view['error']:
+        raise ValueError(view['error'])
+    if view.get('unresolvedAssignments'):
+        raise ValueError('Unresolved effective armor assignments: ' + ', '.join(
+            'MonsterType %s -> Armor %s' % (r['monsterId'], r['armorId'])
+            for r in view['unresolvedAssignments']))
+    return view
+
+
 def apply_edits(config, database, cells):
     if not cells:
         return {}
-    view = model(config, database, {})
-    if view['error']:
-        raise ValueError(view['error'])
+    view = validate(config, database)
     path = sheet_path(config, SHEET)
     raw, header, rows = read_sheet(path)
     by_id = {r['ArmorId']: r for r in rows}
@@ -181,6 +245,7 @@ def apply_edits(config, database, cells):
 
 
 def prepare(config, database, source_dir, uploader):
+    validate(config, database)
     root, destination = Path(source_dir).resolve(), Path(uploader).resolve()
     script = root / 'scripts/build_bundled_rebalances.py'
     if not script.is_file():

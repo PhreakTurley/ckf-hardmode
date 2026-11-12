@@ -516,12 +516,19 @@ or retired combat-rule cells. It refuses to overwrite existing player tuning.
 
 ## Enemy armors
 
-**Enemy Gear → Enemy Armors** shows shipped armor referenced by enemies and
+**Enemy Gear → Enemy Armors** shows armor referenced by effective enemy assignments and
 all authored armor rows, including clones. Each row says **Shipped** or
 **Clone**, with the clone's donor ID. An **Also used by players** marker identifies
 positive contact-service, mission-loot or player-pet references; its tooltip
 lists the references. This is a catalog check, not a calculation of campaign
 availability.
+
+The catalog applies authored monster armor replacements before checking references,
+including the exporter's matching extensions for newly shipped ladders. Missing
+targets identify the enemy, its PL and the missing armor ID; validation, saving
+and package preparation refuse unresolved effective assignments. Replaced native
+references do not produce warnings. Names use each row's effective authored PL,
+sort numbers naturally (9 before 10), and column headers follow page scrolling.
 
 Saving writes stat cells to the existing live `ckf.hardmode.d/ArmorModel.csv`
 (or its parked `.disabled` file). Empty cells inherit: shipped rows use Official

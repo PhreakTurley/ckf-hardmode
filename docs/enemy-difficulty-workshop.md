@@ -57,7 +57,10 @@ a backup of live configuration.
 
 Armor edits become sparse updates. Armor clones inherit unedited fields from
 their source after authored source updates, retain their explicit identities,
-and receive localized names. The BepInEx `_serveOn` control has no SQL equivalent.
+and receive localized names. Names for both authored shipped rows and clones
+replace the source name's level suffix with the effective authored armor PL.
+Every effective enemy armor reference is checked, including unchanged native
+pointers. The BepInEx `_serveOn` control has no SQL equivalent.
 
 For newly shipped complete PL1–20 ladders absent from the authoring sheet, the
 exporter extends only armor pointers. Their native PL1–10 armor signature must

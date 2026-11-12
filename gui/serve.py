@@ -5654,6 +5654,17 @@ class App:
             except (ValueError, OSError, subprocess.SubprocessError) as exc:
                 return {'ok':False, 'error':str(exc)}
 
+    def validate_enemy_armor(self, cd, proposed):
+        if self.static_source is False:
+            return
+        if not any((Path(cd) / rel).is_file() or (Path(cd) / (rel + '.disabled')).is_file()
+                   for rel in (enemy_armor.SHEET, enemy_armor.MONSTERS)):
+            return
+        try:
+            enemy_armor.validate(cd, self.data_source(), proposed)
+        except (ValueError, OSError, static_data.DataError) as exc:
+            raise SaveRefused({'summary': 'Enemy armor assignments are invalid', 'detail': str(exc)})
+
     def validate_talent_tree(self, cd, proposed):
         if self.static_source is False:
             return
@@ -5685,6 +5696,7 @@ class App:
                 self.player_edits(cd, edits, proposed)
                 self.party_edits(cd, edits, proposed)
                 self.enemy_armor_edits(cd, edits, proposed)
+                self.validate_enemy_armor(cd, proposed)
                 self.validate_talent_tree(cd, proposed)
                 notes = (reformat_notes(doc) + stray_notes(doc, doc.schemas)
                          + notes + more)
@@ -5728,6 +5740,7 @@ class App:
                 self.player_edits(cd, edits, proposed)
                 self.party_edits(cd, edits, proposed)
                 self.enemy_armor_edits(cd, edits, proposed)
+                self.validate_enemy_armor(cd, proposed)
                 self.validate_talent_tree(cd, proposed)
                 notes = (reformat_notes(doc) + stray_notes(doc, doc.schemas)
                          + notes + more)

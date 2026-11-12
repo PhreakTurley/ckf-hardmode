@@ -15,6 +15,7 @@ from decimal import Decimal, ROUND_HALF_EVEN
 import hashlib
 import json
 import math
+import re
 from pathlib import Path
 import sqlite3
 
@@ -114,6 +115,13 @@ def verify(sql_path, data_path=DEFAULT_DB, config_dir=CONFIG, native_integrity=F
                         if t == "Armor":
                             family = comment.split(" tier PL ")[0].replace("-", " ").title()
                             label = db.locale.get("ArmorName." + source, family)
+                            label = re.sub(r'\s*(?:\(PL\s*\d+\)|(?:PL|Lvl)\s*\d+)\s*$', '', label, flags=re.I)
+                            expected_names["ArmorName." + str(identity)] = f"{label} (PL {target[t][identity]['PowerLevel']})"
+                if t == "Armor":
+                    for identity, source, _, _ in converted:
+                        if not source:
+                            label = db.locale.get("ArmorName." + str(identity), "Armor " + str(identity))
+                            label = re.sub(r'\s*(?:\(PL\s*\d+\)|(?:PL|Lvl)\s*\d+)\s*$', '', label, flags=re.I)
                             expected_names["ArmorName." + str(identity)] = f"{label} (PL {target[t][identity]['PowerLevel']})"
                 counts["authored_rows"] += len(converted)
 
@@ -226,15 +234,18 @@ def verify(sql_path, data_path=DEFAULT_DB, config_dir=CONFIG, native_integrity=F
                 if t not in kinds:
                     require(raw_rows(t) == before[t], "Unowned table changed: " + t)
                     counts["unchanged_tables"] += 1
-            require(locale == expected_names, "Locale entries do not match inserted armors")
+            require(locale == expected_names, "Locale entries do not match authored armors")
             for identity, row in actual["MonsterType"].items():
+                require(row["ArmorTypeId"] in (0, -1, None, "") or row["ArmorTypeId"] in actual["Armor"],
+                        f"Unresolved effective armor: MonsterType {identity} ArmorTypeId={row['ArmorTypeId']}")
+                counts["effective_armor_references"] += 1
                 if row["ArmorTypeId"] != original["MonsterType"][identity]["ArmorTypeId"]:
                     require(row["ArmorTypeId"] in actual["Armor"], f"Unresolved authored armor: {identity}")
                     counts["authored_armor_references"] += 1
-            # Native content can contain unresolved references that this package
-            # does not own. Keep the old global checks runnable by name.
+            # Armor resolution always runs. Keep the broader native weapon and
+            # talent/effect integrity checks available under their existing names.
             native_checks = {
-                "native_high_PL_gear_resolution": "NOT RUN: opt in with --native-integrity; authored armor resolution ran",
+                "native_high_PL_gear_resolution": "NOT RUN: opt in with --native-integrity; all effective armor resolution ran",
                 "native_talent_effect_resolution": "NOT RUN: opt in with --native-integrity; native talent rows were compared unchanged",
             }
             if native_integrity:
@@ -270,7 +281,8 @@ def verify(sql_path, data_path=DEFAULT_DB, config_dir=CONFIG, native_integrity=F
             for t in db.schema:
                 require(raw_rows(t) == first[t], "Repeated SQL application accumulates changes: " + t)
             counts["repeat_application_tables"] = len(db.schema)
-            counts["localized_inserted_armors"] = len(locale)
+            counts["localized_inserted_armors"] = len(set(target["Armor"]) - set(original["Armor"]))
+            counts["localized_authored_armors"] = len(locale)
             db.assert_unchanged()
             require(roster_path.read_bytes() == roster_bytes, "Roster input moved during verification")
         return {"status": "PASS", "scope": "Enemy armor, PL1-20 Patrol/reinforcement/VIP rosters, Rule82=20 and surgical native corrections",

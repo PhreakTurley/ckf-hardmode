@@ -15,6 +15,7 @@ import io
 import json
 import math
 import os
+import re
 import importlib.util
 import sqlite3
 import sys
@@ -233,7 +234,14 @@ def build(data_path=DEFAULT_DB, config_dir=CONFIG, schema_path=PARSER_SCHEMA):
                 if t == "Armor":
                     family = comment.split(" tier PL ")[0].replace("-", " ").title()
                     label = db.locale.get("ArmorName." + str(source), family)
+                    label = re.sub(r'\s*(?:\(PL\s*\d+\)|(?:PL|Lvl)\s*\d+)\s*$', '', label, flags=re.I)
                     locales["ArmorName." + str(identity)] = f"{label} (PL {tables[t][identity]['PowerLevel']})"
+            if t == "Armor":
+                for identity, source, _, _, _ in rows:
+                    if source is None:
+                        label = db.locale.get("ArmorName." + str(identity), "Armor " + str(identity))
+                        label = re.sub(r'\s*(?:\(PL\s*\d+\)|(?:PL|Lvl)\s*\d+)\s*$', '', label, flags=re.I)
+                        locales["ArmorName." + str(identity)] = f"{label} (PL {tables[t][identity]['PowerLevel']})"
 
         if base["Rule"][82]["ConfigName"] != "Max Enemy Power Level":
             raise ValueError("Rule82 no longer declares the enemy ceiling")
@@ -311,8 +319,8 @@ def build(data_path=DEFAULT_DB, config_dir=CONFIG, schema_path=PARSER_SCHEMA):
                 if target and pointer not in tables[target]:
                     raise ValueError(f"Unresolved surgical pointer: {spec['table']} {spec['id']}.{field}")
         for identity, row in tables["MonsterType"].items():
-            if row["ArmorTypeId"] != base["MonsterType"][identity]["ArmorTypeId"] and row["ArmorTypeId"] not in tables["Armor"]:
-                raise ValueError(f"Unresolved authored armor: MonsterType {identity} ArmorTypeId={row['ArmorTypeId']}")
+            if row["ArmorTypeId"] not in (0, -1, None, "") and row["ArmorTypeId"] not in tables["Armor"]:
+                raise ValueError(f"Unresolved effective armor: MonsterType {identity} ArmorTypeId={row['ArmorTypeId']}")
         statement_bytes = ("-- CKF Enemy Difficulty: armor, PL1-20 rosters, Rule82=20 and reviewed surgical native corrections.\n"
                            + "\n".join(statements) + "\n").encode("utf-8")
         source_bytes = encode({"Metadata": {"StoryKey": "CKFEnemyDifficulty", "StartingId": 900000},
