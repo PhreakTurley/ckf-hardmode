@@ -2325,7 +2325,7 @@ function renderPlayer(panel, page) {
         target = subsections[subsectionKey];
       }
       if (grid.title !== page.title) target.appendChild(el('h3', {text:grid.title}));
-      if (['Weapons','Drone weapons','Cyberware','Cyberware modules','Consumables','Enemy Gear'].includes(page.group)) {
+      if (['Weapons','Drone weapons','Armor','Cyberware','Cyberware modules','Consumables','Enemy Gear'].includes(page.group)) {
         const sortBy = el('select',{'aria-label':'Sort by '+page.title+' · '+grid.title});
         const choices = [{value:'',text:'Catalog order'},{value:'name',text:'Name'}];
         if (grid.serviceColumn) choices.push({value:'service',text:'Service'});
@@ -2441,7 +2441,7 @@ function renderPlayer(panel, page) {
         if (row.playerUse) nameCell.appendChild(el('span',{class:'pb-enemy',text:'Also used by players',title:(row.acquisition || []).join('\n')}));
         if (page.enemyArmor && row.unused) nameCell.appendChild(el('span',{class:'pb-enemy pb-unused',text:'Unused armor',
           title:'No effective enemy armor assignments or known player service, loot or pet references. This row is available for future assignments.'}));
-        if (row.enemyUse) nameCell.appendChild(el('span', {class:'pb-enemy',text:'Also used by enemies',title:'Changing this weapon also affects enemies that use it.'}));
+        if (row.enemyUse) nameCell.appendChild(el('span', {class:'pb-enemy',text:'Also used by enemies',title:'Changing this '+(grid.table==='Armor' ? 'armor' : 'weapon')+' also affects enemies that use it.'}));
         if (row.owner) nameCell.appendChild(el('span', {class:'pb-owner',text:'Managed by '+row.owner}));
         if (row.fitment) nameCell.appendChild(el('small', {class:'pb-fit',text:row.fitment,title:row.fitmentSource}));
         const tr = el('tr', {'data-player-row':grid.table+' '+row.id}, [nameCell]);

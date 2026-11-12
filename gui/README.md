@@ -182,7 +182,7 @@ expanded-sheet grammar below remains a separate format.
 
 The weapon tabs put Melee, Pistol, Revolver, SMG, Shotgun, E-Rifle, Urban Assault,
 Assault Rifle, Sniper Rifle, Railgun, Claws and Eye Lasers first. Canine Attack Rig belongs
-with Drone weapons. Weapon and weapon-mod catalogs require a positive acquisition
+with Drone weapons. Weapon, armor and weapon-mod catalogs require a positive acquisition
 reference from the selected official database: an attainable item service, direct
 mission loot, a blueprint with `Lootable = 1`, or an explicit mission-loot
 reference to the blueprint regardless of its `Lootable` flag. Blueprint
@@ -192,6 +192,9 @@ include cyberweapon talent references, canine/feline weapon
 classes supported by player pet-owning jobs, pet prebuilt equipment, every
 weapon tier in a class named by a pet chassis, and
 the two weapon fields of explicit story `BlockCondition` `Equip` records.
+Armor uses the same checks, plus pet prebuilt armor and the `ArmorType` field
+of explicit story equipment. Armor and pet-armor blueprints join by their
+declared output classes; their service assignments alone do not admit a row.
 Services are matched by flow and option together. Saved service and cyberweapon
 pointer adjustments can add acquisition references; official references remain
 included. A blueprint's existence alone is insufficient. No general character
@@ -199,14 +202,14 @@ template or recruitment rule is inferred. `player_balance.py:player_gear_referen
 owns this inclusive static catalog policy; it does not calculate campaign
 reachability or drop probabilities. Hover a name to inspect its source references.
 
-Shared weapons remain editable and carry an **Also used by enemies** marker.
+Shared weapons and armor remain editable and carry an **Also used by enemies** marker.
 Enemy markers include both official and local overlay references, so a Hard Mode
 repoint cannot erase a Workshop warning. The presence or absence of enemy
 references does not decide player availability.
 Crafted Intrinsic mods are explicitly included as player crafting options,
 independently of item drops or blueprint availability.
 
-Every weapon and weapon-mod grid has a read-only **Blueprint** column. It
+Every weapon, armor and weapon-mod grid has a read-only **Blueprint** column. It
 shows **Blueprint** when a matching blueprint has `Lootable = 1` or an explicit
 `MissionLoot` blueprint reference, including when `Lootable = 0`; otherwise the
 cell is blank. Hover it to inspect the blueprint and loot-row references.
@@ -214,6 +217,17 @@ The marker uses the same `player_balance.py:blueprint_drop_references` index
 as catalog eligibility. Resale assignments and the explicit Crafted Intrinsic
 inclusion do not set the marker. The column stays visible with uniform values,
 is searchable and sortable, and never enters saved adjustments or SQL exports.
+
+**Armor** has **Stealth**, **Light** and **Heavy** pages, with any other obtainable
+declared armor classes shown separately. Armor grids use the weapon catalog's
+service and blueprint columns, sorting, dynamic columns and page scrolling.
+**Intrinsic mods** joins each armor's effective `ArmorEffectId` to its `Effect`
+row. Edits retain their `Effect` identity, and tooltips identify other armor
+sharing that effect; clearing a cell restores its baseline. Missing intrinsic
+links remain explicit. **Other armor overrides** retains unavailable armor while
+its armor or intrinsic effect has saved adjustments, so filtering never strands
+those edits. Player armor adjustments export through the existing player
+balance document into both Workshop and bundled Player Rebalance SQL.
 
 **Other weapon overrides** appears only while weapons or weapon mods without
 an acquisition reference have saved adjustments. Its separate tables retain
@@ -518,9 +532,9 @@ or retired combat-rule cells. It refuses to overwrite existing player tuning.
 
 **Enemy Gear → Enemy Armors** shows armor referenced by effective enemy assignments and
 all authored armor rows, including clones. Each row says **Shipped** or
-**Clone**, with the clone's donor ID. An **Also used by players** marker identifies
-positive contact-service, mission-loot or player-pet references; its tooltip
-lists the references. This is a catalog check, not a calculation of campaign
+**Clone**, with the clone's donor ID. **Also used by players** marks rows admitted
+by the shared player-armor availability policy above; its tooltip lists the
+references. This is a catalog check, not a calculation of campaign
 availability.
 
 Rows with no effective enemy assignment and no known player reference show

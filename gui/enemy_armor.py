@@ -58,28 +58,9 @@ def fingerprints(config):
 
 
 def player_references(source, armors):
-    """Positive service, loot and player-pet references; never an id-only join.
-
-    ContactService flow 2 is the armor catalog. LootTypes.Armor=12 is declared
-    by the captured Constants metadata in _id_constants.csv. This is an
-    inclusive catalog policy, not a campaign availability calculation.
-    """
-    refs = {}
-    def add(rid, why):
-        if rid in armors:
-            refs.setdefault(rid, []).append(why)
-    services = [r for r in pb.contact_services(source) if r['ServiceFlow'] == '2'
-                and r['attainable'] and int(r['ServiceOptionId']) > 0]
-    for rid, armor in armors.items():
-        for service in services:
-            if armor['ServiceOptionId'] == service['ServiceOptionId']:
-                add(rid, 'ContactService ' + service['ServiceTypeId'] + ' (armor service)')
-    for row in source.read('MissionLootModel')[1]:
-        if row['LootTypeId'] == '12':
-            add(row['LootKey'], 'MissionLoot ' + row['MissionLootId'])
-    for row in source.read('DronePrebuiltModel')[1]:
-        add(row['Armor'], 'PetPrebuilt ' + row['DroneType'] + '.Armor')
-    return refs
+    """Use the same table-scoped availability policy as the player catalog."""
+    return {rid: evidence for rid, evidence in pb.player_gear_references(source)['Armor'].items()
+            if rid in armors}
 
 
 def model(config, database, settings, proposed=None):

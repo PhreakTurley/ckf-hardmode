@@ -97,8 +97,13 @@ class PlayerBalanceTests(unittest.TestCase):
             self.assertNotIn(('Rule', '23', 'Value'), touched)
             self.assertFalse(any(t == 'Effect' and int(i) in pb.HARDMODE_EFFECTS for t, i, c in touched))
             # A row absent during export is still reached by the global UPDATE.
+            # Exercise a non-identity multiplier independently of live tuning.
+            future = pb.empty()
+            future['implantMultipliers']['Cost'] = 0.4
+            sweep, _ = pb.sql(future, source)
             db.execute('UPDATE Implant SET ImplantTypeId=999999, Cost=5.1 WHERE ImplantTypeId=(SELECT MIN(ImplantTypeId) FROM Implant)')
-            db.execute(statements[-1])
+            for statement in sweep:
+                db.execute(statement)
             self.assertEqual(db.execute('SELECT Cost FROM Implant WHERE ImplantTypeId=999999').fetchone()[0], 2)
             db.close()
 
@@ -170,14 +175,14 @@ class PlayerBalanceTests(unittest.TestCase):
 
     def test_blueprint_column_matches_typed_drop_references_and_never_enters_sql(self):
         with tempfile.TemporaryDirectory() as config, static_data.StaticData() as source:
-            expected = {({1:'Weapon', 3:'Item', 5:'WeaponMod', 7:'Weapon'}[int(r[0])], str(r[1]))
+            expected = {({1:'Weapon', 2:'Armor', 3:'Item', 5:'WeaponMod', 7:'Weapon', 10:'Armor'}[int(r[0])], str(r[1]))
                         for r in source.connection.execute("""
                             SELECT DISTINCT b.BlueprintClassId,b.OutputId FROM Blueprint b
-                            WHERE b.BlueprintClassId IN (1,3,5,7) AND
+                            WHERE b.BlueprintClassId IN (1,2,3,5,7,10) AND
                               (b.Lootable=1 OR EXISTS (SELECT 1 FROM MissionLoot l
                                  WHERE l.LootTypeId=1 AND l.LootKey=b.BlueprintId))
                         """)}
-            actual = pb.blueprint_drop_references(source, ('Weapon', 'WeaponMod', 'Item'))
+            actual = pb.blueprint_drop_references(source, ('Weapon', 'WeaponMod', 'Armor', 'Item'))
             self.assertEqual({(table, rid) for table, records in actual.items() for rid in records}, expected)
             self.assertIn('Blueprint 200132 via MissionLoot 9130', actual['WeaponMod']['132'])
             self.assertNotIn('21001', actual['Weapon'])
@@ -190,7 +195,7 @@ class PlayerBalanceTests(unittest.TestCase):
             self.assertIsNone(model['error'])
             for page in model['pages']:
                 for grid in page['grids']:
-                    if grid['table'] not in ('Weapon', 'WeaponMod', 'Item'):
+                    if grid['table'] not in ('Weapon', 'WeaponMod', 'Armor', 'Item'):
                         self.assertNotIn('blueprintColumn', grid)
                         continue
                     self.assertEqual(grid['blueprintColumn']['label'], 'Blueprint')

@@ -52,16 +52,20 @@ TEXT_FIELDS = {'Talent': {'IconPng'}, 'JobNode': {'IconPng'},
                'Effect': {'IconAsset'}, 'MatrixEffect': {'IconAsset'}}
 # ContactService.ServiceFlow scopes the option id: for example the official
 # ContactService rows 1, 4 and 7 use option 1 for different catalogs.
-SERVICE_FLOWS = {'Weapon': '1', 'WeaponMod': '3', 'Item': '7', 'Implant': '8'}
+SERVICE_FLOWS = {'Weapon': '1', 'Armor': '2', 'WeaponMod': '3', 'Item': '7', 'Implant': '8'}
 # Generic-pool classification policy. Named MissionLootGroupIds captured in
 # _id_constants.csv: WeaponDeprecated, Weapon, WeaponMod, BlueprintWeapon,
 # BlueprintWeaponMod and BlueprintWeaponModIntrinsic. Other explicit loot
 # references alone do not establish a general loot route.
-GENERIC_GEAR_LOOT_GROUPS = {'Weapon': {'7000', '100000'}, 'WeaponMod': {'8000'},
+GENERIC_GEAR_LOOT_GROUPS = {'Weapon': {'7000', '100000'}, 'Armor': {'6000'}, 'WeaponMod': {'8000'},
                             'Item': {'1000', '1001', '1002', '1003', '1009'}}
 GENERIC_BLUEPRINT_LOOT_GROUPS = {'Weapon': {'50000'}, 'WeaponMod': {'60000', '60001'},
+                                 'Armor': {'40001', '40002', '40003', '40005', '40006', '40007', '40009', '40010', '40011'},
                                  'Item': {'2000', '2001', '2002', '2003'}}
-BLUEPRINT_OUTPUT_TABLES = {'1': 'Weapon', '3': 'Item', '5': 'WeaponMod', '7': 'Weapon'}
+# CoreRPG_v1 Constants.BlueprintClass: Armor=2, PetArmor=10.
+BLUEPRINT_OUTPUT_TABLES = {'1': 'Weapon', '2': 'Armor', '3': 'Item', '5': 'WeaponMod', '7': 'Weapon', '10': 'Armor'}
+# CoreRPG_v1 Constants.ArmorClass; localized display names remain separate.
+ARMOR_CLASSES = {2: 'Stealth', 1: 'Light', 3: 'Heavy', 4: 'Drone'}
 LABELS = {'ApCost': 'AP cost', 'CritMultiBase': 'Crit damage', 'CritMultiStealth': 'Stealth crit damage',
           'ImplantStress': 'Stress', 'InstallTime': 'Install time', 'BaseCost': 'Price',
           'BallisticDamage1': 'Ballistic · 1', 'BallisticDamage2': 'Ballistic · 2',
@@ -238,7 +242,8 @@ def validate(doc, source, config_dir=None):
     known_icons = {}
     item_classes = None
     pointer_rows = {}
-    pointer_fields = {'Talent': {'TargetEffect':'Effect', 'SelfEffect':'Effect', 'MatrixEffect':'MatrixEffect'},
+    pointer_fields = {'Armor': {'ArmorEffectId':'Effect'},
+                      'Talent': {'TargetEffect':'Effect', 'SelfEffect':'Effect', 'MatrixEffect':'MatrixEffect'},
                       'JobNode': {'NodeEffect1Id':'Effect', 'MatrixEffect1Id':'MatrixEffect',
                                   'NodeTalent1Id':'Talent', 'NodeTalentAdjustmentId':'Talent',
                                   'NodeTalentTriggerId':'Talent', 'NodeTalentTriggerEffect':'Effect'}}
@@ -311,7 +316,8 @@ def _effective_enemy_ids(source, config_dir, column):
 def blueprint_drop_references(source, tables=('Weapon', 'WeaponMod')):
     """Positive blueprint-drop evidence, keyed by output table and id.
 
-    Constants.BlueprintClass: Weapon=1, Item=3, WeaponMod=5, PetWeapon=7.
+    Constants.BlueprintClass: Weapon=1, Armor=2, Item=3, WeaponMod=5,
+    PetWeapon=7, PetArmor=10.
     LootTypes.Blueprint=1. Blueprint service assignments are not drop evidence.
     """
     refs = {table: {} for table in tables}
@@ -379,8 +385,8 @@ def contact_services(source):
 def player_gear_references(source, doc=None, blueprint_refs=None, source_kinds=None):
     """Inclusive positive acquisition references, keyed by table and content id.
 
-    BlueprintClass Weapon=1 / WeaponMod=5: CoreRPG_v1.dll, Constants.BlueprintClass.
-    LootTypes Blueprint=1 / Weapon=8 / WeaponMod=10: _id_constants.csv.
+    BlueprintClass values are declared above from CoreRPG_v1.Constants.
+    LootTypes Blueprint=1 / Weapon=8 / WeaponMod=10 / Armor=12: _id_constants.csv.
     Blueprint ServiceOptionId does not establish acquisition. ContactService
     12010 carries Srv_BuyBlueprint_Weapons_PL1; Official/en-US.json,
     BlockDesc.91079_Male, explicitly describes selling weapon blueprints.
@@ -390,7 +396,7 @@ def player_gear_references(source, doc=None, blueprint_refs=None, source_kinds=N
     This is a catalog policy, not a campaign reachability or probability test.
     """
     doc = doc or empty()
-    rows = {table: source.read(table + 'Model')[1] for table in ('Weapon', 'WeaponMod')}
+    rows = {table: source.read(table + 'Model')[1] for table in ('Weapon', 'WeaponMod', 'Armor')}
     known = {table: {r[TABLE_KEYS[table]] for r in records} for table, records in rows.items()}
     refs = {table: {} for table in rows}
 
@@ -413,13 +419,13 @@ def player_gear_references(source, doc=None, blueprint_refs=None, source_kinds=N
 
     loot = source.read('MissionLootModel', ('MissionLootId', 'LootKey', 'LootTypeId'))[1]
     for row in loot:
-        for table, kind in (('Weapon', '8'), ('WeaponMod', '10')):
+        for table, kind in (('Weapon', '8'), ('WeaponMod', '10'), ('Armor', '12')):
             if row['LootTypeId'] == kind:
                 add(table, row['LootKey'], 'MissionLoot ' + row['MissionLootId'], 'loot')
     if blueprint_refs is None:
-        blueprint_refs = blueprint_drop_references(source)
+        blueprint_refs = blueprint_drop_references(source, tuple(rows))
     for table in rows:
-        for rid, evidence in blueprint_refs[table].items():
+        for rid, evidence in blueprint_refs.get(table, {}).items():
             for reference in evidence:
                 add(table, rid, reference, 'blueprint')
 
@@ -455,12 +461,17 @@ def player_gear_references(source, doc=None, blueprint_refs=None, source_kinds=N
                         '.' + field + ' (weapon class ' + row[field] + ')', 'pet')
     for row in source.read('DronePrebuiltModel')[1]:
         add('Weapon', row['Weapon'], 'PetPrebuilt ' + row['DroneType'], 'pet')
+        add('Armor', row['Armor'], 'PetPrebuilt ' + row['DroneType'] + '.Armor', 'pet')
     for row in source.read('BlockConditionModel', ('BlockConditionId', 'ConditionType', 'ActorId',
-                                                  'ConditionValue', 'ConditionValue2'))[1]:
+                                                  'ConditionValue', 'ConditionValue2', 'ConditionValue3'))[1]:
         if row['ConditionType'] == 'Equip':
             for field in ('ConditionValue', 'ConditionValue2'):
                 add('Weapon', row[field], 'BlockCondition ' + row['BlockConditionId'] +
                     ' Equip (' + row['ActorId'] + ')', 'mission')
+            # Installed Modkit config.json, BlockCondition Equip aliases:
+            # ArmorType -> ConditionValue3 (weapons use the first two values).
+            add('Armor', row['ConditionValue3'], 'BlockCondition ' + row['BlockConditionId'] +
+                ' Equip ArmorType (' + row['ActorId'] + ')', 'mission')
     return refs
 
 
@@ -552,7 +563,7 @@ def gear_service_fallbacks(source, acquisition, source_kinds):
             entry = route(table, row['OutputId'])
             entry.update(blueprint=True, generic=True)
     for row in source.read('MissionLootModel', ('LootTypeId', 'LootKey', 'LootGroupId'))[1]:
-        table = {'8': 'Weapon', '10': 'WeaponMod', '2': 'Item'}.get(row['LootTypeId'])
+        table = {'8': 'Weapon', '10': 'WeaponMod', '12': 'Armor', '2': 'Item'}.get(row['LootTypeId'])
         if table in routes:
             entry = route(table, row['LootKey'])
             entry['loot'] = True
@@ -886,6 +897,22 @@ def implant_links(allrows, doc):
     return links, owners
 
 
+def armor_links(allrows, doc):
+    """Join each armor's effective intrinsic effect, including shared owners."""
+    links, owners = {}, {}
+    for armor in allrows['Armor'].values():
+        rid = armor['ArmorId']
+        pointer = str(int(effective(doc, 'Armor', armor, 'ArmorEffectId')))
+        target = None if pointer in ('0', '-1', '') else allrows['Effect'].get(pointer)
+        linked = {'ids': {'Intrinsic mods': pointer}, 'Intrinsic mods': target, 'warnings': []}
+        if pointer not in ('0', '-1', '') and target is None:
+            linked['warnings'].append('Armor %s: intrinsic Effect %s was not found' % (rid, pointer))
+        if target:
+            owners.setdefault(('Effect', pointer), {})[rid] = armor['ArmorName']
+        links[rid] = linked
+    return links, owners
+
+
 def cyberweapon_links(allrows, doc, weapons):
     """Join effective attack/effect pointers and retain all owning implants."""
     attacks = {w['WeaponId']: [] for w in weapons}
@@ -955,7 +982,7 @@ def catalog(config_dir, database, document=None):
                        for t in TABLE_KEYS}
             assets = {r['WeaponModelId']: r for r in source.read('Weapon3DAssetModel')[1]}
             services = service_catalog(source)
-            blueprint_refs = blueprint_drop_references(source, ('Weapon', 'WeaponMod', 'Item'))
+            blueprint_refs = blueprint_drop_references(source, ('Weapon', 'WeaponMod', 'Armor', 'Item'))
             source_kinds = {}
             acquisition = player_gear_references(source, doc, blueprint_refs, source_kinds)
             service_fallbacks = gear_service_fallbacks(source, acquisition, source_kinds)
@@ -965,6 +992,7 @@ def catalog(config_dir, database, document=None):
             acquisition.update(player_item_references(source, doc, blueprint_refs['Item']))
             item_links, item_owners = consumable_links(allrows, doc)
             cyberware_links, implant_owners = implant_links(allrows, doc)
+            intrinsic_links, armor_owners = armor_links(allrows, doc)
             for trait in allrows['Trait'].values():
                 if trait['TraitName'].startswith('Trait.Name.'):
                     trait['TraitName'] = source.locale.get('Trait.Name.' + trait['TraitGroup'] + '_Male', trait['TraitName'])
@@ -1009,7 +1037,7 @@ def catalog(config_dir, database, document=None):
                                     'readOnly': rid in protected.get(table, set()) or (table == 'Rule' and rid in ENEMY_RULES),
                                     'readOnlyReason': 'Managed by Enemy Balance' if table == 'Rule' and rid in ENEMY_RULES
                                                       else 'Managed by Hard Mode Fatigue / limit-break traits'})
-                    if table in ('Weapon', 'WeaponMod'):
+                    if table in ('Weapon', 'WeaponMod', 'Armor'):
                         records[-1]['acquisition'] = acquisition[table].get(rid, [])
                         records[-1]['blueprintDrops'] = blueprint_refs[table].get(rid, [])
                         records[-1]['serviceFallback'] = service_fallbacks[table].get(rid,
@@ -1028,14 +1056,14 @@ def catalog(config_dir, database, document=None):
                 raw = {r[TABLE_KEYS[table]]: r for r in rows}
                 records.sort(key=lambda r: (tuple(effective(doc, table, raw[r['id']], c)
                                                   for c in LEADING_COLUMNS), natural(r['name']))
-                             if table in ('Weapon', 'WeaponMod', 'Implant', 'Item') else ((), natural(r['name'])))
+                             if table in ('Weapon', 'WeaponMod', 'Armor', 'Implant', 'Item') else ((), natural(r['name'])))
                 result_grid = {'table': table, 'title': title, 'columns': visible, 'advanced': advanced, 'rows': records,
                                'multipliers': doc.get('implantMultipliers', {}) if table == 'Implant' else {}}
-                if table in ('Weapon', 'WeaponMod', 'Implant', 'Item'):
+                if table in ('Weapon', 'WeaponMod', 'Armor', 'Implant', 'Item'):
                     result_grid['defaultSort'] = {'key': 'column:Cost', 'descending': False}
-                if table in ('Weapon', 'WeaponMod'):
+                if table in ('Weapon', 'WeaponMod', 'Armor'):
                     result_grid['dynamicColumns'] = True
-                if table in ('Weapon', 'WeaponMod', 'Item'):
+                if table in ('Weapon', 'WeaponMod', 'Armor', 'Item'):
                     result_grid['blueprintColumn'] = {'label': 'Blueprint',
                         'empty': 'No blueprint drop reference in the selected database.'}
                 if table in services:
@@ -1102,7 +1130,7 @@ def catalog(config_dir, database, document=None):
 
             def page(pid, title, group, grids, **kwargs):
                 for g in grids:
-                    if g and group in ('Weapons', 'Drone weapons', 'Consumables', 'Cyberware', 'Cyberware modules'):
+                    if g and group in ('Weapons', 'Drone weapons', 'Armor', 'Consumables', 'Cyberware', 'Cyberware modules'):
                         g['scrollWithPage'] = True
                 result['pages'].append({'id': pid, 'title': title, 'group': group,
                                         'grids': [g for g in grids if g and (g['rows'] or g.get('warning'))], **kwargs})
@@ -1259,6 +1287,37 @@ def catalog(config_dir, database, document=None):
             if other_grids:
                 page('other-weapon-overrides', 'Other weapon overrides', 'Weapons', other_grids,
                      description='These records have no known player acquisition reference. They remain here while they have overrides. Clear their overrides and save to remove them from this page.')
+            enemy_armors = _effective_enemy_ids(source, config_dir, 'ArmorTypeId')
+            enemy_armors.update(r['ArmorTypeId'] for r in source.read('MonsterTypeModel')[1])
+            def armor_grid(rows, title):
+                g = joined_grid('Armor', rows, title, 'Armor', intrinsic_links, armor_owners,
+                                [('Intrinsic mods', 'Effect')])
+                for record in g['rows']:
+                    record['enemyUse'] = record['id'] in enemy_armors
+                return g
+
+            armors = [r for r in allrows['Armor'].values() if r['ArmorId'] in acquisition['Armor']]
+            classes = {int(effective(doc, 'Armor', r, 'ArmorClass')) for r in armors}
+            for cls in list(ARMOR_CLASSES) + sorted(classes - ARMOR_CLASSES.keys()):
+                rows = [r for r in armors if int(effective(doc, 'Armor', r, 'ArmorClass')) == cls]
+                if rows:
+                    title = ARMOR_CLASSES.get(cls, 'Armor class %s' % cls)
+                    page('armor-%s' % cls, title, 'Armor', [armor_grid(rows, title)])
+
+            def armor_has_overrides(row):
+                rid = row['ArmorId']
+                effect = intrinsic_links[rid]['ids']['Intrinsic mods']
+                return any(str(v).strip() for tuning in (doc, saved_doc)
+                           for table, identity in (('Armor', rid), ('Effect', effect))
+                           for v in tuning['tables'].get(table, {}).get(identity, {}).values())
+
+            other_armors = [r for r in allrows['Armor'].values()
+                            if r['ArmorId'] not in acquisition['Armor'] and armor_has_overrides(r)]
+            if other_armors:
+                page('other-armor-overrides', 'Other armor overrides', 'Armor',
+                     [armor_grid(other_armors, 'Other armor overrides')],
+                     description='These armors have no known player acquisition reference. Their armor or intrinsic-effect overrides remain editable until cleared.')
+
             item_editors = consumable_editors(source, allrows, assets, doc, item_owners)
             def consumable_grid(items, title):
                 separate_effects = any(len({item_links[r['ItemTypeId']]['ids'][name]
@@ -1514,7 +1573,7 @@ def augment(data, provenance, config_dir, database):
     payload['RawSQL'] = statements
     validate_native_updates(payload)
     data = encode(payload)
-    receipt['scope'] = 'player talents, weapons, cyberware, consumables, leverage, traits and rules (excluding Enemy Balance Rule 82 and standalone Rules 83-85)'
+    receipt['scope'] = 'player talents, weapons, armor and intrinsic effects, cyberware, consumables, leverage, traits and rules (excluding Enemy Balance Rule 82 and standalone Rules 83-85)'
     receipt['parser_source']['sha256'] = hashlib.sha256(data).hexdigest()
     receipt['parser_source']['records'] = sum(len(payload.get(table, [])) for table in TABLE_KEYS)
     if 'merged_update_records_by_table' in receipt:
