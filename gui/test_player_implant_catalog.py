@@ -15,9 +15,9 @@ def implant(rid, option=0, klass=0, group=0, flag=0):
 
 
 def service(rid, flow, group, level, option, ready=0):
-    return dict(zip(('ServiceTypeId', 'ServiceFlow', 'ServiceGroupId', 'ServiceLevel',
+    return dict(PowerPlayTag='', **dict(zip(('ServiceTypeId', 'ServiceFlow', 'ServiceGroupId', 'ServiceLevel',
                      'ServiceOptionId', 'UpgradeReady', 'DisplayLevel'),
-                    map(str, (rid, flow, group, level, option, ready, level))))
+                    map(str, (rid, flow, group, level, option, ready, level)))))
 
 
 class Source:
@@ -31,12 +31,19 @@ class Source:
             'ContactServiceModel': [service(100, 8, 1, 1, 1, ready=2), service(101, 8, 1, 2, 2),
                                     service(102, 1, 1, 1, 3)],
             'BackstoryModel': [{'BackstoryId': '16', 'BackstoryGroup': '100', 'Implant': '4',
-                               'Implant1': '3', 'Implant2': '999', 'Implant3': '0'}],
+                               'Implant1': '3', 'Implant2': '999', 'Implant3': '0',
+                               'Weight': '1', 'ContactLink1': '0', 'ContactLink2': '0'}],
             'JobModel': [{'JobId': '7', 'JobType': '1', 'ReqCyberClass1Id': '50', 'Enabled': '0'},
                          {'JobId': '8', 'JobType': '2', 'ReqCyberClass1Id': '60', 'Enabled': '1'}],
             'DronePrebuiltModel': [{'DroneType': '7', 'CyberSlot1': '12', 'CyberSlot2': '0',
                                    'CyberSlot3': '0', 'CyberSlot4': '0', 'CyberSlot5': '0'}],
-            'BlockConditionModel': [{'BlockConditionId': '16', 'ConditionType': 'ActivateCyber'}],
+            'BlockConditionModel': [{'BlockConditionId': '16', 'ConditionType': 'ActivateCyber',
+                'GroupId': '', 'ActorId': '', 'ConditionValue': '0', 'ConditionValue2': '0'}],
+            'BlockModel': [], 'StoryMatchModel': [], 'StoryNodeModel': [], 'ContactTypeModel': [],
+            'ContactBackstoryModel': [{'ContactBackstoryId': '30', 'BackstoryGroup': '30',
+                'ContactType': '0', 'NewGame': '1', 'Weight': '1',
+                'ServiceGroupId1': '1', 'ServiceLevel1': '1', 'ServiceGroupId2': '2', 'ServiceLevel2': '1',
+                'ServiceGroupId3': '0', 'ServiceLevel3': '0'}],
         }
 
     def read(self, model, required=()):

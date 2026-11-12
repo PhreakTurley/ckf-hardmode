@@ -113,8 +113,12 @@ class ConsumableEditorTests(unittest.TestCase):
                 if model == 'ContactServiceModel':
                     specs = [('101','7','10','1','1','1','2'), ('102','7','20','1','2','2','0'),
                              ('103','1','30','1','1','1','0')]
-                    return [], [dict(zip(('ServiceTypeId','ServiceFlow','ServiceOptionId','ServiceGroupId',
-                                           'ServiceLevel','DisplayLevel','UpgradeReady'), r)) for r in specs]
+                    return [], [dict(PowerPlayTag='', **dict(zip(('ServiceTypeId','ServiceFlow','ServiceOptionId','ServiceGroupId',
+                                           'ServiceLevel','DisplayLevel','UpgradeReady'), r))) for r in specs]
+                if model == 'ContactBackstoryModel':
+                    return [], [{'ContactBackstoryId':'1','BackstoryGroup':'1','ContactType':'0','NewGame':'1','Weight':'1',
+                        'ServiceGroupId1':'1','ServiceLevel1':'1','ServiceGroupId2':'2','ServiceLevel2':'1',
+                        'ServiceGroupId3':'0','ServiceLevel3':'0'}]
                 return [], []
         source = Source()
         self.assertEqual(pb.player_item_references(source), {'Item':{'1':['ContactService 101']}})

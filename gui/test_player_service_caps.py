@@ -12,7 +12,7 @@ import static_data
 def service(rid, flow, group, level, option, ready='0', display=None):
     return {'ServiceTypeId': str(rid), 'ServiceFlow': str(flow), 'ServiceGroupId': str(group),
             'ServiceLevel': str(level), 'ServiceOptionId': str(option), 'UpgradeReady': str(ready),
-            'DisplayLevel': str(level if display is None else display)}
+            'DisplayLevel': str(level if display is None else display), 'PowerPlayTag': ''}
 
 
 class ServiceSource:
@@ -24,7 +24,19 @@ class ServiceSource:
         if model == 'ContactServiceModel':
             assert all(set(required) <= r.keys() for r in self.rows)
             return list(self.rows[0]) if self.rows else list(required), self.rows
-        return self.source.read(model, required, **kwargs)
+        rows = self.source.read(model, required, **kwargs)[1] if self.source else []
+        if model == 'ContactBackstoryModel':
+            original = {r['ServiceTypeId'] for r in self.source.read('ContactServiceModel')[1]} if self.source else set()
+            # Cap-only fixtures explicitly give each synthetic ladder a starting
+            # contact. Official ladders keep their real acquisition declarations.
+            for r in self.rows:
+                if r['ServiceTypeId'] not in original:
+                    rows.append({'ContactBackstoryId': 'fixture-' + r['ServiceTypeId'],
+                        'BackstoryGroup': 'fixture-' + r['ServiceTypeId'], 'ContactType': '0',
+                        'NewGame': '1', 'Weight': '1', 'ServiceGroupId1': r['ServiceGroupId'],
+                        'ServiceLevel1': '1', 'ServiceGroupId2': '0', 'ServiceLevel2': '0',
+                        'ServiceGroupId3': '0', 'ServiceLevel3': '0'})
+        return list(required), rows
 
 
 class ServiceCapTests(unittest.TestCase):

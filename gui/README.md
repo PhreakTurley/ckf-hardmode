@@ -302,11 +302,24 @@ Weapons, weapon mods, consumables and cyberware always show a **Service** column
 localized names and display levels. `player_balance.py:service_catalog` joins
 `ServiceOptionId` within `ContactService.ServiceFlow` (weapons 1, mods 3,
 items 7, implants 8), so an option id cannot pick up a service from another catalog.
-`player_balance.py:contact_services` treats `UpgradeReady = 2` as the terminal
+`service_availability.py:routes` requires positive acquisition evidence before
+a service ladder can qualify: an ordinary `PowerPlayService` entry with its
+story match and starting nodes, or a contact-service assignment. Contact routes
+include starting contacts, merc backstory contact links, story-created contacts,
+story-match backstories, their inherited contact-type services, and explicit
+story grants. Unreferenced templates and developer-only entries do not qualify.
+Power Play gates are read from `BlockCondition` declarations, rather than a
+list of service names. A contact route can qualify independently of a disabled
+Power Play. Later tiers inherit the ladder's acquisition references. These
+references and exclusion reasons appear in Service tooltips and refresh from
+the selected official database on reload.
+
+`player_balance.py:contact_services` also treats `UpgradeReady = 2` as the terminal
 marker within each `(ServiceFlow, ServiceGroupId)` ladder. The lowest marked
 `ServiceLevel` is the cap, inclusive; higher internal levels are unattainable,
-regardless of their `DisplayLevel`. Ladders without a marker remain included.
-Above-cap services cannot establish weapon, mod or cyberware acquisition and are suppressed
+regardless of their `DisplayLevel`. Ladders without a marker still require an
+acquisition route. Unavailable and above-cap services cannot establish weapon,
+mod, consumable or cyberware acquisition and are suppressed
 from Service labels, including options shared with an attainable service.
 Weapon/mod and consumable rows fall back to their other acquisition labels
 below. Consumables use typed item and blueprint output references, including
@@ -320,6 +333,10 @@ This applies to nonpositive, unknown and above-cap assignments, and to linked
 cyberware service references on weapon rows. Actual attainable service names
 still take precedence; invalid pending assignments remain explicit.
 Cap details and source records remain in tooltips.
+Verification: `python gui/test_service_availability.py` exercises independent
+contact routes, Power Play gates, database changes, and retained overrides;
+`python gui/test_player_service_caps.py` covers the tier boundaries and
+alternate acquisition sources.
 For weapons and mods, another attainable service or any other supported
 acquisition route keeps the gear in its normal catalog. Otherwise only rows with saved overrides remain,
 in **Other weapon overrides**, until those overrides are cleared and saved.

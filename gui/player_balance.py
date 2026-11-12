@@ -15,6 +15,7 @@ import re
 
 import static_data
 import gear_classes
+import service_availability
 
 FILE = 'ckf.player-balance.json'
 TABLE_KEYS = {'Weapon': 'WeaponId', 'WeaponMod': 'WeaponModId', 'Armor': 'ArmorId', 'Implant': 'ImplantTypeId',
@@ -331,14 +332,19 @@ def blueprint_drop_references(source, tables=('Weapon', 'WeaponMod')):
 
 
 def contact_services(source):
-    """Apply the editor's cap policy within each (flow, group) service ladder.
+    """Require a contact/Power Play route, then apply each ladder's tier cap.
 
     UpgradeReady=2 is terminal under the editor's acquisition policy. The first
     such ServiceLevel caps the ladder; DisplayLevel is only a presentation label.
-    Ladders without a terminal marker retain their existing inclusive behavior.
+    Ladders without a terminal marker still require an acquisition route.
     """
     rows = source.read('ContactServiceModel', ('ServiceTypeId', 'ServiceFlow', 'ServiceOptionId',
-                      'ServiceGroupId', 'ServiceLevel', 'DisplayLevel', 'UpgradeReady'))[1]
+                      'ServiceGroupId', 'ServiceLevel', 'DisplayLevel', 'UpgradeReady', 'PowerPlayTag'))[1]
+    routes, blocked = service_availability.routes(source, rows)
+    ladder_tags = {}
+    for row in rows:
+        if row['PowerPlayTag']:
+            ladder_tags.setdefault(row['ServiceGroupId'], set()).add(row['PowerPlayTag'])
     caps = {}
     for row in rows:
         if row['UpgradeReady'] == '2':
@@ -352,12 +358,21 @@ def contact_services(source):
     result = []
     for row in rows:
         cap = caps.get((row['ServiceFlow'], row['ServiceGroupId']))
-        attainable = cap is None or int(row['ServiceLevel']) <= cap['level']
-        reason = '' if attainable else (
-            'Unattainable: ServiceLevel %s exceeds cap %s for ServiceFlow %s, ServiceGroupId %s; '
-            'ContactService %s has UpgradeReady=2.' %
-            (row['ServiceLevel'], cap['level'], row['ServiceFlow'], row['ServiceGroupId'], ', '.join(cap['ids'])))
-        result.append(dict(row, attainable=attainable, cap=cap, unattainableReason=reason))
+        references = routes.get(row['ServiceGroupId'], [])
+        within_cap = cap is None or int(row['ServiceLevel']) <= cap['level']
+        reasons = []
+        if not references:
+            reasons.append('Unavailable: no contact acquisition or actionable Power Play for ServiceGroupId '
+                           + row['ServiceGroupId'] + '.')
+            for tag in sorted(ladder_tags.get(row['ServiceGroupId'], ())):
+                reasons.extend(blocked.get(tag, [tag + ': no PowerPlayService entry.']))
+        if not within_cap:
+            reasons.append(
+                'Unattainable: ServiceLevel %s exceeds cap %s for ServiceFlow %s, ServiceGroupId %s; '
+                'ContactService %s has UpgradeReady=2.' %
+                (row['ServiceLevel'], cap['level'], row['ServiceFlow'], row['ServiceGroupId'], ', '.join(cap['ids'])))
+        result.append(dict(row, attainable=bool(references) and within_cap, cap=cap,
+                           acquisition=references, unattainableReason='\n'.join(reasons)))
     return result
 
 
@@ -811,11 +826,14 @@ def service_catalog(source):
                 entry['labels'].append(text)
             entry['references'].append({'id': row['ServiceTypeId'], 'flow': flow,
                 'level': row['ServiceLevel'], 'displayLevel': row['DisplayLevel'], 'locale': key,
-                'attainable': row['attainable'], 'cap': row['cap'], 'unattainableReason': row['unattainableReason']})
+                'attainable': row['attainable'], 'cap': row['cap'], 'acquisition': row['acquisition'],
+                'unattainableReason': row['unattainableReason']})
     return {table: {option: {'label': ', '.join(entry['labels']), 'references': entry['references'],
                             'attainable': any(r['attainable'] for r in entry['references']),
                             'detail': 'ServiceOptionId %s; ServiceFlow %s; ContactService %s' %
                                       (option, SERVICE_FLOWS[table], ', '.join(r['id'] for r in entry['references']))
+                                      + ''.join('\n' + evidence for evidence in dict.fromkeys(
+                                          e for r in entry['references'] for e in r['acquisition']))
                                       + ''.join('\n' + r['unattainableReason'] for r in entry['references']
                                                 if not r['attainable'])}
                     for option, entry in options.items()} for table, options in grouped.items()}
