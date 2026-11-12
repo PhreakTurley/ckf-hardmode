@@ -38,6 +38,24 @@ class ArmorTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'MonsterType 1100 -> Armor 999999'):
             armor.validate(self.config, serve.static_data.DEFAULT_DB, proposed)
 
+    def test_unused_marker_tracks_effective_assignments_and_player_references(self):
+        with serve.static_data.StaticData() as source:
+            stock = {r['ArmorId']:r for r in source.read('ArmorModel')[1]}
+            enemy_ids = {r['ArmorTypeId'] for r in source.read('MonsterTypeModel')[1]}
+            player_id = next(rid for rid in armor.player_references(source, stock) if rid not in enemy_ids)
+        self.path.write_bytes(self.raw + ('990002,22000,never,,unused clone\r\n'
+                                         + player_id + ',,,,player armor\r\n').encode())
+        view = armor.validate(self.config, serve.static_data.DEFAULT_DB)
+        rows = {r['id']:r for r in view['page']['grids'][0]['rows']}
+        self.assertFalse(rows['990001']['unused'])
+        self.assertTrue(rows['990002']['unused'])
+        self.assertFalse(rows[player_id]['unused'])
+        proposed = {armor.MONSTERS:b'MonsterTypeId,ArmorTypeId\n1,990002\n1100,22511\n'}
+        view = armor.validate(self.config, serve.static_data.DEFAULT_DB, proposed)
+        rows = {r['id']:r for r in view['page']['grids'][0]['rows']}
+        self.assertTrue(rows['990001']['unused'])
+        self.assertFalse(rows['990002']['unused'])
+
     def test_authored_names_use_the_effective_level_and_natural_sort(self):
         self.path.write_bytes(b'ArmorId,_clone,PowerLevel\n990001,135,9\n990002,135,10\n22104,,5\n')
         view = armor.validate(self.config, serve.static_data.DEFAULT_DB)
@@ -133,6 +151,15 @@ setTimeout(function() {
  ck('clones have an explicit visible identity', find(n=>n._cls().includes('pb-clone') && /Clone \d+ \(from \d+\)/.test(n.textContent)).length>0);
  ck('shipped armors are labelled separately', find(n=>n._cls().includes('pill') && n.textContent.startsWith('Shipped ')).length>0);
  ck('tables scroll with the page', find(n=>n._cls().includes('grid-wrap')).every(n=>n._cls().includes('page-grid-wrap')));
+ const unused=page.grids[0].rows.find(r=>r.unused), used=page.grids[0].rows.find(r=>!r.unused);
+ ck('unused armor has a visible disclaimer', find(n=>n._cls().includes('pb-unused') && n.textContent==='Unused armor').length>0);
+ const unchanged=JSON.stringify(buildEdits());
+ const hide=find(n=>n.tagName==='INPUT' && n.getAttribute('aria-label')==='Hide unused armor')[0];
+ hide.checked=true;hide.fire('change');
+ ck('hide unused removes unused rows and retains used armor', !find(n=>n.getAttribute('data-player-row')==='Armor '+unused.id).length && find(n=>n.getAttribute('data-player-row')==='Armor '+used.id).length>0);
+ ck('hiding rows does not change tuning', JSON.stringify(buildEdits())===unchanged);
+ hide.checked=false;hide.fire('change');
+ ck('unchecking restores unused rows', find(n=>n.getAttribute('data-player-row')==='Armor '+unused.id).length>0);
  const before=JSON.stringify(W.player), clone=page.grids[0].rows.find(r=>r.cloneOf);
  const input=find(n=>n.tagName==='INPUT' && n.getAttribute('data-player-target')==='Armor '+clone.id+'.BallisticArmor')[0];
  const previous=input.value;input.value=previous==='47'?'48':'47';input.fire('input');

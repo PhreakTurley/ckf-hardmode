@@ -875,6 +875,7 @@ let SEL = null;        // selected section id (one subsystem, or a group of them
 let LAST_SAVE = null;
 const PLAYER_NAV_OPEN = {};
 const PLAYER_SORT = {}; // View preferences only; never saved as tuning.
+let HIDE_UNUSED_ARMOR = false;
 const PLAYER_PREVIEW_STATE = {revision:0,error:'',destination:null,promise:null};
 // What the requires enforcement did to the working copy since the last
 // load: the keys one flip turned on, and the flip that was refused. Both
@@ -2179,6 +2180,11 @@ function renderPlayer(panel, page) {
   const toolbar = el('div', {class:'pb-tools'}, [search,
     el('label', {class:'small'}, [showAll,document.createTextNode(' Show all columns')]),
     el('span', {class:'small',text:'Red: override · Yellow: nonzero baseline'})]);
+  if (page.enemyArmor) {
+    const hideUnused=el('input',{type:'checkbox',checked:HIDE_UNUSED_ARMOR,'aria-label':'Hide unused armor'});
+    hideUnused.addEventListener('change',function() {HIDE_UNUSED_ARMOR=hideUnused.checked;paint();});
+    toolbar.appendChild(el('label',{class:'small'},[hideUnused,document.createTextNode(' Hide unused armor')]));
+  }
   if (page.grids.length) panel.appendChild(toolbar);
   if (page.grids.length) panel.appendChild(el('p', {class:'doc',text:page.enemyArmor ? 'Enter whole numbers. Clear a cell to restore its baseline. Save, then Prepare Hard Mode + Workshop to apply changes.' : page.talents ? 'Numbers set values. Clear a cell to restore its baseline. Choose an icon or effect from the field’s suggestions. Save, then send to Modkit.' : 'A number sets the value, including negatives. +10 adds 10; x1.5 multiplies by 1.5. Clear a cell to restore its baseline.'}));
   if (page.grids.some(function(g) {return g.iconEditor;}))
@@ -2275,6 +2281,7 @@ function renderPlayer(panel, page) {
     for (const grid of page.grids) {
       playerRefreshIconGroups(grid);
       const matches = grid.rows.filter(function (r) {
+        if (page.enemyArmor && HIDE_UNUSED_ARMOR && r.unused) return false;
         if (r.nodeId && removed.has(r.nodeId)) return false;
         const editor = grid.iconEditor;
         const fields = ((W.player.tables || {})[grid.table] || {})[r.id] || {};
@@ -2282,7 +2289,7 @@ function renderPlayer(panel, page) {
         const token = editor ? (editor.assets[assetId] || {}).token || '' : r.icon || '';
         return (r.name+' '+(r.weaponName || '')+' '+r.id+' '+(grid.category || '')+' '+(grid.subsection || '')+' '+(r.section || '')+' '+token+' '+playerService(grid,r).label
           +' '+(grid.blueprintColumn ? playerBlueprint(grid,r).label : '')+' '+(r.origin || '')+' '+(r.cloneOf || '')
-          +' '+(r.playerUse ? 'Also used by players' : '')).toLocaleLowerCase().includes(query);
+          +' '+(r.playerUse ? 'Also used by players' : '')+' '+(r.unused ? 'Unused armor' : '')).toLocaleLowerCase().includes(query);
       });
       const gridKey = grid.key || grid.table;
       const sortId = page.id+':'+gridKey;
@@ -2432,6 +2439,8 @@ function renderPlayer(panel, page) {
         if (row.origin) nameCell.appendChild(el('span',{class:'pill pb-origin '+(row.cloneOf ? 'unknown pb-clone' : 'na'),
           text:row.cloneOf ? 'Clone '+row.id+' (from '+row.cloneOf+')' : row.origin+' '+row.id}));
         if (row.playerUse) nameCell.appendChild(el('span',{class:'pb-enemy',text:'Also used by players',title:(row.acquisition || []).join('\n')}));
+        if (page.enemyArmor && row.unused) nameCell.appendChild(el('span',{class:'pb-enemy pb-unused',text:'Unused armor',
+          title:'No effective enemy armor assignments or known player service, loot or pet references. This row is available for future assignments.'}));
         if (row.enemyUse) nameCell.appendChild(el('span', {class:'pb-enemy',text:'Also used by enemies',title:'Changing this weapon also affects enemies that use it.'}));
         if (row.owner) nameCell.appendChild(el('span', {class:'pb-owner',text:'Managed by '+row.owner}));
         if (row.fitment) nameCell.appendChild(el('small', {class:'pb-fit',text:row.fitment,title:row.fitmentSource}));

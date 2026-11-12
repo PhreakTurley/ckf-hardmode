@@ -161,6 +161,7 @@ def model(config, database, settings, proposed=None):
                  'powerLevel': r['PowerLevel'], 'armorId': r['ArmorTypeId']}
                 for r in monsters.values()
                 if r['ArmorTypeId'] not in effective and r['ArmorTypeId'] not in ('0', '-1', '')]
+            assigned_enemy_ids = set(enemy_ids)
             enemy_ids.update(r['ArmorId'] for r in authored)
             refs = player_references(source, stock)
             by_id = {r['ArmorId']: r for r in authored}
@@ -178,6 +179,7 @@ def model(config, database, settings, proposed=None):
                 name = armor_name(stock[donor or rid]['ArmorName'], effective[rid]['PowerLevel']) if rid in by_id else stock[rid]['ArmorName']
                 records.append({'id': rid, 'name': name, 'baseline': baseline,
                     'cloneOf': donor, 'origin': 'Clone' if donor else 'Shipped',
+                    'unused': rid not in assigned_enemy_ids and not refs.get(rid),
                     'playerUse': bool(refs.get(rid)), 'acquisition': refs.get(rid, []),
                     'targets': {name: {'table': 'Armor', 'id': rid, 'column': name, 'enemyArmor': True}
                                 for name in declared}})

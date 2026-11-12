@@ -523,6 +523,10 @@ positive contact-service, mission-loot or player-pet references; its tooltip
 lists the references. This is a catalog check, not a calculation of campaign
 availability.
 
+Rows with no effective enemy assignment and no known player reference show
+**Unused armor**. **Hide unused armor** hides those rows from the table while
+preserving their values and pending edits; it changes only the current view.
+
 The catalog applies authored monster armor replacements before checking references,
 including the exporter's matching extensions for newly shipped ladders. Missing
 targets identify the enemy, its PL and the missing armor ID; validation, saving
