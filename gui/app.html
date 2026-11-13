@@ -1260,7 +1260,7 @@ function buildWorking() {
       return (r.cells || []).slice(); }) };
   }
   w.contactTurns = {};
-  for (const key of ['minimum', 'maximum']) w.contactTurns[key] = (MODEL.contactBreaks || {}).document ? String(MODEL.contactBreaks.document[key]) : '';
+  for (const key of ['minimum', 'maximum', 'readyThreshold']) w.contactTurns[key] = (MODEL.contactBreaks || {}).document ? String(MODEL.contactBreaks.document[key]) : '';
   w.partyMaximum = (MODEL.partySize || {}).document ? String(MODEL.partySize.document.maximum) : '';
   w.enemyArmor = JSON.parse(JSON.stringify((MODEL.enemyArmor || {}).values || {}));
   w.player = JSON.parse(JSON.stringify((MODEL.playerBalance || {}).document || {}));
@@ -1372,7 +1372,7 @@ function buildEdits() {
                      value: c.to === undefined || c.to === null ? '' : String(c.to) });
   }
   if (partyChanged()) edits.partySize = {format:1, maximum:Number(W.partyMaximum)};
-  if (contactChanged()) edits.contactBreaks = {format:1, minimum:Number(W.contactTurns.minimum), maximum:Number(W.contactTurns.maximum)};
+  if (contactChanged()) edits.contactBreaks = {format:1, minimum:Number(W.contactTurns.minimum), maximum:Number(W.contactTurns.maximum), readyThreshold:Number(W.contactTurns.readyThreshold)};
   const enemy=enemyArmorChanges();
   if (enemy.cells.length) edits.enemyArmor=enemy;
   const player = playerChanges();
@@ -3919,7 +3919,7 @@ function renderParty(panel) {
 
 function contactChanged() {
   const saved = (MODEL.contactBreaks || {}).document;
-  return ['minimum', 'maximum'].some(function (key) {return W.contactTurns[key] !== (saved ? String(saved[key]) : '');});
+  return ['minimum', 'maximum', 'readyThreshold'].some(function (key) {return W.contactTurns[key] !== (saved ? String(saved[key]) : '');});
 }
 
 function renderContact(panel) {
@@ -3932,11 +3932,11 @@ function renderContact(panel) {
     const input=el('input', {id:id, type:'number', min:'1', max:'2147483647', step:'1', value:W.contactTurns[rule.field],
       disabled:!!model.error, oninput:function () {W.contactTurns[rule.field]=input.value;updateDirty();}});
     card.appendChild(el('div', {class:'field'}, [el('label', {class:'lab', for:id,
-      text:rule.field==='minimum' ? 'Minimum turns' : 'Maximum turns'}), input]));
+      text:({'minimum':'Minimum turns', 'maximum':'Maximum turns', 'readyThreshold':'Contact ready threshold'})[rule.field]}), input]));
     card.appendChild(el('p', {class:'meta', text:'Rule ' + rule.id + ' · ' + rule.name + ' · Official value: ' + rule.baseline}));
     card.appendChild(el('p', {class:'doc', text:rule.description}));
   }
-  card.appendChild(el('p', {class:'doc', text:'Save, then send this mod to Modkit. It updates Rules 84 and 85.'}));
+  card.appendChild(el('p', {class:'doc', text:'Save, then send this mod to Modkit. It updates Rules 84, 85 and 86.'}));
   const folder=el('input', {id:'contact-project', type:'text', value:model.projectDir || '', spellcheck:'false'});
   card.appendChild(el('div', {class:'field'}, [el('label', {class:'lab', for:'contact-project', text:'Modkit mod folder'}), folder]));
   const status=el('p', {class:'small', role:'status', 'aria-live':'polite'});

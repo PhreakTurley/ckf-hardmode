@@ -5578,7 +5578,8 @@ class App:
                 continue
             try:
                 document = module.validate(edits[key])
-                if document == module.load(cd):
+                saved = (module.load(cd, self.data_source()) if key == 'contactBreaks' else module.load(cd))
+                if document == saved:
                     continue  # Preserve original bytes on a no-op, even without official data.
                 lookup(self.data_source())
                 proposed[module.FILE] = module.encode(document)

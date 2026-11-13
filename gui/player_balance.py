@@ -28,7 +28,7 @@ HARDMODE_EFFECTS = {10505, 10507}
 # Enemy Balance owns its spawn-level cap, including in Workshop exports.
 ENEMY_RULES = {'82'}
 STANDALONE_RULES = {'83': 'Party Size Mod', '84': 'Faster Contact Limit Breaks',
-                    '85': 'Faster Contact Limit Breaks'}
+                    '85': 'Faster Contact Limit Breaks', '86': 'Faster Contact Limit Breaks'}
 METADATA = {'Locked', 'FactionId', 'ServiceOptionId', 'Asset3DTypeId', 'ModClassId', 'ModSlot',
             'ShotVFXCount', 'WeaponClass', 'ImplantClass', 'ImplantSlot',
             'ImplantLevel', 'ImplantConflictId', 'Deactivated', 'BackstoryGroup',
@@ -1577,7 +1577,7 @@ def augment(data, provenance, config_dir, database):
     payload['RawSQL'] = statements
     validate_native_updates(payload)
     data = encode(payload)
-    receipt['scope'] = 'player talents, weapons, armor and intrinsic effects, cyberware, consumables, leverage, traits and rules (excluding Enemy Balance Rule 82 and standalone Rules 83-85)'
+    receipt['scope'] = 'player talents, weapons, armor and intrinsic effects, cyberware, consumables, leverage, traits and rules (excluding Enemy Balance Rule 82 and standalone Rules 83-86)'
     receipt['parser_source']['sha256'] = hashlib.sha256(data).hexdigest()
     receipt['parser_source']['records'] = sum(len(payload.get(table, [])) for table in TABLE_KEYS)
     if 'merged_update_records_by_table' in receipt:
