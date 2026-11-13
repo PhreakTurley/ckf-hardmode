@@ -163,12 +163,20 @@ class PlayerBalanceTests(unittest.TestCase):
             self.assertEqual(missing['document'], after['document'])
 
     def test_inclusive_acquisition_keeps_explicit_story_gear_and_nonlootable_mission_blueprints(self):
-        with tempfile.TemporaryDirectory() as config:
+        with tempfile.TemporaryDirectory() as config, static_data.StaticData() as source:
             model = pb.catalog(config, static_data.DEFAULT_DB)
+            story = source.connection.execute('''
+                SELECT BlockConditionId, ConditionValue, ConditionValue2 FROM BlockCondition
+                WHERE GroupId='Post_RetireSleep_StartM2_CreateCharacter'
+                  AND ActorId='PCP_RetireSleep_Soldier' AND ConditionType='Equip'
+            ''').fetchall()
+            self.assertEqual(len(story), 1)
+            story_id, weapon1, weapon2 = story[0]
+            self.assertEqual((weapon1, weapon2), (1028, 4025))
         self.assertIsNone(model['error'])
         drawn = {(g['table'], r['id']): r for p in model['pages'] for g in p['grids'] for r in g['rows']}
         for wid in ('1028', '4025'):
-            self.assertTrue(any('BlockCondition 2526 Equip' in e for e in drawn['Weapon', wid]['acquisition']))
+            self.assertTrue(any('BlockCondition %s Equip' % story_id in e for e in drawn['Weapon', wid]['acquisition']))
         self.assertIn('Blueprint 200132 via MissionLoot 9130', drawn['WeaponMod', '132']['acquisition'])
         for key in (('Weapon', '21001'), ('Weapon', '21006'), ('Weapon', '23001'), ('WeaponMod', '5075')):
             self.assertNotIn(key, set(drawn))

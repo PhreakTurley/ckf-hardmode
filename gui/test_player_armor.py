@@ -15,7 +15,7 @@ class PlayerArmorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as config, static_data.StaticData() as source:
             model = pb.catalog(config, source.path)
             self.assertIsNone(model['error'])
-            pages = [p for p in model['pages'] if p['group'] == 'Armor']
+            pages = [p for p in model['pages'] if p['group'] in ('Armor', 'Drone armors')]
             self.assertEqual([p['title'] for p in pages[:3]], ['Stealth', 'Light', 'Heavy'])
             options = {r['ServiceOptionId'] for r in pb.contact_services(source)
                        if r['attainable'] and r['ServiceFlow'] == '2' and int(r['ServiceOptionId']) > 0}
@@ -40,6 +40,8 @@ class PlayerArmorTests(unittest.TestCase):
                 for record in grid['rows']:
                     self.assertTrue(record['acquisition'])
                     self.assertEqual(pb.ARMOR_CLASSES[int(record['baseline']['ArmorClass'])], page['title'])
+                    self.assertEqual(page['group'], 'Drone armors' if int(record['baseline']['ArmorClass'])
+                                     in pb.DRONE_ARMOR_CLASSES else 'Armor')
 
     def test_intrinsics_follow_effective_pointers_and_preserve_shared_targets(self):
         with tempfile.TemporaryDirectory() as config:

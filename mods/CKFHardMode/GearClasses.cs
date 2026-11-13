@@ -72,16 +72,15 @@ namespace CKFHardMode
         internal const string PointerCol  = "WeaponTypeId";
         internal const string Model       = "WeaponModel";
 
-        // Ten of the sixteen weapon classes get a lever row.
+        // These player weapon classes get a lever row.
         internal static readonly int[] LeverClasses = { 1, 2, 3, 4, 5, 6, 10, 11, 12, 14 };
 
-        // Six do not, and each says why in one string that reaches the log. The
+        // Other declared classes do not; each says why in a string that reaches the log. The
         // assertion that no rule names a weapon in these is made over the
         // GENERATED RULES (see the census below), not by reading the sheet.
         //
-        // All sixteen classes have player rows — the smallest is class 7 at one
-        // and the largest class 1 at sixty-one [measured, stock dump]. The gap
-        // between 16 and 10 is a scope decision, not a data gap.
+        // Drone weapons and the individually tuned cyberweapons stay outside
+        // the player class levers.
         //
         // The strings are transcribed in scripts/gear_classes.py
         // EXCLUDED_CLASSES; nothing compares the two.
@@ -94,6 +93,7 @@ namespace CKFHardMode
             { 17, "Cyber Weapon Eyes — tuned item by item in cyberweapons-lasers.csv" },
             { 18, "DroneSMG — drones are out of scope (proposal.md non-goals)" },
             { 19, "DroneERifle — drones are out of scope (proposal.md non-goals)" },
+            { 20, "Drone Shock Club — drones are out of scope (proposal.md non-goals)" },
         };
 
         // Every one is present in the dumped WeaponModel header and not one is
@@ -300,8 +300,8 @@ namespace CKFHardMode
                 if (Array.IndexOf(LeverClasses, cls) < 0)
                 {
                     Plugin.Log.LogWarning($"GearClasses[{SheetName}:{i + 1}]: class {cls} is "
-                        + "neither one of the ten lever classes nor one of the six excluded "
-                        + "ones. The row is skipped — a class in no bucket is a decision "
+                        + "neither a declared lever class nor a declared excluded "
+                        + "class. The row is skipped — a class in no bucket is a decision "
                         + "nobody has made, not a default.");
                     refused++;
                     continue;
@@ -445,7 +445,7 @@ namespace CKFHardMode
                 if (UnbucketedReported.Add(cls))
                     Plugin.Log.LogWarning($"GearClasses: {IdColumn} {id} has {ClassColumn} "
                         + $"{cls}, which is neither one of the ten lever classes nor one of "
-                        + "the six excluded ones. Nothing tunes it and nothing names it. If "
+                        + "the declared excluded ones. Nothing tunes it and nothing names it. If "
                         + "the game has shipped a new weapon class, it needs a row in "
                         + $"{SheetName} or an entry in ExcludedClasses. Reported once per "
                         + "class.");

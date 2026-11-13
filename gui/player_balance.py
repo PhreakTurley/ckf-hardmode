@@ -65,7 +65,9 @@ GENERIC_BLUEPRINT_LOOT_GROUPS = {'Weapon': {'50000'}, 'WeaponMod': {'60000', '60
 # CoreRPG_v1 Constants.BlueprintClass: Armor=2, PetArmor=10.
 BLUEPRINT_OUTPUT_TABLES = {'1': 'Weapon', '2': 'Armor', '3': 'Item', '5': 'WeaponMod', '7': 'Weapon', '10': 'Armor'}
 # CoreRPG_v1 Constants.ArmorClass; localized display names remain separate.
-ARMOR_CLASSES = {2: 'Stealth', 1: 'Light', 3: 'Heavy', 4: 'Drone'}
+ARMOR_CLASSES = {2: 'Stealth', 1: 'Light', 3: 'Heavy', 4: 'Drone',
+                 5: 'Combat Drone', 6: 'Drone Infantry', 7: 'Heavy Drone'}
+DRONE_ARMOR_CLASSES = {4, 5, 6, 7}
 LABELS = {'ApCost': 'AP cost', 'CritMultiBase': 'Crit damage', 'CritMultiStealth': 'Stealth crit damage',
           'ImplantStress': 'Stress', 'InstallTime': 'Install time', 'BaseCost': 'Price',
           'BallisticDamage1': 'Ballistic · 1', 'BallisticDamage2': 'Ballistic · 2',
@@ -78,9 +80,10 @@ LABELS = {'ApCost': 'AP cost', 'CritMultiBase': 'Crit damage', 'CritMultiStealth
 CLASS_NAMES = {1: 'Melee', 2: 'Pistol', 3: 'Assault Rifle', 4: 'Shotgun',
                5: 'E-Rifle', 6: 'Sniper Rifle', 7: 'Canine Attack Rig', 9: 'Drone assault rifles',
                10: 'SMG', 11: 'Revolver', 12: 'Urban Assault', 14: 'Railgun',
-               16: 'Claws', 17: 'Eye Lasers', 18: 'Drone SMGs', 19: 'Drone energy rifles'}
+               16: 'Claws', 17: 'Eye Lasers', 18: 'Drone SMGs', 19: 'Drone energy rifles',
+               20: 'Drone shock clubs'}
 WEAPON_ORDER = [1, 2, 11, 10, 4, 5, 12, 3, 6, 14, 16, 17]
-DRONE_CLASSES = {7, 9, 18, 19}
+DRONE_CLASSES = {7, 9, 18, 19, 20}
 SLOT_NAMES = {1: 'Skin', 2: 'Spinal', 3: 'Deep Brain', 4: 'Fast Brain', 5: 'Skeletal',
               6: 'Arms', 7: 'Legs', 8: 'Ocular', 9: 'Heart', 10: 'Lungs', 11: 'Quantum Rider'}
 SLOT_ORDER = [8, 6, 1, 5, 3, 4, 2, 9, 10, 7]
@@ -1130,7 +1133,7 @@ def catalog(config_dir, database, document=None):
 
             def page(pid, title, group, grids, **kwargs):
                 for g in grids:
-                    if g and group in ('Weapons', 'Drone weapons', 'Armor', 'Consumables', 'Cyberware', 'Cyberware modules'):
+                    if g and group in ('Weapons', 'Drone weapons', 'Armor', 'Drone armors', 'Consumables', 'Cyberware', 'Cyberware modules'):
                         g['scrollWithPage'] = True
                 result['pages'].append({'id': pid, 'title': title, 'group': group,
                                         'grids': [g for g in grids if g and (g['rows'] or g.get('warning'))], **kwargs})
@@ -1302,7 +1305,8 @@ def catalog(config_dir, database, document=None):
                 rows = [r for r in armors if int(effective(doc, 'Armor', r, 'ArmorClass')) == cls]
                 if rows:
                     title = ARMOR_CLASSES.get(cls, 'Armor class %s' % cls)
-                    page('armor-%s' % cls, title, 'Armor', [armor_grid(rows, title)])
+                    page('armor-%s' % cls, title, 'Drone armors' if cls in DRONE_ARMOR_CLASSES else 'Armor',
+                         [armor_grid(rows, title)])
 
             def armor_has_overrides(row):
                 rid = row['ArmorId']

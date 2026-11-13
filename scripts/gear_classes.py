@@ -30,7 +30,7 @@ import sys
 # difference rather than being silently adopted.
 # ---------------------------------------------------------------------------
 
-# design.md section 5. Ten of the sixteen classes get a lever row.
+# design.md section 5. These player weapon classes get a lever row.
 LEVER_CLASSES = [
     (1,  'Melee'),
     (2,  'Pistol'),
@@ -44,11 +44,10 @@ LEVER_CLASSES = [
     (14, 'Railgun'),
 ]
 
-# Six do not, and the sheet says why. Asserted over the GENERATED RULES, not by
+# Other declared classes do not, and each says why. Asserted over the GENERATED RULES, not by
 # reading the sheet: no rule the sheet produces may name a weapon in any of
-# these. All sixteen classes have player rows -- the smallest is class 7 at 1
-# and the largest class 1 at 61 [measured, dump] -- so the gap between 16 and
-# 10 is a scope decision, not a data gap.
+# these. Drone weapons and the individually tuned cyberweapons stay outside
+# the player class levers.
 EXCLUDED_CLASSES = {
     7:  'Canine Attack Rig -- a single row, so a class lever is that row with extra steps',
     9:  'DroneAR -- drones are out of scope (proposal.md non-goals)',
@@ -56,6 +55,7 @@ EXCLUDED_CLASSES = {
     17: 'Cyber Weapon Eyes -- tuned item by item in cyberweapons-lasers.csv',
     18: 'DroneSMG -- drones are out of scope (proposal.md non-goals)',
     19: 'DroneERifle -- drones are out of scope (proposal.md non-goals)',
+    20: 'Drone Shock Club -- drones are out of scope (proposal.md non-goals)',
 }
 
 # Ids 8, 13 and 15 carry no WeaponModel row in the dump. [measured]
@@ -422,7 +422,7 @@ def partition(weapons, enemy_ids, rules, out=print):
             problems.append(
                 f'P1 {ID_COLUMN} {w["id"]} ({w["name"]!r}) has {CLASS_COLUMN} '
                 f'{w["cls"]}, which is in {len(buckets)} bucket(s) {buckets}. '
-                + ('That class is in neither the ten lever classes nor the six '
+                + ('That class is in neither the declared lever classes nor the '
                    'excluded ones, so this row is tuned by nothing and named by '
                    'nothing.' if not buckets else
                    'A class cannot be both a lever class and an excluded one.'))

@@ -7,8 +7,10 @@ import rule_mod
 import static_data
 
 FILE = 'ckf.contact-limit-breaks.json'
-RULES = ((84, 'minimum', 'Minx Turns Between Contact Limit Breaks'),
-         (85, 'maximum', 'Max Turns between Contact Limit Breaks'))
+RULES = ((84, 'minimum', 'Shortest Wait for Contact Limit Breaks'),
+         (85, 'maximum', 'Longest Wait for Contact Limit Breaks'))
+LEGACY_RULE_NAMES = {84: 'Minx Turns Between Contact Limit Breaks',
+                     85: 'Max Turns between Contact Limit Breaks'}
 encode = party_size.encode
 
 
@@ -37,7 +39,9 @@ def rules(database=None):
         rows = source.connection.execute(
             'SELECT RuleId, Value, ConfigName, ConfigDesc FROM Rule WHERE RuleId IN (84,85) ORDER BY RuleId'
         ).fetchall()
-        if [(r[0], r[2]) for r in rows] != [(rid, name) for rid, _, name in RULES]:
+        if ([r[0] for r in rows] != [rid for rid, _, _ in RULES]
+                or any(row[2] not in (name, LEGACY_RULE_NAMES[rid])
+                       for row, (rid, _, name) in zip(rows, RULES))):
             raise ValueError('Official contact rules 84/85 are missing or renamed; review before exporting.')
         return [{'table': 'Rule', 'id': rid, 'field': field, 'name': name, 'description': description,
                  'baseline': int(static_data.integer_text(value, 'Rule[%d].Value' % rid))}

@@ -48,6 +48,17 @@ class ContactLimitBreakTests(unittest.TestCase):
             self.send()
         self.assertFalse((self.project / 'source_data').exists())
 
+    def test_reviewed_rule_names_accept_current_and_legacy_but_refuse_unknown(self):
+        for names in ({rid: name for rid, _, name in contacts.RULES}, contacts.LEGACY_RULE_NAMES):
+            with self.subTest(names=names), closing(sqlite3.connect(self.database, isolation_level=None)) as db:
+                for rid, name in names.items():
+                    db.execute('UPDATE Rule SET ConfigName=? WHERE RuleId=?', (name, rid))
+                self.assertEqual([r['name'] for r in contacts.rules(self.database)], [names[84], names[85]])
+        with closing(sqlite3.connect(self.database, isolation_level=None)) as db:
+            db.execute("UPDATE Rule SET ConfigName='Unreviewed contact rule' WHERE RuleId=85")
+        with self.assertRaisesRegex(ValueError, 'missing or renamed'):
+            contacts.rules(self.database)
+
     def test_invalid_and_reversed_turns_are_refused(self):
         for low, high in [(2, 1), (0, 1), (1, -1), (1.5, 2), (True, 2), (1, 2147483648)]:
             with self.subTest(low=low, high=high), self.assertRaises(ValueError):

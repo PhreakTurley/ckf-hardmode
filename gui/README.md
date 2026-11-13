@@ -98,7 +98,7 @@ the Node DOM harness with current official data.
 
 **Faster Contact Limit Breaks** has its own navigation section for official
 `Rule` rows 84 and 85. `contact_limit_breaks.py:rules` selects only those two
-identities and verifies their names. The section shows both current official
+identities and verifies their current or legacy official names. The section shows both current official
 baselines and descriptions. The minimum and maximum are positive integer turn
 counts, with minimum no greater than maximum. They live only in
 `BepInEx/config/ckf.contact-limit-breaks.json`; an absent file has no implicit
@@ -181,8 +181,9 @@ translates old `-N` subtraction into `+-N` to preserve its effect. The Hard Mode
 expanded-sheet grammar below remains a separate format.
 
 The weapon tabs put Melee, Pistol, Revolver, SMG, Shotgun, E-Rifle, Urban Assault,
-Assault Rifle, Sniper Rifle, Railgun, Claws and Eye Lasers first. Canine Attack Rig belongs
-with Drone weapons. Weapon, armor and weapon-mod catalogs require a positive acquisition
+Assault Rifle, Sniper Rifle, Railgun, Claws and Eye Lasers first. **Drone weapons**
+has its own heading for Canine Attack Rig, drone assault rifles, SMGs, energy
+rifles and shock clubs. Weapon, armor and weapon-mod catalogs require a positive acquisition
 reference from the selected official database: an attainable item service, direct
 mission loot, a blueprint with `Lootable = 1`, or an explicit mission-loot
 reference to the blueprint regardless of its `Lootable` flag. Blueprint
@@ -218,8 +219,9 @@ as catalog eligibility. Resale assignments and the explicit Crafted Intrinsic
 inclusion do not set the marker. The column stays visible with uniform values,
 is searchable and sortable, and never enters saved adjustments or SQL exports.
 
-**Armor** has **Stealth**, **Light** and **Heavy** pages, with any other obtainable
-declared armor classes shown separately. Armor grids use the weapon catalog's
+**Armor** has **Stealth**, **Light** and **Heavy** pages. **Drone armors** has
+its own heading for **Drone**, **Combat Drone**, **Drone Infantry** and **Heavy Drone**;
+other obtainable declared armor classes remain visible separately. Armor grids use the weapon catalog's
 service and blueprint columns, sorting, dynamic columns and page scrolling.
 **Intrinsic mods** joins each armor's effective `ArmorEffectId` to its `Effect`
 row. Edits retain their `Effect` identity, and tooltips identify other armor

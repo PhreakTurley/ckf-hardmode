@@ -1807,7 +1807,7 @@ function renderIndex() {
   for (const page of ((MODEL.playerBalance || {}).pages || [])) {
     if (!playerGroups[page.group]) {
       const open = PLAYER_NAV_OPEN[page.group] === undefined
-        ? page.group !== 'Drone weapons' && page.group !== 'Cyberware modules' : PLAYER_NAV_OPEN[page.group];
+        ? !['Drone weapons','Drone armors','Cyberware modules'].includes(page.group) : PLAYER_NAV_OPEN[page.group];
       const det = el('details', {class:'pb-nav', open:open}, [el('summary', {text:page.group})]);
       det.addEventListener('toggle', function () {PLAYER_NAV_OPEN[page.group] = det.open;});
       playerGroups[page.group] = det;
@@ -2325,7 +2325,7 @@ function renderPlayer(panel, page) {
         target = subsections[subsectionKey];
       }
       if (grid.title !== page.title) target.appendChild(el('h3', {text:grid.title}));
-      if (['Weapons','Drone weapons','Armor','Cyberware','Cyberware modules','Consumables','Enemy Gear'].includes(page.group)) {
+      if (['Weapons','Drone weapons','Armor','Drone armors','Cyberware','Cyberware modules','Consumables','Enemy Gear'].includes(page.group)) {
         const sortBy = el('select',{'aria-label':'Sort by '+page.title+' · '+grid.title});
         const choices = [{value:'',text:'Catalog order'},{value:'name',text:'Name'}];
         if (grid.serviceColumn) choices.push({value:'service',text:'Service'});
