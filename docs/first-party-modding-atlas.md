@@ -64,15 +64,40 @@ startup in `Logs/Nov7h.txt`, rows 253–258, records chainloader completion befo
 the game's connected-Steam messages and subscription scan. That capture is
 evidence for its run, not a test of a future Workshop bridge.
 
-A proposed early bridge can read the account-level text directly, provided
-it independently identifies the launching account. Automatic account
-identification before discovery has not been tested. Do not select the newest
-file, assume a root-level copy is current, or call the game's full mod loader
-to obtain it. Parse/read failure must be reported separately from an empty
-selection. The native `ProcessModsList` (`0xF8D390`) adds subscribed items
-missing from the saved list with `IsActive = false`; subscription alone must
-not activate their code. Workshop folder resolution and live discovery
-integration remain untested.
+[measured] Early identity lookup and selection reading succeeded in a Windows
+Steam launch on November 15, 2026. `Logs/SteamIdentity-preloader-20261115.log`,
+rows 18–22, records initially zero native user/pipe handles, successful
+`SteamAPI_Init`, a valid app id and Steam identity, a repeated initialization
+preserving that identity and both handles, and complete selection parsing.
+All of this precedes chainloader initialization at row 25 and plugin discovery
+at row 28. CKF's subsequent normal Steam setup reports the same account in
+`Logs/SteamIdentity-Player-20261115.log`, row 48. The probe used the game's
+existing `steam_api64.dll`, SHA-256
+`4DF999C0C8CB12589F0864D52BE5D4C775577AEB27FEE28B49B188F9BA083EEA`.
+
+The tested route is a BepInEx 6 preloader's `Initialize`: load that existing
+native DLL, call `SteamAPI_Init`, obtain `SteamAPI_SteamUser_v021`, call
+`SteamAPI_ISteamUser_GetSteamID`, take the account-id component, validate the
+app through `SteamAPI_ISteamUtils_GetAppID`, then read the account-level text.
+Leave native Steam initialized for the game's subsequent startup and shutdown.
+The probe does not invoke the game's Steamworks managed wrappers or take over
+its callback loop. See the maintainer-only `CKFSteamIdentityProbe.Probe.Initialize`,
+[Steam initialization](https://partner.steamgames.com/doc/sdk/api#initialization_and_shutdown),
+and [current-user identity](https://partner.steamgames.com/doc/api/ISteamUser#GetSteamID).
+
+[measured] The launch also supplied a `SteamID` environment variable before
+native initialization; it matched the API result (preloader log, rows 14 and
+19). Its presence in other launch paths is not established. The test covers
+one Windows Steam account and a main-menu startup, not account switching,
+offline mode, direct executable launches, Proton or native Linux/macOS.
+The temporary deployed diagnostic was removed after the capture.
+
+An early bridge must report identity/init/parse/read failures separately from
+an empty selection. Do not select the newest file, assume a root-level copy
+is current, or call the game's full mod loader to obtain it. The native
+`ProcessModsList` (`0xF8D390`) adds subscribed items missing from the saved list
+with `IsActive = false`; subscription alone must not activate their code.
+Workshop folder resolution and live discovery integration remain untested.
 
 ## Locate today's Hard Mode owner
 
