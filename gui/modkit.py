@@ -2,7 +2,8 @@
 
 The standalone repository owns native talent mappings; player_balance owns
 the additional SQL. This module checks inputs and commits verified sources.
-It preflights SQL in a temporary directory, never installs a mod or submits a Workshop item.
+It prepares SQL in a temporary directory, then updates the upload and installed
+Workshop payloads together. It never submits a Workshop item or opens a save.
 """
 
 import hashlib
@@ -15,18 +16,24 @@ import shutil
 import sys
 import tempfile
 import player_balance
+import steam_workshop
 
 
-def preflight_parser(data, mod, parser_config):
-    """Run the installed parser before a handoff; nothing is installed."""
+def prepare_parser(data, mod, parser_config):
+    """Return the installed parser's exact output bytes and checked inputs."""
     root = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parents[1]))
     script = root / 'scripts/prepare_enemy_difficulty.ps1'
     engine = Path(mod).parent.parent
     dll_name = 'CyberKnightsModkit_Data/Managed/DataParserNETStandard.dll'
     if not (engine / dll_name).is_file():
         engine = Path(r'C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Mod Uploader')
-    if not (engine / dll_name).is_file() or not script.is_file() or not shutil.which('pwsh'):
-        raise ValueError('Player export requires the installed Modkit parser and PowerShell 7 for validation.')
+    if not (engine / dll_name).is_file():
+        raise ValueError('Player export requires the installed Modkit parser: ' + str(engine / dll_name))
+    if not script.is_file():
+        raise ValueError('The editor is missing its bundled Modkit preparation script; rebuild the editor.')
+    pwsh = shutil.which('pwsh')
+    if not pwsh:
+        raise ValueError('Player export requires PowerShell 7 (pwsh) on the Windows PATH.')
     inputs = {path: state(path) for path in (script, engine / dll_name, Path(parser_config))}
     with tempfile.TemporaryDirectory(prefix='ckf-player-parser-') as directory:
         directory = Path(directory)
@@ -34,7 +41,7 @@ def preflight_parser(data, mod, parser_config):
         source.mkdir()
         (source / 'stories.manifest').write_text('talent-balance.json\n', encoding='utf-8')
         (source / 'talent-balance.json').write_bytes(data)
-        result = subprocess.run(['pwsh', '-NoProfile', '-File', str(script), '-SourceContent', str(source),
+        result = subprocess.run([pwsh, '-NoProfile', '-File', str(script), '-SourceContent', str(source),
             '-OutputDirectory', str(directory / '_data'), '-ModkitDirectory', str(engine),
             '-SchemaPath', str(parser_config)], capture_output=True, text=True, timeout=180,
             creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
@@ -43,10 +50,12 @@ def preflight_parser(data, mod, parser_config):
                              (result.stderr or result.stdout)[-4000:].strip())
         if not (directory / '_data/data.sql').is_file() or not (directory / '_data/en-US.json').is_file():
             raise ValueError('Modkit parser produced an incomplete result; nothing was sent.')
+        files = {name: (directory / '_data' / name).read_bytes()
+                 for name in ('data.sql', 'en-US.json')}
     for path, expected in inputs.items():
         if state(path) != expected:
             raise ValueError('Parser input changed during validation: ' + str(path))
-    return inputs
+    return files, inputs
 
 
 def state(path):
@@ -167,6 +176,7 @@ def send(config_dir, project_dir, mod_dir, database=None):
         raise ValueError('Choose the mod folder beside its .workshop.json file.')
     if not (mod / 'upload_content').is_dir():
         raise ValueError('The selected folder is not an initialized Modkit project.')
+    workshop, install_inputs = steam_workshop.local_install_target(mod, state)
     script = project / 'scripts' / 'export_talent_balance.py'
     script_state = state(script)
     exporter = load_exporter(project)
@@ -185,6 +195,7 @@ def send(config_dir, project_dir, mod_dir, database=None):
     database_path = player_balance.static_data.database_path(database)
     inputs[database_path] = state(database_path)
     inputs[script] = script_state
+    inputs.update(install_inputs)
     parser_config = mod.parent / 'config.json'
     inputs[parser_config] = state(parser_config)
     manifest = project / 'source_content' / 'stories.manifest'
@@ -200,6 +211,14 @@ def send(config_dir, project_dir, mod_dir, database=None):
     paths = [project / 'source_content' / 'talent-balance.json',
              project / 'provenance' / 'SOURCE.json', destination_manifest,
              mod / 'source_data' / 'talent-balance.json']
+    payload_paths = [folder / '_data' / name
+                     for folder in (mod / 'upload_content', workshop)
+                     for name in ('data.sql', 'en-US.json')]
+    for path in payload_paths:
+        folder = workshop if workshop in path.parents else mod / 'upload_content'
+        if folder.resolve() not in path.resolve().parents:
+            raise ValueError('Prepared payload points outside its destination: ' + str(path))
+    paths += payload_paths
     expected = {p: state(p) for p in paths}
     if any(Path(config_dir).resolve() in p.resolve().parents for p in paths):
         raise ValueError('Export destinations must be outside the live config directory.')
@@ -223,14 +242,18 @@ def send(config_dir, project_dir, mod_dir, database=None):
             raise ValueError('%s moved before it could be exported' % filename)
     if inputs[cfg][2] != metadata['switch_file']['sha256']:
         raise ValueError('The talent switches changed during export.')
-    for path, checked in preflight_parser(data, mod, parser_config).items():
+    files, parser_inputs = prepare_parser(data, mod, parser_config)
+    for path, checked in parser_inputs.items():
         if path in inputs and inputs[path] != checked:
             raise ValueError('The parser contract changed during validation; nothing was sent.')
         inputs[path] = checked
-    outputs = dict(zip(paths, [data, provenance, manifest_bytes, data]))
+    outputs = dict(zip(paths[:4], [data, provenance, manifest_bytes, data]))
+    outputs.update({path: files[path.name] for path in payload_paths})
     written = commit_files(outputs, expected, inputs)
     return {'ok': True, 'records': metadata['parser_source']['records'],
             'counts': metadata['merged_update_records_by_table'],
             'sourceDir': str(mod / 'source_data'), 'written': written,
+            'uploadDir': str(mod / 'upload_content'), 'installedDir': str(workshop),
+            'files': {name: hashlib.sha256(content).hexdigest() for name, content in files.items()},
             'sha256': hashlib.sha256(data).hexdigest(),
-            'next': 'In Modkit Uploader, click Prepare Mod Data, then Local Install Mod.'}
+            'next': 'Start or restart Cyber Knights to test. The Modkit payload is ready for Workshop submission.'}

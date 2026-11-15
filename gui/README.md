@@ -17,7 +17,8 @@ values happen to agree. The editor writes the live files and keeps no backup.
 | `serve.py` | Stdlib-only server, guarded saves, and validation coordination. |
 | `app.html` | The page. No CDN, no build step. Names no file, field, column or cfg key. |
 | `settings.json` | Per-machine game/config paths, `stripReadme`, and optional Modkit paths. Not committed. |
-| `modkit.py` | Guarded handoff of talent and player-balance sources to Modkit. |
+| `modkit.py` | Guarded player export, Modkit preparation and local installation. |
+| `steam_workshop.py` | Resolve the uploader's local install target and verify Steam registration. |
 | `player_balance.py` | Workshop tuning, official-data catalogs, and SQL generation. |
 | `enemy_armor.py` | Enemy armor catalog, shared authoring-sheet edits, and preparation handoff. |
 | `ckf-config-editor.spec` | PyInstaller spec used by `scripts/make_release.py`. |
@@ -139,9 +140,21 @@ folder** to the initialized `WorkshopContent/<ModName>` folder beside its
 1. Edit values and click **Save** in the editor.
 2. Click **Send player balance to Modkit**. It regenerates the standalone repository's
    `source_content/talent-balance.json` and `provenance/SOURCE.json`, then copies
-   the manifest and parser JSON into the Modkit project's `source_data`.
-3. In Modkit Uploader, click **Prepare Mod Data**, then **Local Install Mod**.
-   Test the changes in game before submitting the prepared version to Workshop.
+   the manifest and parser JSON into the Modkit project's `source_data`. The
+   official parser's SQL and locale output goes into both `upload_content/_data`
+   and the downloaded Workshop item's `_data` in the same guarded transaction.
+3. Start or restart Cyber Knights to test. The first-party uploader can submit
+   the prepared `upload_content` to Workshop after testing; neither **Prepare Mod
+   Data** nor **Local Install Mod** is needed between editor export and testing.
+
+For initial setup, publish the item privately, subscribe and let Steam finish
+downloading it, select its **Steam Mod folder** in Modkit, and activate it in
+the game's Mods screen once. Export reads `publishedfileid` and `steamModFolder`
+from the project's `.workshop.json`; it refuses a mismatched game/item folder
+or missing Steam installed-item registration before replacing any output.
+The editor does not edit Workshop metadata, subscriptions, activation or saves.
+Steam can replace local test files when it downloads a Workshop update; export
+again to restore the current authoring values.
 
 The export includes all eleven classes even when their BepInEx slice switches
 are off. Keep those talent slices off when testing the Workshop package to
@@ -160,10 +173,16 @@ ambiguous mappings refuse the handoff before replacing any output. The contract
 is fingerprinted with the other inputs and its hash is recorded in provenance.
 The handoff rejects native updates containing only an ID. An explicit icon
 override replaces the automatic icon assignment without leaving an empty update.
-Before replacing any output, the editor also runs the installed Modkit parser
+Before replacing any output, the editor runs the installed Modkit parser
 with the selected contract in a temporary directory. This requires PowerShell 7
-and the installed Mod Uploader. Preparing the upload directory, installing
-locally, and submitting remain uploader actions.
+on the Windows PATH and the installed Mod Uploader. The same parser output
+bytes are committed to the upload and local install directories, with readback
+verification and rollback across all export destinations. Other files in those
+directories are preserved. Workshop submission remains an uploader action.
+
+Verification: `python gui/test_modkit.py` covers parser failures, Steam target
+identity and registration, changed inputs/destinations, rollback after a local
+install failure, and equality of the uploaded and installed payloads.
 
 ### Workshop player catalogs
 
