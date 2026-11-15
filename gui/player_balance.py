@@ -47,6 +47,14 @@ METADATA.update({'EffectTypeId', 'MatrixEffectTypeId', 'ImplantEffectId', 'Impla
 METADATA.update({'ItemClass', 'LeverageClass', 'TalentId'})
 ITEM_CLASSES = {1: 'Medical', 2: 'Grenades', 3: 'Devices', 4: 'Chems', 6: 'Sploitkits', 7: 'Matrix'}
 ITEM_TAG_LOCALES = {1: 'Medical', 2: 'Demolition', 3: 'Tech', 4: 'Drugs', 6: 'Leverage', 7: 'HackingDrugs'}
+# Catalog link declaration, keyed by (matrix-only mode, action), never by option
+# id alone. Official MissionAdvantage 15/901/1000/1500/16/900 reference Effect;
+# 704 and 708 reference MatrixEffect. Matrix action 301 (IO Flush, row 3001)
+# is not the physical action 301 (Planned Advantage, row 16).
+LEVERAGE_EFFECT_TABLES = {(False, '205'): 'Effect', (False, '206'): 'Effect',
+                         (False, '215'): 'Effect', (False, '224'): 'Effect',
+                         (False, '301'): 'Effect', (False, '302'): 'Effect',
+                         (True, '302'): 'MatrixEffect', (False, '304'): 'MatrixEffect'}
 # Explicit text-assignment declaration; other fields keep the numeric grammar.
 TEXT_FIELDS = {'Talent': {'IconPng'}, 'JobNode': {'IconPng'},
                'Effect': {'IconAsset'}, 'MatrixEffect': {'IconAsset'}}
@@ -916,6 +924,31 @@ def armor_links(allrows, doc):
     return links, owners
 
 
+def leverage_links(allrows, doc, locale):
+    """Resolve declared action options with their table and saved adjustments."""
+    links, owners = {}, {}
+    for row in allrows['MissionAdvantage'].values():
+        rid = row['AdvantageTypeId']
+        action = str(int(effective(doc, 'MissionAdvantage', row, 'ActionTypeId')))
+        option = str(int(effective(doc, 'MissionAdvantage', row, 'ActionOptionId')))
+        matrix = effective(doc, 'MissionAdvantage', row, 'AdvantageIsMatrixOnly') != 0
+        table = LEVERAGE_EFFECT_TABLES.get((matrix, action))
+        linked = {'ids': {}, 'Effects': None, 'Matrix effects': None, 'warnings': []}
+        linked['note'] = 'Action %s / option %s / matrix-only %s: no declared effect link.' % (action, option, int(matrix))
+        if table:
+            heading = 'Effects' if table == 'Effect' else 'Matrix effects'
+            target = allrows[table].get(option)
+            linked[heading] = target
+            linked['ids'][heading] = option
+            linked['note'] = 'Action %s / option %s / matrix-only %s → %s %s' % (action, option, int(matrix), table, option)
+            if target:
+                owners.setdefault((table, option), {})[rid] = locale.get('Advantage.Name.' + rid, 'Leverage ' + rid)
+            else:
+                linked['warnings'].append('MissionAdvantage %s: %s %s was not found' % (rid, table, option))
+        links[rid] = linked
+    return links, owners
+
+
 def cyberweapon_links(allrows, doc, weapons):
     """Join effective attack/effect pointers and retain all owning implants."""
     attacks = {w['WeaponId']: [] for w in weapons}
@@ -1074,8 +1107,8 @@ def catalog(config_dir, database, document=None):
                                                     'fallbackNonpositive': True, 'fallbackUnavailable': table in ('Implant', 'Item')}
                 return result_grid
 
-            def joined_grid(base_table, rows, title, base_heading, links, owners, blocks, hidden=()):
-                joined = grid(base_table, rows, title)
+            def joined_grid(base_table, rows, title, base_heading, links, owners, blocks, hidden=(), policy='varying'):
+                joined = grid(base_table, rows, title, policy)
                 joined['joined'] = True
                 for column in joined['columns'] + joined['advanced']:
                     column['group'] = column.get('group') or base_heading
@@ -1405,14 +1438,19 @@ def catalog(config_dir, database, document=None):
                            'Other leverage')
                 leverage_groups[heading].append(row)
             leverage_grids = []
+            advantage_links, advantage_owners = leverage_links(allrows, doc, source.locale)
             for heading, rows in leverage_groups.items():
                 if not rows:
                     continue
-                g = grid('MissionAdvantage', rows, 'Leverage', 'nonzero')
+                g = joined_grid('MissionAdvantage', rows, 'Leverage', 'Leverage',
+                                advantage_links, advantage_owners,
+                                [('Effects', 'Effect'), ('Matrix effects', 'MatrixEffect')], policy='nonzero')
                 g.update(key=heading, subsection=heading, subsectionOpen=heading == 'Other leverage')
                 for record in g['rows']:
-                    if record['id'] in face_actions:
-                        record['description'] = ', '.join(sorted(face_actions[record['id']]))
+                    record['description'] = '\n'.join(filter(None, [
+                        source.locale.get('Advantage.Rule.' + record['id'], ''),
+                        ', '.join(sorted(face_actions.get(record['id'], []))),
+                        advantage_links[record['id']]['note']]))
                 leverage_grids.append(g)
             page('leverage', 'Leverage', 'Character', leverage_grids)
             rows = list(allrows['Trait'].values())

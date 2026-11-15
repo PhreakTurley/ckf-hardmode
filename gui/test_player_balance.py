@@ -15,6 +15,30 @@ import static_data
 
 
 class PlayerBalanceTests(unittest.TestCase):
+    def test_leverage_links_keep_action_modes_and_table_identity(self):
+        with static_data.StaticData() as source:
+            tables = {t: {r[pb.TABLE_KEYS[t]]: r for r in source.read(t + 'Model')[1]}
+                      for t in ('MissionAdvantage', 'Effect', 'MatrixEffect')}
+            links, owners = pb.leverage_links(tables, pb.empty(), source.locale)
+            self.assertEqual(links['15']['Effects']['EffectId'], '55001')
+            self.assertEqual(links['900']['Effects']['EffectId'], '55002')
+            self.assertEqual(links['704']['Matrix effects']['MatrixEffectId'], '80002')
+            self.assertIsNone(links['704']['Effects'])
+            self.assertEqual(links['708']['Matrix effects']['MatrixEffectId'], '80003')
+            # IO Flush's numeric action overlaps Planned Advantage's; it must
+            # not expose the unrelated MatrixEffect 1 (IC Disabled).
+            self.assertFalse(links['3001']['ids'])
+            self.assertIn('16', owners[('Effect', '55010')])
+            self.assertIn('6006', owners[('Effect', '55010')])
+            doc = pb.empty()
+            doc['tables'] = {'MissionAdvantage': {'15': {'ActionOptionId': '55012'}}}
+            updated, _ = pb.leverage_links(tables, doc, source.locale)
+            self.assertEqual(updated['15']['Effects']['EffectId'], '55012')
+            doc['tables']['MissionAdvantage']['15']['ActionOptionId'] = '999999999'
+            missing, _ = pb.leverage_links(tables, doc, source.locale)
+            self.assertIsNone(missing['15']['Effects'])
+            self.assertEqual(missing['15']['warnings'], ['MissionAdvantage 15: Effect 999999999 was not found'])
+
     def test_assignment_prefix_normalization_preserves_operations(self):
         for original, expected in [('=90','90'), ('=-10','-10'), ('=+10','10'),
                                    (' = -1e1 ','-1e1'), ('+10','+10'),

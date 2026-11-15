@@ -450,6 +450,15 @@ targeting `LEVERAGE`. The remaining tests, in that order, use effective
 `TokenCost=0`, the matrix-only flag and nonzero `FavorCost`, including saved
 adjustments. Every row belongs to exactly one subsection. Other leverage
 starts expanded and the special groups start collapsed; searching opens matches.
+Each row joins its declared action option to editable **Effects** or **Matrix
+effects** stats through `player_balance.py:leverage_links`. The declaration keys
+on both action type and matrix-only mode: numeric action ids overlap between
+those modes. Saved action/option adjustments determine the next loaded join.
+Every bonus cell retains its actual table/id/column, shared-effect tooltips name
+other leverage using it, and a missing declared target produces a warning.
+Hover the leverage name for its localized rule text and exact link, or an
+explicit note that the action has no declared effect link. These action options
+are not joined merely because an effect with the same number exists.
 
 **Rules** under Player Balance reads every current `Rule` row and groups it by
 `GroupId`. Names and descriptions come from `ConfigName` and `ConfigDesc`.
@@ -668,6 +677,17 @@ baseline. Icon fields offer existing `IconPng` or `IconAsset` values; effect
 pointers offer the appropriate table's ids. Saved pointers determine the next
 loaded view. A manual Workshop node icon takes precedence over an automatically
 derived attribute icon; conflicting authored native assignments still refuse export.
+
+Attributes show **Export icon** alongside the editable **Icon override** field.
+The read-only result follows the exporter's captured `_attribute_nodes` links,
+merged attribute assignments and `_shipped` baselines. A unique largest positive
+attribute selects its icon; a tie, no positive value or no attribute assignment
+preserves the authored or official icon. Workshop manual icons take precedence.
+The preview updates while typing, identifies its source Effect and official icon
+in the tooltip, and creates no saved icon assignments. Invalid captured values
+and conflicting manual ownership remain explicit instead of showing a guessed
+result. This previews the next export; it does not report what is installed in
+the running game.
 
 Explicit overrides are red. Nonzero numeric baselines are yellow, except that
 JobNode BuyCost 1 and Talent baselines stay plain. Text baselines stay plain.

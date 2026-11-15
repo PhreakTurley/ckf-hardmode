@@ -176,6 +176,33 @@ setTimeout(function() {
  ck('restore returns the untouched save payload', JSON.stringify(buildEdits())===before);
  const attr=MODEL.talentBalance.pages.sol.grids.find(g=>g.title==='Attributes');
  ck('extra item carry is at the bottom of attributes', attr.rows.slice(-3).map(r=>r.id).join(',')==='7500,7501,7502');
+ const previews=Object.values(MODEL.talentBalance.pages).flatMap(p=>p.grids).filter(g=>g.title==='Attributes');
+ for (const [id,expected] of Object.entries(MODEL._expectedAttributeIcons || {})) {
+   const grid=previews.find(g=>g.rows.some(r=>r.id===id)), row=grid.rows.find(r=>r.id===id);
+   ck('export icon matches the standalone exporter for JobNode '+id, playerCell(grid,row,grid.columns[0]).base===expected);
+ }
+ const attrRow=attr.rows.find(r=>r.targets.exportIcon.computedIcon);
+ const rule=attrRow.targets.exportIcon.computedIcon;
+ const stored=JSON.stringify(W.overlays), storedPlayer=JSON.stringify(W.player);
+ for (let i=0;i<rule.attributes.length;i++) for (const c of rule.attributes[i].cells)
+   W.overlays[c.overlay].cells[c.row][c.ci]=i===3?'2':'0';
+ render();
+ let exported=()=>find(n=>n.getAttribute('data-export-icon')===attrRow.id)[0];
+ ck('pending attribute changes immediately show their automatic export icon', exported().textContent===rule.attributes[3].icon);
+ const editable=find(n=>n.tagName==='INPUT' && n.getAttribute('data-player-target')==='Effect '+rule.effect+'.AttStrong')[0];
+ editable.value='3';editable.fire('input');
+ ck('typing in an attribute refreshes the visible export icon', exported().textContent===rule.attributes[0].icon);
+ const manualTarget=attrRow.targets['JobNode.IconPng'];
+ if (manualTarget.overlay) W.overlays[manualTarget.overlay].cells[manualTarget.row][manualTarget.ci]='';
+ W.player.tables.JobNode=W.player.tables.JobNode || {};W.player.tables.JobNode[attrRow.id]={IconPng:'ManualFixture'};
+ ck('manual Workshop icons supersede automatic icons in the preview', playerCell(attr,attrRow,attr.columns[0]).base==='ManualFixture');
+ delete W.player.tables.JobNode[attrRow.id];
+ for (const c of rule.attributes[3].cells) W.overlays[c.overlay].cells[c.row][c.ci]='3';
+ ck('tied attributes preserve the official or authored icon', playerCell(attr,attrRow,attr.columns[0]).base===attrRow.baseline.exportIcon);
+ for (const a of rule.attributes) for (const c of a.cells) W.overlays[c.overlay].cells[c.row][c.ci]='0';
+ ck('no positive attribute preserves the official icon', playerCell(attr,attrRow,attr.columns[0]).base===attrRow.baseline.exportIcon);
+ W.overlays=JSON.parse(stored);W.player=JSON.parse(storedPlayer);render();
+ ck('computed icon previews never create saved adjustments', JSON.stringify(buildEdits())===before);
  ck('editing help follows every grid', panel.children[panel.children.length-1]._cls().includes('page-instructions'));
  console.log('Talent UI: '+passed+' passed');process.exit(0);
 },0);
@@ -184,6 +211,21 @@ setTimeout(function() {
 
 if __name__ == '__main__':
     if '--ui' in sys.argv:
-        model = serve.App(serve.load_settings(), 'test-token').api_model()
+        settings = serve.load_settings()
+        model = serve.App(settings, 'test-token').api_model()
+        project = Path(settings.get('talentProjectDir', ''))
+        if (project / 'scripts/export_talent_balance.py').is_file():
+            import modkit
+            exporter = modkit.load_exporter(project)
+            data, provenance, _ = exporter.build_export(Path(serve.config_dir_for(settings)) / 'ckf.hardmode.d', None)
+            data, _, _ = serve.player_balance.augment(data, provenance, serve.config_dir_for(settings), serve.static_data.DEFAULT_DB)
+            doc = model['playerBalance']['document']
+            icons = {str(r['JobNodeId']): r['Icon'] for r in json.loads(data)['JobNode'] if 'Icon' in r}
+            icons.update({rid: fields['IconPng'] for rid, fields in doc['tables'].get('JobNode', {}).items() if 'IconPng' in fields})
+            attribute_ids = {r['id'] for p in model['talentBalance']['pages'].values()
+                             for g in p['grids'] if g['title'] == 'Attributes' for r in g['rows']}
+            model['_expectedAttributeIcons'] = {rid: icon for rid, icon in icons.items() if rid in attribute_ids}
+        else:
+            print('NOT RUN: standalone exporter icon comparison (Workshop repository unavailable)')
         sys.exit(serve.selftest_dom(model, UI))
     unittest.main()

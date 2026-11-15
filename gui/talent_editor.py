@@ -1,4 +1,6 @@
 """Joined talent editing views; native sheet targets remain native sheet edits."""
+import json
+
 import player_balance as pb
 import static_data
 import talent_catalog as tc
@@ -18,6 +20,38 @@ NODE_METADATA = {'JobVersion', 'JobId', 'DisplayCol', 'DisplayRow', 'NodeReq1', 
                  'NodeTalent1Id', 'NodeTalentTriggerId', 'NodeTalentTriggerType',
                  'NodeTalentAdjustmentId', 'CarryItemClass', 'DescRule'}
 
+# Same declaration as the standalone exporter's ATTRIBUTE_ICONS. The preview
+# consumes captured links/baselines, as that exporter does, not display names.
+ATTRIBUTE_ICONS = {'AttStrong': 'Strength', 'AttFast': 'Reaction',
+                   'AttWill': 'Will', 'AttTech': 'Tech'}
+
+
+def icon_rules(overlays):
+    effects, rules = {}, {}
+    for rel, ov in sorted(overlays.items()):
+        if ov.get('table') != 'EffectModel' or ov.get('catalogOrder', 100) >= 100:
+            continue
+        names = [c['name'] for c in ov['columns']]
+        for ri, row in enumerate(ov['rows']):
+            raw = dict(zip(names, row['cells']))
+            eid = raw['EffectId']
+            for name in ATTRIBUTE_ICONS:
+                if name in names:
+                    effects.setdefault(eid, {}).setdefault(name, []).append(
+                        {'overlay': rel, 'row': ri, 'ci': names.index(name)})
+            if raw.get('_group') != 'Attribute nodes':
+                continue
+            baseline = json.loads(raw.get('_shipped') or '{}')
+            owners = json.loads(raw.get('_attribute_nodes') or '[]')
+            for node in owners:
+                rules[str(node)] = {'effect': eid, 'baseline': baseline}
+    for rule in rules.values():
+        rule['attributes'] = [{'icon': icon, 'baseline': rule['baseline'].get(name),
+                               'cells': effects.get(rule['effect'], {}).get(name, [])}
+                              for name, icon in ATTRIBUTE_ICONS.items()]
+        del rule['baseline']
+    return rules
+
 
 def catalog(overlays, database, attribute_columns, attribute_always, talent_excluded, document=None, config_dir=None):
     result = {'pages': {}, 'error': None}
@@ -27,6 +61,7 @@ def catalog(overlays, database, attribute_columns, attribute_always, talent_excl
         with static_data.StaticData(database) as source:
             tables = {t: {r[tc.KEYS[t + 'Model']]: r for r in source.read(t + 'Model')[1]}
                       for t in ('Job', 'JobNode', 'Talent', 'Effect', 'MatrixEffect')}
+            automatic_icons = icon_rules(overlays)
             icons = {col: sorted({r[col] for t, fields in pb.TEXT_FIELDS.items() if col in fields
                                   for r in tables[t].values() if r[col]})
                      for col in ('IconPng', 'IconAsset')}
@@ -78,6 +113,8 @@ def catalog(overlays, database, attribute_columns, attribute_always, talent_excl
                             if name in pb.TEXT_FIELDS.get(table, set()):
                                 col.update(label='Icon', literal=True, always=True,
                                            options=[{'value': i, 'label': i} for i in icons[name]])
+                                if title == 'Attributes' and table == 'JobNode':
+                                    col['label'] = 'Icon override'
                             if name in POINTERS.get(table, {}):
                                 target = POINTERS[table][name]
                                 col['label'] = {'NodeEffect1Id':'Effect', 'MatrixEffect1Id':'Matrix effect',
@@ -122,6 +159,15 @@ def catalog(overlays, database, attribute_columns, attribute_always, talent_excl
                                     col.setdefault('rowOptions', {})[node_id] = [{'value':'0', 'label':'0 · None'}] + options['MatrixEffect']
                             row['targets'][col['name']] = target
                         g['rows'].append(row)
+                    if title == 'Attributes':
+                        name = 'exportIcon'
+                        g['columns'].insert(0, {'name': name, 'label': 'Export icon', 'group': 'Job node',
+                                               'order': -1, 'literal': True, 'always': True})
+                        for row in g['rows']:
+                            target = row['targets']['JobNode.IconPng']
+                            row['baseline'][name] = row['baseline']['JobNode.IconPng']
+                            row['targets'][name] = {'computedIcon': automatic_icons.get(row['id']),
+                                'iconTarget': target, 'readOnly': True}
                     return g
 
                 regular, attribute_rows = [], []

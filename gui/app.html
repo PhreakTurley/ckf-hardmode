@@ -250,6 +250,7 @@ table.pb-grid th{min-width:0;max-width:none!important;white-space:nowrap;word-br
   white-space:nowrap;background:var(--panel);padding:4px 7px;z-index:1}
 .pb-grid th.pb-name{z-index:4;background:var(--panel2)}
 .pb-grid thead tr.pb-subheads th{top:24px}
+.page-grid-wrap .pb-grid thead tr.pb-subheads th{top:auto}
 .pb-grid thead tr:first-child{height:24px}
 .pb-grid th.pb-colgroup{text-align:center;color:var(--dim);border-bottom:0}
 .pb-grid .pb-section th{position:static;padding:8px 7px 5px;background:#28344a;color:#c6d9f6;white-space:normal}
@@ -1889,9 +1890,39 @@ function playerTextWidth(text, heading) {
   return ctx.measureText(String(text)).width;
 }
 
+function playerExportIcon(target, baseline) {
+  const iconTarget=target.iconTarget;
+  const manual=(((W.player.tables || {})[iconTarget.table] || {})[iconTarget.id] || {})[iconTarget.column] || '';
+  const authored=iconTarget.overlay ? W.overlays[iconTarget.overlay].cells[iconTarget.row][iconTarget.ci] || '' : '';
+  const rule=target.computedIcon;
+  let icon=authored || baseline, automatic=false, changed=false;
+  if (rule) {
+    const values=rule.attributes.map(function(attribute) {
+      let value=attribute.baseline;
+      for (const cell of attribute.cells) {
+        const spec=W.overlays[cell.overlay].cells[cell.row][cell.ci].trim();
+        if (spec) {value=spec;changed=true;}
+      }
+      return value===null || value===undefined || !/^[+-]?\d+$/.test(String(value)) ? NaN : Number(value);
+    });
+    if (changed && values.some(Number.isNaN)) return {icon:'Unresolved',detail:'The exporter requires all four captured attribute baselines and integer assignments.'};
+    const largest=Math.max(...values), winners=values.filter(function(v) {return v===largest;});
+    if (changed && largest>0 && winners.length===1) {icon=rule.attributes[values.indexOf(largest)].icon;automatic=true;}
+  }
+  if (manual && authored)
+    return {icon:'Export conflict',detail:'Both native and Workshop tuning assign this icon. Clear one override before exporting.'};
+  if (manual) {icon=manual;automatic=false;}
+  return {icon:icon,detail:(automatic ? 'Automatic from Effect '+rule.effect : manual || authored ? 'Explicit icon override' : 'Official icon')
+    +'\nExported JobNode '+iconTarget.id+' icon: '+icon+'\nOfficial icon: '+baseline};
+}
+
 function playerCell(grid, row, column) {
   const target = row.targets ? row.targets[column.name] : {table:grid.table,id:row.id,column:column.name};
   if (!target) return null;
+  if (target.iconTarget) {
+    const preview=playerExportIcon(target,row.baseline[column.name]);
+    return {target:target,value:'',base:preview.icon,multiplier:1,readOnly:true,readOnlyReason:preview.detail};
+  }
   const fields = ((W.player.tables || {})[target.table] || {})[target.id] || {};
   if (target.enemyArmor) return {target:target,value:(W.enemyArmor[target.id] || {})[target.column] || '',
     base:row.baseline[column.name],multiplier:1,readOnly:false};
@@ -2261,6 +2292,7 @@ function renderPlayer(panel, page) {
     grids.textContent = '';
     const cellViews = new Map();
     const serviceViews = [];
+    const computedViews = [];
     const query = search.value.toLocaleLowerCase();
     const subsections = {};
     const categories = {};
@@ -2508,6 +2540,12 @@ function renderPlayer(panel, page) {
           if (cell.readOnly) {
             td.className = 'readonly';td.textContent = base;
             td.title = cell.readOnlyReason || 'Managed by Hard Mode Fatigue / limit-break traits';
+            if (targetCell.iconTarget) {
+              td.setAttribute('data-export-icon',targetCell.iconTarget.id);
+              computedViews.push(function() {
+                const preview=playerCell(grid,row,col);td.textContent=preview.base;td.title=preview.readOnlyReason;
+              });
+            }
           } else {
             const controlLabel = row.name+' '+(grid.joined ? col.group+' ' : '')+col.label;
             const source = targetCell.table+' '+targetCell.id+'.'+targetCell.column;
@@ -2533,6 +2571,7 @@ function renderPlayer(panel, page) {
               }
               for (const view of cellViews.get(cellKey)) {view.input.value=input.value;view.style(input.value);}
               for (const refresh of serviceViews) refresh();
+              for (const refresh of computedViews) refresh();
               input.style.width = Math.max(item.width-1, Math.ceil(playerTextWidth(input.value,false)+15))+'px';
               style(input.value);updateDirty();updateRules();
             });

@@ -503,6 +503,18 @@ setTimeout(async function () {
   const leverageSearch = find(function(n) {return n.tagName==='INPUT' && n.getAttribute('type')==='search';})[0];
   leverageSearch.value='Suppressed Alarm';leverageSearch.fire('input');
   ck('leverage has readable names', panel.textContent.includes('Suppressed Alarm'));
+  leverageSearch.value='Tactical Dominance';leverageSearch.fire('input');
+  const leverageAP=find(n=>n.tagName==='INPUT' && n.getAttribute('data-player-target')==='Effect 55001.ActionPoints')[0];
+  ck('leverage exposes its linked effect stats by default', !!leverageAP);
+  const leverageBefore=leverageAP.value;leverageAP.value='30';leverageAP.fire('input');
+  ck('leverage bonus edits keep the native Effect identity', buildEdits().playerBalance.cells.some(c=>
+    c.table==='Effect' && c.id==='55001' && c.column==='ActionPoints' && c.value==='30'));
+  leverageAP.value=leverageBefore;leverageAP.fire('input');
+  leverageSearch.value='Bespoke Deck Armor';leverageSearch.fire('input');
+  ck('matrix leverage joins the MatrixEffect table even when an Effect has the same id',
+    find(n=>n.tagName==='INPUT' && n.getAttribute('data-player-target')==='MatrixEffect 80002.DeckArmor').length===1
+    && !find(n=>n.tagName==='INPUT' && n.getAttribute('data-player-target')==='Effect 80002.Heals').length);
+  leverageSearch.value='Suppressed Alarm';leverageSearch.fire('input');
   const all = find(function(n) {return n.tagName==='INPUT' && n.getAttribute('type')==='checkbox';})[0];
   const count = find(function(n) {return n.tagName==='TH';}).length;
   all.checked=true;all.fire('change');
