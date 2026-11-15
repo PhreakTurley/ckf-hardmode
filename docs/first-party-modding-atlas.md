@@ -31,6 +31,49 @@ One uploader mod can carry data modifications and Unity addressables. Its intern
 
 The first-party pages do not establish SQL execution order among active Workshop mods, collision handling, transaction behavior, or the ordering of Workshop SQL versus BepInEx hooks. Treat each as an open integration question. In particular, two systems aimed at the same `(table, id, column)` must not be enabled together until ordering and ownership are verified.
 
+## Read the Workshop activation selection before plugin discovery
+
+The native selection path is
+`Path.Combine(Application.persistentDataPath, ConfigManager.AccountId, "mod_config.txt")`.
+On Windows this resolves under
+`%USERPROFILE%\AppData\LocalLow\TreseBrothersGames\CyberKnights\<account-id>\`.
+`ModManager.GetSortedModsList` reads Steam subscriptions, reads that file,
+reconciles the two lists, and sorts the result. Its file reader skips the first
+line, splits subsequent nonblank lines on commas, and reads `Id`, `IsActive`
+and `Sort`; its writer emits the header `Id,IsActive,Sort`. These are plain-text
+files, separate from the encrypted databases. Sources: native
+`ConfigManager.ReadModsListFilePath` (RVA `0xEEA240`),
+`ModManager.GetSortedModsList` (`0xF8CF00`), `ReadModsListFile` (`0xF8D810`),
+`WriteModsListFile` (`0xF8E1F0`), in the inspected `GameAssembly.dll`, SHA-256
+`0AC7B2A349F40C2CCA43EBD03E6FE7DBC691A37E6157321A9889E1F610D85C03`.
+
+`ConfigManager` starts with account id `"000000"`. The Steam setup coroutine
+assigns the current user's numeric account id as a decimal string. Calling
+the game's path helper before that assignment therefore does not identify
+the Steam account's selection. Sources: the same native binary,
+`ConfigManager..ctor` (`0xEEA420`) and
+`BootloadScene.<SetupSteamSteamManager>d__9.MoveNext` (`0x5ED2B0`; account
+assignment at RVA `0x5ED5E4`). These findings come from native instructions
+mapped using shipped metadata, not the bodies of generated interop stubs.
+
+[measured] The account-level file can be read and its rows parsed while the
+game is closed. Root-level and campaign-level `mod_config.txt` files also
+exist in the inspected installation; their contents are not interchangeable.
+Source: direct reads of the three path levels on November 15, 2026. The captured
+startup in `Logs/Nov7h.txt`, rows 253–258, records chainloader completion before
+the game's connected-Steam messages and subscription scan. That capture is
+evidence for its run, not a test of a future Workshop bridge.
+
+A proposed early bridge can read the account-level text directly, provided
+it independently identifies the launching account. Automatic account
+identification before discovery has not been tested. Do not select the newest
+file, assume a root-level copy is current, or call the game's full mod loader
+to obtain it. Parse/read failure must be reported separately from an empty
+selection. The native `ProcessModsList` (`0xF8D390`) adds subscribed items
+missing from the saved list with `IsActive = false`; subscription alone must
+not activate their code. Workshop folder resolution and live discovery
+integration remain untested.
+
 ## Locate today's Hard Mode owner
 
 The current flow is `schema/*.schema.json` → generated C# binds/config reference/editor controls → live `BepInEx\config\ckf.hardmode.cfg` and `ckf.hardmode.d\*` → `CKFHardMode.dll`. `Plugin.Load` initializes the switches and settings, then `ModelRules` and the independent runtime subsystems. `Overlays.Load` scans the flat live directory in filename order and checks `Slices.OverlayOwner` before reading a switched-off file. `ModelRules` edits materialized rows; `RowClone` serves synthetic rows through readers. See [architecture](architecture.md), [Hard Mode subsystem guide](../mods/CKFHardMode/README.md), [rule engine](rule-engine.md), [overlay format](overlays.md), and code members `Plugin.Load`, `Overlays.Load`, `ModelRules.Init`, `RowClone.Init`, `Slices.OverlayOwner`.
