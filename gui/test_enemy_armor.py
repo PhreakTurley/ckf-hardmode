@@ -126,6 +126,20 @@ class ArmorTests(unittest.TestCase):
             self.assertEqual(rows[1]['_comment'], 'fixture clone')
             self.assertEqual(self.path.read_bytes(), self.raw)
 
+    def test_reset_all_clone_fields_preserves_its_definition_and_inheritance(self):
+        self.path.write_bytes(self.raw.replace(b'never,,fixture clone', b'never,0,fixture clone'))
+        view = armor.validate(self.config, serve.static_data.DEFAULT_DB)
+        result = armor.apply_edits(self.config, serve.static_data.DEFAULT_DB,
+            [{'id':'990001', 'column':column, 'value':''} for column in view['values']['990001']])
+        rows = {r['ArmorId']:r for r in csv.DictReader(io.StringIO(result[armor.SHEET].decode()))}
+        self.assertEqual(rows['990001'], {'ArmorId':'990001', '_clone':'22000', '_serveOn':'never',
+                                         'BallisticArmor':'', '_comment':'fixture clone'})
+        self.assertEqual(rows['22000']['BallisticArmor'], '45')
+        refreshed = armor.validate(self.config, serve.static_data.DEFAULT_DB, result)
+        clone = next(r for r in refreshed['page']['grids'][0]['rows'] if r['id']=='990001')
+        self.assertEqual(clone['cloneOf'], '22000')
+        self.assertEqual(clone['baseline']['BallisticArmor'], '45')
+
     def test_unlisted_shipped_enemy_row_and_extra_column_can_be_authored(self):
         result = armor.apply_edits(self.config, serve.static_data.DEFAULT_DB,
             [{'id':'22001','column':'PhysicalArmor','value':'37'}])

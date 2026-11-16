@@ -297,6 +297,15 @@ unsaved adjustments. Missing descriptions and game-supplied format arguments
 remain explicit. These strings describe the game's rules; the editor does not
 infer gameplay from assembly method names.
 
+Each editable table row has a small **reset** button before its name or identity.
+It clears the row's overrides, including hidden columns and editable linked
+fields, and leaves clone identities and donor references intact. Read-only
+fields and global multipliers are unchanged. Reset remains pending until **Save**.
+The inline **⚔** marker in a gear name means that enemies also use that gear;
+hover it for the shared-use warning.
+Verification: `python gui/test_row_reset.py` exercises reset controls and save
+payloads; `python gui/test_enemy_armor.py` checks clone inheritance after clearing.
+
 The default view hides uniform columns. Weapon and weapon-mod tables recalculate
 visibility from effective values across the whole table when an edit is finished
 (leave the cell or press Enter). A column whose values become equal hides even

@@ -231,7 +231,7 @@ setTimeout(async function () {
   SEL='pb:weapon-1';render();
   const melee = MODEL.playerBalance.pages.find(function(p) {return p.id==='weapon-1';}).grids[0];
   const headers = find(function(n) {return n.tagName==='TH';});
-  ck('PL rarity and cost follow name', headers.slice(0,4).map(function(n) {return n.textContent;}).join('|')==='Name|PL|Rarity|Cost');
+  ck('PL rarity and cost follow name after row actions', headers.slice(0,5).map(function(n) {return n.textContent;}).join('|')==='|Name|PL|Rarity|Cost');
   ck('icon references and separating headings are displayed', find(function(n) {return n._cls().includes('pb-icon');}).length > 0
      && find(function(n) {return n._cls().includes('pb-section');}).length > 1);
   ck('varying damage fields are grouped into attack modes', ['Damage 1','Damage 2'].every(function(group) {

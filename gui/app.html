@@ -246,9 +246,13 @@ table.grid.class-grid td.annotation{min-width:0}
 table.pb-grid{min-width:0;table-layout:fixed}
 table.pb-grid th{min-width:0;max-width:none!important;white-space:nowrap;word-break:normal}
 .pb-grid td input{font-variant-numeric:tabular-nums;min-width:0}
-.pb-grid .pb-name{position:sticky;left:0;min-width:0;max-width:none;
+.pb-grid .pb-reset{position:sticky;left:0;width:54px;padding:3px;background:var(--panel);z-index:2}
+.pb-grid th.pb-reset{z-index:4;background:var(--panel2)}
+.row-reset{font-size:11px;padding:2px 5px}
+.pb-grid .pb-name{position:sticky;left:54px;min-width:0;max-width:none;
   white-space:nowrap;background:var(--panel);padding:4px 7px;z-index:1}
 .pb-grid th.pb-name{z-index:4;background:var(--panel2)}
+.page-grid-wrap .pb-grid thead th.pb-name,.page-grid-wrap .pb-grid thead th.pb-reset{position:sticky}
 .pb-grid thead tr.pb-subheads th{top:24px}
 .page-grid-wrap .pb-grid thead tr.pb-subheads th{top:auto}
 .pb-grid thead tr:first-child{height:24px}
@@ -269,6 +273,7 @@ table.pb-grid th{min-width:0;max-width:none!important;white-space:nowrap;word-br
 body.technical .pb-grid .pb-name small{display:block}
 .pb-grid .pb-name small.pb-fit{display:block;color:var(--dim);white-space:normal;line-height:1.4;margin-top:3px}
 .pb-grid .pb-name .pb-enemy{display:block;color:#f4c17b;font-size:11px;font-weight:600;margin-top:4px}
+.pb-grid .pb-name .pb-enemy-icon{display:inline-block;color:#f4c17b;font-size:13px;margin-left:6px;vertical-align:baseline}
 .pb-grid .pb-name .pb-origin{display:table;margin-top:4px}
 .pb-grid .pb-name .pb-owner{display:block;color:var(--dim);font-size:11px;margin-top:4px}
 .pb-rule-notes{max-width:80ch;margin-top:24px}
@@ -1984,6 +1989,50 @@ function playerCell(grid, row, column) {
     readOnlyReason:target.readOnlyReason || row.readOnlyReason};
 }
 
+function playerRowClears(grid, row) {
+  if (row.readOnly) return [];
+  const cells = new Map();
+  function add(target) {
+    if (!target || target.readOnly || target.generated!==undefined || target.iconTarget) return;
+    let cell;
+    if (target.enemyRule) cell={kind:'enemyRule',id:target.id,column:target.column};
+    else if (target.enemyArmor) cell={kind:'enemyArmor',id:target.id,column:target.column};
+    else if (target.overlay) {
+      const ov=overlayEntry(target.overlay);
+      if (!ov || !ov.writable || !ov.editable[target.ci]) return;
+      cell={kind:'overlay',path:target.overlay,key:ov.rows[target.row].key,column:target.column};
+    } else cell={kind:'player',table:target.table,id:target.id,column:target.column};
+    cells.set(JSON.stringify(cell),cell);
+    if (target.overlay && ((((W.player.tables || {})[target.table] || {})[target.id] || {})[target.column])) {
+      const native={kind:'player',table:target.table,id:target.id,column:target.column};
+      cells.set(JSON.stringify(native),native);
+    }
+  }
+  for (const column of grid.columns.concat(grid.advanced || [])) {
+    const cell=playerCell(grid,row,column);
+    if (cell && !cell.readOnly) add(cell.target);
+  }
+  // Include native assignments with no visible control (for example a legacy
+  // price field now displayed through a linked record). Never touch controls
+  // that define a clone or an overlay row's identity.
+  const targets=Object.values(row.targets || {});
+  if (!targets.some(function(t) {return t.enemyRule || t.enemyArmor || t.overlay;}))
+    for (const column of Object.keys(((W.player.tables || {})[grid.table] || {})[row.id] || {})) {
+      if (!targets.some(function(t) {return t.table===grid.table && t.id===row.id && t.column===column && t.readOnly;}))
+        add({table:grid.table,id:row.id,column:column});
+    }
+  if (grid.iconEditor) add({table:grid.table,id:row.id,column:grid.iconEditor.column});
+  if (grid.consumableEditor) {
+    const editor=grid.consumableEditor;
+    add({table:grid.table,id:row.id,column:editor.tagColumn});
+    add({table:grid.table,id:row.id,column:editor.modelColumn});
+    const talent=row.consumable.talent;
+    if (talent) for (const column of [editor.iconColumn,editor.talentAssetColumn])
+      add({table:editor.talentTable,id:talent.id,column:column});
+  }
+  return Array.from(cells.values());
+}
+
 function playerServiceAssignment(cell, options) {
   if (!cell) return {label:'Unresolved service',detail:'The service assignment could not be read.'};
   const parsed = CKF.parsePlayerAdjust(cell.value);
@@ -2269,7 +2318,7 @@ function renderPlayer(panel, page) {
   if (page.grids.some(function(g) {return g.iconEditor;}))
     panel.appendChild(el('p', {class:'doc',text:page.iconHelp || 'Icon / model changes both visuals. The first choice restores the official assignment. Save, then send to Modkit.'}));
   if (page.grids.some(function(g) {return g.rows.some(function(r) {return r.enemyUse;});}))
-    panel.appendChild(el('p', {class:'doc',text:'Edits to rows marked “Also used by enemies” affect those enemies too.'}));
+    panel.appendChild(el('p', {class:'doc',text:'The ⚔ icon marks gear also used by enemies. Edits to those rows affect those enemies too.'}));
   if (page.multipliers) {
     panel.appendChild(el('p', {class:'doc',text:'Applied to every implant after individual adjustments.'}));
     for (const col in page.multipliers) {
@@ -2447,7 +2496,7 @@ function renderPlayer(panel, page) {
           col.rowOptions[id].map(function(option) {return el('option',{value:option.value,label:option.label});})));
       }
       const nameWidth = Math.ceil(Math.max(playerTextWidth('Name',true), ...grid.rows.map(function (r) {
-        return Math.max(playerTextWidth(r.name,false), r.enemyUse ? playerTextWidth('Also used by enemies',false) : 0,
+        return Math.max(playerTextWidth(r.name,false)+(r.enemyUse ? 22 : 0),
           r.cloneOf ? playerTextWidth('Clone '+r.id+' (from '+r.cloneOf+')',false) : 0,
           r.fitment ? Math.min(320,playerTextWidth(r.fitment,false)) : 0);
       })) + 16);
@@ -2485,9 +2534,9 @@ function renderPlayer(panel, page) {
         if (extra) displayCols[i].width += extra;
         i=end;
       }
-      tbl.appendChild(el('colgroup', {}, [el('col',{style:'width:'+nameWidth+'px'})].concat(displayCols.map(function(c) {return el('col',{style:'width:'+c.width+'px'});} ))));
+      tbl.appendChild(el('colgroup', {}, [el('col',{style:'width:54px'}),el('col',{style:'width:'+nameWidth+'px'})].concat(displayCols.map(function(c) {return el('col',{style:'width:'+c.width+'px'});} ))));
       const grouped = cols.some(function(c) {return !!c.group;});
-      const top = el('tr', {}, [el('th',{class:'pb-name',text:'Name',rowspan:grouped ? '2' : '1'})]);
+      const top = el('tr', {}, [el('th',{class:'pb-reset','aria-label':'Row actions',rowspan:grouped ? '2' : '1'}),el('th',{class:'pb-name',text:'Name',rowspan:grouped ? '2' : '1'})]);
       const sub = el('tr', {class:'pb-subheads'});
       for (let i=0;i<displayCols.length;) {
         const c = displayCols[i].column;
@@ -2505,7 +2554,7 @@ function renderPlayer(panel, page) {
       for (const row of rows) {
         if (row.section && section !== (row.sectionKey || row.section)) {
           section = row.sectionKey || row.section;
-          body.appendChild(el('tr', {class:'pb-section'}, [el('th',{colspan:String(displayCols.length+1),scope:'rowgroup',title:row.sectionEvidence || ''},
+          body.appendChild(el('tr', {class:'pb-section'}, [el('th',{colspan:String(displayCols.length+2),scope:'rowgroup',title:row.sectionEvidence || ''},
             [el('span',{class:'pb-section-name',text:row.section})])]));
         }
         const nameCell = el('td', {class:'pb-name',title:grid.table+' '+row.id+(row.weaponName ? '\n'+row.weaponName : '')+(row.description ? '\n'+row.description : '')+(row.acquisition && row.acquisition.length ? '\nAcquisition references:\n'+row.acquisition.join('\n') : '')}, [
@@ -2521,10 +2570,19 @@ function renderPlayer(panel, page) {
         if (row.playerUse) nameCell.appendChild(el('span',{class:'pb-enemy',text:'Also used by players',title:(row.acquisition || []).join('\n')}));
         if (page.enemyArmor && row.unused) nameCell.appendChild(el('span',{class:'pb-enemy pb-unused',text:'Unused armor',
           title:'No effective enemy armor assignments or known player service, loot or pet references. This row is available for future assignments.'}));
-        if (row.enemyUse) nameCell.appendChild(el('span', {class:'pb-enemy',text:'Also used by enemies',title:'Changing this '+(grid.table==='Armor' ? 'armor' : 'weapon')+' also affects enemies that use it.'}));
+        if (row.enemyUse) nameCell.insertBefore(el('span', {class:'pb-enemy-icon',text:'⚔',role:'img','aria-label':'Also used by enemies',title:'Also used by enemies. Changing this gear also affects enemies that use it.'}),nameCell.children[0]);
         if (row.owner) nameCell.appendChild(el('span', {class:'pb-owner',text:'Managed by '+row.owner}));
         if (row.fitment) nameCell.appendChild(el('small', {class:'pb-fit',text:row.fitment,title:row.fitmentSource}));
-        const tr = el('tr', {'data-player-row':grid.table+' '+row.id}, [nameCell]);
+        const reset=el('button',{class:'rowbtn row-reset',text:'reset','aria-label':'Reset '+grid.table+' '+row.id,
+          disabled:row.readOnly || !(playerRowClears(grid,row).length),
+          title:'Clear this row’s overrides, including hidden fields. Keep its identity and clone definition. Pending until Save.',
+          onclick:function() {
+            applyOverrideClears(playerRowClears(grid,row));updateDirty();
+            if (grid.consumableEditor) refreshConsumableViews((row.acquisition || []).length
+              ? 'consumable-'+row.consumable.classBase : 'other-consumable-overrides');
+            else paint();
+          }});
+        const tr = el('tr', {'data-player-row':grid.table+' '+row.id}, [el('td',{class:'pb-reset'},[reset]),nameCell]);
         for (const item of displayCols) {
           if (item.consumable) {tr.appendChild(consumableSelect(grid,row,item.consumable));continue;}
           if (item.blueprint) {
@@ -3553,7 +3611,7 @@ function overlayBlock(sch, rel, sectionTitle) {
     }
     annotationWidths[v.i]=Math.ceil(width+20);
   }
-  const head = [el('th', {class:leadComments.length ? 'technical-key' : '', text: ov.keyColumn + ' (key)' })];
+  const head = [el('th', {'aria-label':'Row actions'}),el('th', {class:leadComments.length ? 'technical-key' : '', text: ov.keyColumn + ' (key)' })];
   const tailControls = ctlCols.filter(function (v) {return leadComments.indexOf(v) < 0;});
   for (const v of leadComments)
     head.push(el('th', {text: 'Node & details'}));
@@ -3612,6 +3670,13 @@ function overlayBlock(sch, rel, sectionTitle) {
       // addition that may or may not have landed, and NOTHING HERE MAY SPELL
       // ONE OF THE NAMES.
       const rowLab = ((ov.rowLabels || {})[String(r.key)] || '');
+      tr.appendChild(el('td', {}, [el('button',{class:'rowbtn row-reset',text:'reset',
+        'aria-label':'Reset '+ov.table+' '+r.key,disabled:!canWrite || !nEdit,
+        title:'Clear all overrides in this row, including hidden columns. Keep its identity and clone definition. Pending until Save.',
+        onclick:function() {
+          ov.columns.forEach(function(c,i) {if (editableAt(i)) W.overlays[rel].cells[r.i][i]='';});
+          render();
+        }})]));
       tr.appendChild(el('td', { class: 'ro' + (leadComments.length ? ' technical-key' : '') }, [
         document.createTextNode(String(r.key)),
         rowLab ? el('span', { class: 'small', text: '  ' + rowLab }) : null,
