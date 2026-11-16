@@ -848,7 +848,18 @@ negative assignments, text columns, arithmetic terms and clone preservation.
 - A string column counts as an adjust column when it declares `"format": "adjust"` (the five slot columns in `missions.json`). With no declaration, a column counts when every non-empty value parses as an adjustment.
 - `retroactive` (on `teampl`'s `enabled` and `override`) is passed to the page as data. The page builds no warning or confirmation from it.
 - A gate that could not be read shows as unknown, never as off. Each subsystem page has one gate control with three states: on, off, and indeterminate (unreadable). A key missing from the file is still settable ("not in the file yet — saving adds it").
-- **Nav.** Groups and order come from `serve.py:SECTION_GROUPS` and `SECTION_LAST`. The master-switch section is derived from `MASTER_KEY` and pinned first. A section with several gates folds them into a `<details>` summary that reads `on/declared`, adds ` ?` when some gates are unreadable, and reads `N pages` when the section declares no gates.
+- **Nav.** `navigation.py:MOD_OWNERS` declares the outer mod sections: Player Balance, Enemy Balance, Hard Mode, Party Size Mod and Faster Contact Limit Breaks. Each multi-page mod folds independently; the selected mod opens initially. Existing category and page headings remain inside their owner. Category order comes from `serve.py:SECTION_GROUPS` and `SECTION_LAST`; the master switch stays first within Hard Mode. A section with several gates folds them into a `<details>` summary that reads `on/declared`, adds ` ?` when some gates are unreadable, and reads `N pages` when the section declares no gates.
+
+  Talent Balance belongs to Player Balance. Enemy Gear is split: Enemy Armors
+  belongs to Enemy Balance, while Enemy Spawn Weights and Legacy Enemy Overlays
+  remain Hard Mode controls. Bundled Rebalances also remains under Hard Mode
+  because those entries control its native-package loader. Rules and Traits
+  retain their names in each relevant mod: the enemy-owned rule moves to Enemy
+  Balance, and protected Hard Mode trait/effect rows move to its read-only Traits
+  reference page. Player weapons, including rows shared with enemies, appear only
+  under Player Balance. The grouping preserves authoring targets, switch names,
+  export scopes, every catalog row and all unsaved edits. Verification:
+  `python gui/test_navigation.py` and `python gui/test_navigation.py --ui`.
 - **Help text.** Uses `uiDoc`, falling back to `doc`. At render time `strip_maintainer_marks` removes evidence tags (`[measured …]` etc.), parentheticals made up entirely of citations, and a trailing citation. The schema files are not changed.
 - Per-sheet notes render inside a closed `<details>`, and their text stays in the DOM.
 - **Grid column width** (`app.html:colWidth`): 120% of the widest content plus 2ch, capped at 44ch.

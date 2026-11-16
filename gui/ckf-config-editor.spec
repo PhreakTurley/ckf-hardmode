@@ -72,7 +72,7 @@ a = Analysis(                             # noqa: F821
         (os.path.join(SCRIPTS, 'prepare_enemy_difficulty.ps1'), 'scripts'),
         (os.path.join(DOCS, 'mission-reference.json'), 'docs'),
     ],
-    hiddenimports=['check_schema', 'gen_teampl_labels', 'modkit', 'steam_workshop', 'override_validation', 'party_size', 'rule_mod', 'contact_limit_breaks', 'player_balance', 'talent_catalog', 'talent_editor', 'talent_tree', 'enemy_armor', 'pathlib', 'static_data', 'sqlite3'],
+    hiddenimports=['check_schema', 'gen_teampl_labels', 'modkit', 'steam_workshop', 'override_validation', 'navigation', 'party_size', 'rule_mod', 'contact_limit_breaks', 'player_balance', 'talent_catalog', 'talent_editor', 'talent_tree', 'enemy_armor', 'pathlib', 'static_data', 'sqlite3'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

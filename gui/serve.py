@@ -140,6 +140,7 @@ import modkit
 import party_size
 import contact_limit_breaks
 import override_validation
+import navigation
 
 DEFAULT_GAME_DIR = r'C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint'
 
@@ -5471,6 +5472,7 @@ class App:
         visible_sections = [dict(s, subsystems=[u for u in s['subsystems'] if u not in retired]) for s in secs]
         visible_sections = [s for s in visible_sections if s['subsystems']]
         for section in visible_sections:
+            section['owner'] = navigation.section_owner(section)
             if len(section['subsystems']) == 1 and section['subsystems'][0].startswith('Talents'):
                 section['title'] = section['title'].removesuffix(' Talent Balance')
         visible_schemas = [s for s in self.schemas if s['subsystem'] not in retired]
@@ -5479,6 +5481,7 @@ class App:
         for group in nav_groups['groups']:
             group['sections'] = [sid for sid in group['sections'] if sid in visible_ids]
         nav_groups['groups'] = [g for g in nav_groups['groups'] if g['sections'] or g['absent']]
+        player['pages'] = navigation.catalog_pages(player['pages'])
         return {
             'token': self.token,
             'gameDir': self.settings.get('gameDir'),
@@ -5509,6 +5512,7 @@ class App:
                 ATTRIBUTE_EFFECT_COLUMNS, ATTRIBUTE_EFFECT_ALWAYS, TALENT_EFFECT_EXCLUDED,
                 player['document'], cd),
             'navGroups': nav_groups,
+            'modOwners': navigation.MOD_OWNERS,
             'values': model,
             'enableIndex': enable_index(doc, model),
             'masterKey': MASTER_KEY,
@@ -12972,8 +12976,12 @@ const panel = document.querySelector('#panel');
 // is what lets a case compare against the name a schema or a file declares.
 const txt = function (n) {
   return n.textContent.replace(/\u200b/g, '').replace(/\s+/g, ' ').trim(); };
-const navItems = function () { return nav.find(function (n) {
+const renderedNavItems = function () { return nav.find(function (n) {
   return n._cls().includes('navitem') && !n.attrs['data-player-page'] && !n.attrs['data-rule-mod']; }); };
+// Owner grouping changes visual order. Exercise each schema section by its
+// stable ID, while checking the actual rendered order separately below.
+const navItems = function () { const items=renderedNavItems();return FIXTURE.sections.map(function(s) {
+  return items.find(function(n) {return n.attrs['data-section-id']===s.id;}); }); };
 const titleOf = function (item) { return txt(item.querySelector('b')); };
 const select = function (i) { navItems()[i].fire('click'); };
 // file#section, the same unit key the server builds. Derived from the schema's
@@ -12987,6 +12995,9 @@ setTimeout(function () {
   const items = navItems();
   ck('every section has a nav item', items.length === FIXTURE.sections.length,
      [items.length, FIXTURE.sections.length]);
+  ck('each section ID occurs exactly once in the rendered navigation',
+     renderedNavItems().length===FIXTURE.sections.length && FIXTURE.sections.every(function(s) {
+       return renderedNavItems().filter(function(n) {return n.attrs['data-section-id']===s.id;}).length===1;}));
   const playerPages = (FIXTURE.playerBalance || {}).pages || [];
   ck('every Workshop page also has a nav item', nav.find(function (n) {
     return !!n.attrs['data-player-page']; }).length === playerPages.length);
@@ -13002,14 +13013,16 @@ setTimeout(function () {
   const masterSub = FIXTURE.enableIndex.filter(function (e) {
     return (e.gates || []).some(function (g) { return g.name === FIXTURE.masterKey; });
   })[0];
-  ck('the master switch is the first Hard Mode section',
-     titleOf(items[0]) === masterSub.title, [titleOf(items[0]), masterSub.title]);
+  const hardMode=nav.find(function(n) {return n.attrs['data-mod-owner']==='hard-mode';})[0];
+  const hardSections=hardMode.find(function(n) {return !!n.attrs['data-section-id'];});
+  ck('the master switch is the first section within its owning Hard Mode mod',
+     titleOf(hardSections[0]) === masterSub.title, [titleOf(hardSections[0]), masterSub.title]);
 
   // 2. the regression suite is the last
   const lastSec = FIXTURE.sections[FIXTURE.sections.length - 1];
   ck('the section pinned last really is last',
-     titleOf(items[items.length - 1]) === lastSec.title,
-     [titleOf(items[items.length - 1]), lastSec.title]);
+     titleOf(hardSections[hardSections.length - 1]) === lastSec.title,
+     [titleOf(hardSections[hardSections.length - 1]), lastSec.title]);
 
   // 3. the merged section
   //
@@ -13099,21 +13112,30 @@ setTimeout(function () {
   const slotOf = function (s, g) {
     return g.in === 'cfg' ? W.cfg[g.path] : (W.json[unitOf(s)] || {})[g.path]; };
   const groups = FIXTURE.navGroups.groups;
-  const navKids = nav.children;
-  const groupHeads = navKids.filter(function (n) { return n._cls().includes('navgroup'); });
-  ck('every declared group has exactly one header in the nav',
-     groupHeads.length === groups.length, [groupHeads.length, groups.length]);
-  ck('the headers carry the titles the server sent, in the order it sent them',
-     JSON.stringify(groupHeads.map(txt)) === JSON.stringify(groups.map(function (g) { return g.title; })),
-     [groupHeads.map(txt), groups.map(function (g) { return g.title; })]);
-  ck('no group is nested inside another — one level only',
-     groupHeads.every(function (h) {
-       return h.find(function (n) { return n !== h && n._cls().includes('navgroup'); }).length === 0; }));
+  const modNodes=nav.find(function(n) {return !!n.attrs['data-mod-owner'];});
+  const groupHeads=nav.find(function(n) {return !!n.attrs['data-native-group'];});
+  function groupOwners(g) {return Array.from(new Set(g.sections.map(function(id) {
+    return (FIXTURE.sections.find(function(s) {return s.id===id;}) || {}).owner || 'hard-mode';
+  }).concat(g.sections.length ? [] : ['hard-mode'])));}
+  ck('every declared category is retained once in each owning mod',
+     groupHeads.length===groups.reduce(function(total,g) {return total+groupOwners(g).length;},0));
+  ck('mod containers are not nested in other mods',modNodes.every(function(node) {
+    return !node.find(function(n) {return n!==node && !!n.attrs['data-mod-owner'];}).length;}));
+  for (const g of groups) for (const owner of groupOwners(g)) {
+    const node=modNodes.find(function(n) {return n.attrs['data-mod-owner']===owner;});
+    const heads=node.find(function(n) {return n.attrs['data-native-group']===g.id;});
+    ck(g.id+': original category title retained under '+owner,heads.length===1 && txt(heads[0])===g.title);
+  }
+  for (const node of modNodes) {
+    const actual=node.find(function(n) {return !!n.attrs['data-native-group'];}).map(function(n) {return n.attrs['data-native-group'];});
+    const expected=groups.filter(function(g) {return groupOwners(g).includes(node.attrs['data-mod-owner']);}).map(function(g) {return g.id;});
+    ck(node.attrs['data-mod-owner']+': native category order follows the server',JSON.stringify(actual)===JSON.stringify(expected),[actual,expected]);
+  }
   for (const g of groups) {
     if (g.sections.length) continue;
-    const hi = navKids.findIndex(function (n) {
-      return n._cls().includes('navgroup') && txt(n) === g.title; });
-    const next = navKids[hi + 1];
+    const head=groupHeads.find(function(n) {return n.attrs['data-native-group']===g.id;});
+    const siblings=(head.parentNode || head.parent).children;
+    const next=siblings[siblings.indexOf(head)+1];
     ck(g.id + ': a group that draws no page says why, right under its header',
        !!next && next._cls().includes('navnote') && txt(next).length > 0,
        next ? [next.className, txt(next)] : 'nothing follows the header');
@@ -14266,7 +14288,7 @@ setTimeout(function () {
   const gi = FIXTURE.sections.findIndex(function (s) {
     return s.subsystems.indexOf(owner.subsystem) >= 0; });
   ck('the section holding the windowed matrix was found', gi >= 0, owner.subsystem);
-  nav.find(function (n) { return n._cls().includes('navitem') && !n.attrs['data-player-page'] && !n.attrs['data-rule-mod']; })[gi].fire('click');
+  nav.find(function (n) { return n.attrs['data-section-id'] === FIXTURE.sections[gi].id; })[0].fire('click');
   const grids = panel.find(function (n) { return n.tagName === 'TABLE' && n._cls().includes('grid'); });
   const headersOf = function (g) {
     return g.querySelector('thead').find(function (n) { return n.tagName === 'TH'; }).map(txt);

@@ -281,6 +281,14 @@ body.technical .pb-grid .pb-name small{display:block}
 .pb-grid td.readonly{color:var(--dim);padding:5px 8px}
 .pb-nav summary{cursor:pointer;padding:9px 12px;font-weight:600;color:var(--dim)}
 .pb-nav .navitem{padding-left:20px}
+nav .nav-owner{--owner-color:var(--dim);padding:0 0 8px}
+nav .nav-owner + .nav-owner{border-top:2px solid var(--line);margin-top:12px}
+nav .nav-owner[data-mod-owner="player-balance"]{--owner-color:var(--accent)}
+nav .nav-owner[data-mod-owner="enemy-balance"]{--owner-color:var(--unknown)}
+nav .nav-owner-heading{position:sticky;top:0;z-index:2;margin:0;padding:10px;
+  border-left:3px solid var(--owner-color);background:var(--panel);color:var(--ink);
+  font-size:14px;font-weight:700;line-height:1.35}
+nav .nav-owner-heading .navitem{padding:0;border:0;font-size:inherit}
 .pb-multiplier{display:flex;gap:12px;align-items:center;margin:12px 0}
 .pb-multiplier label{width:12rem;font-weight:600}
 .pb-multiplier input{width:7ch}
@@ -875,6 +883,7 @@ let W = null;          // the working copy every control edits
 let SEL = null;        // selected section id (one subsystem, or a group of them)
 let LAST_SAVE = null;
 const PLAYER_NAV_OPEN = {};
+const MOD_NAV_OPEN = {};
 const PLAYER_SORT = {}; // View preferences only; never saved as tuning.
 let HIDE_UNUSED_ARMOR = false;
 const PLAYER_PREVIEW_STATE = {revision:0,error:'',destination:null,promise:null};
@@ -1769,14 +1778,16 @@ function navItem(sec) {
   }
   return el('div', {
     class: 'navitem' + (SEL === sec.id ? ' sel' : ''),
+    'data-section-id': sec.id,
     title: why || 'no enable gate',
     onclick: function () { SEL = sec.id; render(); },
   }, kids);
 }
 
-function groupHead(g) {
+function groupHead(g, owner) {
   return el('div', { class: 'navgroup', text: g.title,
-                     title: g.note || g.title });
+                     'data-native-group': g.id,
+                     title: owner ? owner.title + ': ' + g.title : g.note || g.title });
 }
 
 // Why a group is showing nothing. Never left blank: a header with no rows and
@@ -1788,58 +1799,77 @@ function groupEmptyWhy(g) {
   return 'nothing here yet';
 }
 
-// One level of grouping. The order is the server's -- group headers are dropped
-// in ahead of the first section that belongs to each, so the section order
-// sections_for decided is never rearranged here.
+// Owning mods form the outer level; existing categories stay inside each mod.
 function renderIndex() {
   const nav = $('#index');
   nav.textContent = '';
-  nav.appendChild(el('div', {class:'navitem' + (SEL === 'party-size' ? ' sel' : ''),
-    role:'button', tabindex:'0', 'data-rule-mod':'partySize',
-    onclick:function () {SEL='party-size';render();},
-    onkeydown:function (e) {if (e.key==='Enter' || e.key===' ') {e.preventDefault();SEL='party-size';render();}}
-  }, [el('div', {class:'nm'}, [el('b', {text:'Party Size Mod'})])]));
-  nav.appendChild(el('div', {class:'navitem' + (SEL === 'contact-breaks' ? ' sel' : ''),
-    role:'button', tabindex:'0', 'data-rule-mod':'contactBreaks',
-    onclick:function () {SEL='contact-breaks';render();},
-    onkeydown:function (e) {if (e.key==='Enter' || e.key===' ') {e.preventDefault();SEL='contact-breaks';render();}}
-  }, [el('div', {class:'nm'}, [el('b', {text:'Faster Contact Limit Breaks'})])]));
-  const playerGroups = {};
-  for (const page of ((MODEL.playerBalance || {}).pages || [])) {
-    if (!playerGroups[page.group]) {
-      const open = PLAYER_NAV_OPEN[page.group] === undefined
-        ? !['Drone weapons','Drone armors','Cyberware modules'].includes(page.group) : PLAYER_NAV_OPEN[page.group];
-      const det = el('details', {class:'pb-nav', open:open}, [el('summary', {text:page.group})]);
-      det.addEventListener('toggle', function () {PLAYER_NAV_OPEN[page.group] = det.open;});
-      playerGroups[page.group] = det;
-      nav.appendChild(det);
-    }
-    playerGroups[page.group].appendChild(el('div', {
-      class:'navitem' + (SEL === 'pb:' + page.id ? ' sel' : ''), role:'button', tabindex:'0', 'data-player-page':page.id,
-      onclick:function () {SEL = 'pb:' + page.id; render();},
-      onkeydown:function (e) {if (e.key === 'Enter' || e.key === ' ') {e.preventDefault(); SEL='pb:'+page.id;render();}}
-    }, [el('div', {class:'nm'}, [el('b', {text:page.title})])]));
-  }
-  const ng = MODEL.navGroups || { groups: [], ungrouped: [] };
+  const ng = MODEL.navGroups || {groups:[],ungrouped:[]};
   const byId = {};
-  for (const g of ng.groups) byId[g.id] = g;
-  const headed = {};
-  for (const sec of sections()) {
-    const g = byId[sec.group];
-    if (g && !headed[g.id]) {
-      headed[g.id] = true;
-      nav.appendChild(groupHead(g));
-      if (g.absent.length)
-        nav.appendChild(el('div', { class: 'navnote',
-          text: g.absent.length + ' page(s) not added yet: ' + g.absent.join(', ') }));
+  for (const group of ng.groups) byId[group.id] = group;
+  const pages = (MODEL.playerBalance || {}).pages || [];
+  function sectionOwner(section) {return section.owner || 'hard-mode';}
+  function renderNative(owner, host) {
+    const headed = {};
+    for (const sec of sections().filter(function (s) {return sectionOwner(s) === owner.id;})) {
+      const group = byId[sec.group];
+      if (group && !headed[group.id]) {
+        headed[group.id] = true;
+        host.appendChild(groupHead(group, owner));
+        if (group.absent.length) host.appendChild(el('div', {class:'navnote',
+          text:group.absent.length + ' page(s) not added yet: ' + group.absent.join(', ')}));
+      }
+      host.appendChild(navItem(sec));
     }
-    nav.appendChild(navItem(sec));
+    if (owner.id === 'hard-mode') for (const group of ng.groups) {
+      if (group.sections.length || headed[group.id]) continue;
+      host.appendChild(groupHead(group, owner));
+      host.appendChild(el('div', {class:'navnote',text:groupEmptyWhy(group)}));
+    }
   }
-  // A group that placed no section at all still appears, with the reason.
-  for (const g of ng.groups) {
-    if (headed[g.id]) continue;
-    nav.appendChild(groupHead(g));
-    nav.appendChild(el('div', { class: 'navnote', text: groupEmptyWhy(g) }));
+  function renderCatalog(owner, host) {
+    const groups = {};
+    for (const page of pages.filter(function (p) {return p.owner === owner.id;})) {
+      let parent = host;
+      if (page.group && page.group !== owner.title) {
+        if (!groups[page.group]) {
+          const key = owner.id + ':' + page.group;
+          const open = PLAYER_NAV_OPEN[key] === undefined
+            ? !['Drone weapons','Drone armors','Cyberware modules'].includes(page.group) : PLAYER_NAV_OPEN[key];
+          const det = el('details', {class:'pb-nav',open:open}, [el('summary', {text:page.group})]);
+          det.addEventListener('toggle', function () {PLAYER_NAV_OPEN[key] = det.open;});
+          groups[page.group] = det;
+          host.appendChild(det);
+        }
+        parent = groups[page.group];
+      }
+      parent.appendChild(el('div', {
+        class:'navitem' + (SEL === 'pb:' + page.id ? ' sel' : ''),role:'button',tabindex:'0','data-player-page':page.id,
+        onclick:function () {SEL='pb:'+page.id;render();},
+        onkeydown:function (e) {if (e.key==='Enter' || e.key===' ') {e.preventDefault();SEL='pb:'+page.id;render();}}
+      }, [el('div', {class:'nm'}, [el('b', {text:page.title})])]));
+    }
+  }
+  for (const owner of (MODEL.modOwners || [])) {
+    if (owner.standalone) {
+      const item=el('div', {class:'navitem' + (SEL===owner.selection ? ' sel' : ''),role:'button',tabindex:'0',
+        'data-rule-mod':owner.standalone,onclick:function () {SEL=owner.selection;render();},
+        onkeydown:function (e) {if (e.key==='Enter' || e.key===' ') {e.preventDefault();SEL=owner.selection;render();}}
+      }, [el('div', {class:'nm'}, [el('b', {text:owner.title})])]);
+      nav.appendChild(el('section', {class:'nav-owner','data-mod-owner':owner.id,'aria-label':owner.title},
+        [el('h2', {class:'nav-owner-heading'}, [item])]));
+      continue;
+    }
+    const selected = sections().some(function (s) {return s.id===SEL && sectionOwner(s)===owner.id;})
+      || pages.some(function (p) {return 'pb:'+p.id===SEL && p.owner===owner.id;});
+    const container=el('details', {class:'nav-owner','data-mod-owner':owner.id,'aria-label':owner.title,
+      open:MOD_NAV_OPEN[owner.id]===undefined ? selected : MOD_NAV_OPEN[owner.id]},
+      [el('summary', {class:'nav-owner-heading',text:owner.title})]);
+    container.addEventListener('toggle', function () {MOD_NAV_OPEN[owner.id]=container.open;});
+    const body=el('div', {class:'nav-owner-body'});
+    if (owner.catalogFirst) {renderCatalog(owner,body);renderNative(owner,body);}
+    else {renderNative(owner,body);renderCatalog(owner,body);}
+    container.appendChild(body);
+    nav.appendChild(container);
   }
 }
 
@@ -2197,7 +2227,7 @@ function consumableSelect(grid, row, kind) {
 
 function renderPlayer(panel, page) {
   panel.appendChild(el('div', {class:'pb-heading'}, [el('h2', {text:page.title}),
-    el('span', {class:'small', text:page.enemyArmor ? 'Enemy balance' : page.talents ? 'Talent balance' : 'Workshop player balance'})]));
+    el('span', {class:'small', text:page.ownerTitle || (page.enemyArmor ? 'Enemy balance' : page.talents ? 'Talent balance' : 'Workshop player balance')})]));
   if (page.gateSchema) panel.appendChild(gateControl(page.gateSchema,entryOf(page.gateSchema.subsystem)));
   if (page.description) panel.appendChild(el('p', {class:'doc',text:page.description}));
   if (page.group==='Consumables') {
@@ -2217,7 +2247,7 @@ function renderPlayer(panel, page) {
     toolbar.appendChild(el('label',{class:'small'},[hideUnused,document.createTextNode(' Hide unused armor')]));
   }
   if (page.grids.length) panel.appendChild(toolbar);
-  if (page.grids.length) panel.appendChild(el('p', {class:'doc',text:page.enemyArmor ? 'Enter whole numbers. Clear a cell to restore its baseline. Save, then Prepare Hard Mode + Workshop to apply changes.' : page.talents ? 'Numbers set values. Clear a cell to restore its baseline. Choose an icon or effect from the field’s suggestions. Save, then send to Modkit.' : 'A number sets the value, including negatives. +10 adds 10; x1.5 multiplies by 1.5. Clear a cell to restore its baseline.'}));
+  if (page.grids.length) panel.appendChild(el('p', {class:'doc',text:page.ownershipReference ? 'These entries are managed by '+page.ownerTitle+'. Their read-only fields are retained here for reference.' : page.enemyArmor ? 'Enter whole numbers. Clear a cell to restore its baseline. Save, then Prepare Hard Mode + Workshop to apply changes.' : page.talents ? 'Numbers set values. Clear a cell to restore its baseline. Choose an icon or effect from the field’s suggestions. Save, then send to Modkit.' : 'A number sets the value, including negatives. +10 adds 10; x1.5 multiplies by 1.5. Clear a cell to restore its baseline.'}));
   if (page.grids.some(function(g) {return g.iconEditor;}))
     panel.appendChild(el('p', {class:'doc',text:page.iconHelp || 'Icon / model changes both visuals. The first choice restores the official assignment. Save, then send to Modkit.'}));
   if (page.grids.some(function(g) {return g.rows.some(function(r) {return r.enemyUse;});}))

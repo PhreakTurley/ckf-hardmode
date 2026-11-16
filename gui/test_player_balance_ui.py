@@ -495,9 +495,9 @@ setTimeout(async function () {
   next.fire('click');
   ck('pagination advances', panel.textContent.includes('76–'));
   ck('pagination advances only its own grid', find(function(n) {return n.tagName==='SPAN' && n.textContent.startsWith('76–');}).length===1);
-  const search = find(function(n) {return n.tagName==='INPUT' && n.getAttribute('type')==='search';})[0];
-  search.value='Checked Out';search.fire('input');
-  ck('fatigue rows are read-only in the Workshop trait catalog', find(function(n) {return n._cls().includes('readonly');}).length>0);
+  const hardModeTraits=MODEL.playerBalance.pages.find(function(p) {return p.owner==='hard-mode' && p.title==='Traits';});
+  SEL='pb:'+hardModeTraits.id;render();
+  ck('fatigue rows retain read-only controls under their owning Hard Mode mod', find(function(n) {return n._cls().includes('readonly');}).length>0);
   SEL='pb:leverage';render();
   ck('leverage has data-backed subsets', ['Other leverage','Face leverage','0-token leverage','Matrix-only leverage','Favor-cost leverage'].every(function(title) {return panel.textContent.includes(title);}));
   const leverageSearch = find(function(n) {return n.tagName==='INPUT' && n.getAttribute('type')==='search';})[0];

@@ -1089,6 +1089,8 @@ def catalog(config_dir, database, document=None):
                             {'label': '', 'detail': 'No known player acquisition reference; retained for its overrides.'})
                     if table == 'Rule' and rid in ENEMY_RULES:
                         records[-1]['owner'] = 'Enemy Balance'
+                    elif rid in protected.get(table, set()):
+                        records[-1]['owner'] = 'Hard Mode'
                 raw = {r[TABLE_KEYS[table]]: r for r in rows}
                 records.sort(key=lambda r: (tuple(effective(doc, table, raw[r['id']], c)
                                                   for c in LEADING_COLUMNS), natural(r['name']))
@@ -1168,7 +1170,7 @@ def catalog(config_dir, database, document=None):
                 for g in grids:
                     if g and group in ('Weapons', 'Drone weapons', 'Armor', 'Drone armors', 'Consumables', 'Cyberware', 'Cyberware modules'):
                         g['scrollWithPage'] = True
-                result['pages'].append({'id': pid, 'title': title, 'group': group,
+                result['pages'].append({'id': pid, 'title': title, 'group': group, 'owner': 'player-balance',
                                         'grids': [g for g in grids if g and (g['rows'] or g.get('warning'))], **kwargs})
 
             enemy_weapons = _effective_enemy_ids(source, config_dir, 'WeaponTypeId')
