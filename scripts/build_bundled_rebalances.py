@@ -27,6 +27,8 @@ def prepare_enemy(config, database, modkit, uploader):
     config, database, modkit, uploader = map(Path, (config, database, modkit, uploader))
     if not (uploader.parent / (uploader.name + '.workshop.json')).is_file() or not (uploader / 'upload_content').is_dir():
         raise ValueError('Choose an initialized Enemy Difficulty Modkit folder.')
+    workshop, install_inputs = guarded_handoff.steam_workshop.local_install_target(uploader, guarded_handoff.state)
+    payloads = guarded_handoff.payload_paths(uploader, workshop)
     manifest = uploader / 'source_data/stories.manifest'
     if manifest.exists():
         entries = [line.strip() for line in manifest.read_text(encoding='utf-8-sig').splitlines()
@@ -42,7 +44,7 @@ def prepare_enemy(config, database, modkit, uploader):
     bundled = config / 'ckf.hardmode.rebalances/enemy'
     paths += [bundled / '_data' / name for name in ('data.sql', 'en-US.json')]
     paths += [bundled / 'receipt.json', manifest, uploader / 'source_data/enemy-difficulty.json']
-    paths += [uploader / 'upload_content/_data' / name for name in ('data.sql', 'en-US.json')]
+    paths += payloads
     expected = {p: guarded_handoff.state(p) for p in paths}
     before = fingerprints(config)
     tool_paths = [modkit / 'CyberKnightsModkit_Data/StreamingAssets/config.json',
@@ -50,6 +52,7 @@ def prepare_enemy(config, database, modkit, uploader):
                  ROOT / 'scripts/prepare_enemy_difficulty.ps1', Path(__file__),
                  ROOT / 'scripts/export_enemy_difficulty.py', ROOT / 'scripts/verify_enemy_difficulty.py']
     inputs = {p: guarded_handoff.state(p) for p in tool_paths}
+    inputs.update(install_inputs)
     artifacts, summary = enemy_build(database, config / 'ckf.hardmode.d', tool_paths[0])
     for name, digest_value in summary['source_inputs'].items():
         path = Path(name)
@@ -84,6 +87,7 @@ def prepare_enemy(config, database, modkit, uploader):
         outputs[project / 'parser_prepared/_data' / name] = data
         outputs[bundled / '_data' / name] = data
         outputs[uploader / 'upload_content/_data' / name] = data
+        outputs[workshop / '_data' / name] = data
     outputs[bundled / 'receipt.json'] = encode(receipt)
     outputs[manifest] = artifacts['source_content/stories.manifest']
     outputs[uploader / 'source_data/enemy-difficulty.json'] = artifacts['source_content/enemy-difficulty.json']
@@ -91,7 +95,8 @@ def prepare_enemy(config, database, modkit, uploader):
         raise ValueError('Live tuning changed during preparation; nothing committed.')
     written = guarded_handoff.commit_files(outputs, expected, inputs)
     return {'ok': True, 'written': written, 'files': receipt['files'],
-            'message': 'Prepared Hard Mode Enemy Rebalance and Enemy Difficulty. Restart the game for Hard Mode; use Local Install Mod for Workshop.'}
+            'uploadDir': str(uploader / 'upload_content'), 'installedDir': str(workshop),
+            'message': 'Prepared and locally installed Enemy Difficulty. Start or restart Cyber Knights to test; the Modkit payload is ready for Workshop submission.'}
 
 
 def module(name, path):

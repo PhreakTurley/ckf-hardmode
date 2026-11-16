@@ -19,6 +19,7 @@ values happen to agree. The editor writes the live files and keeps no backup.
 | `settings.json` | Per-machine game/config paths, `stripReadme`, and optional Modkit paths. Not committed. |
 | `modkit.py` | Guarded player export, Modkit preparation and local installation. |
 | `steam_workshop.py` | Resolve the uploader's local install target and verify Steam registration. |
+| `override_validation.py` | Check Official column types and clear matching assignments from proposed edits. |
 | `player_balance.py` | Workshop tuning, official-data catalogs, and SQL generation. |
 | `enemy_armor.py` | Enemy armor catalog, shared authoring-sheet edits, and preparation handoff. |
 | `ckf-config-editor.spec` | PyInstaller spec used by `scripts/make_release.py`. |
@@ -74,18 +75,20 @@ transaction. This setting is independent of Hard Mode's switches.
 After saving, choose the dedicated initialized uploader mod folder in this
 section and click **Send Party Size Mod to Modkit**. The separate
 `partySizeProjectDir` setting leaves the player-balance destination alone. The
-handoff writes only `source_data/stories.manifest` and `party-size.json`, with
+handoff writes `source_data/stories.manifest` and `party-size.json`, with
 one native parser `Rule` update containing only `RuleId`, `Value` and
 `SQL: update`. It refuses a manifest for another mod, changed inputs or an
 incompatible parser declaration, and verifies written bytes. Rule 83 is
 excluded from the Player Balance catalog and rejected by that exporter.
 
-In the official uploader select this mod, then **Prepare Mod Data**. Inspect
-`upload_content/_data/data.sql`: it must contain one `UPDATE Rule SET Value=... WHERE RuleId=83;`
+The export runs the official parser and writes identical SQL/locale payloads
+to `upload_content/_data` and the downloaded item's `_data` in the same guarded
+transaction. Its SQL contains one `UPDATE Rule SET Value=... WHERE RuleId=83;`
 statement; the locale file is empty. The resulting data mod requires no
 BepInEx plugin. For the first test, submit with **Private** visibility,
 subscribe, wait for Steam's download, then activate the mod in the game's Mods
-screen. Later iterations can use **Local Install Mod**. These are the
+screen and select its Steam Mod folder in the uploader. Later iterations need
+only editor export, then a game start or restart. These are the
 [official setup steps](https://cyberknightswiki.tresebrothers.com/Modding_Quick_Start#Setup_Your_Mod).
 Preparation verifies the payload, not mission behavior; check the mission
 selection screen in game before publishing publicly.
@@ -117,7 +120,7 @@ containing only three native parser updates for `RuleId` 84, 85 and 86 and their
 Mod and refuses another mod's manifest. The Player Balance exporter excludes
 and rejects these three rules.
 
-Use **Prepare Mod Data** in the selected uploader project. Its `data.sql`
+Export prepares and locally installs this mod as it does Party Size. Its `data.sql`
 contains exactly three `UPDATE Rule SET Value=... WHERE RuleId=...;` statements,
 for 84, 85 and 86; its locale file is empty. Follow the same private upload,
 subscription, activation and in-game testing steps as [Party Size Mod](#party-size-mod).
@@ -589,10 +592,14 @@ with the [Enemy Difficulty exporter](../docs/enemy-difficulty-workshop.md).
 
 After saving, **Prepare Hard Mode + Workshop** prepares one payload for both
 Hard Mode's bundled Enemy Rebalance and the selected Enemy Difficulty Modkit
-project. It runs the installed parser, the independent enemy verifier and the
+project. It regenerates the maintainer roster artifacts, then runs the installed
+parser, the independent enemy verifier and the
 player/enemy application-order check before guarded writes. It updates the
-bundle receipt and the Modkit project's sources and prepared SQL/locales.
-Use the uploader to install locally or publish; preparation does not activate mods.
+bundle receipt, the Modkit project's sources and prepared SQL/locales, and the
+downloaded Workshop item's `_data`. Start or restart the game to test; use the
+uploader to publish. The local target follows the same item-id and Steam
+registration checks as [Player Balance export](#send-talents-to-modkit-uploader).
+Preparation does not activate mods.
 
 Set **Source checkout** to this repository and **Enemy Difficulty
 Modkit folder** to its initialized `WorkshopContent/EnemyDifficulty` directory.
@@ -806,12 +813,32 @@ The Team PL matrix draws `MissionPowerLevel` 1–10 only (`serve.py:AXIS_WINDOWS
 `serve.py:App.api_save`, in order:
 
 1. **Stale check.** If the SHA-256 of any file the editor reads (`fingerprints`, which covers the cfg, the sidecars, the mirror and every declared sheet) changed since the page loaded, the save is refused.
-2. **Build.** Adjust-grammar check, then `requires_pass`, then `apply_edits`. Any refusal raises `SaveRefused` rather than `assert`, so the checks survive `python -O`. The Team PL mirror is regenerated through `scripts/gen_teampl_labels.py` in the same save as `teampl.json`.
+2. **Build.** Adjust-grammar check, then `requires_pass`, Official-content validation and matching-override cleanup, then `apply_edits`. Any refusal raises `SaveRefused` rather than `assert`, so the checks survive `python -O`. The Team PL mirror is regenerated through `scripts/gen_teampl_labels.py` in the same save as `teampl.json`.
 3. **Validate.** Every file `check_schema` reads (`files_check_schema_reads`) is copied to a temp directory with the proposed bytes overlaid, and `schema/check_schema.py` runs on that directory in a child process (`run_check_schema`). `RANGE` and `INVARIANT` block the save; `STALE` and `MISSING` are reported only. The save is also blocked if the checker could not run, or if its trailing `N problem(s).` line is missing or disagrees with the problem lines it printed.
 4. **Commit** (`commit`). Each changed file is written to a temp file beside its target and fsynced. Then a journal (`.ckf-gui-save-journal.json`) naming the renames is written atomically, the renames run back to back with the mirror first (`mirror_first`), and the journal is deleted. Unchanged files are skipped. On startup `recover_journal` finishes any renames a crash interrupted, following only renames that stay inside the config directory and within one directory.
 5. **Report.** `check_schema` runs again on the real directory. The response includes the notes and a reminder to restart the game, because each subsystem reads its config once in `Plugin.Load()`.
 
-`check_schema.py` declares no columns for lever sheets, so every sheet save carries `NOT VALIDATED AGAINST A SCHEMA` in its notes. Only the grammar and row identity were checked. **Validate** runs steps 2–3 without writing. The Save button is disabled when nothing has changed, the config directory is missing, or the checker did not run at load.
+Content overrides also pass `override_validation.normalize`: column mappings and
+types come from the selected Official database, numeric operands must be finite,
+and INTEGER assignments must fit the declared storage type. Gameplay ranges are
+enforced only where a setting schema declares them. Missing Official data is
+reported explicitly; content edits cannot bypass the check.
+
+Both **Validate** and **Save** clear literal assignments numerically or textually
+equal to the shipped cell. The comparison uses `(table, id, column)` in Official
+data, including for existing stored overrides; sheet comments and `_shipped`
+metadata are not the authority. Arithmetic adjustments, class-wide levers without
+one shipped row, and clone-only cells retain their meaning. Cleanup covers native
+talent sheets, Player Balance and shipped enemy armor rows. **Validate** clears
+the working cells and reports the removals without writing; **Save** commits
+them in its normal transaction. Validation refuses a stale page and preserves
+edits made while its request was running. The Save button is disabled when
+nothing has changed, the config directory is missing, or the checker did not run
+at load.
+
+Verification: `python gui/test_override_validation.py` exercises typed refusals,
+Validate without disk writes, Save cleanup, stale sheet metadata, table identity,
+negative assignments, text columns, arithmetic terms and clone preservation.
 
 ## How rendering is driven by the schema
 

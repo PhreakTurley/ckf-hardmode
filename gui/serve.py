@@ -139,6 +139,7 @@ import enemy_armor
 import modkit
 import party_size
 import contact_limit_breaks
+import override_validation
 
 DEFAULT_GAME_DIR = r'C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint'
 
@@ -1881,8 +1882,8 @@ _SHIPPED_PAIR_RE = re.compile(r'^([A-Za-z][A-Za-z0-9]*)\s+(-?\d+(?:\.\d+)?)$')
 TEXT_BASELINE_COLUMNS = {'JobNodeModel': ('IconPng',)}
 
 
-def official_overlay_baselines(entry, source):
-    """Read display baselines without rewriting a sheet or its stored metadata."""
+def overlay_column_targets(entry):
+    """Declared sheet mappings shared by display, validation and override cleanup."""
     names = [c['name'] for c in entry['columns']]
     table = entry['table']
     filename = os.path.basename(entry['path'])
@@ -1905,6 +1906,13 @@ def official_overlay_baselines(entry, source):
                    for c, model, col in _consumables.SHEET_COLUMNS[sheet.key]}
     # Class-wide levers have no single row baseline. Never pick a representative
     # weapon or use a stale comment to manufacture one.
+    return mapping
+
+
+def official_overlay_baselines(entry, source):
+    """Read display baselines without rewriting a sheet or its stored metadata."""
+    names = [c['name'] for c in entry['columns']]
+    mapping = overlay_column_targets(entry)
     tables = {}
     for model, identity, col in mapping.values():
         if model in tables:
@@ -3598,13 +3606,10 @@ def apply_edits(doc, extras_store, edits, strip_readme=True):
 #
 # WHAT CAN BE VALIDATED HERE AND WHAT CANNOT, SAID BEFORE THE CODE.
 #
-# check_schema.py declares NO COLUMNS for these sheets. It checks that a
-# declared overlay exists and that no unclaimed sheet is sitting in the slice
-# directory, and it never parses one -- its own comment says so: "A direct
-# overlay is NOT a JSON document ... so it is checked for EXISTENCE and never
-# parsed." So the range and type checking every .cfg key and every sidecar
-# field gets is NOT AVAILABLE for a cell here, and no amount of staging will
-# make it available. There is no schema to consult.
+# check_schema.py owns configuration schemas and overlay presence. Content
+# column declarations live in Official/data.db. App.normalize_overrides checks
+# those declarations and clears matching assignments before rendering a save.
+# This layer checks the file dialect and preserves untouched CSV bytes.
 #
 # What IS available is the grammar of the cell, and it differs by kind:
 #
@@ -3626,12 +3631,9 @@ def apply_edits(doc, extras_store, edits, strip_readme=True):
 #                 the player is concerned.
 #             So a non-numeric cell under a non-Set operator is REFUSED, quoting
 #             the code; a non-numeric cell under Set is ACCEPTED and carries a
-#             note naming the sheet, the column and the fact that nothing
-#             range-checked it.
-#
-# EVERY overlay edit carries a note saying what was not checked. "Warn by name
-# rather than accept silently" is the whole requirement, and a save whose notes
-# said nothing would look exactly like a save that had been validated.
+#             note naming the sheet and column. Official-data validation then
+#             refuses text assigned to a numeric content column. Gameplay
+#             limits are checked only where a schema actually declares them.
 
 _OVERLAY_NUMBER_RE = re.compile(r'^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$')
 
@@ -3721,10 +3723,8 @@ def overlay_check_cell(entry, ci, value, rel, notes):
                                      'and DROPS the cell -- the save would look '
                                      'like it worked and change nothing. Only a '
                                      'plain-set column takes text.'})
-    notes.append('%s.%s: %r is text, not a number. A plain-set column takes '
-                 'text (Overlays.cs keeps it as a literal), but NOTHING '
-                 'RANGE-CHECKED IT: check_schema.py declares no columns for '
-                 'these sheets, so the value is written as typed.'
+    notes.append('%s.%s: %r is a text assignment; Official-data validation '
+                 'checks the destination column type when available.'
                  % (rel, name, text))
 
 
@@ -3838,10 +3838,7 @@ def apply_overlay_edits(doc, edits, notes):
                          'the file is byte-identical and the commit skips it'
                          % rel)
         else:
-            notes.append('%s: %d cell(s) moved. NOT VALIDATED AGAINST A SCHEMA '
-                         '-- check_schema.py declares no columns for the lever '
-                         'sheets, so nothing here range-checked the value or '
-                         'its type beyond the cell grammar.' % (rel, len(moved)))
+            notes.append('%s: %d lever cell(s) changed.' % (rel, len(moved)))
     return out
 
 
@@ -5555,7 +5552,7 @@ class App:
                 return party_size.send(config_dir_for(self.settings),
                                        self.settings.get('partySizeProjectDir', ''),
                                        self.data_source(), expect)
-            except (OSError, ValueError) as exc:
+            except (OSError, ValueError, subprocess.SubprocessError) as exc:
                 return {'ok': False, 'error': str(exc)}
 
     def api_contact_export(self, expect=None):
@@ -5564,7 +5561,7 @@ class App:
                 return contact_limit_breaks.send(config_dir_for(self.settings),
                                        self.settings.get('contactBreaksProjectDir', ''),
                                        self.data_source(), expect)
-            except (OSError, ValueError) as exc:
+            except (OSError, ValueError, subprocess.SubprocessError) as exc:
                 return {'ok': False, 'error': str(exc)}
 
     def party_edits(self, cd, edits, proposed):
@@ -5685,14 +5682,30 @@ class App:
         except (ValueError, OSError, static_data.DataError) as exc:
             raise SaveRefused({'summary':'Talent tree is not navigable', 'detail':str(exc)})
 
-    def api_validate(self, edits, strip_readme=None):
+    def normalize_overrides(self, doc, edits):
+        if self.static_source is False:
+            return edits, [], []
+        if not static_data.database_path(self.data_source()).is_file():
+            if any(edits.get(key) for key in ('overlays', 'playerBalance', 'enemyArmor')):
+                raise SaveRefused({'summary': 'Official data is required to validate content overrides.'})
+            return edits, [], ['NOT RUN: Official-data override validation and redundant-override cleanup; database unavailable.']
+        try:
+            with static_data.StaticData(self.data_source()) as source:
+                return override_validation.normalize(sys.modules[__name__], doc, edits, source)
+        except (ValueError, OSError, static_data.DataError) as exc:
+            raise SaveRefused({'summary': 'Content override validation failed', 'detail': str(exc)})
+
+    def api_validate(self, edits, strip_readme=None, expect=None):
         with self.lock:
             doc, model, extras, cd, _rec = self.snapshot()
             if strip_readme is None:
                 strip_readme = bool(self.settings.get('stripReadme', True))
             try:
+                if expect and self.current_fingerprints(cd) != expect:
+                    raise SaveRefused({'summary': 'Configuration changed; reload before validating.'})
                 apply_table_formats(doc, extras, model, edits)
                 edits, notes = requires_pass(doc.schemas, doc, edits)
+                edits, cleared, normalization_notes = self.normalize_overrides(doc, edits)
                 proposed, more = apply_edits(doc, extras, edits, strip_readme)
                 self.player_edits(cd, edits, proposed)
                 self.party_edits(cd, edits, proposed)
@@ -5700,7 +5713,7 @@ class App:
                 self.validate_enemy_armor(cd, proposed)
                 self.validate_talent_tree(cd, proposed)
                 notes = (reformat_notes(doc) + stray_notes(doc, doc.schemas)
-                         + notes + more)
+                         + notes + more + normalization_notes)
             except SaveRefused as e:
                 return {'ok': False, 'refused': e.payload, 'check': None, 'notes': []}
             check = stage_and_validate(doc, proposed)
@@ -5708,6 +5721,7 @@ class App:
             ok = check['ran'] and not blocking
             return {'ok': ok, 'refused': None, 'check': check,
                     'blocking': blocking, 'notes': notes,
+                    'cleared': cleared,
                     'wouldWrite': sorted(proposed.keys())}
 
     def api_save(self, edits, strip_readme=None, force=False, expect=None):
@@ -5737,6 +5751,7 @@ class App:
                 # editor knows which key the player just moved and can name the
                 # dependent. See requires_pass.
                 edits, notes = requires_pass(doc.schemas, doc, edits)
+                edits, cleared, normalization_notes = self.normalize_overrides(doc, edits)
                 proposed, more = apply_edits(doc, extras, edits, strip_readme)
                 self.player_edits(cd, edits, proposed)
                 self.party_edits(cd, edits, proposed)
@@ -5744,7 +5759,7 @@ class App:
                 self.validate_enemy_armor(cd, proposed)
                 self.validate_talent_tree(cd, proposed)
                 notes = (reformat_notes(doc) + stray_notes(doc, doc.schemas)
-                         + notes + more)
+                         + notes + more + normalization_notes)
             except SaveRefused as e:
                 return {'ok': False, 'refused': e.payload}
 
@@ -5892,7 +5907,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, self.app.api_player_preview(body.get('playerBalance') or {}, body.get('fingerprints')))
             if path == '/api/validate':
                 return self._json(200, self.app.api_validate(body.get('edits') or {},
-                                                             body.get('stripReadme')))
+                                                             body.get('stripReadme'), body.get('fingerprints')))
             if path == '/api/save':
                 return self._json(200, self.app.api_save(body.get('edits') or {},
                                                          body.get('stripReadme'),
@@ -8465,12 +8480,10 @@ def selftest(config_arg, frozen_exe=None, legacy_cyberware_help=False):
                                                    'x.csv', _d_notes),
                         SaveRefused))
         overlay_check_cell(_d_entry, 2, 'Charge-Max-Boost', 'x.csv', _d_notes)
-        t.check('the same text under a plain-set column is ACCEPTED -- 11 of '
-                'the 379 filled direct lever cells on disk are exactly this '
-                '(IconPng) -- and it WARNS BY NAME that nothing range-checked '
-                'it, because check_schema declares no columns for these sheets',
+        t.check('plain-set text passes the dialect check and names the '
+                'column whose Official-data type must be checked',
                 len(_d_notes) == 1 and 'x.csv.Plain' in _d_notes[0]
-                and 'NOTHING RANGE-CHECKED IT' in _d_notes[0], _d_notes)
+                and 'destination column type' in _d_notes[0], _d_notes)
         overlay_check_cell(_d_entry, 1, '2.5', 'x.csv', _d_notes)
         overlay_check_cell(_d_entry, 1, '', 'x.csv', _d_notes)
         t.check('and a number, and a blank, pass under either operator without '

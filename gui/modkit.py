@@ -19,7 +19,7 @@ import player_balance
 import steam_workshop
 
 
-def prepare_parser(data, mod, parser_config):
+def prepare_parser(data, mod, parser_config, source_name='talent-balance.json'):
     """Return the installed parser's exact output bytes and checked inputs."""
     root = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parents[1]))
     script = root / 'scripts/prepare_enemy_difficulty.ps1'
@@ -28,25 +28,25 @@ def prepare_parser(data, mod, parser_config):
     if not (engine / dll_name).is_file():
         engine = Path(r'C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Mod Uploader')
     if not (engine / dll_name).is_file():
-        raise ValueError('Player export requires the installed Modkit parser: ' + str(engine / dll_name))
+        raise ValueError('Export requires the installed Modkit parser: ' + str(engine / dll_name))
     if not script.is_file():
         raise ValueError('The editor is missing its bundled Modkit preparation script; rebuild the editor.')
     pwsh = shutil.which('pwsh')
     if not pwsh:
-        raise ValueError('Player export requires PowerShell 7 (pwsh) on the Windows PATH.')
+        raise ValueError('Export requires PowerShell 7 (pwsh) on the Windows PATH.')
     inputs = {path: state(path) for path in (script, engine / dll_name, Path(parser_config))}
     with tempfile.TemporaryDirectory(prefix='ckf-player-parser-') as directory:
         directory = Path(directory)
         source = directory / 'source'
         source.mkdir()
-        (source / 'stories.manifest').write_text('talent-balance.json\n', encoding='utf-8')
-        (source / 'talent-balance.json').write_bytes(data)
+        (source / 'stories.manifest').write_text(source_name + '\n', encoding='utf-8')
+        (source / source_name).write_bytes(data)
         result = subprocess.run([pwsh, '-NoProfile', '-File', str(script), '-SourceContent', str(source),
             '-OutputDirectory', str(directory / '_data'), '-ModkitDirectory', str(engine),
             '-SchemaPath', str(parser_config)], capture_output=True, text=True, timeout=180,
             creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
         if result.returncode:
-            raise ValueError('Modkit parser rejected player balance; nothing was sent. ' +
+            raise ValueError('Modkit parser rejected the export; nothing was sent. ' +
                              (result.stderr or result.stdout)[-4000:].strip())
         if not (directory / '_data/data.sql').is_file() or not (directory / '_data/en-US.json').is_file():
             raise ValueError('Modkit parser produced an incomplete result; nothing was sent.')
@@ -56,6 +56,18 @@ def prepare_parser(data, mod, parser_config):
         if state(path) != expected:
             raise ValueError('Parser input changed during validation: ' + str(path))
     return files, inputs
+
+
+def payload_paths(mod, workshop):
+    """Address only prepared data files inside their selected destinations."""
+    paths = []
+    for folder in (Path(mod) / 'upload_content', Path(workshop)):
+        for name in ('data.sql', 'en-US.json'):
+            path = folder / '_data' / name
+            if folder.resolve() not in path.resolve().parents:
+                raise ValueError('Prepared payload points outside its destination: ' + str(path))
+            paths.append(path)
+    return paths
 
 
 def state(path):
@@ -211,14 +223,8 @@ def send(config_dir, project_dir, mod_dir, database=None):
     paths = [project / 'source_content' / 'talent-balance.json',
              project / 'provenance' / 'SOURCE.json', destination_manifest,
              mod / 'source_data' / 'talent-balance.json']
-    payload_paths = [folder / '_data' / name
-                     for folder in (mod / 'upload_content', workshop)
-                     for name in ('data.sql', 'en-US.json')]
-    for path in payload_paths:
-        folder = workshop if workshop in path.parents else mod / 'upload_content'
-        if folder.resolve() not in path.resolve().parents:
-            raise ValueError('Prepared payload points outside its destination: ' + str(path))
-    paths += payload_paths
+    payloads = payload_paths(mod, workshop)
+    paths += payloads
     expected = {p: state(p) for p in paths}
     if any(Path(config_dir).resolve() in p.resolve().parents for p in paths):
         raise ValueError('Export destinations must be outside the live config directory.')
@@ -248,7 +254,7 @@ def send(config_dir, project_dir, mod_dir, database=None):
             raise ValueError('The parser contract changed during validation; nothing was sent.')
         inputs[path] = checked
     outputs = dict(zip(paths[:4], [data, provenance, manifest_bytes, data]))
-    outputs.update({path: files[path.name] for path in payload_paths})
+    outputs.update({path: files[path.name] for path in payloads})
     written = commit_files(outputs, expected, inputs)
     return {'ok': True, 'records': metadata['parser_source']['records'],
             'counts': metadata['merged_update_records_by_table'],

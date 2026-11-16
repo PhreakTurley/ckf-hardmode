@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 import contact_limit_breaks as contacts
 import party_size
 import modkit
-from test_party_size import PartySizeTests
+from test_party_size import PartySizeTests, registered_project
 
 
 class ContactLimitBreakTests(unittest.TestCase):
@@ -20,7 +20,7 @@ class ContactLimitBreakTests(unittest.TestCase):
         self.party_project = self.project
         self.project = self.project.parent / 'FasterLimitBreaks'
         (self.project / 'upload_content').mkdir(parents=True)
-        (self.project.parent / 'FasterLimitBreaks.workshop.json').write_text('{}')
+        self.workshop = registered_project(self.root, self.project, '1002')
         with closing(sqlite3.connect(self.database, isolation_level=None)) as db:
             for rid, value, name in [(84, 2, contacts.RULES[0][2]), (85, 12, contacts.RULES[1][2]),
                                      (86, 15, contacts.RULES[2][2])]:
@@ -35,6 +35,9 @@ class ContactLimitBreakTests(unittest.TestCase):
         party_size.send(self.config, self.party_project, self.database)
         old = (self.party_project / 'source_data/party-size.json').read_bytes()
         self.send()
+        for name in ('data.sql', 'en-US.json'):
+            self.assertEqual((self.project / 'upload_content/_data' / name).read_bytes(),
+                             (self.workshop / '_data' / name).read_bytes())
         self.assertEqual(json.loads((self.project / 'source_data/contact-limit-breaks.json').read_bytes()),
                          {'Rule': [{'RuleId': 84, 'Value': 1, 'SQL': 'update'},
                                    {'RuleId': 85, 'Value': 1, 'SQL': 'update'},

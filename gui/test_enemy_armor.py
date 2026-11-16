@@ -11,6 +11,40 @@ import enemy_armor as armor
 
 
 class ArmorTests(unittest.TestCase):
+    def test_prepare_rebuilds_roster_before_the_guarded_enemy_export(self):
+        from subprocess import CompletedProcess
+        from unittest.mock import patch
+        root = self.config / 'tools'
+        for name in ('scripts/build_bundled_rebalances.py', 'ckf-enemy-scaling/scripts/build_overlays.py'):
+            path = root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('# fixture')
+        replies = [CompletedProcess([], 0, 'roster prepared', ''),
+                   CompletedProcess([], 0, 'CKF_ENEMY_PREPARED {"ok":true,"installedDir":"fixture"}\n', '')]
+        with patch.object(armor, 'validate'), patch.object(armor.shutil, 'which', return_value=sys.executable), \
+                patch.object(armor.subprocess, 'run', side_effect=replies) as run:
+            result = armor.prepare(self.config, 'selected.db', root, self.config / 'mod')
+        self.assertTrue(result['ok'])
+        first, second = [call.args[0] for call in run.call_args_list]
+        self.assertEqual(Path(first[1]).resolve(), (root / 'ckf-enemy-scaling/scripts/build_overlays.py').resolve())
+        self.assertEqual(first[2:], ['--data', 'selected.db'])
+        self.assertIn('--enemy-only', second)
+        self.assertIn('selected.db', second)
+
+    def test_failed_roster_preparation_cannot_reach_the_install_step(self):
+        from subprocess import CompletedProcess
+        from unittest.mock import patch
+        root = self.config / 'tools'
+        for name in ('scripts/build_bundled_rebalances.py', 'ckf-enemy-scaling/scripts/build_overlays.py'):
+            path = root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('# fixture')
+        with patch.object(armor, 'validate'), patch.object(armor.shutil, 'which', return_value=sys.executable), \
+                patch.object(armor.subprocess, 'run', return_value=CompletedProcess([], 1, '', 'roster input changed')) as run:
+            with self.assertRaisesRegex(ValueError, 'Roster preparation failed: roster input changed'):
+                armor.prepare(self.config, 'selected.db', root, self.config / 'mod')
+        self.assertEqual(run.call_count, 1)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

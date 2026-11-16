@@ -13,6 +13,17 @@ import party_size
 import modkit
 
 
+def registered_project(root, project, itemid):
+    workshop = root / 'workshop/content/1021210' / itemid
+    workshop.mkdir(parents=True)
+    (workshop.parents[2] / 'appworkshop_1021210.acf').write_text(
+        '"AppWorkshop" { "WorkshopItemsInstalled" { ' +
+        ' '.join('"%s" {}' % p.name for p in workshop.parent.iterdir()) + ' } }')
+    metadata = project.parent / (project.name + '.workshop.json')
+    metadata.write_text(json.dumps({'publishedfileid': itemid, 'steamModFolder': str(workshop)}))
+    return workshop
+
+
 class PartySizeTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -31,7 +42,8 @@ class PartySizeTests(unittest.TestCase):
         self.project = self.root / 'WorkshopContent' / 'IncreasedPartySize'
         (self.project / 'upload_content').mkdir(parents=True)
         self.metadata = self.project.parent / 'IncreasedPartySize.workshop.json'
-        self.metadata.write_text('{}')
+        self.workshop = registered_project(self.root, self.project, '1001')
+        self.metadata_bytes = self.metadata.read_bytes()
         (self.project.parent / 'config.json').write_text(json.dumps({'Rule': {'sql': {
             'table': 'Rule', 'fields': [
                 {'name': 'RuleId', 'type': 'INTEGER', 'primaryKey': True},
@@ -47,8 +59,10 @@ class PartySizeTests(unittest.TestCase):
         source = json.loads((self.project / 'source_data/party-size.json').read_bytes())
         self.assertEqual(source, {'Rule': [{'RuleId': 83, 'Value': 6, 'SQL': 'update'}]})
         self.assertEqual((self.project / 'source_data/stories.manifest').read_bytes(), b'party-size.json\n')
-        self.assertEqual(self.metadata.read_bytes(), b'{}')
-        self.assertFalse(any((self.project / 'upload_content').iterdir()))
+        self.assertEqual(self.metadata.read_bytes(), self.metadata_bytes)
+        for name in ('data.sql', 'en-US.json'):
+            self.assertEqual((self.project / 'upload_content/_data' / name).read_bytes(),
+                             (self.workshop / '_data' / name).read_bytes())
 
     def test_only_the_declared_identity_is_accepted(self):
         with closing(sqlite3.connect(self.database, isolation_level=None)) as db:
@@ -56,6 +70,29 @@ class PartySizeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'missing or renamed'):
             self.send()
         self.assertFalse((self.project / 'source_data').exists())
+
+    def test_unregistered_local_target_refuses_sources_and_upload_together(self):
+        manifest = self.workshop.parents[2] / 'appworkshop_1021210.acf'
+        manifest.write_text('"AppWorkshop" { "WorkshopItemsInstalled" {} }')
+        before = {p: p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
+        with self.assertRaisesRegex(ValueError, 'Steam has not registered'):
+            self.send()
+        self.assertEqual({p: p.read_bytes() for p in self.root.rglob('*') if p.is_file()}, before)
+
+    def test_local_install_failure_rolls_back_sources_and_prepared_upload(self):
+        from unittest.mock import patch
+        self.send()
+        self.tuning.write_bytes(party_size.encode({'format': 1, 'maximum': 7}))
+        before = {p: p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
+        replace = modkit.os.replace
+        def fail_local(source, destination):
+            if Path(destination) == self.workshop / '_data/data.sql':
+                raise PermissionError('local destination denied')
+            return replace(source, destination)
+        with patch.object(modkit.os, 'replace', side_effect=fail_local):
+            with self.assertRaisesRegex(PermissionError, 'local destination denied'):
+                self.send()
+        self.assertEqual({p: p.read_bytes() for p in self.root.rglob('*') if p.is_file()}, before)
 
     def test_no_implicit_maximum_or_database_fallback(self):
         self.tuning.unlink()

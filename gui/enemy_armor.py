@@ -231,11 +231,16 @@ def prepare(config, database, source_dir, uploader):
     validate(config, database)
     root, destination = Path(source_dir).resolve(), Path(uploader).resolve()
     script = root / 'scripts/build_bundled_rebalances.py'
-    if not script.is_file():
-        raise ValueError('Choose the Hard Mode source checkout containing the rebalance builder.')
+    roster = root / 'ckf-enemy-scaling/scripts/build_overlays.py'
+    if not script.is_file() or not roster.is_file():
+        raise ValueError('Choose the Hard Mode maintainer checkout containing the rebalance and roster builders.')
     python = shutil.which('python')
     if not python:
         raise ValueError('Python is required to prepare native packages on the maintainer machine.')
+    prepared = subprocess.run([python, str(roster), '--data', str(database)], cwd=root,
+        capture_output=True, text=True, timeout=600, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+    if prepared.returncode:
+        raise ValueError('Roster preparation failed: ' + (prepared.stderr or prepared.stdout)[-4000:].strip())
     run = subprocess.run([python, str(script), '--enemy-only', '--config', str(config),
         '--data', str(database), '--uploader-project', str(destination)], cwd=root,
         capture_output=True, text=True, timeout=600, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
