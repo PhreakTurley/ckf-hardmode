@@ -196,6 +196,17 @@ outside Hard Mode's overlay directory. Records are sparse adjustments keyed by
 SQL table, content id and column. Clearing a cell removes its adjustment.
 Shared effects have one stored value wherever the editor displays them.
 
+**Player Balance → Character → Attribute benefits** exposes the declared
+attribute-benefit `Effect` and `MatrixEffect` records through the same sparse
+adjustments and Workshop export. Baselines refresh from the selected official
+database. Each attribute has its own grid; Tech also has a Matrix grid.
+**Show all columns** exposes the remaining numeric fields, including metadata
+and zero baselines. Hover a benefit name for its official locale description;
+that description is reference text and does not recalculate with edits.
+Missing records in an older database are reported by table and id.
+`python gui/test_attribute_benefits.py` checks coverage, baselines, export and
+clearing; add `--ui` to check navigation, column visibility and save targets.
+
 Workshop adjustment cells treat plain numbers as assignments, including
 negative numbers: `-10` sets to -10. `+10` adds 10 and `x1.5` multiplies by 1.5.
 `=N` remains an accepted input alias; the editor displays and saves assignments

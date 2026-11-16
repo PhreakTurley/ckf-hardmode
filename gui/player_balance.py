@@ -23,6 +23,18 @@ TABLE_KEYS = {'Weapon': 'WeaponId', 'WeaponMod': 'WeaponModId', 'Armor': 'ArmorI
               'MissionAdvantage': 'AdvantageTypeId', 'Trait': 'TraitId', 'Rule': 'RuleId', 'Item': 'ItemTypeId'}
 MOD_CATEGORIES = ('Weapon Mods', 'Crafted Intrinsic', 'Intrinsic')
 MULTIPLIERS = {'Cost': 'Price', 'InstallTime': 'Installation time', 'ImplantStress': 'Implant stress'}
+# Attribute-benefit identities are declared independently of the selected DB.
+# Missing definitions stay visible as warnings for older official databases.
+ATTRIBUTE_BENEFITS = (
+    ('Strength', 'Effect', (('310', 'Strength'),)),
+    ('Reaction', 'Effect', (('311', 'Reaction'),)),
+    ('Will', 'Effect', (('312', 'Resistance and armor'), ('313', 'Cybernetic weapon damage'))),
+    ('Tech', 'Effect', (('314', 'Critical chance and drone damage'),)),
+    ('Tech', 'MatrixEffect', (('330', 'Matrix bonuses'),)),
+    ('Persuasion', 'Effect', (('320', 'Legwork'), ('321', 'Dealmaker'))),
+    ('Cunning', 'Effect', (('322', 'Handbrake'), ('323', 'Bait the Trap'), ('324', 'Pressure Drop'))),
+    ('Handling', 'Effect', (('325', 'Mission XP'), ('326', 'Team stress resistance'))),
+)
 # The limit-break edits remain exclusively in Hard Mode.
 HARDMODE_EFFECTS = {10505, 10507}
 # Enemy Balance owns its spawn-level cap, including in Workshop exports.
@@ -1426,6 +1438,28 @@ def catalog(config_dir, database, document=None):
                      description='These implants have no known player acquisition reference under the inclusive filter. '
                                  'They remain here while the implant or its linked effects have overrides. '
                                  'Clear those overrides and save to remove them from this page.')
+            attribute_grids = []
+            for attribute, table, definitions in ATTRIBUTE_BENEFITS:
+                rows = [allrows[table][rid] for rid, _name in definitions if rid in allrows[table]]
+                title = attribute + (' · Matrix' if table == 'MatrixEffect' else '')
+                g = grid(table, rows, title, 'nonzero')
+                g.update(dynamicColumns=True, scrollWithPage=True)
+                names = dict(definitions)
+                for record in g['rows']:
+                    record['name'] = names[record['id']]
+                    record['description'] = source.locale.get(
+                        '%s.%s.AttributeDesc' % (table, record['id']), '')
+                missing = [rid for rid, _name in definitions if rid not in allrows[table]]
+                if missing:
+                    g['warning'] = 'The selected official database is missing %s attribute-benefit rows: %s.' % (
+                        table, ', '.join(missing))
+                attribute_grids.append(g)
+            page('attribute-benefits', 'Attribute benefits', 'Character', attribute_grids,
+                 description='Change the benefits granted by each attribute. Values use the game’s stored units; '
+                             'hover a benefit name for its official description. Descriptions show the official '
+                             'benefits and do not change with overrides. Save, then send Player Balance to Modkit '
+                             'to apply your changes.')
+
             face_actions = {}
             for talent in allrows['Talent'].values():
                 if talent['TalentIsFace'] != '0' and talent['TargetType'] == 'LEVERAGE':
