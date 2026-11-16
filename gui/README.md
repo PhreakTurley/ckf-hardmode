@@ -21,6 +21,7 @@ values happen to agree. The editor writes the live files and keeps no backup.
 | `steam_workshop.py` | Resolve the uploader's local install target and verify Steam registration. |
 | `override_validation.py` | Check Official column types and clear matching assignments from proposed edits. |
 | `player_balance.py` | Workshop tuning, official-data catalogs, and SQL generation. |
+| `enemy_rules.py` | Authoritative Enemy Balance Rule assignments in the shared enemy authoring document. |
 | `enemy_armor.py` | Enemy armor catalog, shared authoring-sheet edits, and preparation handoff. |
 | `ckf-config-editor.spec` | PyInstaller spec used by `scripts/make_release.py`. |
 
@@ -565,6 +566,11 @@ their old cells, neutralizes the old global settings, and clears the two moved
 or retired combat-rule cells. It refuses to overwrite existing player tuning.
 
 ## Enemy armors
+
+**Enemy Balance → Rules** edits the enemy-owned Rule value. It is saved and
+exported by Enemy Balance, using the [enemy authoring document](../docs/enemy-difficulty-workshop.md#authoring-and-outputs).
+Clear it to restore the shipped value. After Save, use **Prepare Hard Mode + Workshop**
+on Enemy Armors to update both distribution paths.
 
 **Enemy Gear → Enemy Armors** shows armor referenced by effective enemy assignments and
 all authored armor rows, including clones. Each row says **Shipped** or

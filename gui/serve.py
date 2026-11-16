@@ -136,6 +136,7 @@ import static_data
 import player_balance
 import talent_editor
 import enemy_armor
+import enemy_rules
 import modkit
 import party_size
 import contact_limit_breaks
@@ -5419,7 +5420,7 @@ class App:
 
     def current_fingerprints(self, cd):
         result = fingerprints(cd, self.schemas)
-        for rel in enemy_armor.fingerprints(Path(cd)):
+        for rel in enemy_armor.fingerprints(Path(cd)) + [enemy_rules.FILE]:
             path = Path(cd) / rel
             result[rel] = hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None
         if self.static_source is not False:
@@ -5482,6 +5483,7 @@ class App:
             group['sections'] = [sid for sid in group['sections'] if sid in visible_ids]
         nav_groups['groups'] = [g for g in nav_groups['groups'] if g['sections'] or g['absent']]
         player['pages'] = navigation.catalog_pages(player['pages'])
+        enemy_rules.decorate(player['pages'])
         return {
             'token': self.token,
             'gameDir': self.settings.get('gameDir'),
@@ -5500,6 +5502,7 @@ class App:
                         for s in decorate_schemas(visible_schemas)],
             'sections': visible_sections,
             'playerBalance': player,
+            'enemyRules': enemy_rules.model(cd, False if self.static_source is False else self.data_source()),
             'partySize': party_size.model(cd, self.data_source(),
                                          self.settings.get('partySizeProjectDir', '')),
             'contactBreaks': contact_limit_breaks.model(cd, self.data_source(),
@@ -5628,6 +5631,17 @@ class App:
             except (ValueError, OSError, static_data.DataError) as exc:
                 return {'ok': False, 'error': str(exc)}
 
+    def enemy_rule_edits(self, cd, edits, proposed):
+        change = edits.get('enemyRules')
+        if not change or not change.get('cells'):
+            return
+        try:
+            with static_data.StaticData(self.data_source()) as source:
+                document, _ = enemy_rules.pending(cd, source, change)
+            proposed[enemy_rules.FILE] = (json.dumps(document, ensure_ascii=False, indent=2) + '\n').encode('utf-8')
+        except (ValueError, OSError, static_data.DataError) as exc:
+            raise SaveRefused({'summary': 'Enemy rules were not saved', 'detail': str(exc)})
+
     def enemy_armor_edits(self, cd, edits, proposed):
         change = edits.get('enemyArmor')
         if not change or not change.get('cells'):
@@ -5690,7 +5704,7 @@ class App:
         if self.static_source is False:
             return edits, [], []
         if not static_data.database_path(self.data_source()).is_file():
-            if any(edits.get(key) for key in ('overlays', 'playerBalance', 'enemyArmor')):
+            if any(edits.get(key) for key in ('overlays', 'playerBalance', 'enemyArmor', 'enemyRules')):
                 raise SaveRefused({'summary': 'Official data is required to validate content overrides.'})
             return edits, [], ['NOT RUN: Official-data override validation and redundant-override cleanup; database unavailable.']
         try:
@@ -5714,6 +5728,7 @@ class App:
                 self.player_edits(cd, edits, proposed)
                 self.party_edits(cd, edits, proposed)
                 self.enemy_armor_edits(cd, edits, proposed)
+                self.enemy_rule_edits(cd, edits, proposed)
                 self.validate_enemy_armor(cd, proposed)
                 self.validate_talent_tree(cd, proposed)
                 notes = (reformat_notes(doc) + stray_notes(doc, doc.schemas)
@@ -5760,6 +5775,7 @@ class App:
                 self.player_edits(cd, edits, proposed)
                 self.party_edits(cd, edits, proposed)
                 self.enemy_armor_edits(cd, edits, proposed)
+                self.enemy_rule_edits(cd, edits, proposed)
                 self.validate_enemy_armor(cd, proposed)
                 self.validate_talent_tree(cd, proposed)
                 notes = (reformat_notes(doc) + stray_notes(doc, doc.schemas)

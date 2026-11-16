@@ -120,7 +120,7 @@ def roster_source(data_path, read):
             raise ValueError(f"Stale roster input: {relative}; rebuild ckf-enemy-scaling first")
     statements = []
     for line in artifacts["prepared/_data/data.sql"].decode("utf-8").splitlines():
-        if not line or line.startswith("--") or line == 'UPDATE "Rule" SET "Value"=20 WHERE "RuleId"=82;':
+        if not line or line.startswith("--") or re.fullmatch(r'UPDATE "Rule" SET "Value"=-?\d+ WHERE "RuleId"=82;', line):
             continue
         if not line.startswith(('DELETE FROM "MonsterGroupMember" ', 'INSERT OR REPLACE INTO "MonsterGroupMember" ')) or not line.endswith(';'):
             raise ValueError("Unexpected roster statement")
@@ -142,7 +142,7 @@ def build(data_path=DEFAULT_DB, config_dir=CONFIG, schema_path=PARSER_SCHEMA):
         return raw
 
     fixes = json.loads(read(config_dir.parent / FIXES_FILE))
-    if fixes.get("format") != 1 or set(fixes) - {"format", "basis", "updates", "clones"}:
+    if fixes.get("format") != 1 or set(fixes) - {"format", "basis", "updates", "clones", "rules"}:
         raise ValueError("Unsupported surgical enemy fixes document")
     if fixes.get("clones"):
         raise ValueError("Surgical fixes must use existing native pointers; clones are disabled")
@@ -171,8 +171,8 @@ def build(data_path=DEFAULT_DB, config_dir=CONFIG, schema_path=PARSER_SCHEMA):
         statements, locales, ledger, overlay_rows, clone_rows = [], {}, [], {}, {}
 
         def update(t, identity, values, origin, surgical=False):
-            if t == "Rule" and (identity != 82 or set(values) != {"Value"} or values["Value"] != 20):
-                raise ValueError("Only Rule82.Value=20 belongs to this export")
+            if t == "Rule" and (identity != 82 or set(values) != {"Value"} or values["Value"] != enemy_ceiling):
+                raise ValueError("Only the authored Rule82.Value belongs to this export")
             if surgical and (t not in FIX_COLUMNS or set(values) - FIX_COLUMNS[t]):
                 raise ValueError(f"Unsupported surgical fields: {t} {identity}")
             if t == "MonsterType" and not surgical and set(values) - {"ArmorTypeId"}:
@@ -245,7 +245,15 @@ def build(data_path=DEFAULT_DB, config_dir=CONFIG, schema_path=PARSER_SCHEMA):
 
         if base["Rule"][82]["ConfigName"] != "Max Enemy Power Level":
             raise ValueError("Rule82 no longer declares the enemy ceiling")
-        update("Rule", 82, {"Value": 20}, "native enemy ceiling")
+        rules = fixes.get("rules", {})
+        if not isinstance(rules, dict) or set(rules) - {"82"}:
+            raise ValueError("Enemy Balance owns only Rule82.Value")
+        fields = rules.get("82", {"Value": base["Rule"][82]["Value"]})
+        if (not isinstance(fields, dict) or set(fields) != {"Value"}
+                or type(fields["Value"]) is not int or not -(2 ** 63) <= fields["Value"] < 2 ** 63):
+            raise ValueError("Rule82.Value requires a representable whole number")
+        enemy_ceiling = fields["Value"]
+        update("Rule", 82, {"Value": enemy_ceiling}, "authored enemy rule")
         overlay("Armor")
         overlay("MonsterType")
         # The reviewed roster policy supersedes legacy spawn sheets entirely.
@@ -321,11 +329,11 @@ def build(data_path=DEFAULT_DB, config_dir=CONFIG, schema_path=PARSER_SCHEMA):
         for identity, row in tables["MonsterType"].items():
             if row["ArmorTypeId"] not in (0, -1, None, "") and row["ArmorTypeId"] not in tables["Armor"]:
                 raise ValueError(f"Unresolved effective armor: MonsterType {identity} ArmorTypeId={row['ArmorTypeId']}")
-        statement_bytes = ("-- CKF Enemy Difficulty: armor, PL1-20 rosters, Rule82=20 and reviewed surgical native corrections.\n"
+        statement_bytes = ("-- CKF Enemy Difficulty: armor, PL1-20 rosters, authored Rule82 and reviewed surgical native corrections.\n"
                            + "\n".join(statements) + "\n").encode("utf-8")
         source_bytes = encode({"Metadata": {"StoryKey": "CKFEnemyDifficulty", "StartingId": 900000},
                                "RawSQL": statements, "RawText": {"Generic": locales}})
-        summary = {"format": 4, "scope": "Enemy armor, PL1-20 Patrol/reinforcement/VIP rosters, Rule82=20 and surgical native corrections",
+        summary = {"format": 4, "enemy_ceiling": enemy_ceiling, "scope": "Enemy armor, PL1-20 Patrol/reinforcement/VIP rosters, authored Rule82 and surgical native corrections",
                    "official_database": str(db.path), "official_database_sha256": inputs[str(db.path)],
                    "configuration_directory": str(config_dir.resolve()), "parser_schema": str(schema_path.resolve()),
                    "source_inputs": inputs, "exporter_sha256": sha(Path(__file__).read_bytes()),

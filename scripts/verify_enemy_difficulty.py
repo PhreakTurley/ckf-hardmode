@@ -38,7 +38,7 @@ def verify(sql_path, data_path=DEFAULT_DB, config_dir=CONFIG, native_integrity=F
     require(roster_check["sql_sha256"] == hashlib.sha256(roster_bytes).hexdigest(), "Roster input moved during verification")
     locale = json.loads(sql_path.with_name("en-US.json").read_bytes())
     fixes = json.loads((config_dir.parent / FIXES_FILE).read_bytes())
-    require(fixes.get("format") == 1, "Unsupported surgical fix format")
+    require(fixes.get("format") == 1 and not set(fixes) - {"format", "basis", "updates", "clones", "rules"}, "Unsupported enemy authoring format")
     require(not fixes.get("clones"), "Surgical clones are disabled; use native pointers")
     conn = sqlite3.connect(":memory:")
     counts = Counter()
@@ -131,7 +131,13 @@ def verify(sql_path, data_path=DEFAULT_DB, config_dir=CONFIG, native_integrity=F
                 target["MonsterGroupMember"] = normalize("MonsterGroupMember", roster_db.execute('SELECT * FROM "MonsterGroupMember"').fetchall())
             counts.update({"independent_roster_" + name: value for name, value in roster_check["checks"].items()})
             require(target["Rule"][82]["ConfigName"] == "Max Enemy Power Level", "Rule82 declaration changed")
-            target["Rule"][82]["Value"] = 20
+            rules = fixes.get("rules", {})
+            require(isinstance(rules, dict) and not set(rules) - {"82"}, "Unsupported enemy rules")
+            fields = rules.get("82", {"Value": target["Rule"][82]["Value"]})
+            require(isinstance(fields, dict) and set(fields) == {"Value"}, "Unsupported enemy rule fields")
+            ceiling = fields["Value"]
+            require(type(ceiling) is int and -(2 ** 63) <= ceiling < 2 ** 63, "Invalid enemy rule integer")
+            target["Rule"][82]["Value"] = ceiling
             groups, ambiguous = defaultdict(dict), set()
             for row in original["MonsterType"].values():
                 pg, pl = row["PowerGroupId"], row["PowerLevel"]
@@ -285,7 +291,7 @@ def verify(sql_path, data_path=DEFAULT_DB, config_dir=CONFIG, native_integrity=F
             counts["localized_authored_armors"] = len(locale)
             db.assert_unchanged()
             require(roster_path.read_bytes() == roster_bytes, "Roster input moved during verification")
-        return {"status": "PASS", "scope": "Enemy armor, PL1-20 Patrol/reinforcement/VIP rosters, Rule82=20 and surgical native corrections",
+        return {"status": "PASS", "scope": "Enemy armor, PL1-20 Patrol/reinforcement/VIP rosters, authored Rule82 and surgical native corrections",
                 "sql_sha256": hashlib.sha256(sql_bytes).hexdigest(), "checks": dict(counts),
                 "native_integrity_checks": native_checks,
                 "legacy_roster_checks": roster_check["legacy_checks"],

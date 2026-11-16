@@ -5,6 +5,7 @@ import math
 from pathlib import Path
 
 import enemy_armor
+import enemy_rules
 import player_balance as pb
 import static_data
 
@@ -154,6 +155,18 @@ def normalize(api, doc, edits, source):
                         edits.setdefault('enemyArmor', {'databaseSha': database_sha}).setdefault('cells', []).append(cell)
                     cell['value'] = ''
                     cleared.append({'kind': 'enemyArmor', 'id': row['ArmorId'], 'column': field})
+    if (Path(doc.config_dir) / enemy_rules.FILE).is_file() or edits.get('enemyRules'):
+        _, redundant = enemy_rules.pending(doc.config_dir, source, edits.get('enemyRules'))
+        checked += 1
+        if redundant:
+            block = edits.setdefault('enemyRules', {'databaseSha': database_sha})
+            cells = block.setdefault('cells', [])
+            cell = next((c for c in cells if str(c['id']) == '82' and c['column'] == 'Value'), None)
+            if cell is None:
+                cell = {'id': '82', 'column': 'Value'}
+                cells.append(cell)
+            cell['value'] = ''
+            cleared.append({'kind': 'enemyRule', 'id': '82', 'column': 'Value'})
     source.assert_unchanged()
     notes = ['Official data declarations: checked %d populated override cell(s) for column types and finite numeric values.' % checked]
     if cleared:

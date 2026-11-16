@@ -3,9 +3,9 @@
 For armor edits and preparation to both Hard Mode and this Modkit project,
 use the editor's [Enemy Armors page](../gui/README.md#enemy-armors).
 
-Enemy Difficulty applies authored enemy armor and armor assignments, sets
-`Rule82.Value` to 20, and applies reviewed surgical native corrections from a
-separate Workshop authoring document, and includes the reviewed PL1–20 Patrol,
+Enemy Difficulty applies authored enemy armor and armor assignments, reads
+`Rule82.Value` from the editor's **Enemy Balance → Rules** field, applies reviewed
+surgical native corrections from a separate Workshop authoring document, and includes the reviewed PL1–20 Patrol,
 reinforcement and VIP roster progression. Other native weapon, talent, effect
 and stat scaling remains unchanged.
 
@@ -37,9 +37,15 @@ Other pools retain shipped effective behavior. The roster policy uses matching
 PL numbers, preserves non-Patrol PL1 and restores native behavior above PL20.
 
 The additional surgical source is `BepInEx/config/ckf.enemy-difficulty.json`.
-It is the single live authoring document for sparse native corrections, kept
-outside Git like the armor inputs. Each update names its table, id, changed
-fields, expected native values and replacements. Surgical fixes must point to
+It is the single live authoring document for sparse native corrections and enemy
+rules, kept outside Git like the armor inputs. The editor saves the Enemy Balance
+rule in `rules` as a sparse `"82": {"Value": <integer>}` assignment. Clearing it
+restores the shipped Rule 82 value; Validate clears an equal-to-shipped assignment
+in the editor, and Save persists its removal. Preparation reads this field for
+both the bundled Hard Mode payload and the uploader/installed Workshop payload.
+The roster input's own Rule assignment is excluded from the merged export.
+Each surgical update names its table, id, changed fields, expected native values
+and replacements. Surgical fixes must point to
 existing native rows; weapon, talent and effect repair clones are rejected.
 Expected-value disagreements refuse export, so an updated official row cannot silently receive a stale patch.
 

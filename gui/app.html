@@ -1272,6 +1272,7 @@ function buildWorking() {
   w.contactTurns = {};
   for (const key of ['minimum', 'maximum', 'readyThreshold']) w.contactTurns[key] = (MODEL.contactBreaks || {}).document ? String(MODEL.contactBreaks.document[key]) : '';
   w.partyMaximum = (MODEL.partySize || {}).document ? String(MODEL.partySize.document.maximum) : '';
+  w.enemyRules = JSON.parse(JSON.stringify((MODEL.enemyRules || {}).values || {}));
   w.enemyArmor = JSON.parse(JSON.stringify((MODEL.enemyArmor || {}).values || {}));
   w.player = JSON.parse(JSON.stringify((MODEL.playerBalance || {}).document || {}));
   return w;
@@ -1315,6 +1316,7 @@ function dirtyPaths() {
   }
   for (const c of overlayDirtyCells())
     out.push(c.rel + ':' + c.key.join('/') + '.' + c.col);
+  for (const c of enemyRuleChanges().cells) out.push('Enemy rule '+c.id+'.'+c.column);
   for (const c of enemyArmorChanges().cells) out.push('Enemy armor '+c.id+'.'+c.column);
   for (const c of playerChanges().cells) out.push(c.table + ':' + c.id + '.' + c.column);
   if (playerChanges().removedJobNodes) out.push('Removed job nodes');
@@ -1383,6 +1385,8 @@ function buildEdits() {
   }
   if (partyChanged()) edits.partySize = {format:1, maximum:Number(W.partyMaximum)};
   if (contactChanged()) edits.contactBreaks = {format:1, minimum:Number(W.contactTurns.minimum), maximum:Number(W.contactTurns.maximum), readyThreshold:Number(W.contactTurns.readyThreshold)};
+  const rules=enemyRuleChanges();
+  if (rules.cells.length) edits.enemyRules=rules;
   const enemy=enemyArmorChanges();
   if (enemy.cells.length) edits.enemyArmor=enemy;
   const player = playerChanges();
@@ -1881,6 +1885,15 @@ function playerRound(value) {
   return value - floor === 0.5 ? (floor % 2 === 0 ? floor : floor + 1) : Math.round(value);
 }
 
+function enemyRuleChanges() {
+  const out={cells:[],databaseSha:(((MODEL.enemyRules || {}).database || {}).sha256)};
+  for (const id in (W.enemyRules || {})) for (const column in W.enemyRules[id]) {
+    const before=(((MODEL.enemyRules || {}).values || {})[id] || {})[column] || '';
+    if (W.enemyRules[id][column]!==before) out.cells.push({id:id,column:column,value:W.enemyRules[id][column]});
+  }
+  return out;
+}
+
 function enemyArmorChanges() {
   const out={cells:[],databaseSha:(((MODEL.enemyArmor || {}).database || {}).sha256)};
   for (const id in (W.enemyArmor || {})) for (const column in W.enemyArmor[id]) {
@@ -1954,6 +1967,9 @@ function playerCell(grid, row, column) {
     return {target:target,value:'',base:preview.icon,multiplier:1,readOnly:true,readOnlyReason:preview.detail};
   }
   const fields = ((W.player.tables || {})[target.table] || {})[target.id] || {};
+  if (target.enemyRule) return {target:target,value:(W.enemyRules[target.id] || {})[target.column] || '',
+    base:row.baseline[column.name],multiplier:1,readOnly:!!(MODEL.enemyRules || {}).error,
+    readOnlyReason:(MODEL.enemyRules || {}).error};
   if (target.enemyArmor) return {target:target,value:(W.enemyArmor[target.id] || {})[target.column] || '',
     base:row.baseline[column.name],multiplier:1,readOnly:false};
   if (target.generated!==undefined) return {target:target,value:'',base:target.generated,multiplier:1,
@@ -2228,6 +2244,8 @@ function consumableSelect(grid, row, kind) {
 function renderPlayer(panel, page) {
   panel.appendChild(el('div', {class:'pb-heading'}, [el('h2', {text:page.title}),
     el('span', {class:'small', text:page.ownerTitle || (page.enemyArmor ? 'Enemy balance' : page.talents ? 'Talent balance' : 'Workshop player balance')})]));
+  if (page.enemyRules && (MODEL.enemyRules || {}).error)
+    panel.appendChild(banner('err','Enemy rules unavailable',[MODEL.enemyRules.error]));
   if (page.gateSchema) panel.appendChild(gateControl(page.gateSchema,entryOf(page.gateSchema.subsystem)));
   if (page.description) panel.appendChild(el('p', {class:'doc',text:page.description}));
   if (page.group==='Consumables') {
@@ -2247,7 +2265,7 @@ function renderPlayer(panel, page) {
     toolbar.appendChild(el('label',{class:'small'},[hideUnused,document.createTextNode(' Hide unused armor')]));
   }
   if (page.grids.length) panel.appendChild(toolbar);
-  if (page.grids.length) panel.appendChild(el('p', {class:'doc',text:page.ownershipReference ? 'These entries are managed by '+page.ownerTitle+'. Their read-only fields are retained here for reference.' : page.enemyArmor ? 'Enter whole numbers. Clear a cell to restore its baseline. Save, then Prepare Hard Mode + Workshop to apply changes.' : page.talents ? 'Numbers set values. Clear a cell to restore its baseline. Choose an icon or effect from the field’s suggestions. Save, then send to Modkit.' : 'A number sets the value, including negatives. +10 adds 10; x1.5 multiplies by 1.5. Clear a cell to restore its baseline.'}));
+  if (page.grids.length) panel.appendChild(el('p', {class:'doc',text:page.enemyRules ? 'Enter a whole number. Clear the cell to use the shipped value. Save, then Prepare Hard Mode + Workshop under Enemy Armors to apply it.' : page.ownershipReference ? 'These entries are managed by '+page.ownerTitle+'. Their read-only fields are retained here for reference.' : page.enemyArmor ? 'Enter whole numbers. Clear a cell to restore its baseline. Save, then Prepare Hard Mode + Workshop to apply changes.' : page.talents ? 'Numbers set values. Clear a cell to restore its baseline. Choose an icon or effect from the field’s suggestions. Save, then send to Modkit.' : 'A number sets the value, including negatives. +10 adds 10; x1.5 multiplies by 1.5. Clear a cell to restore its baseline.'}));
   if (page.grids.some(function(g) {return g.iconEditor;}))
     panel.appendChild(el('p', {class:'doc',text:page.iconHelp || 'Icon / model changes both visuals. The first choice restores the official assignment. Save, then send to Modkit.'}));
   if (page.grids.some(function(g) {return g.rows.some(function(r) {return r.enemyUse;});}))
@@ -2579,7 +2597,7 @@ function renderPlayer(panel, page) {
           } else {
             const controlLabel = row.name+' '+(grid.joined ? col.group+' ' : '')+col.label;
             const source = targetCell.table+' '+targetCell.id+'.'+targetCell.column;
-            const input = el('input', {type:'text',value:value,placeholder:displayBase,spellcheck:'false',
+            const input = el('input', {type:targetCell.enemyRule ? 'number' : 'text',...(targetCell.enemyRule ? {step:'1'} : {}),value:value,placeholder:displayBase,spellcheck:'false',
               style:'width:'+(item.width-1)+'px',
               'aria-label':controlLabel,'data-player-target':source,
               ...(col.options ? {list:'choices-'+encodeURIComponent([page.id,gridKey,col.name].join('|'))
@@ -2591,7 +2609,8 @@ function renderPlayer(panel, page) {
             if (!cellViews.has(cellKey)) cellViews.set(cellKey,[]);
             cellViews.get(cellKey).push({input:input,style:style});
             input.addEventListener('input', function () {
-              if (targetCell.enemyArmor) W.enemyArmor[targetCell.id][targetCell.column]=input.value;
+              if (targetCell.enemyRule) W.enemyRules[targetCell.id][targetCell.column]=input.value;
+              else if (targetCell.enemyArmor) W.enemyArmor[targetCell.id][targetCell.column]=input.value;
               else if (targetCell.overlay) W.overlays[targetCell.overlay].cells[targetCell.row][targetCell.ci]=input.value;
               else {
                 const table = W.player.tables[targetCell.table] || (W.player.tables[targetCell.table] = {});
@@ -4207,6 +4226,8 @@ function applyOverrideClears(cleared) {
         if (!Object.keys(rows[cell.id]).length) delete rows[cell.id];
         if (!Object.keys(rows).length) delete W.player.tables[cell.table];
       }
+    } else if (cell.kind === 'enemyRule' && W.enemyRules[cell.id]) {
+      W.enemyRules[cell.id][cell.column] = '';
     } else if (cell.kind === 'enemyArmor' && W.enemyArmor[cell.id]) {
       W.enemyArmor[cell.id][cell.column] = '';
     }

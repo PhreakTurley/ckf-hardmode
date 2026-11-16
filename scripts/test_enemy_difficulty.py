@@ -36,7 +36,7 @@ class EnemyDifficultyChecks(unittest.TestCase):
         with TemporaryDirectory(prefix='verifier-test-', dir=PROJECT) as temporary:
             directory = Path(temporary) / "ckf.hardmode.d"
             directory.mkdir()
-            guarded_write(directory.parent / FIXES_FILE, b'{"format":1,"clones":[],"updates":[]}')
+            guarded_write(directory.parent / FIXES_FILE, b'{"format":1,"clones":[],"updates":[],"rules":{"82":{"Value":19}}}')
             with StaticData() as db:
                 ids = [r['MonsterTypeId'] for r in db.read('MonsterTypeModel')[1]]
             guarded_write(directory / 'ArmorModel.csv', b'ArmorId,BallisticArmor\n')
@@ -51,7 +51,21 @@ class EnemyDifficultyChecks(unittest.TestCase):
             payload = json.loads(artifacts['source_content/enemy-difficulty.json'])
             non_roster = [statement for statement in payload['RawSQL'] if 'MonsterGroupMember' not in statement]
             self.assertEqual(len(non_roster), 2)
-            self.assertIn('WHERE "RuleId"=82', non_roster[0])
+            self.assertEqual(non_roster[0], 'UPDATE "Rule" SET "Value"=19 WHERE "RuleId"=82;')
+            sql = directory.parent / 'data.sql'
+            sql.write_bytes(artifacts['prepared/_data/data.sql'])
+            sql.with_name('en-US.json').write_bytes(artifacts['prepared/_data/en-US.json'])
+            self.assertEqual(verify(sql, config_dir=directory)['status'], 'PASS')
+            sql.write_bytes(sql.read_bytes() + b'\nUPDATE Rule SET Value=20 WHERE RuleId=82;')
+            with self.assertRaisesRegex(AssertionError, 'Row mismatch: Rule 82'):
+                verify(sql, config_dir=directory)
+            # With no authored rule, the shipped cell remains authoritative.
+            guarded_write(directory.parent / FIXES_FILE, b'{"format":1,"clones":[],"updates":[]}')
+            stock_artifacts, _ = build(config_dir=directory)
+            stock_payload = json.loads(stock_artifacts['source_content/enemy-difficulty.json'])
+            self.assertFalse(any('WHERE "RuleId"=82' in s for s in stock_payload['RawSQL']))
+            sql.write_bytes(stock_artifacts['prepared/_data/data.sql'])
+            self.assertEqual(verify(sql, config_dir=directory)['status'], 'PASS')
             self.assertIn('WHERE "MonsterTypeId"=1100', non_roster[1])
             self.assertTrue(any(statement.startswith('DELETE FROM "MonsterGroupMember"') for statement in payload['RawSQL']))
             self.assertFalse(any('spawn-' in path for path in artifacts['review/SOURCE.json'].decode().splitlines()))

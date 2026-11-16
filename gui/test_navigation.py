@@ -6,6 +6,7 @@ import unittest
 
 import navigation
 import serve
+import enemy_rules
 import player_balance
 import static_data
 
@@ -31,7 +32,10 @@ class NavigationTests(unittest.TestCase):
         def records(pages):
             return Counter((g.get('key'), g['table'], r['id'], repr(r))
                            for p in pages for g in p['grids'] for r in g['rows'])
-        self.assertEqual(records(self.original['pages']), records(self.model['playerBalance']['pages']))
+        partitioned = navigation.catalog_pages(self.original['pages'])
+        self.assertEqual(records(self.original['pages']), records(partitioned))
+        enemy_rules.decorate(partitioned)
+        self.assertEqual(records(partitioned), records(self.model['playerBalance']['pages']))
         self.assertEqual({p['title'] for p in self.original['pages']},
                          {p['title'] for p in self.model['playerBalance']['pages']})
         self.assertEqual(len({p['id'] for p in self.model['playerBalance']['pages']}),
