@@ -53,6 +53,7 @@ Hard Mode and Data Dump are independent plugins. Both inspect game types through
 | Change enemy stats, gear, or roster data | [Tune enemies](tuning-enemies.md) |
 | Prepare the combined Hard Mode download | [Bundled rebalances](bundled-rebalances.md) |
 | Prepare the enemy changes as a Workshop data mod | [Enemy Difficulty preparation](enemy-difficulty-workshop.md) |
+| Add starting and Hub character availability | [Hire Everyone](hire-everyone.md) |
 | Compare faction roster slots | [Enemy faction parity](enemy-faction-parity.md) |
 | Add a Harmony patch | [Patching rules](patching-rules.md) |
 
