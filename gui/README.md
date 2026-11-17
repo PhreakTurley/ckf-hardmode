@@ -132,17 +132,26 @@ independent destinations, invalid turn ranges, no-op byte preservation and
 installed-parser output; `python gui/test_contact_limit_breaks_ui.py` exercises
 all three controls and the independent save payload.
 
-## Send talents to Modkit Uploader
+## Export all four Workshop mods to Modkit Uploader
 
-Open **Workshop export** above the editor. Set **Workshop
+Open **Workshop export** above the editor. Set **Player Balance
 source repository** to a checkout of `ckf-talent-balance` containing
-`scripts/export_talent_balance.py` with `build_export()`. Set **Modkit mod
+`scripts/export_talent_balance.py` with `build_export()`. Set **Player Balance Modkit
 folder** to the initialized `WorkshopContent/<ModName>` folder beside its
 `<ModName>.workshop.json`, then click **Save folders**. The paths persist as
 `talentProjectDir` and `modkitProjectDir` in the editor's settings file.
+Set the other three destinations in **Enemy Armors**, **Party Size Mod** and
+**Faster Contact Limit Breaks** using their dedicated controls. Each mod must
+have its own initialized Modkit folder and installed Workshop item.
 
 1. Edit values and click **Save** in the editor.
-2. Click **Send player balance to Modkit**. It regenerates the standalone repository's
+2. Click **Export all four mods to Modkit**. It updates Player Balance, Enemy
+   Difficulty, Party Size and Faster Contact Limit Breaks using their saved
+   folders. Each export prepares its upload payload and installed Workshop
+   payload with the existing guarded writer. The result lists each mod's
+   success or failure; a failed mod leaves successful exports in place and
+   independent mods are still attempted. A changed config or destination
+   blocks subsequent writes. Player Balance regenerates the standalone repository's
    `source_content/talent-balance.json` and `provenance/SOURCE.json`, then copies
    the manifest and parser JSON into the Modkit project's `source_data`. The
    official parser's SQL and locale output goes into both `upload_content/_data`
@@ -169,7 +178,8 @@ Workshop SQL. Unmoved Hard Mode settings remain in the BepInEx workflow.
 The button requires saved edits and saved folder paths. The server validates
 the config, checks source and destination fingerprints before replacement,
 verifies the written bytes, and rolls back its own completed replacements if
-the handoff fails. A conflicting Modkit manifest is refused for review.
+that mod's handoff fails. Earlier successful mods remain updated. A conflicting
+Modkit manifest is refused for review.
 The handoff reads the selected project's `WorkshopContent/config.json`, converts
 mapped enum numbers to the parser's named values, and validates the final native
 records against its field, type and value-mapping declarations. Unknown or
@@ -187,6 +197,8 @@ directories are preserved. Workshop submission remains an uploader action.
 Verification: `python gui/test_modkit.py` covers parser failures, Steam target
 identity and registration, changed inputs/destinations, rollback after a local
 install failure, and equality of the uploaded and installed payloads.
+`python gui/test_workshop_export.py` and its `--ui` mode cover the combined
+action, distinct destinations, stale inputs and per-mod results.
 
 ### Workshop player catalogs
 
@@ -624,7 +636,7 @@ player/enemy application-order check before guarded writes. It updates the
 bundle receipt, the Modkit project's sources and prepared SQL/locales, and the
 downloaded Workshop item's `_data`. Start or restart the game to test; use the
 uploader to publish. The local target follows the same item-id and Steam
-registration checks as [Player Balance export](#send-talents-to-modkit-uploader).
+registration checks as [Workshop export](#export-all-four-workshop-mods-to-modkit-uploader).
 Preparation does not activate mods.
 
 Set **Source checkout** to this repository and **Enemy Difficulty

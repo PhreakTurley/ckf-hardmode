@@ -103,7 +103,7 @@ Workshop folder resolution and live discovery integration remain untested.
 
 The current flow is `schema/*.schema.json` → generated C# binds/config reference/editor controls → live `BepInEx\config\ckf.hardmode.cfg` and `ckf.hardmode.d\*` → `CKFHardMode.dll`. `Plugin.Load` initializes the switches and settings, then `ModelRules` and the independent runtime subsystems. `Overlays.Load` scans the flat live directory in filename order and checks `Slices.OverlayOwner` before reading a switched-off file. `ModelRules` edits materialized rows; `RowClone` serves synthetic rows through readers. See [architecture](architecture.md), [Hard Mode subsystem guide](../mods/CKFHardMode/README.md), [rule engine](rule-engine.md), [overlay format](overlays.md), and code members `Plugin.Load`, `Overlays.Load`, `ModelRules.Init`, `RowClone.Init`, `Slices.OverlayOwner`.
 
-The game installation contains the only tuning copy. Do not create a second set of current tuning values in this repository as a migration input. The editor saves the live BepInEx config and can hand off talent overlays through the separate talent repository's exporter; see [Send talents to Modkit Uploader](../gui/README.md#send-talents-to-modkit-uploader). `scripts/make_release.py` packages the live config with the DLL, BepInEx and editor.
+The game installation contains the only tuning copy. Do not create a second set of current tuning values in this repository as a migration input. The editor saves the live BepInEx config and updates the four Workshop mods through [Workshop export](../gui/README.md#export-all-four-workshop-mods-to-modkit-uploader). `scripts/make_release.py` packages the live config with the DLL, BepInEx and editor.
 
 ## Porting surface by owner
 

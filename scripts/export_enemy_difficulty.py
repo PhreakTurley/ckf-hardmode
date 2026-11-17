@@ -163,6 +163,15 @@ def build(data_path=DEFAULT_DB, config_dir=CONFIG, schema_path=PARSER_SCHEMA):
         read(db.locale_path)
         tables = {}
         for t, key in KEYS.items():
+            if t == "Effect":
+                # Effects are pointer destinations, never export assignments.
+                # Index their declared identity without converting unrelated
+                # official fields through the installed parser's older schema.
+                if not any(c[1] == key and c[5] for c in db.schema[t]):
+                    raise ValueError(f"Official pointer target has no declared key: {t}.{key}")
+                tables[t] = {int(r[key]): {key: int(r[key])}
+                             for r in db.read(t + "Model", labels=False)[1]}
+                continue
             if schema[t]["sql"]["table"] != t or set(contracts[t]) != {c[1] for c in db.schema[t]}:
                 raise ValueError(f"Parser/official SQL column disagreement: {t}")
             tables[t] = {int(r[key]): {c: number(v, contracts[t][c]) for c, v in r.items()}

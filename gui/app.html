@@ -324,11 +324,11 @@ button:focus-visible,summary:focus-visible,.navitem:focus-visible{outline:2px so
 <details class="card" style="margin:0 16px 10px" id="modkit-export">
   <summary>Workshop export</summary>
   <div class="field">
-    <label class="lab" for="talent-project">Workshop source repository</label>
+    <label class="lab" for="talent-project">Player Balance source repository</label>
     <input id="talent-project" type="text" spellcheck="false">
   </div>
   <div class="field">
-    <label class="lab" for="modkit-project">Modkit mod folder</label>
+    <label class="lab" for="modkit-project">Player Balance Modkit folder</label>
     <input id="modkit-project" type="text" spellcheck="false">
   </div>
   <div class="field">
@@ -337,10 +337,10 @@ button:focus-visible,summary:focus-visible,.navitem:focus-visible{outline:2px so
   </div>
   <div class="ctl">
     <button id="modkit-paths">Save folders</button>
-    <button id="send-talents" class="primary">Send player balance to Modkit</button>
-    <span id="modkit-status" class="small" role="status" aria-live="polite"></span>
+    <button id="send-talents" class="primary">Export all four mods to Modkit</button>
+    <span id="modkit-status" class="small" role="status" aria-live="polite" style="white-space:pre-line"></span>
   </div>
-  <p class="doc">Save, then send to Modkit to prepare the Workshop upload and install it locally. Start or restart Cyber Knights to test.</p>
+  <p class="doc">Save, then export Player Balance, Enemy Difficulty, Party Size and Faster Contact Limit Breaks to their saved Modkit and installed Workshop folders. Start or restart Cyber Knights to test.</p>
 </details>
 
 <main>
@@ -4341,12 +4341,16 @@ for (const id of ['talent-project', 'modkit-project'])
 
 $('#send-talents').addEventListener('click', async function () {
   $('#send-talents').disabled = true;
-  $('#modkit-status').textContent = 'Preparing and installing saved player balance…';
+  $('#modkit-status').textContent = 'Preparing and installing all four Workshop mods…';
   try {
-    const result = await api('/api/talent-export', { fingerprints: MODEL.fingerprints });
-    $('#modkit-status').textContent = result.ok
-      ? 'Player balance prepared and installed locally. ' + result.next
-      : 'Export failed: ' + result.error;
+    const result = await api('/api/workshop-export', { fingerprints: MODEL.fingerprints });
+    const lines = (result.mods || []).map(function(mod) {
+      return mod.title+': '+(mod.ok ? 'prepared and installed locally.' : 'failed: '+mod.error);
+    });
+    if (result.ok) lines.push(result.next);
+    else if (result.error) lines.push('Export failed: '+result.error);
+    else lines.push('Export finished with failures. Successful mods above were updated.');
+    $('#modkit-status').textContent = lines.join('\n');
   } catch (e) {
     $('#modkit-status').textContent = 'Export failed: ' + String(e);
   } finally {

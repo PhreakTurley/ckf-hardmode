@@ -5530,6 +5530,70 @@ class App:
             'fingerprints': self.current_fingerprints(cd) if os.path.isdir(cd) else {},
         }
 
+    def api_workshop_export(self, expect=None):
+        """Update all four saved Workshop projects with per-mod receipts.
+
+        Each exporter guards and verifies its own transaction. A failed mod
+        does not hide successful updates or prevent independent mods running.
+        """
+        with self.lock:
+            results = []
+            try:
+                settings = dict(self.settings)
+                cd = config_dir_for(settings)
+                database = self.data_source()
+                baseline = self.current_fingerprints(cd)
+                if expect is not None and baseline != expect:
+                    raise ValueError('Configuration changed on disk; reload before exporting.')
+                if os.path.exists(journal_path(cd)):
+                    raise ValueError('A config save is incomplete; reload before exporting.')
+                check = run_check_schema(cd)
+                if not check['ran'] or any(p['kind'] in BLOCKING for p in check['problems']):
+                    raise ValueError('Configuration validation must pass before exporting.')
+                jobs = [
+                    ('player', 'Player Balance', 'modkitProjectDir', lambda: modkit.send(cd,
+                        settings.get('talentProjectDir') or '', settings.get('modkitProjectDir') or '', database)),
+                    ('enemy', 'Enemy Difficulty', 'enemyModkitProjectDir', lambda: enemy_armor.prepare(
+                        Path(cd), database, settings.get('enemySourceDir') or '', settings.get('enemyModkitProjectDir') or '')),
+                    ('party', 'Party Size Mod', 'partySizeProjectDir', lambda: party_size.send(
+                        cd, settings.get('partySizeProjectDir') or '', database, baseline)),
+                    ('contacts', 'Faster Contact Limit Breaks', 'contactBreaksProjectDir', lambda: contact_limit_breaks.send(
+                        cd, settings.get('contactBreaksProjectDir') or '', database, baseline)),
+                ]
+                destinations, installed, install_inputs = set(), set(), {}
+                # Resolve every installation before any exporter can write.
+                for _key, title, setting, _send in jobs:
+                    folder = settings.get(setting) or ''
+                    if not folder.strip():
+                        raise ValueError('Choose and save the %s Modkit folder before exporting.' % title)
+                    project = Path(folder).resolve()
+                    workshop, inputs = modkit.steam_workshop.local_install_target(project, modkit.state)
+                    if project in destinations or workshop.resolve() in installed:
+                        raise ValueError('Each of the four mods needs a distinct Modkit and Workshop folder.')
+                    if not (project / 'upload_content').is_dir():
+                        raise ValueError('Choose an initialized %s Modkit folder.' % title)
+                    destinations.add(project)
+                    installed.add(workshop.resolve())
+                    install_inputs.update(inputs)
+                for key, title, _setting, send in jobs:
+                    try:
+                        if self.current_fingerprints(cd) != baseline:
+                            raise ValueError('Configuration changed during export; reload before exporting again.')
+                        if any(modkit.state(path) != state for path, state in install_inputs.items()):
+                            raise ValueError('Workshop destinations changed during export; review the folders before exporting again.')
+                        result = send()
+                        if not result.get('ok'):
+                            raise ValueError(result.get('error') or 'Export did not complete.')
+                        results.append(dict(result, id=key, title=title))
+                    except Exception as exc:
+                        results.append({'id': key, 'title': title, 'ok': False, 'error': str(exc)})
+                return {'ok': all(result['ok'] for result in results), 'mods': results,
+                        'written': [path for result in results for path in result.get('written', [])],
+                        'next': ('Start or restart Cyber Knights to test. All four Modkit payloads are ready for Workshop submission.'
+                                 if all(result['ok'] for result in results) else 'Review the failed exports before Workshop submission.')}
+            except Exception as exc:
+                return {'ok': False, 'mods': results, 'error': str(exc)}
+
     def api_talent_export(self, expect=None):
         with self.lock:
             cd = config_dir_for(self.settings)
@@ -5941,6 +6005,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, self.app.api_enemy_prepare(body.get('fingerprints')))
             if path == '/api/talent-export':
                 return self._json(200, self.app.api_talent_export(body.get('fingerprints')))
+            if path == '/api/workshop-export':
+                return self._json(200, self.app.api_workshop_export(body.get('fingerprints')))
             if path == '/api/settings':
                 s = self.app.settings
                 if 'gameDir' in body:
@@ -6987,7 +7053,7 @@ def selftest(config_arg, frozen_exe=None, legacy_cyberware_help=False):
         units = sidecar_names(app.schemas)
         files_seen = sorted({unit_file(u) for u in units})
         owned_now = sorted(set(files_check_schema_reads(app.schemas))
-                           | set(enemy_armor.fingerprints(Path(cd))))
+                           | set(enemy_armor.fingerprints(Path(cd))) | {enemy_rules.FILE})
         print('        layout: %d unit(s) across %d physical file(s); %d path(s) '
               'the editor owns' % (len(units), len(files_seen), len(owned_now)))
         print('        files: %s' % ', '.join(owned_now))
