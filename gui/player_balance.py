@@ -323,6 +323,108 @@ def validate(doc, source, config_dir=None):
     if removed:
         import talent_tree
         talent_tree.plan(doc, source, config_dir)
+    attribute_descriptions(doc, source)
+
+
+# Per-row hover strings are independent of numeric effects. Scaling and keys:
+# https://cyberknightswiki.tresebrothers.com/Modding_Use_Cases#Notable_Rules_for_Attribute_Bonuses
+# Labels/units follow Official/en-US.json's AttributeDesc and Job.Effects keys.
+ATTRIBUTE_GROUPS = dict(enumerate(('Strength', 'Reaction', 'Will', 'Tech',
+                                  'Persuasion', 'Cunning', 'Handling', 'Tech'), 301))
+ATTRIBUTE_LABELS = {
+    'Effect': {
+        'RecoilRate': '% Recoil Rate', 'PureDamageMelee': '% Kinetic Dmg as extra Pure Dmg',
+        'WoundRes': '% Wound Res', 'MoveSpeed': '% Move Speed', 'InitBonus': ' Initiative',
+        'StressRes': '% Stress Res', 'PureArmor': '% Built-In Armor',
+        'DumpShockRes': '% Matrix Dump Shock Res', 'CritRate': '% Critical Chance',
+        'DroneDamage': '% Dmg vs Drones', 'PhysicalDamage': '% Kinetic Dmg',
+        'BallisticDamage': '% Ballistic Dmg', 'PureDamageBallistic': '% Ballistic Dmg as extra Pure Dmg',
+        'MaxHitPoints': ' Hit Points', 'DeathSave': '% Death Res',
+        'MeleeAttack': '% Melee Accuracy', 'RangedAttack': '% All Ranged Accuracy',
+        'AccuracyRifle': '% Long Range Accuracy (Sniper/Railgun)',
+        'AccuracyPistol': '% Light Weapons Accuracy (Pistol/SMG/Revolver)',
+        'AccuracyAssault': '% Assault Rifle Accuracy',
+        'AccuracyCloseCombat': '% Close-Quarters Accuracy (Shotgun/E-Rifle/UAR)',
+        'AccuracyDrone': '% Accuracy vs Drones', 'StealthAccuracy': '% Stealth Accuracy',
+        'OptimalRange': '% Optimal Range', 'CritRateStealth': '% Stealth Crit Chance',
+        'CritRateStreak': '% Crit Chance per Hit in the Streak',
+        'CritMultiStealth': '% Stealth Crit Dmg', 'CritMultiBase': '% Crit Dmg',
+        'FullAutoDamage': '% Full Auto Dmg', 'PhysicalArmor': '% Kinetic Armor',
+        'BallisticArmor': '% Ballistic Armor', 'ArmorCrit': '% Armor Shred',
+        'Evasion': '% Evasion', 'CoverBonus': '% Cover Bonus', 'FiringArc': ' degree Firing Angle',
+        'Legwork': '% Legwork Success', 'XpBonus': '% XP',
+    },
+    'MatrixEffect': {'ActionPoints': ' Matrix AP', 'DeckArmor': ' Cyberdeck Armor',
+                     'IoPercent': '% IO Speed', 'DumpShockRes': '% Matrix Dump Shock Res'},
+}
+# SpecialValue is scaled first. Handbrake's resulting value is six-hour units;
+# keep that multiplier in the displayed amount, not in the per-attribute divisor.
+ATTRIBUTE_SPECIALS = {
+    64: (' hr mission delay with Handbrake Talent', 6),
+    65: ('% chance Head Hunters will arrive with Bait the Trap Talent', 1),
+    66: (' Heat reduction with Pressure Drop Talent', 1),
+    67: ('% Legwork bonus (including Armwork)', 1),
+    68: ('% Mission Payment with Dealmaker', 1),
+    70: ('% Mission XP for entire team', 1),
+    71: ('% Stress Res for entire team', 1),
+    72: ('% Cybernetic Weapon Accuracy', 1),
+    74: ('% Cybernetic Weapon Dmg', 1),
+}
+ATTRIBUTE_IGNORED = {'EffectId', 'MatrixEffectId', 'EffectClassification', 'EffectGroupId',
+                     'EffectClearType', 'EffectPurgeType', 'EffectOwner', 'IconAsset',
+                     'VFX', 'EffectName', 'SpecialCode', 'SpecialValue', 'SpecialMerge'}
+
+
+def attribute_descriptions(doc, source):
+    """Derive locale overrides from all saved attribute adjustments, never a cache.
+
+    Unknown nonzero fields refuse validation/export instead of silently emitting
+    incomplete tooltips. Unedited rows retain the game's original locale strings.
+    """
+    descriptions = {}
+    for table in ('Effect', 'MatrixEffect'):
+        records = doc['tables'].get(table, {})
+        if not records:
+            continue
+        for row in source.read(table + 'Model')[1]:
+            rid = row[TABLE_KEYS[table]]
+            if rid not in records:
+                continue
+            group = effective(doc, table, row, 'EffectGroupId')
+            if group not in ATTRIBUTE_GROUPS or (table == 'MatrixEffect' and group > 304):
+                continue
+            attribute = ATTRIBUTE_GROUPS[group]
+            lines = []
+
+            def line(value, label, multiplier=1):
+                # Exact ratio: 50 -> +1 per 2; 25 -> +1 per 4; -350 -> -7 per 2.
+                value = int(value)
+                if value:
+                    divisor = math.gcd(abs(value), 100)
+                    lines.append('%+d%s per %d %s' %
+                                 (value // divisor * multiplier, label, 100 // divisor, attribute))
+
+            for col in row:
+                if col in ATTRIBUTE_IGNORED:
+                    continue
+                value = effective(doc, table, row, col)
+                if not value:
+                    continue
+                label = ATTRIBUTE_LABELS[table].get(col)
+                if label is None:
+                    raise ValueError('%s %s.%s: attribute hover text is not supported for this nonzero field; '
+                                     'review its display rules before saving.' % (table, rid, col))
+                line(value, label)
+            code = int(effective(doc, table, row, 'SpecialCode'))
+            value = effective(doc, table, row, 'SpecialValue')
+            if code and value:
+                if code not in ATTRIBUTE_SPECIALS:
+                    raise ValueError('%s %s: attribute hover text is not supported for SpecialCode %d; '
+                                     'review its display rules before saving.' % (table, rid, code))
+                label, multiplier = ATTRIBUTE_SPECIALS[code]
+                line(value, label, multiplier)
+            descriptions['%s.%s.AttributeDesc' % (table, rid)] = '\n'.join(lines)
+    return descriptions
 
 
 def _effective_enemy_ids(source, config_dir, column):
@@ -1439,6 +1541,7 @@ def catalog(config_dir, database, document=None):
                                  'They remain here while the implant or its linked effects have overrides. '
                                  'Clear those overrides and save to remove them from this page.')
             attribute_grids = []
+            attribute_text = attribute_descriptions(doc, source)
             for attribute, table, definitions in ATTRIBUTE_BENEFITS:
                 rows = [allrows[table][rid] for rid, _name in definitions if rid in allrows[table]]
                 title = attribute + (' · Matrix' if table == 'MatrixEffect' else '')
@@ -1447,8 +1550,8 @@ def catalog(config_dir, database, document=None):
                 names = dict(definitions)
                 for record in g['rows']:
                     record['name'] = names[record['id']]
-                    record['description'] = source.locale.get(
-                        '%s.%s.AttributeDesc' % (table, record['id']), '')
+                    locale_key = '%s.%s.AttributeDesc' % (table, record['id'])
+                    record['description'] = attribute_text.get(locale_key, source.locale.get(locale_key, ''))
                 missing = [rid for rid, _name in definitions if rid not in allrows[table]]
                 if missing:
                     g['warning'] = 'The selected official database is missing %s attribute-benefit rows: %s.' % (
@@ -1456,9 +1559,9 @@ def catalog(config_dir, database, document=None):
                 attribute_grids.append(g)
             page('attribute-benefits', 'Attribute benefits', 'Character', attribute_grids,
                  description='Change the benefits granted by each attribute. Values use the game’s stored units; '
-                             'hover a benefit name for its official description. Descriptions show the official '
-                             'benefits and do not change with overrides. Save, then send Player Balance to Modkit '
-                             'to apply your changes.')
+                             'hover a benefit name for its saved description. Validate and Save check the updated '
+                             'hover text, including earlier saved changes. Export Player Balance to Modkit '
+                             'to apply the values and hover text in game.')
 
             face_actions = {}
             for talent in allrows['Talent'].values():
@@ -1613,6 +1716,7 @@ def augment(data, provenance, config_dir, database):
     doc = load(config_dir)
     with static_data.StaticData(database) as source:
         statements, touched = sql(doc, source, config_dir)
+        attribute_text = attribute_descriptions(doc, source)
         receipt['official_database'] = identity(source)
     # RawSQL runs after native table records in the installed parser. Overlap
     # would silently choose an owner, so refuse instead.
@@ -1649,6 +1753,12 @@ def augment(data, provenance, config_dir, database):
                 if (table, str(row[key]), aliases.get(table, {}).get(col, col)) in touched:
                     raise ValueError('Talent and player tuning both own %s %s %s' % (table, row[key], col))
     payload['RawSQL'] = statements
+    if attribute_text:
+        generic = payload.setdefault('RawText', {}).setdefault('Generic', {})
+        for key, value in attribute_text.items():
+            if key in generic and generic[key] != value:
+                raise ValueError('Talent and player tuning both own hover text %s' % key)
+            generic[key] = value
     validate_native_updates(payload)
     data = encode(payload)
     receipt['scope'] = 'player talents, weapons, armor and intrinsic effects, cyberware, consumables, leverage, traits and rules (excluding Enemy Balance Rule 82 and standalone Rules 83-86)'
@@ -1658,7 +1768,8 @@ def augment(data, provenance, config_dir, database):
         for table in receipt['merged_update_records_by_table']:
             receipt['merged_update_records_by_table'][table] = len(payload.get(table, []))
     receipt['player_balance'] = {'source': FILE, 'sha256': hashlib.sha256((Path(config_dir) / FILE).read_bytes()).hexdigest(),
-                                 'statements': len(statements), 'assignments': len(touched)}
+                                 'statements': len(statements), 'assignments': len(touched),
+                                 'attribute_descriptions': sorted(attribute_text)}
     return data, encode(receipt), receipt
 
 

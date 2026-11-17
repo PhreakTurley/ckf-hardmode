@@ -213,8 +213,16 @@ attribute-benefit `Effect` and `MatrixEffect` records through the same sparse
 adjustments and Workshop export. Baselines refresh from the selected official
 database. Each attribute has its own grid; Tech also has a Matrix grid.
 **Show all columns** exposes the remaining numeric fields, including metadata
-and zero baselines. Hover a benefit name for its official locale description;
-that description is reference text and does not recalculate with edits.
+and zero baselines. Hover a benefit name for its saved description. Validate
+and Save check generated hover text against the full tuning document, including
+previously saved changes. After saving, export Player Balance to Modkit to
+include the matching `RawText.Generic` entries in the game's locale payload.
+Descriptions include unchanged bonuses, omit bonuses set to zero, and use exact
+per-attribute ratios. Clearing all adjustments on a row restores its official
+text on the next export. Fields and special codes without declared display rules
+refuse validation/export with the table, id and unsupported field/code rather
+than leaving stale or incomplete text. These keys and scaling rules follow the
+[official attribute modding guide](https://cyberknightswiki.tresebrothers.com/Modding_Use_Cases#Notable_Rules_for_Attribute_Bonuses).
 Missing records in an older database are reported by table and id.
 `python gui/test_attribute_benefits.py` checks coverage, baselines, export and
 clearing; add `--ui` to check navigation, column visibility and save targets.
