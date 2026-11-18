@@ -203,7 +203,9 @@ setTimeout(function() {
  ck('no positive attribute preserves the official icon', playerCell(attr,attrRow,attr.columns[0]).base===attrRow.baseline.exportIcon);
  W.overlays=JSON.parse(stored);W.player=JSON.parse(storedPlayer);render();
  ck('computed icon previews never create saved adjustments', JSON.stringify(buildEdits())===before);
- ck('editing help follows every grid', panel.children[panel.children.length-1]._cls().includes('page-instructions'));
+ const help = panel.find(n=>n.tagName==='SUMMARY' && n.textContent==='How to edit')[0];
+ ck('editing help is a disclosure beside the grid controls', !!help && !help.parent.open
+   && help.parent.textContent.includes('Clear a cell to restore its baseline'));
  console.log('Talent UI: '+passed+' passed');process.exit(0);
 },0);
 '''

@@ -147,6 +147,7 @@ setTimeout(async function () {
      && cappedCell().textContent===cappedGrid.serviceColumn.options['1'].label);
   cappedInput.value='';cappedInput.fire('input');
   ck('reset restores availability instead of a capped service', cappedCell().textContent===cappedRow.serviceFallback.label);
+  cappedSearch.value='';cappedSearch.fire('input');
   W.player=JSON.parse(cappedPlayer);
   SEL='pb:weapon-16';render();
   const clawAll = find(function(n) {return n.tagName==='INPUT' && n.getAttribute('type')==='checkbox';})[0];
@@ -189,6 +190,10 @@ setTimeout(async function () {
   ck('service search finds cyberweapons by their linked implant service', brightshotCell().length===1);
   ck('the consolidated display retains the native implant service save target', buildEdits().playerBalance.cells.some(c=>
     c.table==='Implant' && c.id===linkedImplant.id && c.column==='ServiceOptionId' && c.value===nextService));
+  SEL='pb:implant-global';render();SEL='pb:weapon-17';render();
+  const restoredSearch=find(n=>n.tagName==='INPUT' && n.getAttribute('type')==='search')[0];
+  ck('returning to a page restores its filter', restoredSearch.value===nextServiceName);
+  restoredSearch.value='';restoredSearch.fire('input');
   W.player=JSON.parse(serviceSnapshot);render();
   const priceSnapshot=JSON.stringify(W.player), priceTarget=brightshot.targets.Cost;
   const priceColumn=laserNames.columns.concat(laserNames.advanced).find(c=>c.name==='Cost');
@@ -220,7 +225,8 @@ setTimeout(async function () {
   const input = find(function (n) {return n.tagName==='INPUT' && n.getAttribute('type')==='text';})[0];
   ck('a weapon stat can be edited', !!input);
   input.value='=0';input.fire('input');
-  ck('explicit zero is red', input.parent._cls().includes('overlay-overwrite'));
+  ck('explicit zero has both the override fill and pending marker',
+    input.parent._cls().includes('overlay-overwrite') && input.parent._cls().includes('dirty'));
   ck('an edit is included in the save payload', buildEdits().playerBalance.cells.some(function (c) {return c.value==='=0';}));
   input.value='';input.fire('input');
   ck('clearing an override remains an explicit edit', buildEdits().playerBalance.cells.some(function (c) {return c.value==='';}));
@@ -249,10 +255,16 @@ setTimeout(async function () {
   ck('weapon and slot subsections stay inside each category', modCategories.every(function(n) {
     return n.children.some(function(c) {return c.tagName==='DETAILS' && c._cls().includes('pb-subsection');});
   }));
-  ck('each category retains icon groups and editable fields', modCategories.every(function(n) {
-    return n.find(function(c) {return c._cls().includes('pb-section');}).length>0
-      && n.find(function(c) {return c.tagName==='INPUT' && c.getAttribute('data-player-target');}).length>0;
-  }));
+  for (const category of modCategories.map(n=>n.getAttribute('data-mod-category'))) {
+    const current=()=>find(n=>n.getAttribute('data-mod-category')===category)[0];
+    if (!current().open) {
+      ck('closed '+category+' postpones rendering its controls', !current().find(n=>n.tagName==='INPUT').length);
+      current().open=true;current().fire('toggle');
+    }
+    ck(category+' retains icon groups and editable fields when open',
+      current().find(n=>n._cls().includes('pb-section')).length>0
+      && current().find(n=>n.tagName==='INPUT' && n.getAttribute('data-player-target')).length>0);
+  }
   const modSearch=find(function(n) {return n.tagName==='INPUT' && n.getAttribute('type')==='search';})[0];
   modSearch.value='Crafted Intrinsic';modSearch.fire('input');
   ck('search can select the crafted category without mixing the others',
@@ -268,6 +280,8 @@ setTimeout(async function () {
   const visualAll=find(n=>n.tagName==='INPUT' && n.getAttribute('type')==='checkbox')[0];
   visualAll.checked=true;visualAll.fire('change');
   const modGrid=MODEL.playerBalance.pages.find(p => p.id==='weapon-mods').grids.find(g => g.iconEditor);
+  const modFold=find(n=>n.tagName==='DETAILS' && n.children[0].textContent===modGrid.subsection)[0];
+  if (!modFold.open) {modFold.open=true;modFold.fire('toggle');}
   const modRow=modGrid.rows[0], modEditor=modGrid.iconEditor;
   const originalVisual=(((W.player.tables || {}).WeaponMod || {})[modRow.id] || {})[modEditor.column];
   const baseVisual=String(modRow.baseline[modEditor.column]);
@@ -290,6 +304,7 @@ setTimeout(async function () {
   modPicker().value='';modPicker().fire('change');
   ck('default restores the official mod visual and group', modRow.sectionKey===modEditor.assets[baseVisual].thumbnail
      && modPicker().value==='');
+  visualAll.checked=false;visualAll.fire('change');
   if (originalVisual!==undefined) W.player.tables.WeaponMod[modRow.id][modEditor.column]=originalVisual;
   const iconPlayer=JSON.stringify(W.player);
   const modPage=MODEL.playerBalance.pages.find(p=>p.id==='weapon-mods'), originalModGrids=modPage.grids;
@@ -490,6 +505,9 @@ setTimeout(async function () {
   SEL='pb:traits';render();
   ck('traits have score subsections', find(function(n) {return n.tagName==='SUMMARY' && n.textContent.startsWith('Trait score ');}).length>1);
   ck('trait effects display their owners', find(function(n) {return n._cls().includes('pb-section-name');}).length>0);
+  const pagedTraits=MODEL.playerBalance.pages.find(p=>p.id==='traits').grids.find(g=>g.rows.length>ROWS_PER_PAGE);
+  const traitFold=find(n=>n.tagName==='DETAILS' && n.children[0].textContent===pagedTraits.subsection)[0];
+  if (!traitFold.open) {traitFold.open=true;traitFold.fire('toggle');}
   ck('traits are paginated', find(function(n) {return n.tagName==='BUTTON' && n.textContent==='Next' && !n.disabled;}).length>0);
   const next = find(function(n) {return n.tagName==='BUTTON' && n.textContent==='Next' && !n.disabled;})[0];
   next.fire('click');

@@ -336,8 +336,9 @@ explicit overrides, including zero. Leverage and linked bonus grids show fields
 with at least one nonzero baseline. Weapon and weapon-mod tables grow with
 the page instead of using an inner vertical scrollbar; wide tables retain
 horizontal scrolling. Names stay fixed while the grid scrolls horizontally;
-large catalogs are searchable and paginated. Red marks overrides or a global
-implant multiplier; yellow marks other nonzero baselines.
+large catalogs are searchable and paginated. Teal marks overrides or an applied
+global implant multiplier. Gold highlights baselines. A violet edge marks a
+pending edit, and red marks a value the editor flagged as invalid.
 
 Weapons, weapon mods, consumables and implants default to ascending Cost.
 PL, rarity and cost columns stay immediately after the name when visible. Melee and SMG rows first
@@ -761,7 +762,8 @@ and conflicting manual ownership remain explicit instead of showing a guessed
 result. This previews the next export; it does not report what is installed in
 the running game.
 
-Explicit overrides are red. Nonzero numeric baselines are yellow, except that
+The grid uses the cell colors described under Player Balance. Nonzero numeric
+baselines are highlighted, except that
 JobNode BuyCost 1 and Talent baselines stay plain. Text baselines stay plain.
 
 **Remove** is available only on upgrade nodes with a positive `SubTree`.
@@ -907,6 +909,15 @@ negative assignments, text columns, arithmetic terms and clone preservation.
   export scopes, every catalog row and all unsaved edits. Verification:
   `python gui/test_navigation.py` and `python gui/test_navigation.py --ui`.
 - **Help text.** Uses `uiDoc`, falling back to `doc`. At render time `strip_maintainer_marks` removes evidence tags (`[measured …]` etc.), parentheticals made up entirely of citations, and a trailing citation. The schema files are not changed.
+- **Page links and drafts.** The URL records the open page. Back and Forward move
+  between pages, and returning to a catalog restores its filter and column
+  display. Applying the current game directory keeps the draft. Switching data
+  sources offers to save the draft, discard it, or cancel.
+- **Loading.** The browser requests settings with `/api/model?view=editor`. A
+  separate catalog index supplies sidebar entries. Catalog pages load when
+  opened, and the server reuses player catalog data while the source fingerprints
+  match. Large grids paginate, and closed subsections build their controls when
+  opened.
 - Per-sheet notes render inside a closed `<details>`, and their text stays in the DOM.
 - **Grid column width** (`app.html:colWidth`): 120% of the widest content plus 2ch, capped at 44ch.
 
@@ -915,7 +926,9 @@ Display-only tables in `serve.py` (none of them changes what is read or written)
 ## Security
 
 - Binds `127.0.0.1` only.
-- GET serves only `/` and `/app.html` (the same fixed file) and `/api/model`. POST serves `/api/validate`, `/api/save`, `/api/settings` and `/api/quit`. No request path is ever mapped to a file.
+- GET serves the fixed page, model, and data status. POST routes handle catalog
+  reads, editing, validation, settings, and Modkit operations. No request path
+  is mapped to a file.
 - Every request must have a matching `Host` (otherwise 421). Every API request, including `/api/model`, needs the per-process token in `X-CKF-Token`, and a present `Origin` must match. The server substitutes the token into the page when it serves it.
 - POST bodies are capped at 32 MB. Responses send a restrictive `Content-Security-Policy`, `nosniff` and `no-store`.
 - The only path a client can supply is the game/config directory. Filenames come from the schemas' `targets`.
@@ -967,8 +980,6 @@ python gui\serve.py --selftest --frozen-exe dist\CKF-Config-Editor.exe
 
 ## Known issues
 
-- **A refused save discards all pending edits.** The Save handler calls `await load()` unconditionally after `/api/save` (`app.html:3113`), which rebuilds the working copy. **Validate** doesn't reload.
-- **Nav rows can't be reached by keyboard.** Each `.navitem` is a `div` with `onclick` and no `tabindex` or `role` (`app.html:1616-1620`). The `<summary>` and the gate checkboxes inside it can be focused.
 - **Stale source comments in `serve.py`.** The module docstring (`serve.py:14-27`) still describes the 3.x layout (a one-key `.cfg`, `ckf.hardmode.json`, sheets not owned). `serve.py:1056-1060` says the editor never writes overlay files. `serve.py:209-215` says "these four tables" and "nothing else in this file names … a column", but there are more tables, and `overlay_labels` checks for a column literally named `Cost` (`serve.py:1699-1700`).
 
 ## Related

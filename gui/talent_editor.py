@@ -53,7 +53,8 @@ def icon_rules(overlays):
     return rules
 
 
-def catalog(overlays, database, attribute_columns, attribute_always, talent_excluded, document=None, config_dir=None):
+def catalog(overlays, database, attribute_columns, attribute_always, talent_excluded,
+            document=None, config_dir=None, tag=None):
     result = {'pages': {}, 'error': None}
     if database is False:
         return result
@@ -79,7 +80,8 @@ def catalog(overlays, database, attribute_columns, attribute_always, talent_excl
                         row[col] = str(int(pb.effective(document, 'Talent', row, col)))
             by_sheet = {(ov['table'].removesuffix('Model'), rel.split('.')[-2]): (rel, ov)
                         for rel, ov in overlays.items() if ov.get('catalogOrder', 100) < 100}
-            for tag, job in tc.JOBS.items():
+            jobs = tc.JOBS.items() if tag is None else ((tag, tc.JOBS[tag]),)
+            for tag, job in jobs:
                 nodes, parents, owners = tc.catalog({t + 'Model': r for t, r in topology.items()}, job)
                 carry = {rid for rid, r in nodes.items() if int(r['CarryItemClass']) > 0}
                 carry.update(r['SubTree'] for rid, r in nodes.items() if rid in carry and int(r['SubTree']) > 0)
@@ -208,3 +210,26 @@ def catalog(overlays, database, attribute_columns, attribute_always, talent_excl
         result['error'] = str(exc)
         result['pages'] = {}
     return result
+
+
+def pack_choices(page):
+    """Share identical suggestion lists across columns and per-row overrides."""
+    pools, indexes = [], {}
+
+    def reference(options):
+        key = tuple((option['value'], option['label']) for option in options)
+        if key not in indexes:
+            indexes[key] = len(pools)
+            pools.append(options)
+        return indexes[key]
+
+    def column(col):
+        result = dict(col)
+        if 'options' in col:
+            result['options'] = reference(col['options'])
+        if 'rowOptions' in col:
+            result['rowOptions'] = {row: reference(options) for row, options in col['rowOptions'].items()}
+        return result
+
+    grids = [dict(grid, columns=[column(col) for col in grid['columns']]) for grid in page['grids']]
+    return {'page': dict(page, grids=grids), 'choices': pools}

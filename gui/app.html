@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#171b23">
 <title>CKF Balance Editor</title>
 <style>
 :root{
@@ -10,10 +11,7 @@
   --ink:#e6e8ec; --dim:#9aa1ad; --faint:#6b7280;
   --on:#3ea76a; --off:#7b8494; --unknown:#c9973f; --danger:#d0564a;
   --accent:#5b8dd6; --unsetbg:#20242c;
-  /* The sticky header's height, in one place. It was written as a bare 58px in
-     three rules (nav top, nav max-height, main min-height) and they had to be
-     kept in step by hand; the density pass changed the header and would have
-     had to change all three. */
+  /* The toolbar observer updates this fallback once the header is measured. */
   --hh:44px;
 }
 /* DENSITY. One window, one user, tabular numeric data, long sessions: width
@@ -21,7 +19,7 @@
    should not scroll sideways inside a pane narrower than itself. Base is 14.5px
    and the nav is 244px. */
 *{box-sizing:border-box}
-html{height:100%}
+html{height:100%;color-scheme:dark;scroll-padding-top:calc(var(--hh) + 10px)}
 body{margin:0;min-height:100%}
 body{background:var(--bg);color:var(--ink);
   font:14.5px/1.45 ui-sans-serif,system-ui,"Segoe UI",Roboto,sans-serif}
@@ -31,7 +29,12 @@ header{position:sticky;top:0;z-index:20;background:var(--panel);
   border-bottom:1px solid var(--line);padding:7px 14px;display:flex;gap:10px;
   align-items:center;flex-wrap:wrap}
 header h1{font-size:15px;margin:0 10px 0 0;font-weight:600;letter-spacing:.2px}
-header input[type=text]{width:min(44ch,32vw)}
+header input[type=text]{width:min(44ch,32vw);min-width:0;flex:1 1 auto}
+.path-tools,.save-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0}
+.save-tools{flex-wrap:nowrap}
+.skip-link{position:fixed;top:6px;left:8px;z-index:30;padding:7px 10px;background:var(--panel);transform:translateY(-150%)}
+.skip-link:focus{transform:none}
+#nav-toggle{display:none}
 input,select,button,textarea{font:inherit;color:var(--ink);background:var(--panel2);
   border:1px solid var(--line);border-radius:5px;padding:3px 7px}
 input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:-1px}
@@ -43,7 +46,7 @@ button.warn{background:#4a2320;border-color:#7d3a34}
 main{display:flex;align-items:flex-start;gap:0;min-height:calc(100% - var(--hh))}
 nav{width:244px;flex:0 0 244px;border-right:1px solid var(--line);
   padding:8px 0;position:sticky;top:var(--hh);max-height:calc(100vh - var(--hh));
-  overflow:auto}
+  overflow:auto;scroll-padding-top:44px;overscroll-behavior:contain}
 
 /* THE NAV ROW READS NAME FIRST.
    A section can hold many slices (Cyberware has twelve), and a row that drew
@@ -55,9 +58,10 @@ nav .navitem{display:flex;gap:7px;align-items:center;padding:4px 6px 4px 11px;
   cursor:pointer;border-left:3px solid transparent;min-width:0}
 nav .navitem:hover{background:var(--panel)}
 nav .navitem.sel{background:var(--panel);border-left-color:var(--accent)}
-nav .navitem .nm{flex:1 1 auto;min-width:0;overflow:hidden}
-nav .navitem .nm b{display:block;font-weight:600;white-space:nowrap;
-  overflow:hidden;text-overflow:ellipsis}
+nav .navitem .nm{flex:1 1 auto;min-width:0;color:var(--ink);text-decoration:none;overflow-wrap:anywhere}
+nav .navitem .nm b{display:block;font-weight:600;line-height:1.3;padding:2px 0}
+nav .navitem .nm:hover{text-decoration:underline;text-underline-offset:3px}
+nav .navitem .nm[aria-current="page"]{color:var(--accent)}
 nav .navitem .tog{flex:0 0 auto;margin:0}
 nav .navitem .pill{flex:0 0 auto}
 
@@ -83,6 +87,9 @@ nav .navgroup{padding:11px 11px 3px;font-size:11px;font-weight:700;
 nav .navnote{padding:1px 11px 6px;font-size:11.75px;color:var(--faint);
   line-height:1.35}
 section#panel{flex:1;min-width:0;padding:12px 16px 80px}
+#panel :is(h2,h3){text-wrap:pretty}
+#panel:focus{outline:none}
+#panel :is(h2,h3):focus-visible{outline:2px solid var(--accent);outline-offset:4px}
 @media (max-width:1180px){
   nav{width:208px;flex:0 0 208px}
   section#panel{padding:10px 11px 80px}
@@ -102,8 +109,11 @@ section#panel{flex:1;min-width:0;padding:12px 16px 80px}
 p.doc{margin:6px 0 0}
 p.doc+p.doc{margin-top:7px}
 .meta{color:var(--faint);font-size:12.25px;margin-top:4px;max-width:110ch}
-.field{display:grid;grid-template-columns:20ch 1fr;gap:11px;padding:7px 0;
+.field{display:grid;grid-template-columns:minmax(0,20ch) minmax(0,1fr);gap:11px;padding:7px 0;
   border-top:1px solid var(--line)}
+.field.full-width{grid-template-columns:minmax(0,1fr)}
+.field input[type=text],.field select{max-width:100%}
+.field code,.banner li{overflow-wrap:anywhere}
 .field:first-of-type{border-top:0}
 .field.disabled{opacity:.5}
 .field label.lab{font-weight:600}
@@ -112,7 +122,7 @@ p.doc+p.doc{margin-top:7px}
    subsystem. It sits at the top of the header card and is the most
    consequential control on the page, so it gets a wider label column than an
    ordinary lever and its box and state word sit on one line. */
-.field.gate{grid-template-columns:24ch 1fr;align-items:start;border-top:0;
+.field.gate{grid-template-columns:minmax(0,24ch) minmax(0,1fr);align-items:start;border-top:0;
   margin-top:6px;padding-top:9px;border-top:1px solid var(--line)}
 .field.gate label.lab{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .field.gate label.lab code{flex:0 0 100%}
@@ -144,7 +154,7 @@ table.grid td.axis{position:sticky;left:0;background:var(--panel2);
   padding:3px 7px;font-weight:600;z-index:1}
 table.grid td{font-size:13px}
 table.grid td.ro{padding:3px 7px}
-table.grid td input{border:0;border-radius:0;background:transparent;width:11ch;
+table.grid td input{border:0;border-radius:0;background:transparent;width:11ch;font-variant-numeric:tabular-nums;
   padding:3px 7px}
 table.grid td.unset input{background:var(--unsetbg)}
 table.grid td.unset{background:
@@ -193,17 +203,30 @@ table.grid th.constant,table.grid td.constant{opacity:.62}
    variant-pairing case asserts that a row outside the variant family carries no
    pill, so anything added inside a <tr> risks reading as one. A class on the td
    is neither. */
-table.grid td.dirty input{box-shadow:inset 3px 0 0 var(--accent)}
+table.grid td.dirty :is(input,select){box-shadow:inset 3px 0 0 #d9b4fe}
 /* The cell a refusal named. Distinct from `bad` (which this page decided) so
    that "the server said no to THIS cell" and "this does not parse" do not wear
    the same colour. */
 table.grid td.refused input{background:#3a1d1a;color:#ffb4aa;
   box-shadow:inset 3px 0 0 var(--danger)}
 table.grid td.editable input::placeholder{color:var(--faint);font-style:italic}
-table.grid td.shipped-interesting,table.grid td.shipped-interesting input{background:#403817;color:#ffe28a;opacity:1}
-table.grid td.shipped-interesting input::placeholder{color:#ffe28a;opacity:1}
-table.grid td.overlay-overwrite,table.grid td.overlay-overwrite input{background:#482326;color:#ffb5b9;opacity:1}
-table.grid td.overlay-overwrite input::placeholder{color:#ffb5b9;opacity:1}
+.shipped-interesting{--cell-bg:#3b3422;--cell-ink:#f6d88d}
+.overlay-overwrite{--cell-bg:#173f48;--cell-ink:#9ce8ea}
+table.grid td:is(.shipped-interesting,.overlay-overwrite),
+table.grid td:is(.shipped-interesting,.overlay-overwrite) :is(input,select){
+  background:var(--cell-bg);color:var(--cell-ink);opacity:1}
+table.grid td:is(.shipped-interesting,.overlay-overwrite) input::placeholder{color:var(--cell-ink);opacity:1}
+table.grid td:is(.bad,.refused) input{background:#4b2526;color:#ffd0cb}
+table.grid td:is(.bad,.refused) input::placeholder{color:#ffd0cb}
+.cell-key{display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap;margin:8px 0;color:var(--dim);font-size:12.5px}
+.cell-key span{display:inline-flex;align-items:center;gap:5px}
+.cell-key i{width:16px;height:12px;border:1px solid var(--line);border-radius:2px;
+  background:var(--cell-bg,var(--panel2));color:var(--cell-ink,var(--ink))}
+.cell-key i.dirty{border-left:3px solid #d9b4fe}
+.cell-key i.bad{background:#4b2526;border-color:#d97970}
+.overlay-sheet{border-top:1px solid var(--line);padding:5px 0}
+.overlay-sheet>summary{cursor:pointer;overflow-wrap:anywhere;padding:5px 3px;font-weight:600}
+.overlay-sheet>.field>div:first-child{display:none}
 table.grid td.shipped-interesting .small,table.grid td.overlay-overwrite .small{color:inherit}
 table.grid td.annotation{white-space:normal;width:24rem;min-width:22rem;max-width:28rem;line-height:1.4}
 table.grid td.annotation .node-name{display:block;font-weight:600}
@@ -263,7 +286,6 @@ table.pb-grid th{min-width:0;max-width:none!important;white-space:nowrap;word-br
 .pb-grid .pb-service{padding:4px 7px;color:var(--dim);white-space:normal;font-size:12px;line-height:1.35}
 .pb-grid .pb-icon select{width:100%;font-size:13px}
 .pb-grid .pb-icon small{display:block;font-size:11px;margin-top:3px;color:var(--dim)}
-.pb-grid td.overlay-overwrite select{background:#482326;color:#ffb5b9}
 .pb-subsection{margin:18px 0}
 .pb-category>.pb-subsection{margin:12px 0 16px 12px}
 .pb-subsection>summary{font-size:18px;font-weight:600;cursor:pointer;margin:0 0 10px}
@@ -280,8 +302,6 @@ body.technical .pb-grid .pb-name small{display:block}
 .pb-rule{margin:16px 0}
 .pb-rule p{margin:5px 0}
 .pb-rule small{color:var(--faint);overflow-wrap:anywhere}
-.pb-grid td.overlay-overwrite input{background:#482326;color:#ffb5b9}
-.pb-grid td.shipped-interesting input{background:#403817;color:#ffe28a}
 .pb-grid td input::placeholder{opacity:1;color:inherit;font-style:normal}
 .pb-grid td.readonly{color:var(--dim);padding:5px 8px}
 .pb-nav summary{cursor:pointer;padding:9px 12px;font-weight:600;color:var(--dim)}
@@ -299,27 +319,57 @@ nav .nav-owner-heading .navitem{padding:0;border:0;font-size:inherit}
 .pb-multiplier input{width:7ch}
 table.grid td.annotation{min-width:16rem;width:19rem;max-width:23rem}
 table.grid th{overflow-wrap:normal}
-@media(max-width:780px){header{position:static;flex-wrap:wrap}nav{position:static;width:174px;flex-basis:174px}
-  .pb-heading{align-items:flex-start;flex-direction:column}}
-button:focus-visible,summary:focus-visible,.navitem:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+table.grid:not(.pb-grid):not(.class-grid) th{overflow-wrap:anywhere}
+@media(max-width:780px){
+  #nav-toggle{display:inline-block}
+  main{display:block}
+  nav{display:none;position:static;width:auto;max-height:48vh;border-bottom:1px solid var(--line)}
+  body.nav-open nav{display:block}
+  .pb-heading{align-items:flex-start;gap:4px;flex-direction:column}
+  .path-tools{flex:1 1 260px}
+  .field,.field.gate{grid-template-columns:minmax(0,1fr);gap:5px}
+  .pb-grid .pb-name{position:static}
+  .page-grid-wrap .pb-grid thead th.pb-name{position:relative}
+}
+button:focus-visible,summary:focus-visible,.nm:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+dialog{max-width:min(34rem,calc(100vw - 24px));padding:18px;color:var(--ink);background:var(--panel);
+  border:1px solid var(--line);border-radius:8px}
+dialog::backdrop{background:#10141caa}
+dialog h2{font-size:18px;margin:0}
+dialog form{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 </style>
 </head>
 <body>
 
+<a class="skip-link" href="#panel">Skip to editor</a>
 <header>
   <h1>CKF Balance Editor</h1>
-  <label class="small" for="gamedir">Game directory</label>
-  <input type="text" id="gamedir" spellcheck="false">
-  <button id="applydir">Apply</button>
-  <span id="probe"></span>
+  <button id="nav-toggle" type="button" aria-expanded="false" aria-controls="index">Pages</button>
+  <div class="path-tools">
+    <label class="small" for="gamedir">Game directory</label>
+    <input type="text" id="gamedir" spellcheck="false" autocomplete="off">
+    <button id="applydir">Apply</button>
+    <span id="probe"></span>
+  </div>
   <span class="spacer"></span>
-  <span id="dirty" class="small"></span>
-  <button id="revalidate">Validate</button>
-  <button id="save" class="primary">Save</button>
+  <div class="save-tools">
+    <span id="dirty" class="small" role="status"></span>
+    <button id="revalidate">Validate</button>
+    <button id="save" class="primary">Save</button>
+  </div>
   <label class="small"><input type="checkbox" id="technical"> Technical details</label>
 </header>
 
-<div id="banners" style="padding:10px 16px 0"></div>
+<div id="banners" aria-live="polite" style="padding:10px 16px 0"></div>
+<dialog id="pending-dialog" aria-labelledby="pending-title">
+  <h2 id="pending-title">Pending edits</h2>
+  <p>Save your edits before changing the data source, or discard them and continue.</p>
+  <form method="dialog">
+    <button value="cancel" autofocus>Cancel</button>
+    <button value="discard" class="warn">Discard edits</button>
+    <button value="save" class="primary">Save and continue</button>
+  </form>
+</dialog>
 
 <details class="card" style="margin:0 16px 10px" id="modkit-export">
   <summary>Workshop export</summary>
@@ -344,8 +394,8 @@ button:focus-visible,summary:focus-visible,.navitem:focus-visible{outline:2px so
 </details>
 
 <main>
-  <nav id="index"></nav>
-  <section id="panel"></section>
+  <nav id="index" aria-label="Editor pages"></nav>
+  <section id="panel" tabindex="-1" aria-label="Editing page"><p role="status">Loading editor…</p></section>
 </main>
 
 <script>
@@ -849,13 +899,16 @@ const $ = function (s, r) { return (r || document).querySelector(s); };
 function pinPageTableHeaders() {
   const header=document.querySelector('body > header');
   const top=header ? Math.max(0,header.getBoundingClientRect().bottom) : 0;
+  const positions=[];
   for (const table of document.querySelectorAll('.page-grid-wrap table.grid')) {
     const head=table.querySelector('thead');
     if (!head) continue;
     const rect=table.getBoundingClientRect();
     const distance=Math.max(0,Math.min(top-rect.top,rect.height-head.offsetHeight));
-    head.style.transform='translateY('+distance+'px)';
+    positions.push([head,'translateY('+distance+'px)']);
   }
+  for (const [head,transform] of positions)
+    if (head.style.transform!==transform) head.style.transform=transform;
 }
 let pinHeadersPending=false;
 function schedulePinnedHeaders() {
@@ -864,9 +917,16 @@ function schedulePinnedHeaders() {
   window.requestAnimationFrame(function() {pinHeadersPending=false;pinPageTableHeaders();});
 }
 if (window.addEventListener) {
-  window.addEventListener('scroll',schedulePinnedHeaders,{passive:true,capture:true});
+  window.addEventListener('scroll',schedulePinnedHeaders,{passive:true});
   window.addEventListener('resize',schedulePinnedHeaders,{passive:true});
-  if (window.ResizeObserver) new ResizeObserver(schedulePinnedHeaders).observe(document.body);
+  if (window.ResizeObserver) {
+    const toolbar=document.querySelector('body > header');
+    new ResizeObserver(function() {
+      document.documentElement.style.setProperty('--hh',Math.ceil(toolbar.getBoundingClientRect().height)+'px');
+      schedulePinnedHeaders();
+    }).observe(toolbar);
+    new ResizeObserver(schedulePinnedHeaders).observe(document.body);
+  }
 }
 const el = function (tag, attrs, kids) {
   const n = document.createElement(tag);
@@ -890,6 +950,14 @@ let LAST_SAVE = null;
 const PLAYER_NAV_OPEN = {};
 const MOD_NAV_OPEN = {};
 const PLAYER_SORT = {}; // View preferences only; never saved as tuning.
+const PLAYER_VIEW = new Map();
+const OVERLAY_PAGE = new Map();
+const OVERLAY_OPEN = new Map();
+const ROWS_PER_PAGE = 75;
+let CATALOG_INDEX = null;
+let PAGE_CATALOGS = new Map();
+let WORKING_REQUEST = false;
+let RELOAD_REQUIRED = false;
 let HIDE_UNUSED_ARMOR = false;
 const PLAYER_PREVIEW_STATE = {revision:0,error:'',destination:null,promise:null};
 // What the requires enforcement did to the working copy since the last
@@ -919,6 +987,66 @@ async function api(path, body) {
   const text = await r.text();
   if (!r.ok) throw new Error(path + ': ' + r.status + ' ' + text.slice(0, 400));
   return JSON.parse(text);
+}
+
+function selectionURL(id) {return '#page='+encodeURIComponent(id);}
+
+function selectionFromURL() {
+  const hash=window.location && window.location.hash;
+  if (!hash || !hash.startsWith('#page=')) return null;
+  try {return decodeURIComponent(hash.slice(6));} catch (_) {return null;}
+}
+
+function selectPage(id, push) {
+  if (WORKING_REQUEST) return;
+  SEL=id;
+  const section=sectionOf(id);
+  const page=MODEL.playerBalance.pages.find(function(p) {return SEL==='pb:'+p.id;});
+  const owner=section ? section.owner : page && page.owner;
+  if (owner) MOD_NAV_OPEN[owner]=true;
+  if (page && page.group) PLAYER_NAV_OPEN[owner+':'+page.group]=true;
+  if (push && window.history && window.location.hash!==selectionURL(id))
+    window.history.pushState(null,'',selectionURL(id));
+  render();
+  if (window.scrollTo) window.scrollTo(0,0);
+  revealActiveLink();
+  focusPageHeading();
+}
+
+function revealActiveLink() {
+  const nav=$('#index');
+  const link=$('[aria-current="page"]',nav);
+  if (!link || !nav.clientHeight) return;
+  const row=link.getBoundingClientRect(), view=nav.getBoundingClientRect();
+  if (row.top<view.top+44) nav.scrollTop-=view.top+44-row.top;
+  else if (row.bottom>view.bottom) nav.scrollTop+=row.bottom-view.bottom+6;
+}
+
+function focusPageHeading() {
+  const panel=$('#panel');
+  const heading=$('h2',panel) || $('h3',panel) || panel;
+  if (heading.focus) {
+    heading.setAttribute('tabindex','-1');
+    heading.focus({preventScroll:true});
+  }
+}
+
+function pageLink(id, title, selected) {
+  return el('a',{class:'nm',href:selectionURL(id),'aria-current':selected ? 'page' : null,
+    onclick:function(e) {
+      if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || (e.button && e.button!==0)) return;
+      e.preventDefault();
+      setMobileNav(false);
+      selectPage(id,true);
+    }},[el('b',{text:title})]);
+}
+
+function setMobileNav(open) {
+  const toggle=$('#nav-toggle');
+  if (!toggle) return;
+  if (open) document.body.classList.add('nav-open');
+  else document.body.classList.remove('nav-open');
+  toggle.setAttribute('aria-expanded',String(open));
 }
 
 // ---------------------------------------------------------------------------
@@ -1323,9 +1451,10 @@ function dirtyPaths() {
     out.push(c.rel + ':' + c.key.join('/') + '.' + c.col);
   for (const c of enemyRuleChanges().cells) out.push('Enemy rule '+c.id+'.'+c.column);
   for (const c of enemyArmorChanges().cells) out.push('Enemy armor '+c.id+'.'+c.column);
-  for (const c of playerChanges().cells) out.push(c.table + ':' + c.id + '.' + c.column);
-  if (playerChanges().removedJobNodes) out.push('Removed job nodes');
-  for (const k of Object.keys(playerChanges().implantMultipliers)) out.push('All cyberware:' + k);
+  const player=playerChanges();
+  for (const c of player.cells) out.push(c.table + ':' + c.id + '.' + c.column);
+  if (player.removedJobNodes) out.push('Removed job nodes');
+  for (const k of Object.keys(player.implantMultipliers)) out.push('All cyberware:' + k);
   if (partyChanged()) out.push('Party Size Mod: maximum');
   if (contactChanged()) out.push('Faster Contact Limit Breaks: turns');
   return out;
@@ -1777,7 +1906,7 @@ function navItem(sec) {
   // nav. A section of MANY folds both into a summary, because twelve pills in
   // a 244px row crowd the name exactly as twelve boxes did. Every pill and
   // every box is still there, one click away, each beside its own page's name.
-  const kids = [el('div', { class: 'nm' }, [el('b', { text: sec.title })])];
+  const kids = [pageLink(sec.id,sec.title,SEL===sec.id)];
   if (ents.length === 1) {
     const tg = gateToggle(ents[0]);
     if (tg) kids.push(tg);
@@ -1789,7 +1918,6 @@ function navItem(sec) {
     class: 'navitem' + (SEL === sec.id ? ' sel' : ''),
     'data-section-id': sec.id,
     title: why || 'no enable gate',
-    onclick: function () { SEL = sec.id; render(); },
   }, kids);
 }
 
@@ -1811,6 +1939,7 @@ function groupEmptyWhy(g) {
 // Owning mods form the outer level; existing categories stay inside each mod.
 function renderIndex() {
   const nav = $('#index');
+  const scroll = nav.scrollTop;
   nav.textContent = '';
   const ng = MODEL.navGroups || {groups:[],ungrouped:[]};
   const byId = {};
@@ -1843,7 +1972,9 @@ function renderIndex() {
         if (!groups[page.group]) {
           const key = owner.id + ':' + page.group;
           const open = PLAYER_NAV_OPEN[key] === undefined
-            ? !['Drone weapons','Drone armors','Cyberware modules'].includes(page.group) : PLAYER_NAV_OPEN[key];
+            ? pages.some(function(p) {return p.owner===owner.id && p.group===page.group && SEL==='pb:'+p.id;})
+              || !['Drone weapons','Drone armors','Cyberware modules'].includes(page.group)
+            : PLAYER_NAV_OPEN[key];
           const det = el('details', {class:'pb-nav',open:open}, [el('summary', {text:page.group})]);
           det.addEventListener('toggle', function () {PLAYER_NAV_OPEN[key] = det.open;});
           groups[page.group] = det;
@@ -1852,18 +1983,14 @@ function renderIndex() {
         parent = groups[page.group];
       }
       parent.appendChild(el('div', {
-        class:'navitem' + (SEL === 'pb:' + page.id ? ' sel' : ''),role:'button',tabindex:'0','data-player-page':page.id,
-        onclick:function () {SEL='pb:'+page.id;render();},
-        onkeydown:function (e) {if (e.key==='Enter' || e.key===' ') {e.preventDefault();SEL='pb:'+page.id;render();}}
-      }, [el('div', {class:'nm'}, [el('b', {text:page.title})])]));
+        class:'navitem' + (SEL === 'pb:' + page.id ? ' sel' : ''),'data-player-page':page.id,
+      }, [pageLink('pb:'+page.id,page.title,SEL==='pb:'+page.id)]));
     }
   }
   for (const owner of (MODEL.modOwners || [])) {
     if (owner.standalone) {
-      const item=el('div', {class:'navitem' + (SEL===owner.selection ? ' sel' : ''),role:'button',tabindex:'0',
-        'data-rule-mod':owner.standalone,onclick:function () {SEL=owner.selection;render();},
-        onkeydown:function (e) {if (e.key==='Enter' || e.key===' ') {e.preventDefault();SEL=owner.selection;render();}}
-      }, [el('div', {class:'nm'}, [el('b', {text:owner.title})])]);
+      const item=el('div', {class:'navitem' + (SEL===owner.selection ? ' sel' : ''),'data-rule-mod':owner.standalone},
+        [pageLink(owner.selection,owner.title,SEL===owner.selection)]);
       nav.appendChild(el('section', {class:'nav-owner','data-mod-owner':owner.id,'aria-label':owner.title},
         [el('h2', {class:'nav-owner-heading'}, [item])]));
       continue;
@@ -1877,9 +2004,12 @@ function renderIndex() {
     const body=el('div', {class:'nav-owner-body'});
     if (owner.catalogFirst) {renderCatalog(owner,body);renderNative(owner,body);}
     else {renderNative(owner,body);renderCatalog(owner,body);}
+    if (MODEL.deferredCatalogs && owner.catalogFirst && !CATALOG_INDEX)
+      body.appendChild(el('button',{text:'Load catalog pages',onclick:loadCatalogIndex}));
     container.appendChild(body);
     nav.appendChild(container);
   }
+  nav.scrollTop=scroll;
 }
 
 // ---------------------------------------------------------------------------
@@ -2222,8 +2352,11 @@ function refreshConsumableViews(destination) {
         } else pages.push(page);
       }
       MODEL.playerBalance.pages=pages;
-      if (destination && SEL===from && pages.some(function(p) {return p.id===destination;})) SEL='pb:'+destination;
-      PLAYER_PREVIEW_STATE.destination=null;render();return true;
+      PLAYER_PREVIEW_STATE.destination=null;
+      if (destination && SEL===from && SEL!=='pb:'+destination && !WORKING_REQUEST
+          && pages.some(function(p) {return p.id===destination;})) selectPage('pb:'+destination,true);
+      else render();
+      return true;
     } catch(error) {
       if (revision===PLAYER_PREVIEW_STATE.revision) {PLAYER_PREVIEW_STATE.error=error.message;render();}
       return false;
@@ -2277,17 +2410,57 @@ function consumableSelect(grid, row, kind) {
     select.appendChild(el('option',{value:current,text:describe(current).name,title:describe(current).detail || ''}));
   select.value=value ? current : '';
   select.disabled=select.children.length<2 && !value;
-  const td=el('td',{class:'pb-icon'+(value ? ' overlay-overwrite' : ''),title:table+' '+id+'.'+column+'\n'+(describe(current).detail || '')
+  const saved=playerRawValue({table:table,id:id,column:column},true);
+  const td=el('td',{class:'pb-icon'+(value ? ' overlay-overwrite' : '')+(saved!==value ? ' dirty' : ''),title:table+' '+id+'.'+column+'\n'+(describe(current).detail || '')
     + ((!isTag && !isModel && talent.sharedWith.length) ? '\nShared with: '+talent.sharedWith.join(', ') : '')},[select]);
   select.addEventListener('change',function() {
     const records=W.player.tables[table] || (W.player.tables[table]={});
     const record=records[id] || (records[id]={});
     if (select.value && select.value!==base) record[column]=select.value;else delete record[column];
+    td.className='pb-icon'+(record[column] ? ' overlay-overwrite' : '')+((record[column] || '')!==saved ? ' dirty' : '');
     select.disabled=true;updateDirty();
     refreshConsumableViews(isTag ? ((row.acquisition || []).length
       ? 'consumable-'+(record[column] || base) : 'other-consumable-overrides') : null);
   });
   return td;
+}
+
+function playerRawValue(target, saved) {
+  if (target.overlay) return (saved ? MODEL.values.overlays[target.overlay].rows[target.row].cells
+    : W.overlays[target.overlay].cells[target.row])[target.ci] || '';
+  const values=target.enemyRule ? (saved ? MODEL.enemyRules.values : W.enemyRules)
+    : target.enemyArmor ? (saved ? MODEL.enemyArmor.values : W.enemyArmor)
+    : (((saved ? MODEL.playerBalance.document : W.player) || {}).tables || {})[target.table];
+  return ((values || {})[target.id] || {})[target.column] || '';
+}
+
+function cellKey() {
+  return el('div',{class:'cell-key'},[
+    ['overlay-overwrite','Override'],['shipped-interesting','Highlighted baseline'],
+    ['dirty','Pending edit'],['bad','Invalid value'],
+  ].map(function(item) {return el('span',{},[
+    el('i',{class:item[0],'aria-hidden':'true'}),document.createTextNode(item[1]),
+  ]);}));
+}
+
+function pager(key, total, page, change) {
+  function advance(offset) {
+    change(page+offset);
+    if (!document.querySelectorAll) return;
+    const next=Array.from(document.querySelectorAll('.pager')).find(function(node) {
+      return node.getAttribute('data-pager')===key;
+    });
+    if (next) {
+      const [previous,following]=next.querySelectorAll('button');
+      const active=offset<0 ? previous : following;
+      (active.disabled ? (offset<0 ? following : previous) : active).focus({preventScroll:true});
+    }
+  }
+  return el('div',{class:'pb-tools pager','data-pager':key},[
+    el('button',{text:'Previous',disabled:page===0,onclick:function() {advance(-1);}}),
+    el('span',{class:'small',role:'status',text:(page*ROWS_PER_PAGE+1)+'–'+Math.min((page+1)*ROWS_PER_PAGE,total)+' of '+total}),
+    el('button',{text:'Next',disabled:(page+1)*ROWS_PER_PAGE>=total,onclick:function() {advance(1);}}),
+  ]);
 }
 
 function renderPlayer(panel, page) {
@@ -2303,18 +2476,25 @@ function renderPlayer(panel, page) {
       el('span',{text:PLAYER_PREVIEW_STATE.error+' Pending edits are preserved. '}),
       el('button',{text:'Retry view update',onclick:function() {refreshConsumableViews(PLAYER_PREVIEW_STATE.destination);}})]));
   }
-  const search = el('input', {type:'search',placeholder:'Filter by name', 'aria-label':'Filter '+page.title});
-  const showAll = el('input', {type:'checkbox'});
+  if (!PLAYER_VIEW.has(page.id))
+    PLAYER_VIEW.set(page.id,{query:'',showAll:false,pageNumbers:{},openSections:{},searchPage:0});
+  const view=PLAYER_VIEW.get(page.id);
+  const search = el('input', {type:'search',placeholder:'Filter rows…',value:view.query,'aria-label':'Filter '+page.title});
+  const showAll = el('input', {type:'checkbox',checked:view.showAll});
   const toolbar = el('div', {class:'pb-tools'}, [search,
-    el('label', {class:'small'}, [showAll,document.createTextNode(' Show all columns')]),
-    el('span', {class:'small',text:'Red: override · Yellow: nonzero baseline'})]);
+    el('label', {class:'small'}, [showAll,document.createTextNode(' Show all columns')])]);
   if (page.enemyArmor) {
     const hideUnused=el('input',{type:'checkbox',checked:HIDE_UNUSED_ARMOR,'aria-label':'Hide unused armor'});
     hideUnused.addEventListener('change',function() {HIDE_UNUSED_ARMOR=hideUnused.checked;paint();});
     toolbar.appendChild(el('label',{class:'small'},[hideUnused,document.createTextNode(' Hide unused armor')]));
   }
-  if (page.grids.length) panel.appendChild(toolbar);
-  if (page.grids.length) panel.appendChild(el('p', {class:'doc',text:page.enemyRules ? 'Enter a whole number. Clear the cell to use the shipped value. Save, then Prepare Hard Mode + Workshop under Enemy Armors to apply it.' : page.ownershipReference ? 'These entries are managed by '+page.ownerTitle+'. Their read-only fields are retained here for reference.' : page.enemyArmor ? 'Enter whole numbers. Clear a cell to restore its baseline. Save, then Prepare Hard Mode + Workshop to apply changes.' : page.talents ? 'Numbers set values. Clear a cell to restore its baseline. Choose an icon or effect from the field’s suggestions. Save, then send to Modkit.' : 'A number sets the value, including negatives. +10 adds 10; x1.5 multiplies by 1.5. Clear a cell to restore its baseline.'}));
+  if (page.grids.length) {
+    panel.appendChild(toolbar);
+    panel.appendChild(cellKey());
+    panel.appendChild(disclosure('How to edit',[
+      el('p',{class:'legend',text:page.enemyRules ? 'Enter a whole number. Clear the cell to use the shipped value. Save, then Prepare Hard Mode + Workshop under Enemy Armors to apply it.' : page.ownershipReference ? 'These entries are managed by '+page.ownerTitle+'. Their read-only fields are retained here for reference.' : page.enemyArmor ? 'Enter whole numbers. Clear a cell to restore its baseline. Save, then Prepare Hard Mode + Workshop to apply changes.' : page.talents ? 'Numbers set values. Clear a cell to restore its baseline. Choose an icon or effect from the field’s suggestions. Save, then send to Modkit.' : 'A number sets the value, including negatives. +10 adds 10 and x1.5 multiplies by 1.5. Clear a cell to restore its baseline.'}),
+    ],false));
+  }
   if (page.grids.some(function(g) {return g.iconEditor;}))
     panel.appendChild(el('p', {class:'doc',text:page.iconHelp || 'Icon / model changes both visuals. The first choice restores the official assignment. Save, then send to Modkit.'}));
   if (page.grids.some(function(g) {return g.rows.some(function(r) {return r.enemyUse;});}))
@@ -2331,8 +2511,26 @@ function renderPlayer(panel, page) {
   const removedTools=el('div',{class:'pb-tools'});
   if (page.talents) panel.appendChild(removedTools);
   const grids = el('div', {});
-  const pageNumbers = {};
-  const openSections = {};
+  const pageNumbers = view.pageNumbers;
+  const openSections = view.openSections;
+  const suggestions=el('div',{});
+  panel.appendChild(suggestions);
+  const choiceIds=new WeakMap(), choiceSets=new Map();
+  function choiceList(options) {
+    if (!options) return null;
+    if (choiceIds.has(options)) return choiceIds.get(options);
+    const signature=JSON.stringify(options);
+    if (!choiceSets.has(signature)) {
+      const id='choices-'+choiceSets.size;
+      suggestions.appendChild(el('datalist',{id:id},options.map(function(option) {
+        return el('option',{value:option.value,label:option.label});
+      })));
+      choiceSets.set(signature,id);
+    }
+    const id=choiceSets.get(signature);
+    choiceIds.set(options,id);
+    return id;
+  }
   let columnRefreshPending=false;
   function refreshColumnsAfterEdit(grid, shown) {
     if (showAll.checked || columnRefreshPending) return;
@@ -2390,7 +2588,7 @@ function renderPlayer(panel, page) {
     const cellViews = new Map();
     const serviceViews = [];
     const computedViews = [];
-    const query = search.value.toLocaleLowerCase();
+    const query = search.value.trim().toLocaleLowerCase();
     const subsections = {};
     const categories = {};
     const subsectionCounts = {};
@@ -2407,11 +2605,14 @@ function renderPlayer(panel, page) {
           }}));
         }
     }
+    const filtered=[];
+    let total=0;
     for (const grid of page.grids) {
       playerRefreshIconGroups(grid);
       const matches = grid.rows.filter(function (r) {
         if (page.enemyArmor && HIDE_UNUSED_ARMOR && r.unused) return false;
         if (r.nodeId && removed.has(r.nodeId)) return false;
+        if (!query) return true;
         const editor = grid.iconEditor;
         const fields = ((W.player.tables || {})[grid.table] || {})[r.id] || {};
         const assetId = editor ? CKF.playerDisplayValue(fields[editor.column] || '') || r.baseline[editor.column] : '';
@@ -2420,39 +2621,56 @@ function renderPlayer(panel, page) {
           +' '+(grid.blueprintColumn ? playerBlueprint(grid,r).label : '')+' '+(r.origin || '')+' '+(r.cloneOf || '')
           +' '+(r.playerUse ? 'Also used by players' : '')+' '+(r.unused ? 'Unused armor' : '')).toLocaleLowerCase().includes(query);
       });
+      filtered.push({grid:grid,matches:matches,start:total});
+      total+=matches.length;
+    }
+    const searchPage=Math.min(view.searchPage,Math.max(0,Math.ceil(total/ROWS_PER_PAGE)-1));
+    if (query && total>ROWS_PER_PAGE) grids.appendChild(pager('search',total,searchPage,function(number) {
+      view.searchPage=number;paint();
+    }));
+    if (query && !total) grids.appendChild(el('p',{role:'status',class:'small',text:'No matches. Try another search.'}));
+    for (const {grid,matches,start} of filtered) {
       const gridKey = grid.key || grid.table;
       const sortId = page.id+':'+gridKey;
       const sort = PLAYER_SORT[sortId] || grid.defaultSort || {key:'',descending:false};
-      const number = pageNumbers[gridKey] || 0;
-      const rows = grid.unpaginated ? playerSortedRows(grid,matches,sort)
-        : playerSortedRows(grid,matches,sort).slice(number * 75, (number + 1) * 75);
+      const number=Math.min(pageNumbers[gridKey] || 0,Math.max(0,Math.ceil(matches.length/ROWS_PER_PAGE)-1));
+      const firstRow=query ? Math.max(0,searchPage*ROWS_PER_PAGE-start) : number*ROWS_PER_PAGE;
+      const lastRow=query ? (searchPage+1)*ROWS_PER_PAGE-start : firstRow+ROWS_PER_PAGE;
+      if (query && (lastRow<=0 || firstRow>=matches.length) && !grid.warning) continue;
       if (!matches.length && !grid.warning) continue;
       let target = grids;
+      let visible=true;
       if (grid.category) {
         const categoryKey='category:'+grid.category;
         if (!categories[grid.category]) {
           const first=Object.keys(categories).length===0;
+          const open=!!query || (openSections[categoryKey]===undefined ? first : openSections[categoryKey]);
           const det=el('details', {class:'pb-subsection pb-category', 'data-mod-category':grid.category,
-            open:!!query || (openSections[categoryKey]===undefined ? first : openSections[categoryKey])},
+            'data-view-key':categoryKey,open:open},
             [el('summary', {text:grid.category})]);
-          det.addEventListener('toggle', function () {openSections[categoryKey]=det.open;});
+          watchFold(det,categoryKey,open);
           grids.appendChild(det);categories[grid.category]=det;
         }
         target=categories[grid.category];
+        visible=target.open;
       }
       if (grid.subsection) {
         const subsectionKey=JSON.stringify([grid.category || '',grid.subsection]);
         if (!subsections[subsectionKey]) {
           const first=!subsectionCounts[grid.category || ''];
-          const det = el('details', {class:'pb-subsection',open:!!query || (openSections[subsectionKey] === undefined
-            ? (grid.subsectionOpen === undefined ? first : grid.subsectionOpen) : openSections[subsectionKey])},
+          const open=!!query || (openSections[subsectionKey] === undefined
+            ? (grid.subsectionOpen === undefined ? first : grid.subsectionOpen) : openSections[subsectionKey]);
+          const det = el('details', {class:'pb-subsection','data-view-key':subsectionKey,open:open},
             [el('summary', {text:grid.subsection,title:grid.iconPath || ''})]);
-          det.addEventListener('toggle', function () {openSections[subsectionKey] = det.open;});
+          watchFold(det,subsectionKey,open);
           target.appendChild(det);subsections[subsectionKey] = det;
           subsectionCounts[grid.category || '']=(subsectionCounts[grid.category || ''] || 0)+1;
         }
         target = subsections[subsectionKey];
+        visible=visible && target.open;
       }
+      if (!visible) continue;
+      const rows=playerSortedRows(grid,matches,sort).slice(firstRow,Math.max(0,lastRow));
       if (grid.title !== page.title) target.appendChild(el('h3', {text:grid.title}));
       if (['Weapons','Drone weapons','Armor','Drone armors','Cyberware','Cyberware modules','Consumables','Enemy Gear'].includes(page.group)) {
         const sortBy = el('select',{'aria-label':'Sort by '+page.title+' · '+grid.title});
@@ -2476,10 +2694,9 @@ function renderPlayer(panel, page) {
           el('button',{text:'Re-sort',disabled:!sort.key,'aria-label':'Re-sort '+page.title+' · '+grid.title,onclick:changeSort}),
           ...(grid.rows.some(function(r) {return r.section;}) ? [el('span',{class:'small',text:'Within each icon group'})] : [])]));
       }
-      if (!grid.unpaginated && matches.length > 75) target.appendChild(el('div', {class:'pb-tools'}, [
-        el('button', {text:'Previous',disabled:number === 0,onclick:function () {pageNumbers[gridKey] = number - 1;paint();}}),
-        el('span', {class:'small',text:(number * 75 + 1)+'–'+Math.min((number+1)*75,matches.length)+' of '+matches.length}),
-        el('button', {text:'Next',disabled:(number + 1) * 75 >= matches.length,onclick:function () {pageNumbers[gridKey] = number + 1;paint();}})]));
+      if (!query && matches.length>ROWS_PER_PAGE) target.appendChild(pager(gridKey,matches.length,number,function(next) {
+        pageNumbers[gridKey]=next;paint();
+      }));
       if (grid.warning) target.appendChild(el('div', {class:'banner warn',text:grid.warning}));
       const cols = playerDisplayColumns(grid,showAll.checked);
       const showIcon=playerIconVisible(grid,showAll.checked);
@@ -2487,14 +2704,6 @@ function renderPlayer(panel, page) {
       if (!rows.length) continue;
       const tbl = el('table', {class:'grid pb-grid'});
       const widths = cols.map(function (c) {return c.options ? 190 : playerColumnWidth(grid, c);});
-      for (const col of cols.filter(function(c) {return c.options;})) {
-        const listId='choices-'+encodeURIComponent([page.id,gridKey,col.name].join('|'));
-        grids.appendChild(el('datalist',{id:listId},col.options.map(function(option) {
-          return el('option',{value:option.value,label:option.label});
-        })));
-        for (const id in (col.rowOptions || {})) grids.appendChild(el('datalist',{id:listId+'-'+id},
-          col.rowOptions[id].map(function(option) {return el('option',{value:option.value,label:option.label});})));
-      }
       const nameWidth = Math.ceil(Math.max(playerTextWidth('Name',true), ...grid.rows.map(function (r) {
         return Math.max(playerTextWidth(r.name,false)+(r.enemyUse ? 22 : 0),
           r.cloneOf ? playerTextWidth('Clone '+r.id+' (from '+r.cloneOf+')',false) : 0,
@@ -2615,7 +2824,9 @@ function renderPlayer(panel, page) {
             function describe(id, changed) {
               const asset = editor.assets[id] || {};
               td.title = (asset.label || 'Unknown visual')+' · Asset '+id+'\nIcon: '+(asset.thumbnail || '(empty)')+'\n3D model: '+(asset.resource || '(empty)');
-              td.className = 'pb-icon'+(changed ? ' overlay-overwrite' : '');
+              const target={table:grid.table,id:row.id,column:editor.column};
+              td.className = 'pb-icon'+(changed ? ' overlay-overwrite' : '')
+                +(playerRawValue(target,true)!==playerRawValue(target,false) ? ' dirty' : '');
             }
             describe(currentId,!!fields[editor.column]);
             select.addEventListener('change',function () {
@@ -2640,9 +2851,18 @@ function renderPlayer(panel, page) {
           // edited before it, matching the SQL operation order.
           const displayBase = multiplier === 1 ? base : String(playerRound(Number(base) * multiplier));
           const td = el('td', {});
-          function style(v) {td.className = v.trim() !== '' || multiplier !== 1 ? 'overlay-overwrite'
-            : col.literal || col.baselinePlain || String(base)===col.plainBaseline ? '' : Number(base) !== 0 ? 'shipped-interesting' : '';}
-          style(value);
+          function style(v, control) {
+            const highlight=v.trim() !== '' || multiplier !== 1 ? 'overlay-overwrite'
+              : !col.literal && !col.baselinePlain && String(base)!==col.plainBaseline && Number(base)!==0
+                ? 'shipped-interesting' : '';
+            const dirty=playerRawValue(targetCell,true)!==playerRawValue(targetCell,false);
+            const overlay=targetCell.overlay && MODEL.values.overlays[targetCell.overlay];
+            const problem=(control && control.validity && control.validity.badInput) || (overlay ? (CKF.overlayCellProblem(overlay,targetCell.ci,v) || {}).bad
+              : targetCell.enemyRule || targetCell.enemyArmor ? v!=='' && !/^[+-]?\d+$/.test(v)
+              : !col.literal && !CKF.parsePlayerAdjust(v).ok);
+            td.className=[highlight,dirty ? 'dirty' : '',problem ? 'bad' : ''].filter(Boolean).join(' ');
+            if (control) control.setAttribute('aria-invalid',String(!!problem));
+          }
           if (cell.readOnly) {
             td.className = 'readonly';td.textContent = base;
             td.title = cell.readOnlyReason || 'Managed by Hard Mode Fatigue / limit-break traits';
@@ -2658,13 +2878,13 @@ function renderPlayer(panel, page) {
             const input = el('input', {type:targetCell.enemyRule ? 'number' : 'text',...(targetCell.enemyRule ? {step:'1'} : {}),value:value,placeholder:displayBase,spellcheck:'false',
               style:'width:'+(item.width-1)+'px',
               'aria-label':controlLabel,'data-player-target':source,
-              ...(col.options ? {list:'choices-'+encodeURIComponent([page.id,gridKey,col.name].join('|'))
-                + (col.rowOptions && col.rowOptions[row.id] ? '-'+row.id : '')} : {}),
+               list:choiceList((col.rowOptions || {})[row.id] || col.options),
               title:col.label+' · baseline '+base+'\n'+source
                 + ((targetCell.sharedWith || []).length ? '\nShared with: '+targetCell.sharedWith.join(', ') : '')
                 + (multiplier !== 1 ? ' · global ×'+multiplier+' after individual adjustments' : '')});
             const cellKey = JSON.stringify([targetCell.overlay || targetCell.table,targetCell.id,targetCell.column]);
             if (!cellViews.has(cellKey)) cellViews.set(cellKey,[]);
+            style(value,input);
             cellViews.get(cellKey).push({input:input,style:style});
             input.addEventListener('input', function () {
               if (targetCell.enemyRule) W.enemyRules[targetCell.id][targetCell.column]=input.value;
@@ -2676,11 +2896,15 @@ function renderPlayer(panel, page) {
                 if (input.value.trim()) record[targetCell.column] = input.value;
                 else delete record[targetCell.column];
               }
-              for (const view of cellViews.get(cellKey)) {view.input.value=input.value;view.style(input.value);}
+              for (const view of cellViews.get(cellKey)) {
+                if (view.input!==input) view.input.value=input.value;
+                view.style(input.value,view.input);
+              }
               for (const refresh of serviceViews) refresh();
               for (const refresh of computedViews) refresh();
               input.style.width = Math.max(item.width-1, Math.ceil(playerTextWidth(input.value,false)+15))+'px';
-              style(input.value);updateDirty();updateRules();
+              updateDirty();
+              if (col.name===grid.specialRuleColumn) updateRules();
             });
             input.addEventListener('change',function () {refreshColumnsAfterEdit(grid,shownColumns);});
             input.addEventListener('keydown',function(e) {if (e.key==='Enter') refreshColumnsAfterEdit(grid,shownColumns);});
@@ -2695,9 +2919,35 @@ function renderPlayer(panel, page) {
     }
     updateRules();
     schedulePinnedHeaders();
+    function watchFold(det,key,initial) {
+      let open=initial;
+      det.addEventListener('toggle',function() {
+        if (det.isConnected===false || det.open===open) return;
+        open=det.open;
+        if (query) return;
+        openSections[key]=open;
+        if (!open) return;
+        const hadFocus=document.activeElement===det.children[0];
+        paint();
+        if (hadFocus) {
+          const next=Array.from(grids.querySelectorAll('details')).find(function(n) {
+            return n.getAttribute('data-view-key')===key;
+          });
+          if (next) next.children[0].focus({preventScroll:true});
+        }
+      });
+    }
   }
-  search.addEventListener('input',function () {for (const key in pageNumbers) delete pageNumbers[key];paint();});
-  showAll.addEventListener('change',paint);paint();
+  let filterTimer;
+  search.addEventListener('input',function () {
+    view.query=search.value;view.searchPage=0;
+    for (const key in pageNumbers) delete pageNumbers[key];
+    if (!window.setTimeout) {paint();return;}
+    window.clearTimeout(filterTimer);
+    filterTimer=window.setTimeout(function() {if (grids.isConnected) paint();},90);
+  });
+  showAll.addEventListener('change',function() {view.showAll=showAll.checked;paint();});
+  paint();
 }
 
 // One line per group: the short facts read as a run, `absent means` is a
@@ -2734,6 +2984,7 @@ function gateState(sch, f) {
 function formControl(sch, f) {
   const slot = fieldValue(sch, f);
   const ctl = el('div', { class: 'ctl' });
+  const controlId='field-'+encodeURIComponent(sch.subsystem+':'+f.path);
   const commit = function (v, present) {
     slot.value = v;
     if (present !== undefined) slot.present = present;
@@ -2742,7 +2993,7 @@ function formControl(sch, f) {
   };
 
   if (f.type === 'bool') {
-    const cb = el('input', { type: 'checkbox' });
+    const cb = el('input', { id:controlId,type: 'checkbox' });
     cb.checked = !!slot.value;
     // NOT DISABLED WHEN THE KEY IS ABSENT: CfgFile.set_value appends a key
     // the file does not carry, and a .cfg the game has not rewritten may lack
@@ -2752,7 +3003,7 @@ function formControl(sch, f) {
     ctl.appendChild(el('label', { class: 'chk' }, [cb,
       el('span', { text: slot.value ? 'true' : 'false' })]));
   } else if (f.type === 'enum') {
-    const sel = el('select', {});
+    const sel = el('select', {id:controlId});
     for (const v of (f.values || [])) {
       const o = el('option', { value: v, text: v });
       if (String(slot.value) === String(v)) o.selected = true;
@@ -2761,7 +3012,7 @@ function formControl(sch, f) {
     sel.addEventListener('change', function () { commit(sel.value); });
     ctl.appendChild(sel);
   } else if (f.type === 'stringList') {
-    const inp = el('input', { type: 'text', size: '52' });
+    const inp = el('input', { id:controlId, type: 'text', size: '52' });
     inp.value = Array.isArray(slot.value) ? slot.value.join(', ') : (slot.value || '');
     inp.addEventListener('change', function () {
       commit(inp.value.split(',').map(function (s) { return s.trim(); })
@@ -2771,7 +3022,7 @@ function formControl(sch, f) {
     ctl.appendChild(el('span', { class: 'small',
       text: 'comma separated, one line (README.md:88-90)' }));
   } else {
-    const inp = el('input', { type: 'text', size: f.type === 'string' ? '40' : '14' });
+    const inp = el('input', { id:controlId, type: 'text', size: f.type === 'string' ? '40' : '14' });
     inp.value = slot.present ? CKF.fmtCell(slot.value) : '';
     if (!slot.present) inp.placeholder = '— unset —';
     inp.addEventListener('change', function () {
@@ -2817,7 +3068,7 @@ function formControl(sch, f) {
 function fieldRow(sch, f) {
   const gate = gateState(sch, f);
   const row = el('div', { class: 'field' + (gate === true ? '' : ' disabled') });
-  row.appendChild(el('label', { class: 'lab' }, [
+  row.appendChild(el('label', { class: 'lab',for:'field-'+encodeURIComponent(sch.subsystem+':'+f.path) }, [
     document.createTextNode(f.label || f.path),
     pathCode(sch, f),
   ]));
@@ -2839,7 +3090,8 @@ function cellInput(t, f, row, col, opts) {
   const fmt = t.formats[col.name] || '';
   const v = row.cells[col.name];
   const td = el('td', {});
-  const inp = el('input', { type: 'text', spellcheck: 'false' });
+  const inp = el('input', { type: 'text', spellcheck: 'false',
+    'aria-label':(f.label || f.path)+' · '+col.name+(row.id===null ? '' : ' · Row '+row.id) });
   if (opts.width) inp.setAttribute('style', 'width:' + opts.width + 'ch');
   inp.value = CKF.fmtCell(v);
   inp.disabled = !!opts.readonly;
@@ -3391,11 +3643,11 @@ function overlayGroups(sch, ov) {
 //
 // `summary` says how many and what of, so the reader can tell a sheet with
 // nothing to say from one with a page of it without opening anything.
-function disclosure(summary, nodes) {
+function disclosure(summary, nodes, showCount=true) {
   const kids = nodes.filter(Boolean);
   if (!kids.length) return null;
   const det = el('details', { class: 'disc' }, [
-    el('summary', { text: summary + ' (' + kids.length + ')' }),
+    el('summary', { text: showCount ? summary + ' (' + kids.length + ')' : summary }),
   ]);
   const body = el('div', { class: 'discbody' });
   for (const n of kids) body.appendChild(n);
@@ -3424,7 +3676,10 @@ function overlayInput(ov, rel, ri, ci, opts) {
   const orig = String(src[ci] === undefined || src[ci] === null ? '' : src[ci]);
   const ship = ((ov.shipped || {})[String(ri)] || {})[col.name];
   const lab = (ov.labels || {})[col.name];
-  const inp = el('input', { type: 'text', spellcheck: 'false' });
+  const row=(ov.rows[ri] || {}).key || [];
+  const name=(ov.rowLabels || {})[String(row)] || row.join(' / ');
+  const inp = el('input', { type: 'text', spellcheck: 'false',
+    'aria-label':(lab ? lab.label : col.name)+' · '+name });
   if (opts.width) inp.setAttribute('style', 'width:' + opts.width + 'ch');
   inp.value = String(wrow[ci] === undefined || wrow[ci] === null ? '' : wrow[ci]);
 
@@ -3438,7 +3693,7 @@ function overlayInput(ov, rel, ri, ci, opts) {
       ? 'Blank restores the baseline'
       : 'Official value: ' + ship + '; an empty box leaves that alone');
     if (highlight) why.push(highlight === 'overlay-overwrite'
-      ? 'red: an override is set' : 'yellow: an atypical shipped value');
+      ? 'Override set' : 'Highlighted baseline');
     const p = CKF.overlayCellProblem(ov, ci, v);
     if (p && p.bad) { cls.push('bad'); why.push('Cannot save: ' + p.bad); }
     else if (p && p.warn) why.push('Not schema-checked: ' + p.warn);
@@ -3452,6 +3707,7 @@ function overlayInput(ov, rel, ri, ci, opts) {
       why.push('Last save refused this cell: ' + ref);
     }
     host.className = cls.filter(Boolean).join(' ');
+    inp.setAttribute('aria-invalid',String(!!(p && p.bad || ref)));
     inp.title = why.join('. ');
   };
   paint();
@@ -3475,7 +3731,7 @@ function overlayContentWidth(ov, rel, rows, column, heading) {
 
 function overlayBlock(sch, rel, sectionTitle) {
   const ov = overlayEntry(rel);
-  const block = el('div', { class: 'field', style: 'grid-template-columns:1fr' });
+  const block = el('div', { class: 'field full-width' });
   const base = rel.split('/').pop();
   block.appendChild(el('div', {}, [
     el('label', { class: 'lab' }, [
@@ -3611,7 +3867,7 @@ function overlayBlock(sch, rel, sectionTitle) {
     }
     annotationWidths[v.i]=Math.ceil(width+20);
   }
-  const head = [el('th', {'aria-label':'Row actions'}),el('th', {class:leadComments.length ? 'technical-key' : '', text: ov.keyColumn + ' (key)' })];
+  const head = [el('th', {'aria-label':'Row actions'}),el('th', {class:leadComments.length ? 'technical-key' : '', text: CKF.softWrap(ov.keyColumn) + ' (key)' })];
   const tailControls = ctlCols.filter(function (v) {return leadComments.indexOf(v) < 0;});
   for (const v of leadComments)
     head.push(el('th', {text: 'Node & details'}));
@@ -3655,14 +3911,23 @@ function overlayBlock(sch, rel, sectionTitle) {
                          text: CKF.softWrap(v.c.name) }));
   tbl.appendChild(el('thead', {}, [el('tr', {}, head)]));
   const tb = el('tbody', {});
+  const page=Math.min(OVERLAY_PAGE.get(showKey) || 0,Math.max(0,Math.ceil(rowCount/ROWS_PER_PAGE)-1));
+  const start=page*ROWS_PER_PAGE, end=start+ROWS_PER_PAGE;
+  if (rowCount>ROWS_PER_PAGE) block.appendChild(pager(showKey,rowCount,page,function(next) {
+    OVERLAY_PAGE.set(showKey,next);renderPanel();
+  }));
+  let offset=0;
   for (const g of groups) {
+    const rows=g.rows.slice(Math.max(0,start-offset),Math.max(0,end-offset));
+    offset+=g.rows.length;
+    if (!rows.length) continue;
     if (g.title !== null && sectionTitle === undefined) {
       tb.appendChild(el('tr', { class: 'grouphead' }, [
         el('td', { colspan: String(head.length) }, [
           el('b', { text: g.title }),
           document.createTextNode('  ' + g.rows.length + ' rule(s)')])]));
     }
-    for (const r of g.rows) {
+    for (const r of rows) {
       const tr = el('tr', {});
       // The row's id, and — where the server sent one — the name that id
       // stands for beside it. `rowLabels` is read defensively: absent, empty
@@ -3856,7 +4121,7 @@ function overlayBlock(sch, rel, sectionTitle) {
 
 function fieldBlock(sch, f) {
   const ui = f.ui || 'form';
-  const block = el('div', { class: 'field', style: 'grid-template-columns:1fr' });
+  const block = el('div', { class: 'field full-width' });
   block.appendChild(el('div', {}, [
     el('label', { class: 'lab' }, [
       document.createTextNode((f.label || f.path) + '  '),
@@ -4014,11 +4279,31 @@ function renderSubsystem(p, sch, fields) {
   for (const rel of ovs) for (const title of ((overlayEntry(rel) || {}).groupOrder || []))
     if (((overlayEntry(rel) || {}).hiddenGroups || []).indexOf(title) < 0
         && sectionTitles.indexOf(title) < 0) sectionTitles.push(title);
-  for (const rel of ovs) {
-    const ov = overlayEntry(rel);
-    if (!(ov && ov.groupOrder && ov.groupOrder.length)) {
-      any = true; body.appendChild(overlayBlock(sch, rel));
+  const sheets=ovs.filter(function(rel) {return !((overlayEntry(rel) || {}).groupOrder || []).length;});
+  const manySheets=sheets.length>2 && sheets.reduce(function(count,rel) {
+    return count+((overlayEntry(rel) || {}).rows || []).length;
+  },0)>ROWS_PER_PAGE*2;
+  if (sheets.length) {
+    any=true;
+    body.appendChild(cellKey());
+  }
+  for (const [index,rel] of sheets.entries()) {
+    if (!manySheets) {body.appendChild(overlayBlock(sch,rel));continue;}
+    const ov=overlayEntry(rel) || {};
+    const open=OVERLAY_OPEN.has(rel) ? OVERLAY_OPEN.get(rel) : index===0;
+    const fold=el('details',{class:'overlay-sheet',open:open},[
+      el('summary',{text:rel.split('/').pop()+(ov.rows ? ' ('+ov.rows.length+' rows)' : '')}),
+    ]);
+    function showSheet() {
+      if (fold.open && fold.children.length===1) fold.appendChild(overlayBlock(sch,rel));
     }
+    fold.addEventListener('toggle',function() {
+      if (fold.isConnected===false) return;
+      OVERLAY_OPEN.set(rel,fold.open);
+      showSheet();
+    });
+    body.appendChild(fold);
+    showSheet();
   }
   for (const title of sectionTitles) {
     any = true;
@@ -4136,26 +4421,95 @@ function renderEnemyArmor(panel) {
   panel.appendChild(prepare);panel.appendChild(status);
 }
 
+async function loadCatalogIndex() {
+  const model=MODEL;
+  if (!model.deferredCatalogs || CATALOG_INDEX) return;
+  CATALOG_INDEX=api('/api/catalog',{kind:'index',fingerprints:model.fingerprints});
+  try {
+    const result=await CATALOG_INDEX;
+    if (MODEL!==model) return;
+    if (result.error) throw new Error(result.error);
+    model.playerBalance.pages=result.pages;
+    // Avoid replacing a page or an input the player is already using.
+    const active=document.activeElement;
+    const focusPage=active && $('#index').contains(active) && active.getAttribute('href');
+    renderIndex();
+    revealActiveLink();
+    if (focusPage) for (const link of $('#index').querySelectorAll('a'))
+      if (link.getAttribute('href')===focusPage) link.focus({preventScroll:true});
+  } catch (e) {
+    if (MODEL!==model) return;
+    model.playerBalance.error=e.message;
+    CATALOG_INDEX=null;
+    renderBanners();
+  }
+}
+
+function deferredCatalog(panel, kind, key, title) {
+  const model=MODEL, selection=SEL, cacheKey=kind+':'+key;
+  if (!PAGE_CATALOGS.has(cacheKey)) {
+    const request=api('/api/catalog',{kind:kind,key:key,fingerprints:model.fingerprints});
+    PAGE_CATALOGS.set(cacheKey,{request:request});
+    request.then(function(result) {
+      if (MODEL!==model) return;
+      if (result.choices) for (const grid of result.page.grids) for (const column of grid.columns) {
+        if (column.options!==undefined) column.options=result.choices[column.options];
+        for (const id in (column.rowOptions || {})) column.rowOptions[id]=result.choices[column.rowOptions[id]];
+      }
+      if (kind==='enemy-armor' && result.page) {
+        Object.assign(model.enemyArmor,result);
+        W.enemyArmor=JSON.parse(JSON.stringify(result.values));
+      }
+      PAGE_CATALOGS.set(cacheKey,result);
+      if (SEL===selection) {
+        const focused=document.activeElement===panel;
+        renderPanel();
+        if (focused) focusPageHeading();
+      }
+    }).catch(function(e) {
+      if (MODEL!==model) return;
+      PAGE_CATALOGS.set(cacheKey,{error:e.message});
+      if (SEL===selection) renderPanel();
+    });
+  }
+  const result=PAGE_CATALOGS.get(cacheKey);
+  if (result.page) return result.page;
+  if (result.error) panel.appendChild(el('div',{class:'banner err'},[
+    el('h2',{text:title}),el('p',{text:result.error}),
+    el('button',{text:'Retry',onclick:function() {PAGE_CATALOGS.delete(cacheKey);renderPanel();}}),
+  ]));
+  else panel.appendChild(el('p',{role:'status',text:'Loading '+title+'…'}));
+  return null;
+}
+
 function renderPanelContents() {
   const p = $('#panel');
   p.textContent = '';
-  if (SEL === (MODEL.enemyArmor || {}).sectionId) {renderEnemyArmor(p);return;}
+  if (SEL === (MODEL.enemyArmor || {}).sectionId) {
+    if (!MODEL.deferredCatalogs || MODEL.enemyArmor.page || deferredCatalog(p,'enemy-armor','','Enemy Armors'))
+      renderEnemyArmor(p);
+    return;
+  }
   if (SEL === 'party-size') {renderParty(p);return;}
   if (SEL === 'contact-breaks') {renderContact(p);return;}
   const playerPage = ((MODEL.playerBalance || {}).pages || []).find(function (page) {return SEL === 'pb:' + page.id;});
-  if (playerPage) {renderPlayer(p, playerPage); return;}
+  if (playerPage || (MODEL.deferredCatalogs && SEL && SEL.startsWith('pb:'))) {
+    const page=playerPage && playerPage.grids ? playerPage
+      : deferredCatalog(p,'player',SEL.slice(3),playerPage ? playerPage.title : 'catalog page');
+    if (page) renderPlayer(p,page);
+    return;
+  }
   const sec = sectionOf(SEL);
   if (!sec) return;
   const talentSchema=schemasOf(sec).find(function(s) {return overlaysOf(s).some(function(rel) {return (overlayEntry(rel) || {}).catalogOrder===1;});});
-  if (talentSchema && MODEL.talentBalance) {
+  if (talentSchema && (MODEL.talentBalance || MODEL.deferredCatalogs)) {
+    const rel=overlaysOf(talentSchema).find(function(r) {return (overlayEntry(r) || {}).catalogOrder===1;});
+    const key=rel.split('.').slice(-2)[0];
+    const page=MODEL.deferredCatalogs ? deferredCatalog(p,'talent',key,sec.title)
+      : MODEL.talentBalance.pages[key];
+    if (page) {renderPlayer(p,Object.assign({},page,{title:sec.title,gateSchema:talentSchema}));return;}
+    if (MODEL.deferredCatalogs) return;
     if (MODEL.talentBalance.error) p.appendChild(banner('err','Talent editor unavailable',[MODEL.talentBalance.error]));
-    else {
-      const rel=overlaysOf(talentSchema).find(function(r) {return (overlayEntry(r) || {}).catalogOrder===1;});
-      const page=MODEL.talentBalance.pages[rel.split('.').slice(-2)[0]];
-      if (page) {
-        renderPlayer(p,Object.assign({},page,{title:sec.title,gateSchema:talentSchema}));return;
-      }
-    }
   }
   const schs = schemasOf(sec);
   if (!schs.length) return;
@@ -4195,11 +4549,13 @@ function renderPanel() {
   function visit(node) {
     for (const child of Array.from(node.children || [])) {
       const classes=child.className || '';
+      if (child.tagName==='TABLE' || child.tagName==='DATALIST') continue;
       // Per-table reference folds retain their column controls beside the grid.
       if (child.tagName==='DETAILS' && !String(classes).split(/\s+/).includes('page-help')) continue;
-      const howTo=/(?:\bSave(?:,|\s+(?:your|edits|changes|then|the|first))|\bClearing\b|\bclear a cell\b|\bfirst choice\b|\bempty (?:box|cell)\b|\btyped 0\b|^(?:Click|Type|Enter|Use) )/i.test(child.textContent || '');
-      if (String(classes).split(/\s+/).includes('page-help')
-          || (String(classes).split(/\s+/).some(function(c) {return c==='doc' || c==='legend';}) && howTo)) {
+      const names=String(classes).split(/\s+/);
+      const howTo=names.some(function(c) {return c==='doc' || c==='legend';})
+        && /(?:\bSave(?:,|\s+(?:your|edits|changes|then|the|first))|\bClearing\b|\bclear a cell\b|\bfirst choice\b|\bempty (?:box|cell)\b|\btyped 0\b|^(?:Click|Type|Enter|Use) )/i.test(child.textContent || '');
+      if (names.includes('page-help') || howTo) {
         (child.parentNode || child.parent).removeChild(child);notes.push(child);
       } else visit(child);
     }
@@ -4211,17 +4567,18 @@ function renderPanel() {
 // ---------------------------------------------------------------------------
 
 function updateDirty() {
-  const prepareEnemy=$('#prepare-enemy',$('#panel'));
-  if (prepareEnemy) prepareEnemy.disabled=!!dirtyPaths().length;
   const d = dirtyPaths();
-  $('#dirty').textContent = d.length
+  const prepareEnemy=$('#prepare-enemy',$('#panel'));
+  if (prepareEnemy) prepareEnemy.disabled=!!d.length || WORKING_REQUEST;
+  const label = d.length
     ? d.length + ' change(s) pending'
     : 'no changes';
-  $('#save').disabled = !d.length
+  if ($('#dirty').textContent!==label) $('#dirty').textContent=label;
+  $('#save').disabled = WORKING_REQUEST || RELOAD_REQUIRED || !d.length
     || MODEL.probe.config.state === 'missing' || !MODEL.check.ran;
   const foldersPending = $('#talent-project').value.trim() !== MODEL.modkit.talentProjectDir
     || $('#modkit-project').value.trim() !== MODEL.modkit.modkitProjectDir;
-  $('#send-talents').disabled = !!d.length || foldersPending || !MODEL.check.ran
+  $('#send-talents').disabled = WORKING_REQUEST || RELOAD_REQUIRED || !!d.length || foldersPending || !MODEL.check.ran
     || !MODEL.modkit.talentProjectDir || !MODEL.modkit.modkitProjectDir;
   $('#send-talents').title = d.length ? 'Save pending edits first.' : '';
   const partySend = $('#panel').querySelector('#send-party');
@@ -4245,8 +4602,11 @@ function renderProbe() {
     title: p.detail || '', text: 'config ' + p.state }));
 }
 
-async function load() {
-  MODEL = await api('/api/model');
+function acceptModel(model) {
+  MODEL=model;
+  RELOAD_REQUIRED=false;
+  CATALOG_INDEX=null;
+  PAGE_CATALOGS=new Map();
   W = buildWorking();PLAYER_PREVIEW_STATE.error='';PLAYER_PREVIEW_STATE.destination=null;PLAYER_PREVIEW_STATE.revision++;
   // Both belong to one working copy. A fresh read is a fresh copy, and after a
   // save the server's own notes (LAST_SAVE.notes) are the record of what it
@@ -4257,23 +4617,75 @@ async function load() {
   // warning. (Under 'use strict' an assignment to an undeclared name here is a
   // ReferenceError that stops load(); undeclared_globals_in_app_html in
   // serve.py guards that.)
-  if (!SEL || (SEL !== 'party-size' && SEL !== 'contact-breaks' && !sectionOf(SEL) && !((MODEL.playerBalance || {}).pages || []).some(function (p) {return SEL === 'pb:'+p.id;}))) SEL = MODEL.sections[0].id;
+  const requested=selectionFromURL() || SEL;
+  const selectable=requested && (sectionOf(requested) || MODEL.modOwners.some(function(o) {return o.selection===requested;})
+    || (requested.startsWith('pb:') && (MODEL.deferredCatalogs || MODEL.playerBalance.pages.some(function(p) {return requested==='pb:'+p.id;}))));
+  SEL=selectable ? requested : (MODEL.sections[0] || {}).id;
   $('#gamedir').value = MODEL.configDirOverride || MODEL.gameDir || '';
   $('#talent-project').value = MODEL.modkit.talentProjectDir;
   $('#modkit-project').value = MODEL.modkit.modkitProjectDir;
   $('#official-data').value = MODEL.officialDataPath || '';
   renderProbe();
   render();
+  if (MODEL.deferredCatalogs) loadCatalogIndex();
+}
+
+async function load() {
+  acceptModel(await api('/api/model?view=editor'));
+}
+
+function samePath(a,b) {
+  function normalize(path) {return (path || '').trim().replace(/\\/g,'/').replace(/\/+$/,'').toLowerCase();}
+  return normalize(a)===normalize(b);
+}
+
+function setWorkingRequest(active) {
+  WORKING_REQUEST=active;
+  for (const id of ['panel','index','modkit-export']) {
+    const node=$('#'+id);
+    if (node) node.inert=active || RELOAD_REQUIRED;
+  }
+  for (const id of ['revalidate','applydir','gamedir']) $('#'+id).disabled=active || RELOAD_REQUIRED;
+  updateDirty();
+}
+
+async function mayReplaceDraft() {
+  if (!dirtyPaths().length) return true;
+  const dialog=$('#pending-dialog');
+  const choice=await new Promise(function(resolve) {
+    dialog.returnValue='cancel';
+    dialog.addEventListener('close',function() {resolve(dialog.returnValue);},{once:true});
+    dialog.showModal();
+  });
+  return choice==='discard' || (choice==='save' && await saveDraft());
+}
+
+function showStatus(kind,title,lines) {
+  const box=$('#banners');
+  box.insertBefore(banner(kind,title,lines),box.firstChild);
 }
 
 $('#applydir').addEventListener('click', async function () {
-  const v = $('#gamedir').value.trim();
+  if (!MODEL || WORKING_REQUEST) return;
+  const entered=$('#gamedir').value.trim();
+  const v=entered || MODEL.defaultGameDir || '';
+  const previous=MODEL.configDirOverride || MODEL.gameDir;
+  if (samePath(v,previous)) {
+    $('#gamedir').value=previous;
+    return;
+  }
+  if (!await mayReplaceDraft()) return;
   const body = /bepinex[\\/]+config[\\/]*$/i.test(v)
-    ? { configDirOverride: v } : { gameDir: v, configDirOverride: null };
-  MODEL = await api('/api/settings', body);
-  W = buildWorking();
-  renderProbe();
-  render();
+    ? {configDirOverride:v} : {gameDir:v,configDirOverride:null};
+  setWorkingRequest(true);
+  try {
+    const model=await api('/api/settings',Object.assign(body,{reloadModel:true}));
+    LAST_SAVE=null;
+    acceptModel(model);
+  } catch(e) {
+    RELOAD_REQUIRED=true;
+    showStatus('err','Could not switch game directory',['Reload the editor before making further changes.',String(e)]);
+  } finally {setWorkingRequest(false);}
 });
 
 function applyOverrideClears(cleared) {
@@ -4300,6 +4712,7 @@ function applyOverrideClears(cleared) {
 }
 
 $('#revalidate').addEventListener('click', async function () {
+  if (!MODEL || WORKING_REQUEST) return;
   const edits = buildEdits(), stamp = JSON.stringify(edits);
   const r = await api('/api/validate', { edits: edits, fingerprints: MODEL.fingerprints });
   if (stamp !== JSON.stringify(buildEdits())) {
@@ -4323,17 +4736,29 @@ $('#revalidate').addEventListener('click', async function () {
 });
 
 $('#modkit-paths').addEventListener('click', async function () {
+  if (!MODEL || WORKING_REQUEST) return;
+  const settings={
+    talentProjectDir:$('#talent-project').value.trim(),
+    modkitProjectDir:$('#modkit-project').value.trim(),
+    officialDataPath:$('#official-data').value.trim(),
+  };
+  const reload=!samePath(settings.officialDataPath,MODEL.officialDataPath)
+    || !samePath(settings.talentProjectDir,MODEL.modkit.talentProjectDir);
+  if (reload && !await mayReplaceDraft()) return;
+  setWorkingRequest(true);
   try {
-    const result = await api('/api/settings', {
-      talentProjectDir: $('#talent-project').value.trim(),
-      modkitProjectDir: $('#modkit-project').value.trim(),
-      officialDataPath: $('#official-data').value.trim()
+    const result=await api('/api/settings',Object.assign(settings,{reloadModel:reload}));
+    if (reload) acceptModel(result);
+    else Object.assign(MODEL.modkit,{
+      talentProjectDir:settings.talentProjectDir,modkitProjectDir:settings.modkitProjectDir,
     });
-    await load();
     $('#modkit-status').textContent = 'Folders saved.';
   } catch (e) {
-    $('#modkit-status').textContent = String(e);
-  }
+    if (reload) {
+      RELOAD_REQUIRED=true;
+      showStatus('err','Could not change Workshop sources',['Reload the editor before making further changes.',String(e)]);
+    } else $('#modkit-status').textContent = String(e);
+  } finally {setWorkingRequest(false);}
 });
 
 for (const id of ['talent-project', 'modkit-project'])
@@ -4358,8 +4783,9 @@ $('#send-talents').addEventListener('click', async function () {
   }
 });
 
-$('#save').addEventListener('click', async function () {
-  $('#save').disabled = true;
+async function saveDraft() {
+  if (!MODEL || WORKING_REQUEST || $('#save').disabled) return false;
+  setWorkingRequest(true);
   try {
     // fingerprints prove the save is written against the bytes this page was
     // shown. Row identity is positional; a file edited on disk underneath us
@@ -4369,21 +4795,42 @@ $('#save').addEventListener('click', async function () {
   } catch (e) {
     LAST_SAVE = { ok: false, refused: { summary: 'the request failed', detail: String(e) } };
   }
-  if (!LAST_SAVE.ok) {render();return;}
-  const keep = LAST_SAVE;
-  await load();
-  LAST_SAVE = keep;
-  render();
+  try {
+    if (!LAST_SAVE.ok) {render();return false;}
+    await load();
+    return true;
+  } catch(e) {
+    RELOAD_REQUIRED=true;
+    showStatus('warn','Changes saved. Reload the editor to continue.',[String(e)]);
+    return false;
+  } finally {setWorkingRequest(false);}
+}
+$('#save').addEventListener('click',saveDraft);
+
+const navToggle=$('#nav-toggle');
+if (navToggle) navToggle.addEventListener('click',function() {
+  setMobileNav(navToggle.getAttribute('aria-expanded')!=='true');
+  revealActiveLink();
 });
+if (window.addEventListener) {
+  window.addEventListener('popstate',function() {
+    if (MODEL) selectPage(selectionFromURL() || (MODEL.sections[0] || {}).id,false);
+  });
+  window.addEventListener('beforeunload',function(e) {
+    if (W && dirtyPaths().length) {e.preventDefault();e.returnValue='';}
+  });
+}
 
 load().catch(function (e) {
   $('#banners').appendChild(banner('err', 'Could not load the config', [String(e)]));
 });
 $('#technical').addEventListener('change', function (e) {document.body.classList.toggle('technical', e.target.checked);});
 if (window.setInterval) window.setInterval(async function () {
-  if (!MODEL || !(MODEL.playerBalance || {}).database) return;
+  if (!MODEL || WORKING_REQUEST || RELOAD_REQUIRED || !(MODEL.playerBalance || {}).database) return;
   try {
+    const model=MODEL;
     const status = await api('/api/data-status');
+    if (MODEL!==model || WORKING_REQUEST) return;
     if (status.sha256 === MODEL.playerBalance.database.sha256) return;
     if (dirtyPaths().length) {
       if (!$('#database-changed')) {
@@ -4392,7 +4839,8 @@ if (window.setInterval) window.setInterval(async function () {
       }
       $('#send-talents').disabled = true;
     } else {
-      await load();
+      setWorkingRequest(true);
+      try {await load();} finally {setWorkingRequest(false);}
     }
   } catch (e) {
     // Keep the current working copy; save/export perform their own fresh read.

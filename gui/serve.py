@@ -5407,6 +5407,8 @@ class App:
         self.lock = threading.Lock()
         self.catalog_sha = None
         self.catalog_error = None
+        self.editor_catalog_key = None
+        self.editor_catalogs = {}
 
     def data_source(self):
         return self.static_source or self.settings.get('officialDataPath') or default_static_source()
@@ -5457,12 +5459,83 @@ class App:
         model, extras = build_model(doc)
         return doc, model, extras, cd, recovery
 
-    def api_model(self):
+    def player_catalog(self, cd):
+        player = player_balance.catalog(cd, False if self.static_source is False else self.data_source())
+        player['pages'] = navigation.catalog_pages(player['pages'])
+        enemy_rules.decorate(player['pages'])
+        return player
+
+    def editor_player_document(self, cd, fingerprints):
+        result = {'document': player_balance.empty(), 'database': None, 'error': None, 'pages': []}
+        if self.static_source is False or not fingerprints.get('@official-data.db'):
+            result['error'] = 'Official data is unavailable. Check the database path in Workshop export.'
+        else:
+            result['database'] = {'sha256': fingerprints['@official-data.db']}
+        try:
+            result['document'] = player_balance.load(cd)
+        except (ValueError, OSError) as exc:
+            result['error'] = str(exc)
+        return result
+
+    def api_catalog(self, kind, key, expect):
+        """Read an editor catalog against the same inputs as the draft."""
+        with self.lock:
+            cd = config_dir_for(self.settings)
+            current = self.current_fingerprints(cd) if os.path.isdir(cd) else {}
+            if expect != current:
+                return {'error': 'Files changed on disk. Reload to view their current values.'}
+            source = False if self.static_source is False else self.data_source()
+            identity = (cd, source, current)
+            if identity != self.editor_catalog_key:
+                self.editor_catalog_key = identity
+                self.editor_catalogs = {}
+            catalogs = self.editor_catalogs
+            if kind in ('index', 'player'):
+                if 'player' not in catalogs:
+                    catalogs['player'] = self.player_catalog(cd)
+                player = catalogs['player']
+                if kind == 'index':
+                    result = {'pages': [{k: p[k] for k in ('id', 'title', 'owner', 'group')}
+                                        for p in player['pages']], 'error': player['error']}
+                else:
+                    page = next((p for p in player['pages'] if p['id'] == key), None)
+                    result = {'page': page, 'error': player['error'] or (None if page else 'Page unavailable.')}
+            elif kind == 'enemy-armor':
+                if kind not in catalogs:
+                    catalogs[kind] = enemy_armor.model(cd, source, {})
+                result = dict(catalogs[kind], sourceDir=self.settings.get('enemySourceDir', ''),
+                              modkitDir=self.settings.get('enemyModkitProjectDir', ''))
+            elif kind == 'talent' and isinstance(key, str) and key in talent_editor.tc.JOBS:
+                cache_key = (kind, key)
+                if cache_key not in catalogs:
+                    player = self.editor_player_document(cd, current)
+                    if player['error']:
+                        catalogs[cache_key] = {'page': None, 'error': player['error']}
+                    else:
+                        if 'overlays' not in catalogs:
+                            catalogs['overlays'] = read_document(cd, self.schemas, source).overlays
+                        data = talent_editor.catalog(catalogs['overlays'], source,
+                            ATTRIBUTE_EFFECT_COLUMNS, ATTRIBUTE_EFFECT_ALWAYS, TALENT_EFFECT_EXCLUDED,
+                            player['document'], cd, tag=key)
+                        page = data['pages'].get(key)
+                        catalogs[cache_key] = talent_editor.pack_choices(page) if page else {
+                            'error': data['error'] or 'Talent page unavailable.'}
+                result = catalogs[cache_key]
+            else:
+                return {'error': 'Unknown editor catalog.'}
+            if (self.current_fingerprints(cd) if os.path.isdir(cd) else {}) != current:
+                self.editor_catalog_key = None
+                return {'error': 'Files changed while loading the catalog. Reload to continue.'}
+            return result
+
+    def api_model(self, editor=False):
         doc, model, _extras, cd, recovery = self.snapshot()
         secs = sections_for(self.schemas)
         check = run_check_schema(cd) if os.path.isdir(cd) else {
             'ran': False, 'problems': [], 'error': 'config directory does not exist'}
-        player = player_balance.catalog(cd, False if self.static_source is False else self.data_source())
+        source = False if self.static_source is False else self.data_source()
+        digests = self.current_fingerprints(cd) if os.path.isdir(cd) else {}
+        player = self.editor_player_document(cd, digests) if editor else self.player_catalog(cd)
         retired = {'CyberweaponsClaws', 'CyberweaponsLasers', 'ImplantsGlobal',
                    'GearClasses', 'StunClub', 'PowerLevel', 'RuleModel',
                    'ConsumablesChems', 'ConsumablesDevices', 'ConsumablesGrenades',
@@ -5482,8 +5555,10 @@ class App:
         for group in nav_groups['groups']:
             group['sections'] = [sid for sid in group['sections'] if sid in visible_ids]
         nav_groups['groups'] = [g for g in nav_groups['groups'] if g['sections'] or g['absent']]
-        player['pages'] = navigation.catalog_pages(player['pages'])
-        enemy_rules.decorate(player['pages'])
+        armor = {} if editor else enemy_armor.model(cd, source, self.settings)
+        talent = None if editor else ({'pages': {}, 'error': player['error']} if player['error']
+            else talent_editor.catalog(model['overlays'], source, ATTRIBUTE_EFFECT_COLUMNS,
+                ATTRIBUTE_EFFECT_ALWAYS, TALENT_EFFECT_EXCLUDED, player['document'], cd))
         return {
             'token': self.token,
             'gameDir': self.settings.get('gameDir'),
@@ -5502,18 +5577,16 @@ class App:
                         for s in decorate_schemas(visible_schemas)],
             'sections': visible_sections,
             'playerBalance': player,
+            'deferredCatalogs': editor,
             'enemyRules': enemy_rules.model(cd, False if self.static_source is False else self.data_source()),
             'partySize': party_size.model(cd, self.data_source(),
                                          self.settings.get('partySizeProjectDir', '')),
             'contactBreaks': contact_limit_breaks.model(cd, self.data_source(),
                                          self.settings.get('contactBreaksProjectDir', '')),
-            'enemyArmor': dict(enemy_armor.model(cd, False if self.static_source is False else self.data_source(), self.settings),
+            'enemyArmor': dict(armor,
                 sectionId=next((s['id'] for s in visible_sections if 'EnemyArmor' in s['subsystems']), None)),
             'talentCatalogError': self.catalog_error,
-            'talentBalance': {'pages': {}, 'error': player['error']} if player['error'] else talent_editor.catalog(model['overlays'],
-                False if self.static_source is False else self.data_source(),
-                ATTRIBUTE_EFFECT_COLUMNS, ATTRIBUTE_EFFECT_ALWAYS, TALENT_EFFECT_EXCLUDED,
-                player['document'], cd),
+            'talentBalance': talent,
             'navGroups': nav_groups,
             'modOwners': navigation.MOD_OWNERS,
             'values': model,
@@ -5527,7 +5600,7 @@ class App:
             'recovery': recovery,
             'fieldCount': sum(len(s['fields']) for s in self.schemas),
             'visibleFieldCount': sum(len(s['fields']) for s in visible_schemas),
-            'fingerprints': self.current_fingerprints(cd) if os.path.isdir(cd) else {},
+            'fingerprints': digests,
         }
 
     def api_workshop_export(self, expect=None):
@@ -5956,7 +6029,7 @@ class Handler(BaseHTTPRequestHandler):
             if not (self._token_ok() and self._origin_ok()):
                 return self._send(403, 'forbidden', 'text/plain; charset=utf-8')
             try:
-                return self._json(200, self.app.api_model())
+                return self._json(200, self.app.api_model(editor=self.path.endswith('?view=editor')))
             except Exception:
                 return self._json(500, {'error': traceback.format_exc()})
         if path == '/api/data-status':
@@ -5992,6 +6065,9 @@ class Handler(BaseHTTPRequestHandler):
             if path == '/api/validate':
                 return self._json(200, self.app.api_validate(body.get('edits') or {},
                                                              body.get('stripReadme'), body.get('fingerprints')))
+            if path == '/api/catalog':
+                return self._json(200, self.app.api_catalog(body.get('kind'), body.get('key'),
+                                                            body.get('fingerprints')))
             if path == '/api/save':
                 return self._json(200, self.app.api_save(body.get('edits') or {},
                                                          body.get('stripReadme'),
@@ -6008,19 +6084,23 @@ class Handler(BaseHTTPRequestHandler):
             if path == '/api/workshop-export':
                 return self._json(200, self.app.api_workshop_export(body.get('fingerprints')))
             if path == '/api/settings':
-                s = self.app.settings
-                if 'gameDir' in body:
-                    s['gameDir'] = str(body['gameDir'] or '')
-                if 'configDirOverride' in body:
-                    v = body['configDirOverride']
-                    s['configDirOverride'] = str(v) if v else None
-                if 'stripReadme' in body:
-                    s['stripReadme'] = bool(body['stripReadme'])
-                for key in ('talentProjectDir', 'modkitProjectDir', 'officialDataPath', 'partySizeProjectDir', 'contactBreaksProjectDir', 'enemySourceDir', 'enemyModkitProjectDir'):
-                    if key in body:
-                        s[key] = str(body[key] or '').strip()
-                save_settings(s)
-                return self._json(200, self.app.api_model())
+                with self.app.lock:
+                    s = dict(self.app.settings)
+                    if 'gameDir' in body:
+                        s['gameDir'] = str(body['gameDir'] or '')
+                    if 'configDirOverride' in body:
+                        v = body['configDirOverride']
+                        s['configDirOverride'] = str(v) if v else None
+                    if 'stripReadme' in body:
+                        s['stripReadme'] = bool(body['stripReadme'])
+                    for key in ('talentProjectDir', 'modkitProjectDir', 'officialDataPath', 'partySizeProjectDir', 'contactBreaksProjectDir', 'enemySourceDir', 'enemyModkitProjectDir'):
+                        if key in body:
+                            s[key] = str(body[key] or '').strip()
+                    save_settings(s)
+                    self.app.settings = s
+                    if body.get('reloadModel'):
+                        return self._json(200, self.app.api_model(editor=True))
+                return self._json(200, {'ok': True})
             if path == '/api/quit':
                 threading.Thread(target=self.server.shutdown, daemon=True).start()
                 return self._json(200, {'ok': True})
@@ -11913,7 +11993,7 @@ def selftest(config_arg, frozen_exe=None, legacy_cyberware_help=False):
                         (page or '')[:200])
                 if mtok:
                     xreq = urllib.request.Request(
-                        xurl + 'api/model', headers={'X-CKF-Token': mtok.group(1)})
+                        xurl + 'api/model?view=editor', headers={'X-CKF-Token': mtok.group(1)})
                     jm = json.loads(urllib.request.urlopen(
                         xreq, timeout=CHECK_SCHEMA_TIMEOUT + 180).read().decode('utf-8'))
                     t.check('/api/model from the exe carries every schema field',
@@ -12657,9 +12737,9 @@ ck('invalid input is visible rather than mistaken for zero',
    CKF.overlayZeroColumns(zeroFixture, zeroRows.slice(1), zeroWorking)[1] === false);
 const highlightFixture = {columns: [{name:'id'}, {name:'value'}, {name:'_comment',control:true}],
   roles:['identity','lever','control'], shippedHighlights:{'7':[1]}};
-ck('an explicit zero override is red', CKF.overlayHighlight(highlightFixture,7,1,'0') === 'overlay-overwrite');
+ck('an explicit zero gets the override highlight', CKF.overlayHighlight(highlightFixture,7,1,'0') === 'overlay-overwrite');
 ck('an override takes priority over a shipped exception', CKF.overlayHighlight(highlightFixture,7,1,'5') === 'overlay-overwrite');
-ck('clearing an override restores yellow on the same original row', CKF.overlayHighlight(highlightFixture,7,1,'') === 'shipped-interesting');
+ck('clearing an override restores the baseline highlight on the same original row', CKF.overlayHighlight(highlightFixture,7,1,'') === 'shipped-interesting');
 ck('a usual default stays plain', CKF.overlayHighlight(highlightFixture,4,1,'') === '');
 ck('keys and annotation controls never get override colors',
    CKF.overlayHighlight(highlightFixture,7,0,'7') === '' && CKF.overlayHighlight(highlightFixture,7,2,'name') === '');
@@ -13038,7 +13118,7 @@ def dom_driver(model_json, asserts=None):
     body = blocks[1].replace('__CKF_TOKEN__', 'test-token')
     fetch = ('\nconst FIXTURE = %s;\n'
              'const fetch = async function (path) {\n'
-             '  if (path !== "/api/model") throw new Error("unexpected " + path);\n'
+             '  if (path !== "/api/model?view=editor") throw new Error("unexpected " + path);\n'
              '  return { ok: true, status: 200, text: async function () '
              '{ return JSON.stringify(FIXTURE); } };\n'
              '};\n' % model_json)

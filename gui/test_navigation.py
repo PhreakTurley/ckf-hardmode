@@ -90,7 +90,12 @@ setTimeout(function () {
   ck('Hard Mode retains Bundled Rebalances and Systems', ['bundled-rebalances','systems'].every(g=>owner('hard-mode').find(n=>n.attrs['data-native-group']===g).length===1));
   ck('shared weapons have no enemy sidebar entries', !owner('enemy-balance').find(n=>String(n.attrs['data-player-page'] || '').startsWith('weapon-')).length);
   const page=MODEL.playerBalance.pages.find(p=>p.owner==='player-balance' && p.id.startsWith('weapon-'));
-  const link=owner('player-balance').find(n=>n.attrs['data-player-page']===page.id)[0];
+  const item=owner('player-balance').find(n=>n.attrs['data-player-page']===page.id)[0];
+  const link=item.find(n=>n.tagName==='A')[0];
+  ck('Hard Mode page names are real links separate from their gate controls',
+    owner('hard-mode').find(n=>n.attrs['data-section-id']).every(n=>n.children[0].tagName==='A'
+      && n.children[0].getAttribute('href') && !n.children[0].find(c=>c.tagName==='INPUT').length));
+  ck('catalog page has a URL that can be opened directly', link.getAttribute('href')===selectionURL('pb:'+page.id));
   link.fire('click');
   ck('regrouped links still select their existing editing page', SEL==='pb:'+page.id && $('#panel').textContent.includes(page.title));
   owner('player-balance').open=false;owner('player-balance').fire('toggle');render();
