@@ -30,6 +30,7 @@ CONFIG = MODKIT.parent / 'Cyber Knights Flashpoint/BepInEx/config'
 PROJECT = ROOT / 'ckf-hire-everyone'
 FILE = 'ckf.hire-everyone.json'
 SOURCE = 'hire-everyone.json'
+LINKED_SETUP_OFFSET = 192
 BACKSTORY_BLOCK_OFFSET = 256
 # Authored scope: the available Hub roster, excluding four unfinished entries
 # whose shipped blocks have Pre_AlwaysFail. New official entries require review.
@@ -175,11 +176,12 @@ def build(database, document=None):
         condition_counts = Counter()
         finish_events = []
         next_block = BASE
+        next_linked_setup_block = BASE + LINKED_SETUP_OFFSET
 
         def add(table, **values):
             nonlocal next_block
             if table == 'Block' and 'BlockId' not in values:
-                if next_block > BASE + BACKSTORY_BLOCK_OFFSET:
+                if next_block >= BASE + LINKED_SETUP_OFFSET:
                     raise ValueError('Starter and Hub blocks exceed their reserved portion of the ID range.')
                 values['BlockId'] = next_block
                 next_block += 1
@@ -210,6 +212,14 @@ def build(database, document=None):
 
         def has_character(group, actor, exists):
             condition(group, 'HasCharacter', ActorId=actor, OptionId=1 if exists else -1)
+
+        def linked_setup_block(group, **fields):
+            nonlocal next_linked_setup_block
+            if next_linked_setup_block > BASE + BACKSTORY_BLOCK_OFFSET:
+                raise ValueError('Linked contact setup exceeds its reserved IDs.')
+            row = add('Block', GroupId=group, BlockId=next_linked_setup_block, **fields)
+            next_linked_setup_block += 1
+            return row
 
         for index, bid in enumerate(HUB):
             source = backstories[bid]
@@ -295,14 +305,46 @@ def build(database, document=None):
                     continue
                 contact = contacts[cid]
                 pre_contact, post_contact = mod_id(f'Pre_{key}_Contact_{cid}'), mod_id(f'Post_{key}_Contact_{cid}')
-                contact_actor = 'NTG_' + contact['TagID']
-                has_character(pre_contact, contact_actor, False)
-                condition(post_contact, 'AddCharacter', ActorId=contact['ContactStoryId'], ConditionValue=cid)
+                contact_actor = hire_backstories.permanent_contact_actor(contact, key)
+                identity, tag = hire_backstories.contact_identity(contact, contact_actor, stories.tags)
+                hire_backstories.contact_presence(condition, pre_contact, identity, tag, False)
+                condition(post_contact, 'AddCharacter', ActorId=contact_actor, ConditionValue=cid)
                 add('Block', GroupId=setup_group, PreConditionGroup=pre_contact, PostConditionGroup=post_contact)
             if source['BlockGroup']:
-                if not any(r['GroupId'] == source['BlockGroup'] for r in rows['Block']):
+                native_setup = stories.blocks[source['BlockGroup']]
+                if not native_setup:
                     raise ValueError('Starter initialization group missing: ' + source['BlockGroup'])
-                add('Block', GroupId=setup_group, EventId=source['BlockGroup'], EventType='Group')
+                target = source['BlockGroup']
+                creators = [(b, c) for b in native_setup for field in ('PreDialogPostCondition', 'PostConditionGroup')
+                            for c in stories.conditions[b[field]] if c['ConditionType'] == 'AddCharacter']
+                if creators:
+                    # Molly's native setup also creates Brandt outside ContactLink1/2.
+                    if [(b['BlockId'], c['BlockConditionId']) for b, c in creators] != [(86, 557)]:
+                        raise ValueError('Review contact creation in shipped setup for Backstory ' + str(bid))
+                    native, action = creators[0]
+                    if (len(native_setup) != 1 or native['EventType'] != 'Event' or native['PreConditionGroup']
+                            or native['PreState1'] or native['PreState2'] or native['PreDialogPostCondition']
+                            or native['Dialog']):
+                        raise ValueError('Review Brandt setup before adapting it for a Hub offer')
+                    contact = stories.contact(action)
+                    actor_id = hire_backstories.permanent_contact_actor(contact, key)
+                    identity, tag = hire_backstories.contact_identity(contact, actor_id, stories.tags)
+                    guard = mod_id(f'Pre_{key}_LinkedSetup')
+                    create_contact = mod_id(f'Post_{key}_LinkedContact')
+                    effects = mod_id(f'Post_{key}_LinkedEffects')
+                    target = mod_id(f'B_{key}_LinkedSetup')
+                    hire_backstories.contact_presence(condition, guard, identity, tag, False)
+                    condition(create_contact, 'AddCharacter', ActorId=actor_id, ConditionValue=contact['ContactBackstoryId'])
+                    linked_setup_block(target, PreConditionGroup=guard, PostConditionGroup=create_contact)
+                    for row in stories.conditions[native['PostConditionGroup']]:
+                        if row != action:
+                            values = {k: v for k, v in row.items() if k not in
+                                      ('BlockConditionId', 'GroupId', 'JsonId', 'ConditionType')}
+                            condition(effects, row['ConditionType'], **values)
+                    values = {k: native[k] for k in columns['Block'] if k not in ('BlockId', 'GroupId')}
+                    values['PostConditionGroup'] = effects
+                    linked_setup_block(target, **values)
+                add('Block', GroupId=setup_group, EventId=target, EventType='Group')
             talk = add('Block', GroupId=mod_id(f'B_{key}_Talk'), StoryNodeId=node,
                        ActorId=actor, InterpolateActorId=actor, DialogSide=1, ChoiceMeta=7,
                        EventId=options, EventType='Choice')
@@ -446,6 +488,7 @@ def verify_policy(connection, document=None, locale=None):
     backstories = {r['BackstoryId']: dict(r) for r in connection.execute('SELECT * FROM Backstory')}
     blocks = [dict(r) for r in connection.execute('SELECT * FROM Block')]
     conditions = [dict(r) for r in connection.execute('SELECT * FROM BlockCondition')]
+    verify_contact_guards(connection, blocks, conditions)
     hire_backstories.verify_events(connection, HUB, document or defaults(backstories), locale)
     document = defaults(backstories) if document is None else validate(document)
     roster_actors = {backstories[bid]['CharStoryId'] for bid in HUB + STARTERS}
@@ -514,6 +557,36 @@ def verify_policy(connection, document=None, locale=None):
             raise ValueError('Starter lacks the existing-character guard: ' + str(bid))
     if sorted(actual) != sorted(bid for bid in STARTERS if document['starters'][str(bid)]):
         raise ValueError('Starter Hub coverage is incomplete or duplicated')
+
+
+def verify_contact_guards(connection, blocks, conditions):
+    actions = hire_backstories.groups(conditions)
+    contacts = [dict(r) for r in connection.execute('SELECT * FROM ContactBackstory')]
+    by_id = hire_backstories.groups(contacts, 'ContactBackstoryId')
+    by_pool = hire_backstories.groups(contacts, 'BackstoryGroup')
+    tags = {r[0] for r in connection.execute('SELECT TagId FROM Tag')}
+    for row in conditions:
+        if (row['GroupId'].endswith('_HireEveryone') and row['ConditionType'] == 'HasCharacter'
+                and row['ActorId'].startswith(('NCP_', 'NCT_', 'NTG_'))):
+            raise ValueError(f'Contact {row["ActorId"]} still uses the mercenary lookup')
+    for block in blocks:
+        if not block['GroupId'].endswith('_HireEveryone'):
+            continue
+        for field in ('PreDialogPostCondition', 'PostConditionGroup'):
+            for row in actions[block[field]]:
+                if row['ConditionType'] != 'AddCharacter' or row['ActorId'].startswith('PCT_'):
+                    continue
+                if not row['ActorId'].startswith(('NCP_', 'NCT_')):
+                    raise ValueError(f'Invalid contact actor for {block["BlockId"]}: {row["ActorId"]}')
+                candidates = (by_pool[row['ConditionValue2']] if row['ConditionValue'] == -1
+                              else by_id[row['ConditionValue']])
+                if len(candidates) != 1:
+                    raise ValueError(f'Contact creation in {block["BlockId"]} needs one reviewed backstory')
+                identity, tag = hire_backstories.contact_identity(candidates[0], row['ActorId'], tags)
+                if not any(r['ConditionType'] == 'Tag' and r['OptionId'] == -1
+                           and r['ActorId'] == identity and r['ConditionKey'] == tag
+                           for r in actions[block['PreConditionGroup']]):
+                    raise ValueError(f'Unguarded contact creation in {block["BlockId"]}: {identity}')
 
 
 def validate_roster(database, document):
@@ -592,10 +665,13 @@ def selftest(database):
             raise AssertionError(name)
     # Change both the SQL result and its expected rows: policy checks must still
     # catch an incorrect slot or a missing duplicate guard.
-    for name in ('wrong starting slot refused', 'missing duplicate guard refused'):
+    for name in ('wrong starting slot refused', 'missing duplicate guard refused', 'mercenary lookup for contact refused'):
         altered = copy.deepcopy(expected)
         if name.startswith('wrong'):
             altered['Backstory'][0]['NewGame'] = 5
+        elif name.startswith('mercenary'):
+            guard = next(r for r in altered['BlockCondition'] if r['ActorId'] == 'NTG_PersonID_Recruit_Agent_Escaped_Son'
+                         and r['ConditionType'] == 'Tag' and r['OptionId'] == -1)
         else:
             guard = next(r for r in altered['BlockCondition'] if r['GroupId'] == mod_id(f'Pre_Hub_{STARTERS[0]}_Absent'))
             guard['OptionId'] = 1
@@ -605,6 +681,8 @@ def selftest(database):
             memory.executescript(sql_bytes.decode())
             if name.startswith('wrong'):
                 memory.execute('UPDATE Backstory SET NewGame=5 WHERE BackstoryId=?', (BASE,))
+            elif name.startswith('mercenary'):
+                memory.execute("UPDATE BlockCondition SET ConditionType='HasCharacter' WHERE GroupId=?", (guard['GroupId'],))
             else:
                 memory.execute('UPDATE BlockCondition SET OptionId=1 WHERE GroupId=?', (guard['GroupId'],))
             memory.row_factory = sqlite3.Row

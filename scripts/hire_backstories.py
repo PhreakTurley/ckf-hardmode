@@ -17,6 +17,9 @@ STORY_TABLES = ('Block', 'BlockCondition', 'Dialog', 'StoryMatch', 'ContactBacks
 OPERATIONS = {'AddCharacter', 'StoryMatch', 'Tag', 'Trait', 'Obligation', 'Item', 'CharacterStatus', 'PayRate'}
 RECRUITMENT_QUIPS = {'Recruit_Global_FaceThink', 'Recruit_Global_DefineTrust'}
 CONTACT_FALLBACKS = {4004: 8, 4005: 8, 4006: 9, 4008: 9, 4009: 8, 4012: 9, 305100: 9}
+# These backstories reference undefined identity tags. Their permanent actor
+# IDs and these authored tags also resolve contacts from earlier exports.
+CONTACT_PRESENCE_TAGS = {2009: 'Tag_Gambler', 2022: 'Tag_StreetDocScammer'}
 # These replies name the survivor directly instead of using an actor token.
 NAMED_SURVIVORS = {91276: 'NCP_Recruit_Sniper_BestShot_Raven',
                    91277: 'NCP_Recruit_Sniper_BestShot_Kelsen',
@@ -39,6 +42,27 @@ def setup_id(bid):
 
 def deadline(index):
     return 4 + index % 4
+
+
+def permanent_contact_actor(contact, key):
+    actor = contact['ContactStoryId']
+    return actor if actor.startswith('NCP_') else mod_id(f'NCP_{key}_Contact_{contact["ContactBackstoryId"]}')
+
+
+def contact_identity(contact, permanent_actor, tags):
+    tag = contact['TagID']
+    if tag and tag in tags:
+        return 'NTG_' + tag, tag
+    tag = CONTACT_PRESENCE_TAGS.get(contact['ContactBackstoryId'])
+    if (not permanent_actor.startswith('NCP_') or tag not in tags
+            or tag not in (contact['Tag1'], contact['Tag2'], contact['Tag3'])):
+        raise ValueError(f'ContactBackstory {contact["ContactBackstoryId"]}: no usable identity check')
+    return permanent_actor, tag
+
+
+def contact_presence(condition, group, identity, tag, exists):
+    # HasCharacter uses the player roster reader even for a contact's actor ID.
+    condition(group, 'Tag', ActorId=identity, ConditionKey=tag, OptionId=1 if exists else -1)
 
 
 def groups(rows, field='GroupId'):
@@ -169,19 +193,18 @@ def emit(stories, bid, backstory, offer, temporary, setup, base, turns, add, con
     cast_tags = {}
     cast_aliases = {}
     contact_actors = {}
+    contact_tags = {}
     fixed_cast = {}
     fallback_cast = {}
 
     def bind_contact(role, contact):
-        actor_id = contact['ContactStoryId']
         cid = contact['ContactBackstoryId']
-        if contact['TagID'] in stories.tags:
-            bindings[role] = 'NTG_' + contact['TagID']
-            contact_actors[role] = actor_id or mod_id(f'NCT_{key}_Contact_{cid}')
-        else:
-            # A backstory can name a tag with no definition (Fabber, 2009).
-            # Give that contact a permanent actor ID for guard and dialogue lookup.
-            bindings[role] = contact_actors[role] = actor_id or mod_id(f'NCP_{key}_Contact_{cid}')
+        permanent = permanent_contact_actor(contact, key)
+        identity, tag = contact_identity(contact, permanent, stories.tags)
+        bindings[role] = identity
+        contact_tags[identity] = tag
+        contact_actors[role] = (mod_id(f'NCT_{key}_Contact_{cid}')
+                                if identity.startswith('NTG_') and not contact['ContactStoryId'] else permanent)
 
     for row in action_rows:
         if row['ConditionType'] == 'AddCharacter':
@@ -230,7 +253,7 @@ def emit(stories, bid, backstory, offer, temporary, setup, base, turns, add, con
 
     def absent(suffix, identity):
         group = mod_id(f'Pre_{key}_{suffix}')
-        condition(group, 'HasCharacter', ActorId=identity, OptionId=-1)
+        contact_presence(condition, group, identity, contact_tags[identity], False)
         return group
 
     def copy_locale(old, new):
@@ -305,6 +328,7 @@ def emit(stories, bid, backstory, offer, temporary, setup, base, turns, add, con
                         or not fallback['ContactStoryId'] or not cast_tags.get(roles[0])):
                     raise ValueError(f'Backstory {bid}: cast needs a guaranteed New Game contact')
                 role = roles[0]
+                contact_tags[bindings[role]] = cast_tags[role]
                 fallback_cast[target] = bindings[role], fallback['ContactStoryId'], cast_tags[role]
             yield '', effects
         for row in rows:
@@ -396,7 +420,7 @@ def emit(stories, bid, backstory, offer, temporary, setup, base, turns, add, con
         for state in states:
             condition(group, 'GameState', ConditionKey=state)
         if identity:
-            condition(group, 'HasCharacter', ActorId=identity, OptionId=1 if exists else -1)
+            contact_presence(condition, group, identity, contact_tags[identity], exists)
         return group
 
     def describe(row, label):
@@ -630,10 +654,8 @@ def verify_events(connection, scope, document, locale=None):
                 for field in ('PreConditionGroup', 'PreDialogPostCondition', 'PostConditionGroup'):
                     for op in actions[step[field]]:
                         if op['ConditionType'] in ('Recruit', 'Purge') or (op['ConditionType'] == 'AddCharacter'
-                                and (op['ActorId'].startswith(('PCP_', 'PCT_'))
-                                     or not any(r['ConditionType'] == 'HasCharacter' and r['OptionId'] == -1
-                                                for r in actions[step['PreConditionGroup']]))):
-                            raise ValueError(f'Backstory {bid}: unsafe or unguarded action on a starter path')
+                                and not op['ActorId'].startswith(('NCP_', 'NCT_'))):
+                            raise ValueError(f'Backstory {bid}: unsafe action on a starter path')
                 if step['EventType'] in ('Group', 'GroupFirst', 'Choice', 'TalkOn'):
                     visit(step['EventId'])
 
@@ -684,7 +706,8 @@ def check_availability(bid, key, actor, prompts, replies, actions):
             for cond in actions[row['PreConditionGroup']]:
                 if cond['ConditionType'] == 'GameState' and not state_allows(cond['ConditionKey']):
                     return False
-                if cond['ConditionType'] == 'HasCharacter' and ((cond['ActorId'] in actors) != (cond['OptionId'] == 1)):
+                if (cond['ConditionType'] in ('HasCharacter', 'Tag')
+                        and (cond['ActorId'] in actors) != (cond['OptionId'] == 1)):
                     return False
             return True
 
@@ -692,7 +715,7 @@ def check_availability(bid, key, actor, prompts, replies, actions):
 
     pending = {choice_flag(row) for row in replies}
     contacts = {r['ActorId'] for row in replies for r in actions[row['PreConditionGroup']]
-                if r['ConditionType'] == 'HasCharacter' and r['ActorId'] != actor}
+                if r['ConditionType'] == 'Tag'}
     base = {'Origin_Completed'}
     second = base | {mod_id(key + '_Trait')}
     for present in ({actor}, {actor, *contacts}):

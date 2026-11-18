@@ -115,8 +115,9 @@ class HireEveryoneTests(unittest.TestCase):
                                  ['B_Finish_4003_Setup_HireEveryone', 'B_Finish_4003_Launch_HireEveryone'])
                 for _, _, guard, actor in fabber_setup:
                     self.assertEqual(actor, fabber)
-                    self.assertIn((fabber, -1), selected.execute("""SELECT ActorId, OptionId FROM BlockCondition
-                        WHERE GroupId=? AND ConditionType='HasCharacter'""", (guard,)).fetchall())
+                    self.assertIn((fabber, 'Tag_Gambler', -1), selected.execute("""
+                        SELECT ActorId, ConditionKey, OptionId FROM BlockCondition
+                        WHERE GroupId=? AND ConditionType='Tag'""", (guard,)).fetchall())
                 self.assertEqual(selected.execute("""SELECT EventId FROM Block
                     WHERE GroupId='B_Finish_4003_Launch_HireEveryone' ORDER BY BlockId DESC LIMIT 1""").fetchone(),
                     ('B_Finish_4003_Prompts_HireEveryone',))
@@ -124,6 +125,26 @@ class HireEveryoneTests(unittest.TestCase):
                     FROM Block b JOIN BlockCondition c ON c.GroupId=b.PostConditionGroup
                     WHERE b.GroupId='B_Finish_4003_Choices_HireEveryone' AND c.ConditionType='CharacterStatus'""").fetchall(),
                     [(fabber, fabber, 1)])
+                for bid, tag in ((4012, 'PersonID_Recruit_Agent_Escaped_Son'), (4016, 'PersonID_NCP_Judge')):
+                    guards = selected.execute("""SELECT b.GroupId, p.ConditionType, p.OptionId, p.ConditionKey
+                        FROM Block b JOIN BlockCondition p ON p.GroupId=b.PreConditionGroup
+                        JOIN BlockCondition c ON c.GroupId=b.PostConditionGroup AND c.ConditionType='AddCharacter'
+                        WHERE p.ActorId=? AND b.GroupId IN (?,?) ORDER BY b.BlockId""",
+                        ('NTG_' + tag, f'B_Finish_{bid}_Setup_HireEveryone', f'B_Finish_{bid}_Launch_HireEveryone')).fetchall()
+                    self.assertEqual(guards, [(f'B_Finish_{bid}_{stage}_HireEveryone', 'Tag', -1, tag)
+                                              for stage in ('Setup', 'Launch')])
+                self.assertEqual(selected.execute("""SELECT p.ConditionType,p.ActorId,p.ConditionKey,p.OptionId
+                    FROM Block b JOIN BlockCondition p ON p.GroupId=b.PreConditionGroup
+                    JOIN BlockCondition c ON c.GroupId=b.PostConditionGroup AND c.ConditionType='AddCharacter'
+                    WHERE b.GroupId='B_Hub_19_Setup_HireEveryone' AND c.ConditionValue=5010""").fetchone(),
+                    ('Tag', 'NTG_PersonID_NPC_Wendigo', 'PersonID_NPC_Wendigo', -1))
+                self.assertEqual(selected.execute("""SELECT p.ConditionType,p.ActorId,p.ConditionKey,p.OptionId
+                    FROM Block b JOIN BlockCondition p ON p.GroupId=b.PreConditionGroup
+                    JOIN BlockCondition c ON c.GroupId=b.PostConditionGroup AND c.ConditionType='AddCharacter'
+                    WHERE b.GroupId='B_Hub_35_LinkedSetup_HireEveryone' AND c.ConditionValue=5022""").fetchone(),
+                    ('Tag', 'NTG_PersonID_NPC_Brandt', 'PersonID_NPC_Brandt', -1))
+                self.assertEqual(selected.execute("""SELECT EventId FROM Block WHERE GroupId='B_Hub_35_Setup_HireEveryone'
+                    AND EventType='Group'""").fetchone(), ('B_Hub_35_LinkedSetup_HireEveryone',))
                 minimum = set(selected.execute("""
                     SELECT ContactBackstoryId,ContactStoryId FROM ContactBackstory WHERE NewGame=1 AND Status=1
                 """))
@@ -140,9 +161,9 @@ class HireEveryoneTests(unittest.TestCase):
                     self.assertEqual(len(fallback), 1)
                     guard, target, tag = fallback[0]
                     self.assertEqual(target, actor)
-                    self.assertEqual(selected.execute("""SELECT ActorId,OptionId FROM BlockCondition
-                        WHERE GroupId=? AND ConditionType='HasCharacter'""", (guard,)).fetchone(),
-                        ('NTG_' + tag.removeprefix('ADD_'), -1))
+                    self.assertEqual(selected.execute("""SELECT ActorId,ConditionKey,OptionId FROM BlockCondition
+                        WHERE GroupId=? AND ConditionType='Tag'""", (guard,)).fetchone(),
+                        ('NTG_' + tag.removeprefix('ADD_'), tag.removeprefix('ADD_'), -1))
                     self.assertTrue(selected.execute("""SELECT 1 FROM Block
                         WHERE GroupId=? AND EventType='Group' AND EventId LIKE ?""",
                         (f'B_Finish_{bid}_Launch_HireEveryone', f'B_Finish_{bid}_Resolve_%_HireEveryone')).fetchone())

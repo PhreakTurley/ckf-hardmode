@@ -81,6 +81,18 @@ role remains empty, they use one of the two guaranteed contacts.
 | Counter-Intel Turned Warden, Cybersword weapon developer, retired sniper | Origami |
 | Rebuilt Cybersword, betrayed soldier, escaped Agent EX, cult Warmachine | Dr. Ashe |
 
+Contact creation and cast recovery test the contact's tag through the contact
+lookup. `HasCharacter` calls the player roster lookup, so the exporter uses
+it for merc checks and uses `Tag` for contact checks. [measured] Shipped
+`GameAssembly.dll`, `GameDataManager.EvaluatePreconditionBlockCondition` at
+RVAs `0xAC5001`–`0xAC503F` and `0xAC418F`–`0xAC423A`. A shared identity is
+reused through new-game setup, dialogue recovery, or a later Hub offer.
+Wendigo's Ward War and starter contact templates, `ContactBackstory` 1058 and
+5010, share `PersonID_NPC_Wendigo`. [measured] `Official/data.db`.
+Molly's Hub setup also guards Brandt, whom her shipped setup creates outside
+the two linked contacts. [measured] `Official/data.db`, `Block` 86 and
+`BlockCondition` 557.
+
 The shipped Vanguard Hub offer casts the Fabber during offer setup and
 activates the contact on the matching choice. Backstory 2009 refers to
 `PersonID_Recruit_UHUB_Vanguard_Fabber`, which has no row in `Tag`.
