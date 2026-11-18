@@ -20,6 +20,7 @@ if __name__ == '__main__':
 from static_data import StaticData, DEFAULT_DB, database_path, quote
 from modkit import commit_files, payload_paths, state, prepare_parser, steam_workshop
 import hire_backstories
+from hire_backstories import FIRST_ID as BASE, LAST_ID, mod_id
 
 MODKIT = Path(r'C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Mod Uploader')
 UPLOADER = MODKIT / 'WorkshopContent/HireEveryone'
@@ -28,8 +29,7 @@ CONFIG = MODKIT.parent / 'Cyber Knights Flashpoint/BepInEx/config'
 PROJECT = ROOT / 'ckf-hire-everyone'
 FILE = 'ckf.hire-everyone.json'
 SOURCE = 'hire-everyone.json'
-PREFIX = 'HE3841540859'
-BASE = 384154000
+BACKSTORY_BLOCK_OFFSET = 256
 # Authored scope: the available Hub roster, excluding four unfinished entries
 # whose shipped blocks have Pre_AlwaysFail. New official entries require review.
 HUB = (4000, 4003, 4004, 4005, 4006, 4008, 4009, 4011, 4012,
@@ -45,6 +45,8 @@ KEYS = {'Backstory': 'BackstoryId', 'Block': 'Id',
 IDENTITIES = {'Backstory': ('BackstoryId',), 'Block': ('BlockId',), 'StoryNode': ('StoryNodeId',),
               'Tag': ('JsonId',), 'StoryMatch': ('StoryMatchId',),
               'Dialog': ('GroupId', 'JsonId'), 'BlockCondition': ('GroupId', 'JsonId')}
+AUTHORED_NUMERIC_IDS = {'Backstory': 'BackstoryId', 'Block': 'BlockId', 'StoryMatch': 'StoryMatchId',
+                        'Tag': 'JsonId', 'BlockCondition': 'JsonId', 'Dialog': 'JsonId'}
 ORIGINS = {
     'Post_Amnesia_TutorialSkipOrEnd': {3: 98, 5: 99},
     'Post_SynDebts_TutorialSkipOrEnd': {3: 3, 5: 2},
@@ -124,7 +126,8 @@ def model(config_dir, database, project):
                     if key == 'hub':
                         item['editable'] = bid in HUB
                         try:
-                            hire_backstories.check_coverage(stories, row, entries[bid], PREFIX, BASE + 1000)
+                            hire_backstories.check_coverage(stories, row, entries[bid],
+                                                            BASE + BACKSTORY_BLOCK_OFFSET, hire_backstories.deadline(0))
                         except (KeyError, ValueError) as exc:
                             item['backstoryIssue'] = str(exc)
                     result[key].append(item)
@@ -175,6 +178,8 @@ def build(database, document=None):
         def add(table, **values):
             nonlocal next_block
             if table == 'Block' and 'BlockId' not in values:
+                if next_block > BASE + BACKSTORY_BLOCK_OFFSET:
+                    raise ValueError('Starter and Hub blocks exceed their reserved portion of the ID range.')
                 values['BlockId'] = next_block
                 next_block += 1
             cols = columns[table]
@@ -199,7 +204,7 @@ def build(database, document=None):
         def condition(group, kind, seq=None, **fields):
             condition_counts[group] += 1
             if seq is None:
-                seq = condition_counts[group]
+                seq = BASE + condition_counts[group] - 1
             return add('BlockCondition', GroupId=group, JsonId=seq, ConditionType=kind, **fields)
 
         def has_character(group, actor, exists):
@@ -215,20 +220,21 @@ def build(database, document=None):
             block, main, setup = entries[bid]
             clone = dict(source)
             clone_id = BASE + index
-            init_group = f'B_{PREFIX}_Start_{bid}'
-            post = f'Post_{PREFIX}_Start_{bid}'
+            init_group = mod_id(f'B_Start_{bid}')
+            post = mod_id(f'Post_Start_{bid}')
             clone.update(BackstoryId=clone_id, BackstoryGroup=1,
                          NewGame=slot, BlockGroup=init_group)
             add('Backstory', **clone)
             # The starter clone alone runs setup; the original Hub template and
             # its recruitment conversation retain their native records.
-            finish_events.append((bid, source, block, main['ActorId'], setup, BASE + 1000 + 256 * index))
+            base = BASE + BACKSTORY_BLOCK_OFFSET + hire_backstories.BLOCKS_PER_BACKSTORY * index
+            finish_events.append((bid, source, block, main['ActorId'], setup, base, hire_backstories.deadline(index)))
             if slot == 4:
                 condition(post, 'Tag', ActorId=source['CharStoryId'], ConditionKey='ADD_PersonID_StartingHacker')
-            queued = f'{PREFIX}_Finish_{bid}_Queued'
+            queued = mod_id(f'Finish_{bid}_Queued')
             add('Block', GroupId=init_group, PostConditionGroup=post if slot == 4 else '',
-                EventType='Group', EventId=hire_backstories.setup_id(PREFIX, bid),
-                StoryNode1='ADD_' + hire_backstories.node_id(PREFIX, bid),
+                EventType='Group', EventId=hire_backstories.setup_id(bid),
+                StoryNode1='ADD_' + hire_backstories.node_id(bid),
                 PreState1='NOT_' + queued, PostState2='ADD_' + queued,
                 PostState1=block['PreState1'].replace('NOT_', 'ADD_', 1))
             traits = [r for r in rows['Trait'] if r['TagMatch'] == source['BackstoryTrait']]
@@ -246,7 +252,8 @@ def build(database, document=None):
                     texts[f'Backstory.{suffix}.{clone_id}'] = locale[key]
             roster.append({'direction': 'Hub to start', 'source': bid, 'template': clone_id,
                            'slot': slot, 'name': locale[f'Trait.Name.{tid}_Male'],
-                           'starterBackstoryEvent': hire_backstories.node_id(PREFIX, bid),
+                           'starterBackstoryEvent': hire_backstories.node_id(bid),
+                           'deadlineTurns': hire_backstories.deadline(index),
                            'openingDeployment': {group: starts[slot] for group, starts in ORIGINS.items() if slot in starts}})
 
         for bid in STARTERS:
@@ -254,12 +261,15 @@ def build(database, document=None):
             if not document['starters'][str(bid)]:
                 next_block += 7 + bool(source['BlockGroup']) + sum(bool(source[key]) for key in ('ContactLink1', 'ContactLink2'))
                 continue
-            key = f'{PREFIX}_{bid}'
-            actor = 'PCT_' + key
-            node, cooldown_node = 'SN_' + key, 'SN_' + key + '_Cooldown'
-            absent, create, hire, fire = ('Pre_' + key + '_Absent', 'Post_' + key + '_Create',
-                                         'Post_' + key + '_Hire', 'Post_' + key + '_Fire')
-            options, setup_group = 'B_' + key + '_Options', 'B_' + key + '_Setup'
+            key = f'Hub_{bid}'
+            actor = mod_id('PCT_' + key)
+            node, cooldown_node = mod_id('SN_' + key), mod_id('SN_' + key + '_Cooldown')
+            absent, create, hire, fire = (mod_id(name) for name in
+                                         (f'Pre_{key}_Absent', f'Post_{key}_Create',
+                                          f'Post_{key}_Hire', f'Post_{key}_Fire'))
+            options, setup_group = mod_id(f'B_{key}_Options'), mod_id(f'B_{key}_Setup')
+            hired, cooldown, expired = (mod_id(f'{key}_{state}') for state in ('Hired', 'Cooldown', 'Expires'))
+            expiry_block, cooldown_block = mod_id(f'B_{key}_Expires'), mod_id(f'B_{key}_Cooldown')
             has_character(absent, 'PTG_' + source['TagID'], False)
             primary = condition(create, 'AddCharacter', ActorId=actor, ConditionValue=bid, ConditionValue3=1)
             name = locale.get(f'Backstory.GivenName.{bid}', '')
@@ -269,13 +279,13 @@ def build(database, document=None):
             condition(hire, 'TempStoryId', ActorId=actor, OptionId=-1, ConditionKey=actor)
             condition(fire, 'Purge', ActorId=actor)
             add('Block', GroupId='B_UHUB_Recruit_' + GROUPS[source['JobTypeId']], Weight=20,
-                PreState1='NOT_' + key + '_Hired', PreState2='NOT_' + key + '_Cooldown',
+                PreState1='NOT_' + hired, PreState2='NOT_' + cooldown,
                 PreConditionGroup=absent, PostConditionGroup=create,
-                PostState1='ADD_' + key + '_Cooldown', StoryNode1='ADD_' + node, EventType='Recruit')
+                PostState1='ADD_' + cooldown, StoryNode1='ADD_' + node, EventType='Recruit')
             add('StoryNode', StoryNodeId=node, GroupId=node, StoryNodeType='Recruit',
-                OnAddedBlock=setup_group, ExpirationBlock='B_' + key + '_Expires', ExpirationTurns=60)
+                OnAddedBlock=setup_group, ExpirationBlock=expiry_block, ExpirationTurns=60)
             add('StoryNode', StoryNodeId=cooldown_node, GroupId=node, StoryNodeType='Regular',
-                ExpirationBlock='B_' + key + '_Cooldown', ExpirationTurns=360)
+                ExpirationBlock=cooldown_block, ExpirationTurns=360)
             # Reuse the starter's original contacts and relationship setup.
             # Existing contacts are checked before creation; their current state
             # is retained if another story already introduced them.
@@ -283,7 +293,7 @@ def build(database, document=None):
                 if not cid:
                     continue
                 contact = contacts[cid]
-                pre_contact, post_contact = 'Pre_' + key + f'_Contact_{cid}', 'Post_' + key + f'_Contact_{cid}'
+                pre_contact, post_contact = mod_id(f'Pre_{key}_Contact_{cid}'), mod_id(f'Post_{key}_Contact_{cid}')
                 contact_actor = 'NTG_' + contact['TagID']
                 has_character(pre_contact, contact_actor, False)
                 condition(post_contact, 'AddCharacter', ActorId=contact['ContactStoryId'], ConditionValue=cid)
@@ -292,34 +302,32 @@ def build(database, document=None):
                 if not any(r['GroupId'] == source['BlockGroup'] for r in rows['Block']):
                     raise ValueError('Starter initialization group missing: ' + source['BlockGroup'])
                 add('Block', GroupId=setup_group, EventId=source['BlockGroup'], EventType='Group')
-            talk = add('Block', GroupId='B_' + key + '_Talk', StoryNodeId=node,
+            talk = add('Block', GroupId=mod_id(f'B_{key}_Talk'), StoryNodeId=node,
                        ActorId=actor, InterpolateActorId=actor, DialogSide=1, ChoiceMeta=7,
                        EventId=options, EventType='Choice')
             for gender in ('Male', 'Female'):
                 texts[f'BlockDesc.{talk["BlockId"]}_{gender}'] = locale[f'Backstory.Desc.{bid}_{gender}']
             yes = add('Block', GroupId=options, ActorId='PCP_Knight', InterpolateActorId=actor,
-                      ChoiceMeta=6, PostConditionGroup=hire, PostState1='ADD_' + key + '_Hired',
-                      PostState2='DEL_' + key + '_Cooldown', StoryNode1='DEL_' + node,
+                      ChoiceMeta=6, PostConditionGroup=hire, PostState1='ADD_' + hired,
+                      PostState2='DEL_' + cooldown, StoryNode1='DEL_' + node,
                       StoryNode2='DEL_' + cooldown_node)
             for gender in ('Male', 'Female'):
                 texts[f'BlockDesc.{yes["BlockId"]}_{gender}'] = 'Recruit {1}.'
             later = add('Block', GroupId=options, ActorId='PCP_Knight', ChoiceMeta=2,
-                        PreState1='NOT_' + key + '_Expires')
+                        PreState1='NOT_' + expired)
             texts[f'BlockDesc.{later["BlockId"]}'] = 'I need more time to decide.'
             no = add('Block', GroupId=options, ActorId='PCP_Knight', InterpolateActorId=actor,
                      ChoiceMeta=-2, PostConditionGroup=fire, StoryNode1='DEL_' + node,
                      StoryNode2='ADD_' + cooldown_node)
             for gender in ('Male', 'Female'):
                 texts[f'BlockDesc.{no["BlockId"]}_{gender}'] = 'Decline {1}.'
-            add('Block', GroupId='B_' + key + '_Expires', PostState1='ADD_' + key + '_Expires',
+            add('Block', GroupId=expiry_block, PostState1='ADD_' + expired,
                 EventId=options, EventType='Choice')
-            add('Block', GroupId='B_' + key + '_Cooldown', PostState1='DEL_' + key + '_Cooldown',
-                PostState2='DEL_' + key + '_Expires')
+            add('Block', GroupId=cooldown_block, PostState1='DEL_' + cooldown,
+                PostState2='DEL_' + expired)
             roster.append({'direction': 'Starter to Hub', 'source': bid,
                            'group': GROUPS[source['JobTypeId']], 'name': name})
 
-        # Append deployment conditions after the published setup and recruit
-        # conditions so their auto-assigned SQLite row IDs stay stable on upgrade.
         for index, bid in enumerate(HUB):
             selection = document['hub'][str(bid)]
             if not selection['include']:
@@ -328,15 +336,13 @@ def build(database, document=None):
             actor = backstories[bid]['CharStoryId']
             for group, starts in ORIGINS.items():
                 if slot in starts:
-                    seq = 1000 + 2 * index
+                    seq = BASE + 2 * index
                     condition(group, 'CharAltStart', seq, ActorId=actor, ConditionValue=starts[slot])
                     condition(group, 'CharacterStatus', seq + 1, ActorId=actor, ConditionValue=1, ConditionValue2=1)
 
-        # Append the new nodes after existing Workshop nodes so their SQL row
-        # IDs and the published recruitment BlockIds stay stable on upgrade.
-        for bid, source, offer, temporary, setup, base in finish_events:
+        for bid, source, offer, temporary, setup, base, turns in finish_events:
             hire_backstories.emit(stories, bid, source, offer, temporary, setup,
-                                  PREFIX, base, add, condition, texts)
+                                  base, turns, add, condition, texts)
 
         sql = [f'INSERT INTO {quote(table)} ({", ".join(map(quote, cols))}) '
                f'SELECT {", ".join(literal(row[c]) for c in cols)} '
@@ -348,7 +354,28 @@ def build(database, document=None):
                                'startingSlots': dict(Counter(r['slot'] for r in roster if 'slot' in r))}
 
 
+def verify_namespace(rows):
+    native_groups = {'Block': {'B_UHUB_Recruit_' + group for group in GROUPS.values()},
+                     'BlockCondition': ORIGINS}
+    local_fields = {'Backstory': ('BlockGroup',), 'Block': ('StoryNodeId', 'PreConditionGroup',
+                   'PreDialogPostCondition', 'PostConditionGroup', 'StoryNode1', 'StoryNode2', 'StoryNode3', 'Dialog'),
+                    'StoryNode': ('StoryNodeId', 'OnAddedBlock', 'ExpirationStoryNode', 'ExpirationBlock'),
+                    'Tag': ('TagId',)}
+    for table, added in rows.items():
+        id_field = AUTHORED_NUMERIC_IDS.get(table)
+        for row in added:
+            if id_field and not BASE <= row[id_field] <= LAST_ID:
+                raise ValueError(f'{table}.{id_field} is outside the Hire Everyone ID range: {row[id_field]}')
+            group = row.get('GroupId')
+            if group and group not in native_groups.get(table, ()) and not group.endswith('_HireEveryone'):
+                raise ValueError(f'{table}.GroupId lacks the HireEveryone suffix: {group}')
+            for col in local_fields.get(table, ()):
+                if row[col] and not row[col].endswith('_HireEveryone'):
+                    raise ValueError(f'{table}.{col} lacks the HireEveryone suffix: {row[col]}')
+
+
 def verify(database, sql_bytes, text_bytes, expected, source_text, document=None):
+    verify_namespace(expected)
     with StaticData(database) as original, closing(sqlite3.connect(':memory:')) as memory:
         original.connection.backup(memory)
         before = {t: memory.execute('SELECT * FROM ' + quote(t)).fetchall() for t in original.schema}
@@ -402,6 +429,8 @@ def verify(database, sql_bytes, text_bytes, expected, source_text, document=None
             for col in ('OnAddedBlock', 'ExpirationBlock'):
                 if r[col] and r[col] not in blocks:
                     raise ValueError('Missing node block: ' + r[col])
+            if r['ExpirationStoryNode'] and r['ExpirationStoryNode'] not in nodes:
+                raise ValueError('Missing successor node: ' + r['ExpirationStoryNode'])
         for r in expected['BlockCondition']:
             if r['ConditionType'] == 'StoryMatch' and r['ConditionKey'] not in matches:
                 raise ValueError('Missing casting group: ' + r['ConditionKey'])
@@ -416,7 +445,7 @@ def verify_policy(connection, document=None, locale=None):
     backstories = {r['BackstoryId']: dict(r) for r in connection.execute('SELECT * FROM Backstory')}
     blocks = [dict(r) for r in connection.execute('SELECT * FROM Block')]
     conditions = [dict(r) for r in connection.execute('SELECT * FROM BlockCondition')]
-    hire_backstories.verify_events(connection, HUB, PREFIX, document or defaults(backstories), locale)
+    hire_backstories.verify_events(connection, HUB, document or defaults(backstories), locale)
     document = defaults(backstories) if document is None else validate(document)
     roster_actors = {backstories[bid]['CharStoryId'] for bid in HUB + STARTERS}
     for group, starts in ORIGINS.items():
@@ -445,7 +474,7 @@ def verify_policy(connection, document=None, locale=None):
             continue
         wanted_slot = selection['slot']
         wanted = dict(native, BackstoryId=BASE + index, BackstoryGroup=1,
-                      NewGame=wanted_slot, BlockGroup=f'B_{PREFIX}_Start_{source_id}')
+                      NewGame=wanted_slot, BlockGroup=mod_id(f'B_Start_{source_id}'))
         if clone != wanted:
             raise ValueError('Starting template changed character data or uses the wrong slot: ' + str(source_id))
         original_entries = [b for b in blocks if (b['GroupId'] or '').startswith('B_UHUB_Recruit_')
@@ -466,7 +495,7 @@ def verify_policy(connection, document=None, locale=None):
             raise ValueError('Starting hacker tag does not match selected group: ' + str(source_id))
     actual = []
     for b in blocks:
-        if b['BlockId'] < BASE or b['EventType'] != 'Recruit':
+        if not BASE <= b['BlockId'] <= LAST_ID or b['EventType'] != 'Recruit':
             continue
         creation = [c for c in conditions if c['GroupId'] == b['PostConditionGroup']
                     and c['ConditionType'] == 'AddCharacter' and c['ConditionValue3'] == 1]
@@ -553,7 +582,7 @@ def selftest(database):
     for name, operation in [
         ('native UPDATE refused', 'UPDATE Backstory SET NewGame=0 WHERE BackstoryId=22;'),
         ('native DELETE refused', 'DELETE FROM Backstory WHERE BackstoryId=22;'),
-        ('unrelated INSERT refused', 'INSERT INTO Rule (RuleId) VALUES (384154000);')]:
+        ('unrelated INSERT refused', 'INSERT INTO Rule (RuleId) VALUES (567000);')]:
         try:
             verify(database, sql_bytes + operation.encode(), text_bytes, expected, source['RawText']['Generic'])
         except (ValueError, sqlite3.DatabaseError):
@@ -567,7 +596,7 @@ def selftest(database):
         if name.startswith('wrong'):
             altered['Backstory'][0]['NewGame'] = 5
         else:
-            guard = next(r for r in altered['BlockCondition'] if r['GroupId'] == f'Pre_{PREFIX}_{STARTERS[0]}_Absent')
+            guard = next(r for r in altered['BlockCondition'] if r['GroupId'] == mod_id(f'Pre_Hub_{STARTERS[0]}_Absent'))
             guard['OptionId'] = 1
         with StaticData(database) as original:
             memory = sqlite3.connect(':memory:')

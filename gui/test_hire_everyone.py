@@ -77,25 +77,50 @@ class HireEveryoneTests(unittest.TestCase):
                 pools = selected.execute('SELECT BackstoryId, NewGame FROM Backstory WHERE BackstoryId IN (?,?,?) ORDER BY BackstoryId',
                                          (hire.BASE, hire.BASE + 1, hire.BASE + 2)).fetchall()
                 self.assertEqual(pools, [(hire.BASE, 5), (hire.BASE + 1, 4)])
-                nodes = selected.execute("SELECT StoryNodeId FROM StoryNode WHERE StoryNodeId LIKE 'SN_HE3841540859_Finish_%'").fetchall()
-                self.assertEqual({row[0] for row in nodes}, {hire.hire_backstories.node_id(hire.PREFIX, bid)
+                nodes = selected.execute("""SELECT StoryNodeId FROM StoryNode
+                    WHERE StoryNodeId LIKE 'SN_Finish_%_HireEveryone' AND StoryNodeType='Root'""").fetchall()
+                self.assertEqual({row[0] for row in nodes}, {hire.hire_backstories.node_id(bid)
                                  for bid in hire.HUB if bid != 4004})
                 self.assertEqual(selected.execute("SELECT BlockId FROM Block WHERE StoryNode1='ADD_SN_Hacker_LeftForDead'").fetchall(), [(91006,)])
-                agent = 'HE3841540859_Finish_4012'
-                self.assertEqual(selected.execute('SELECT StoryNodeType, ActorId FROM StoryNode WHERE StoryNodeId=?',
-                                                  ('SN_' + agent,)).fetchone(), ('Root', ''))
-                reply = selected.execute("""SELECT BlockId, EventType, EventId, Dialog, StoryNode1, PostConditionGroup
+                agent_node = 'SN_Finish_4012_HireEveryone'
+                retry_node = 'SN_Finish_4012_Retry_HireEveryone'
+                prompt_group = 'B_Finish_4012_Prompts_HireEveryone'
+                self.assertEqual(selected.execute("""SELECT StoryNodeType, ExpirationTurns, ExpirationBlock,
+                    ExpirationStoryNode, PauseMode FROM StoryNode WHERE StoryNodeId=?""", (agent_node,)).fetchone(),
+                    ('Root', 4, prompt_group, retry_node, 0))
+                self.assertEqual(selected.execute("""SELECT StoryNodeId, ChoiceMeta, EventType, EventId FROM Block
+                    WHERE StoryNodeId IN (?,?) ORDER BY ChoiceMeta DESC""", (agent_node, retry_node)).fetchall(),
+                    [(agent_node, 5, 'GroupFirst', prompt_group), (retry_node, 4, 'GroupFirst', prompt_group)])
+                reply = selected.execute("""SELECT BlockId, EventType, EventId, Dialog, StoryNode1, StoryNode2, PostConditionGroup
                     FROM Block WHERE GroupId = ? AND PreDialogPostCondition IN
                     (SELECT GroupId FROM BlockCondition WHERE ConditionKey = ?)""",
-                    ('B_' + agent + '_Choices', 'ADD_' + agent + '_Choice_91258')).fetchall()
+                    ('B_Finish_4012_Choices_HireEveryone', 'ADD_Finish_4012_Choice_91258_HireEveryone')).fetchall()
                 self.assertEqual(len(reply), 1)
-                block, kind, target, dialog, removal, effects = reply[0]
-                self.assertEqual((kind, target, removal), ('Event', '', 'DEL_SN_' + agent))
+                block, kind, target, dialog, removal, retry_removal, effects = reply[0]
+                self.assertEqual((kind, target, removal, retry_removal),
+                                 ('Event', '', 'DEL_' + agent_node, 'DEL_' + retry_node))
                 self.assertTrue(dialog)
+                self.assertTrue(567000 <= block <= 567999)
                 self.assertEqual(selected.execute('SELECT ConditionValue FROM BlockCondition WHERE GroupId=? AND ConditionType=?',
                                                   (effects, 'Item')).fetchone(), (3606,))
                 locale = json.loads((workshop / '_data/en-US.json').read_bytes())
                 self.assertTrue(locale[f'BlockDesc.{block}_Female'])
+                for bid in hire.HUB:
+                    if bid == 4004:
+                        continue
+                    followup, = selected.execute('SELECT Dialog FROM Block WHERE GroupId=?',
+                                                 (f'B_Finish_{bid}_Followup_HireEveryone',)).fetchone()
+                    lines = [line for key, line in locale.items() if key.startswith(f'Dialog.{followup}.')]
+                    quips = {row[0] for row in selected.execute('SELECT QuipType FROM Dialog WHERE GroupId=?', (followup,))}
+                    self.assertTrue(lines)
+                    self.assertTrue(quips.isdisjoint({'Recruit_Global_FaceThink', 'Recruit_Global_DefineTrust'}))
+                    self.assertTrue(any(line.startswith("Further define this merc's Backstory") for line in lines)
+                                    or 'Recruit_Global_Define2' in quips)
+                    self.assertFalse(any(line.startswith('What do you think, {1}?') or 'trust is our baseline' in line
+                                         for line in lines))
+                    if bid == 4012:
+                        self.assertTrue(locale[f'Dialog.{followup}.567001_Female'].startswith("I've got one more question"))
+                        self.assertTrue(locale[f'Dialog.{followup}.567002'].startswith("Further define this merc's Backstory"))
 
 
 UI = r'''

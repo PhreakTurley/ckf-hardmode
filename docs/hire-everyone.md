@@ -13,6 +13,12 @@ combat starter rows in the current `Official/data.db`; a changed roster refuses
 preparation until reviewed. Content and localization come from the official
 database and locale through the [static reader](static-data.md).
 
+The export reserves numeric content IDs `567000–567999` and appends
+`_HireEveryone` to new string IDs. It keeps shipped references, including the
+shared Hub and Origin group names. SQLite assigns its internal row IDs.
+Start a new campaign for this namespace. Earlier test campaigns stored the
+previous template and story node identifiers.
+
 Hub characters receive separate starting-only Backstory templates. Their
 new templates use BackstoryGroup 1. The shipped class sets the default starting
 group. The Editor can assign any of the three groups to an included Hub recruit.
@@ -33,20 +39,26 @@ The shipped slot 4 actors have no deployment pair. [measured]
 The clones preserve native class, cosmetics, implants, base trait fields,
 identity and tags. Their initialization sets the native hired flag, runs the
 starter's supporting cast and relationship setup, and queues their **Finish
-Backstory** node. The node is available on the timeline and roster page after
-the Origin intro. A roster check uses the starter's permanent actor ID. The
-node belongs to the selected New Game template and closes after completion.
-Campaigns created before this feature have no queued starter nodes.
+Backstory** node. The prompt is eligible for the timeline and roster page
+when the Origin sets `Origin_Completed`. A roster check uses the starter's
+permanent actor ID. The deadline is staggered from four to seven turns after
+the node is queued. At expiry the node opens the current conversation and
+hands off to a roster prompt so the player can resume a dismissed dialogue.
+Both entry points share the same completion flags.
 
-`scripts/hire_backstories.py` uses the shipped timeline chatter shape and adapts
-each reviewed Hub conversation into two choices. The trait choice leads to the
-follow-up choice. That choice plays the reply, applies its effects, and closes
-the prompt. An interrupted conversation resumes from its saved choice. Branches
-whose effects were already applied by the earlier exporter are hidden to avoid
-replaying the effects. The adaptation reuses existing contacts by identity and
-keeps cast tags local to each conversation. The shipped Hub conversations handle
-later recruitment. Menu descriptions use the native backstory text when
-available, otherwise the associated trait text.
+The timeline skips active story nodes whose stored `ExpiresTurn` is `-1`.
+[measured] Shipped `GameAssembly.dll` on Unity 6000.3.12f1,
+`SaveManager.PopulateTimelineEvents` at RVA `0xF54EC6` and
+`GameDataManager.BuildStoryNode` at RVA `0xAC0D8F`–`0xAC0E74`.
+
+`scripts/hire_backstories.py` adapts each reviewed Hub conversation into two
+choices. The trait choice leads to the follow-up, with the Face question and
+the trust warning removed. The follow-up choice plays the reply, applies its
+effects, and closes the prompt. An interrupted conversation resumes from
+its saved choice. The adaptation reuses existing contacts by identity and keeps
+cast tags local to each conversation. The shipped Hub conversations handle later
+recruitment. Menu descriptions use the native backstory text when available,
+otherwise the associated trait text.
 
 Selected combat starters receive new Hub entries in their respective class
 groups. These use the original Backstory ID, a HasCharacter condition against
@@ -113,7 +125,8 @@ These are content checks. Starting setup, contact casting, recruitment, expiry
 and duplicate suppression in the running game remain [unverified].
 
 Review the generated setup before a live test. In both Origins, start with a
-Hub character and check that the safehouse shows their **Finish Backstory**
-event. Save and reload between choices, check the resulting traits and contacts,
-and confirm that finishing closes the event. Include two Hub starters in one
-campaign and hire a different Hub merc later through their ordinary offer.
+Hub character and look for **Finish Backstory** on the top timeline and on
+the character page. Try the timeline entry for one starter and let another
+reach its deadline. Check the resulting traits and contacts, confirm that
+finishing clears the prompt, and hire a different Hub merc through their
+ordinary offer.
