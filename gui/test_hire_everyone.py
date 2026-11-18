@@ -124,6 +124,51 @@ class HireEveryoneTests(unittest.TestCase):
                     FROM Block b JOIN BlockCondition c ON c.GroupId=b.PostConditionGroup
                     WHERE b.GroupId='B_Finish_4003_Choices_HireEveryone' AND c.ConditionType='CharacterStatus'""").fetchall(),
                     [(fabber, fabber, 1)])
+                minimum = set(selected.execute("""
+                    SELECT ContactBackstoryId,ContactStoryId FROM ContactBackstory WHERE NewGame=1 AND Status=1
+                """))
+                self.assertEqual(minimum, {(8, 'NCP_Origami'), (9, 'NCP_Ashe')})
+                knight_choices = selected.execute('SELECT ContactLink1, ContactLink2 FROM Backstory WHERE NewGame=1').fetchall()
+                face_choices = selected.execute('SELECT ContactLink1, ContactLink2 FROM Backstory WHERE NewGame=2').fetchall()
+                self.assertEqual((len(knight_choices), len(face_choices)), (4, 3))
+                for bid, fallback_id in {4005: 8, 4006: 9, 4008: 9, 4009: 8, 4012: 9, 305100: 9}.items():
+                    actor, = [actor for cid, actor in minimum if cid == fallback_id]
+                    fallback = selected.execute("""SELECT b.PreConditionGroup,c.ActorId,c.ConditionKey FROM Block b
+                        JOIN BlockCondition c ON c.GroupId=b.PostConditionGroup
+                        WHERE b.GroupId LIKE ? AND c.ConditionType='Tag'""",
+                        (f'B_Finish_{bid}_Fallback_%_HireEveryone',)).fetchall()
+                    self.assertEqual(len(fallback), 1)
+                    guard, target, tag = fallback[0]
+                    self.assertEqual(target, actor)
+                    self.assertEqual(selected.execute("""SELECT ActorId,OptionId FROM BlockCondition
+                        WHERE GroupId=? AND ConditionType='HasCharacter'""", (guard,)).fetchone(),
+                        ('NTG_' + tag.removeprefix('ADD_'), -1))
+                    self.assertTrue(selected.execute("""SELECT 1 FROM Block
+                        WHERE GroupId=? AND EventType='Group' AND EventId LIKE ?""",
+                        (f'B_Finish_{bid}_Launch_HireEveryone', f'B_Finish_{bid}_Resolve_%_HireEveryone')).fetchone())
+                for original, contact, name in ((91276, 2011, 'Raven'), (91277, 2012, 'Kelsen'), (91278, 2013, 'Ryka')):
+                    variants = selected.execute("""SELECT BlockId, Dialog, PreDialogPostCondition, PostConditionGroup
+                        FROM Block WHERE GroupId='B_Finish_4013_Choices_HireEveryone'
+                        AND PreDialogPostCondition IN (SELECT GroupId FROM BlockCondition WHERE ConditionKey=?)""",
+                        (f'ADD_Finish_4013_Choice_{original}_HireEveryone',)).fetchall()
+                    self.assertEqual(len(variants), 2)
+                    for option, speech, before, after in variants:
+                        self.assertTrue(any(name in value for key, value in locale.items()
+                                            if key.startswith(f'Dialog.{speech}.')))
+                        self.assertFalse(any(name in value for key, value in locale.items()
+                                             if key == f'BlockDesc.{option}' or key.startswith(f'BlockDesc.{option}_')))
+                        self.assertIsNone(selected.execute("""SELECT 1 FROM BlockCondition WHERE GroupId=?
+                            AND ConditionType='AddCharacter'""", (after,)).fetchone())
+                    self.assertEqual(selected.execute("""SELECT backstory.ContactBackstoryId
+                        FROM BlockCondition c JOIN ContactBackstory backstory ON
+                        (c.ConditionValue = -1 AND backstory.BackstoryGroup = c.ConditionValue2)
+                        OR backstory.ContactBackstoryId = c.ConditionValue
+                        WHERE c.GroupId IN (?,?) AND c.ConditionType='AddCharacter'""",
+                        (variants[0][2], variants[1][2])).fetchall(), [(contact,)])
+                all_dialogue = [line for key, line in locale.items() if key.startswith(('Dialog.', 'BlockDesc.'))]
+                self.assertTrue(any("when you're hacking" in line for line in all_dialogue))
+                self.assertTrue(any('spinal cord' in line for line in all_dialogue))
+                self.assertFalse(any('�' in line or '<style=DIalog' in line for line in all_dialogue))
                 for bid in hire.HUB:
                     if bid == 4004:
                         continue

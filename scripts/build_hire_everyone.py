@@ -20,6 +20,7 @@ if __name__ == '__main__':
 from static_data import StaticData, DEFAULT_DB, database_path, quote
 from modkit import commit_files, payload_paths, state, prepare_parser, steam_workshop
 import hire_backstories
+import hire_backstory_copy
 from hire_backstories import FIRST_ID as BASE, LAST_ID, mod_id
 
 MODKIT = Path(r'C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Mod Uploader')
@@ -661,7 +662,7 @@ def main():
         return
     schema = MODKIT / 'CyberKnightsModkit_Data/StreamingAssets/config.json'
     watched = [args.data, args.data.parent / 'en-US.json', Path(__file__), Path(hire_backstories.__file__),
-               schema, args.config / FILE]
+               Path(hire_backstory_copy.__file__), schema, args.config / FILE]
     inputs = {p: state(p) for p in watched}
     destinations = [args.out / 'source_data/stories.manifest', args.out / 'source_data/hire-everyone.json',
                     args.out / 'prepared/_data/data.sql', args.out / 'prepared/_data/en-US.json',

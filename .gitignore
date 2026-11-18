@@ -51,6 +51,7 @@
 !/scripts/test_enemy_difficulty.py
 !/scripts/build_hire_everyone.py
 !/scripts/hire_backstories.py
+!/scripts/hire_backstory_copy.py
 
 # the pinned BepInEx is unpacked here locally; only the how-to is published
 !/vendor/

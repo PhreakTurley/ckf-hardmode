@@ -59,10 +59,27 @@ choice plays the reply, applies its
 effects, and closes the prompt. An interrupted conversation resumes from
 its saved choice. Starter setup creates fixed contacts by their shipped
 backstory and reuses existing contacts by identity. Opening an unfinished
-conversation also checks for missing setup contacts. Contacts introduced by a
-choice are created on that branch. The shipped Hub conversations handle later
-recruitment. Menu descriptions use the native backstory text when available,
-otherwise the associated trait text.
+conversation also checks for missing setup contacts. The exporter checks the
+actors and interpolation targets in each choice and reply. The three Fireteam
+Shadow Wolf options describe the contact by role. The chosen survivor is
+created before their name appears in the reply. The exported English dialogue
+and choice labels include starter-only copyedits. The shipped Hub conversations
+handle later recruitment. Menu descriptions use the native backstory text when
+available, otherwise the associated trait text.
+
+The minimum active contact pool is Origami and Dr. Ashe. [measured] The shipped
+`NewGameDataManager.CreateContacts` passes 1 to
+`DataDb.ReadContactBackstorysNewGame` in `GameAssembly.dll`. In
+`Official/data.db`, `ContactBackstory` 8 and 9 have both `NewGame=1` and
+`Status=1`. The four Knight templates have no `ContactLink1/2`. The three Face
+templates link three different contact pairs. See `Backstory` 9–12, 13, 15,
+and 16. The starter stories try the native casting rules first. If a contact
+role remains empty, they use one of the two guaranteed contacts.
+
+| Starter backstory | Guaranteed fallback |
+|---|---|
+| Counter-Intel Turned Warden, Cybersword weapon developer, retired sniper | Origami |
+| Rebuilt Cybersword, betrayed soldier, escaped Agent EX, cult Warmachine | Dr. Ashe |
 
 The shipped Vanguard Hub offer casts the Fabber during offer setup and
 activates the contact on the matching choice. Backstory 2009 refers to

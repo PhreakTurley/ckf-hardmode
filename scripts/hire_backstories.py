@@ -2,6 +2,7 @@
 from collections import defaultdict
 import re
 
+import hire_backstory_copy
 
 # BackstoryId -> (trait prompt, follow-up prompt). These anchors are reviewed
 # individually. A different conversation needs review before it can ship.
@@ -15,6 +16,11 @@ CONVERSATIONS = {
 STORY_TABLES = ('Block', 'BlockCondition', 'Dialog', 'StoryMatch', 'ContactBackstory', 'Tag')
 OPERATIONS = {'AddCharacter', 'StoryMatch', 'Tag', 'Trait', 'Obligation', 'Item', 'CharacterStatus', 'PayRate'}
 RECRUITMENT_QUIPS = {'Recruit_Global_FaceThink', 'Recruit_Global_DefineTrust'}
+CONTACT_FALLBACKS = {4004: 8, 4005: 8, 4006: 9, 4008: 9, 4009: 8, 4012: 9, 305100: 9}
+# These replies name the survivor directly instead of using an actor token.
+NAMED_SURVIVORS = {91276: 'NCP_Recruit_Sniper_BestShot_Raven',
+                   91277: 'NCP_Recruit_Sniper_BestShot_Kelsen',
+                   91278: 'NCP_Recruit_Sniper_BestShot_Ryka'}
 BLOCKS_PER_BACKSTORY = 48
 FIRST_ID, LAST_ID = 567000, 567999
 
@@ -164,6 +170,7 @@ def emit(stories, bid, backstory, offer, temporary, setup, base, turns, add, con
     cast_aliases = {}
     contact_actors = {}
     fixed_cast = {}
+    fallback_cast = {}
 
     def bind_contact(role, contact):
         actor_id = contact['ContactStoryId']
@@ -228,8 +235,10 @@ def emit(stories, bid, backstory, offer, temporary, setup, base, turns, add, con
 
     def copy_locale(old, new):
         for suffix in ('', '_Male', '_Female'):
-            if old + suffix in stories.locale:
-                texts[new + suffix] = stories.locale[old + suffix]
+            key = old + suffix
+            if key in stories.locale:
+                text = stories.locale[key]
+                texts[new + suffix] = hire_backstory_copy.edit(key, text) if old.startswith(('Dialog.', 'BlockDesc.')) else text
 
     copied_dialogs = {}
 
@@ -289,6 +298,14 @@ def emit(stories, bid, backstory, offer, temporary, setup, base, turns, add, con
                     effects.append(('Tag', {'ActorId': alias, 'ConditionKey': 'ADD_' + cast_tags[role]}, None))
                 if alias.startswith(('NCT_', 'PCT_')):
                     effects.append(('TempStoryId', {'ActorId': alias, 'OptionId': -1, 'ConditionKey': alias}, None))
+            contact_roles = [role for role in roles if role.startswith('NC')]
+            if contact_roles:
+                fallback = stories.contact_ids.get(CONTACT_FALLBACKS.get(bid))
+                if (len(roles) != 1 or not fallback or fallback['NewGame'] != 1 or fallback['Status'] != 1
+                        or not fallback['ContactStoryId'] or not cast_tags.get(roles[0])):
+                    raise ValueError(f'Backstory {bid}: cast needs a guaranteed New Game contact')
+                role = roles[0]
+                fallback_cast[target] = bindings[role], fallback['ContactStoryId'], cast_tags[role]
             yield '', effects
         for row in rows:
             if row['Optional'] != 3:
@@ -343,11 +360,19 @@ def emit(stories, bid, backstory, offer, temporary, setup, base, turns, add, con
     setup_batches = list(cast(offer['EventId'])) if offer['EventId'] else []
     setup_batches.extend(operation_batches(sorted(initial, key=lambda r: r['ConditionType'] != 'AddCharacter')))
     repairs = []
+    cast_retries = []
     for identity, effects in setup_batches:
         ordinal = str(block_no + 1)
         before = absent('Setup_' + ordinal, identity) if identity else ''
         post = mod_id(f'Post_{key}_Setup_{ordinal}')
-        block(start, PreConditionGroup=before, PostConditionGroup=post)
+        kind, fields, _ = effects[0]
+        casting = fallback_cast.get(fields['ConditionKey']) if kind == 'StoryMatch' else None
+        if casting:
+            resolve = mod_id(f'B_{key}_Resolve_{ordinal}')
+            cast_retries.append((resolve, post, *casting))
+            block(start, EventType='Group', EventId=resolve)
+        else:
+            block(start, PreConditionGroup=before, PostConditionGroup=post)
         write_effects(post, effects)
         if identity:
             repairs.append((identity, post))
@@ -356,7 +381,8 @@ def emit(stories, bid, backstory, offer, temporary, setup, base, turns, add, con
 
     # The timeline skips untimed nodes. Expiry opens the same current prompt
     # and leaves an untimed roster entry in case the player closes the dialogue.
-    launch = mod_id(f'B_{key}_Launch') if repairs else prompts
+    prepare_contacts = bool(repairs or cast_retries)
+    launch = mod_id(f'B_{key}_Launch') if prepare_contacts else prompts
     add('StoryNode', GroupId=node, StoryNodeId=node, StoryNodeType='Root',
         ExpirationTurns=turns, ExpirationBlock=launch, ExpirationStoryNode=retry)
     add('StoryNode', GroupId=node, StoryNodeId=retry, StoryNodeType='Regular')
@@ -400,7 +426,7 @@ def emit(stories, bid, backstory, offer, temporary, setup, base, turns, add, con
     for active_node, meta, name in ((node, 5, 'Entry'), (retry, 4, 'Resume')):
         row = block(mod_id(f'B_{key}_{name}'), StoryNodeId=active_node,
                     ActorId=actor, InterpolateActorId=actor, ChoiceMeta=meta,
-                    EventType='Group' if repairs else 'GroupFirst', EventId=launch,
+                    EventType='Group' if prepare_contacts else 'GroupFirst', EventId=launch,
                     PreConditionGroup=visible_entry, **prompt)
         describe(row, 'Finish Backstory: {1}')
 
@@ -412,18 +438,32 @@ def emit(stories, bid, backstory, offer, temporary, setup, base, turns, add, con
         block(prompts, EventType='Choice', EventId=target, Dialog=dialog_id,
               PreConditionGroup=gate(step, [*no_choice, trait + trained]), **prompt)
 
+    setup_contacts = {identity for identity, _ in repairs} | {r[2] for r in cast_retries}
+    guaranteed = {c['ContactStoryId'] for c in stories.contact_ids.values()
+                  if c['NewGame'] == 1 and c['ContactStoryId']}
+
+    def contact_refs(rows):
+        return {target for r in rows for col in ('ActorId', 'InterpolateActorId')
+                if (target := rebind(r[col])).startswith(('NCP_', 'NCT_', 'NTG_'))}
+
+    def require_contacts(available, needed, context):
+        missing = needed - available - guaranteed
+        if missing:
+            raise ValueError(f'Backstory {bid}: {context} references unavailable contacts {sorted(missing)}')
+
+    require_contacts(setup_contacts, contact_refs([followup, *traits]) | contact_refs(
+        [row for part in [followup, *traits] for row in stories.dialogs[part['Dialog']]]), 'trait or follow-up')
+    deferred_replies = []
     for path, _closing, _ending in branches:
         source = path[0]
         index = source['BlockId']
         picked, ready = mod_id(f'{key}_Choice_{index}'), mod_id(f'{key}_Prepared_{index}')
         pre = native_conditions(source['PreDialogPostCondition'])
         post = native_conditions(source['PostConditionGroup'])
-        if index in (91019, 91099) or len(path) > 1:
-            # In these replies the merged dialogue names the newly cast or
-            # created contact. Resolve just that identity before speaking.
-            create = [r for r in post if r['ConditionType'] in ('AddCharacter', 'StoryMatch')]
-            pre += create
-            post = [r for r in post if r not in create]
+        named = {rebind(NAMED_SURVIVORS[index])} if index in NAMED_SURVIVORS else set()
+        reply_contacts = named | contact_refs([r for step in path for r in stories.dialogs[step['Dialog']]])
+        before_ct = bool(pre) or index in (91019, 91099) or len(path) > 1
+        require_contacts(setup_contacts, contact_refs([source]), f'option {index}')
         if any(b['PreConditionGroup'] or b['PreState1'] or b['PreState2'] or b['PostState1'] or b['PostState2']
                for b in path):
             raise ValueError(f'Backstory {bid}: branch state needs review at Block {index}')
@@ -432,13 +472,20 @@ def emit(stories, bid, backstory, offer, temporary, setup, base, turns, add, con
                 raise ValueError(f'Backstory {bid}: extra branch effects need review at Block {step["BlockId"]}')
         reply = dialog(*(step['Dialog'] for step in path))
         before, after = list(operation_batches(pre)), list(operation_batches(post))
+        # Resolve a branch's contact before its first spoken line. Keep the
+        # other branch effects on the choice's original completion side.
+        create = [batch for batch in after if batch[0] in reply_contacts]
+        before += create
+        after = [batch for batch in after if batch not in create]
+        require_contacts(setup_contacts | {identity for identity, _ in before}, reply_contacts, f'reply {index}')
         guarded = {identity for identity, _ in before + after if identity}
         if len(guarded) > 1:
             raise ValueError(f'Backstory {bid}: follow-up {index} needs multiple contact guards')
         identity = next(iter(guarded), '')
         cases = (False, True) if identity else (False,)
 
-        def terminal(resuming, prepared, existing, contact):
+        def terminal(resuming, prepared, existing, contact, repair=False, *, index=index, source=source, reply=reply,
+                     before=before, after=after, picked=picked, ready=ready):
             flags = ['HAS_' + picked] if resuming else [*no_choice, 'HAS_' + trained]
             if before:
                 flags.append(('HAS_' if prepared else 'NOT_') + ready)
@@ -460,11 +507,12 @@ def emit(stories, bid, backstory, offer, temporary, setup, base, turns, add, con
                 for variant in ('Male', 'Female'):
                     texts.setdefault(f'{label}_{variant}', texts.get(label) or 'Continue the conversation.')
             condition(start_post, 'GameState', ConditionKey='ADD_' + picked)
-            if before and not prepared:
+            if before and (not prepared or repair):
                 for required, effects in before:
-                    if not required or not existing:
+                    if (not required and not repair) or (required and not existing):
                         write_effects(start_post, effects)
-                condition(start_post, 'GameState', ConditionKey='ADD_' + ready)
+                if not prepared:
+                    condition(start_post, 'GameState', ConditionKey='ADD_' + ready)
             effects_after = [effect for required, effects in after if not required or not existing for effect in effects]
             effects_after.extend(cleanup)
             write_effects(end_post, effects_after)
@@ -476,10 +524,13 @@ def emit(stories, bid, backstory, offer, temporary, setup, base, turns, add, con
             terminal(True, False, exists, identity)
         if before:
             # A saved reply may already have executed its pre-dialog effects.
-            # The current roster decides whether any post-dialog creation is needed.
-            pending_identity = next((contact for contact, _ in after if contact), '')
-            for exists in ((False, True) if pending_identity else (True,)):
-                terminal(True, True, exists, pending_identity)
+            # The tag-aware path repairs a missing contact without replaying
+            # the other effects. Append new rows after the published blocks.
+            if before_ct:
+                terminal(True, True, True, identity)
+            else:
+                deferred_replies.append((terminal, True, identity, False))
+            deferred_replies.append((terminal, False, identity, bool(identity)))
 
     for r in traits:
         if r['PreConditionGroup'] or r['PreDialogPostCondition'] or r['PostConditionGroup']:
@@ -495,8 +546,21 @@ def emit(stories, bid, backstory, offer, temporary, setup, base, turns, add, con
     for identity, post in repairs:
         before = gate(f'Restore_{block_no + 1}', [], identity)
         block(launch, PreConditionGroup=before, PostConditionGroup=post, **prompt)
-    if repairs:
+    for resolve, _post, _identity, _fallback, _tag in cast_retries:
+        block(launch, EventType='Group', EventId=resolve, PreConditionGroup=visible_entry, **prompt)
+    if prepare_contacts:
         block(launch, EventType='GroupFirst', EventId=prompts, PreConditionGroup=visible_entry, **prompt)
+    for terminal, exists, identity, repair in deferred_replies:
+        if identity or exists:
+            terminal(True, True, exists, identity, repair)
+    for resolve, post, identity, fallback, tag in cast_retries:
+        retry_cast = resolve.replace('_Resolve_', '_Fallback_')
+        before = absent(f'Cast_{block_no + 1}', identity)
+        block(resolve, PreConditionGroup=before, PostConditionGroup=post)
+        block(resolve, EventType='GroupFirst', EventId=retry_cast)
+        fallback_post = mod_id(f'Post_{key}_Fallback_{block_no + 1}')
+        block(retry_cast, PreConditionGroup=before, PostConditionGroup=fallback_post)
+        condition(fallback_post, 'Tag', ActorId=fallback, ConditionKey='ADD_' + tag)
 
 
 def verify_events(connection, scope, document, locale=None):
@@ -538,7 +602,7 @@ def verify_events(connection, scope, document, locale=None):
             raise ValueError(f'Backstory {bid}: contact recovery must run before the conversation')
         initial_contacts = {b['PostConditionGroup'] for b in by_group[setup_id(bid)]
                             if any(r['ConditionType'] == 'AddCharacter' for r in actions[b['PostConditionGroup']])}
-        if {b['PostConditionGroup'] for b in repairs[:-1]} != initial_contacts:
+        if {b['PostConditionGroup'] for b in repairs[:-1] if b['PostConditionGroup']} != initial_contacts:
             raise ValueError(f'Backstory {bid}: contact recovery must cover each starter contact')
         entries = []
         for active_node, meta in ((node, 5), (retry, 4)):
