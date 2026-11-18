@@ -159,6 +159,7 @@ table.hire-roster th,table.hire-roster td{padding:7px 10px}
 .hire-roster th small,.hire-roster td small{display:block;margin-top:3px;color:var(--dim);font-weight:400}
 .hire-roster.grid td input[type=checkbox]{width:auto;margin:0;accent-color:var(--accent)}
 .hire-roster select{max-width:100%}
+.hire-roster .hire-story-missing{color:#f4c17b;font-weight:600}
 table.grid td input{border:0;border-radius:0;background:transparent;width:11ch;font-variant-numeric:tabular-nums;
   padding:3px 7px}
 table.grid td.unset input{background:var(--unsetbg)}
@@ -4418,15 +4419,15 @@ function renderHireEveryone(panel) {
       card.appendChild(el('h4', {text:title}));
       const isHub = key === 'hub';
       const columns = ['Character', 'Class', includeLabel];
-      if (isHub) columns.push('Starting group');
+      if (isHub) columns.push('Starting group', 'New Game event');
       const table = el('table', {class:'grid hire-roster', 'aria-label':title}, [
         el('thead', {}, [el('tr', {}, columns.map(text => el('th', {scope:'col', text:text})))])]);
       const body = el('tbody');
       for (const row of model[key]) {
         const draft = W.hireEveryone[key];
-        const selected = isHub ? draft[row.id] : null;
+        const selected = isHub ? (draft[row.id] || {include:false, slot:row.defaultSlot}) : null;
         const include = el('input', {type:'checkbox', checked:isHub ? selected.include : draft[row.id],
-          'aria-label':includeLabel + ' for ' + row.name, 'data-hire-include':row.id});
+          disabled:isHub && !row.editable, 'aria-label':includeLabel + ' for ' + row.name, 'data-hire-include':row.id});
         const name = el('th', {scope:'row'}, [el('span', {text:row.name}),
           [row.name, row.job].includes(row.backstory) ? null : el('small', {text:row.backstory})]);
         const cells = [name, el('td', {text:row.job}), el('td', {}, [include])];
@@ -4437,7 +4438,7 @@ function renderHireEveryone(panel) {
               text:g.name + (g.slot===row.defaultSlot ? ' (default)' : '')})));
           group.value = String(selected.slot);
           const showDeployment = function () {
-            group.disabled = !selected.include;
+            group.disabled = !selected.include || !row.editable;
             const choice = model.groups.find(g => g.slot===selected.slot);
             deployment.textContent = !selected.include ? 'Outside starting roster'
               : choice.deploys ? 'Deploys in both Origin openers' : 'Starts at the safehouse';
@@ -4450,6 +4451,8 @@ function renderHireEveryone(panel) {
           });
           showDeployment();
           cells.push(el('td', {}, [group, deployment]));
+          cells.push(el('td', {'data-hire-story':row.id, class:row.backstoryIssue ? 'hire-story-missing' : 'small',
+            title:row.backstoryIssue, text:row.backstoryIssue ? 'Missing event' : 'Finish Backstory'}));
         } else {
           include.addEventListener('change', function () {draft[row.id] = include.checked; updateDirty();});
         }

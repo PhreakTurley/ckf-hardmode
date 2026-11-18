@@ -31,14 +31,20 @@ The shipped slot 4 actors have no deployment pair. [measured]
 `Official/data.db`, `BlockCondition` 717–734 and 849–866.
 
 The clones preserve native class, cosmetics, implants, base trait fields,
-identity and tags. Their new initialization blocks copy the native recruitment
-setup without creating the main character again, translate its temporary actor
-reference to the permanent identity, and invoke the existing casting group when
-one is referenced. They set the native recruitment's hired flag. Menu descriptions
-use the native backstory text when available, otherwise the associated backstory
-trait's localized text.
-The builder does not translate choices in recruitment conversations into
-additional starting variants.
+identity and tags. Their initialization sets the native hired flag, runs the
+starter's supporting cast and relationship setup, and queues their **Finish
+Backstory** node. The node is available on the timeline and roster page after
+the Origin intro. A roster check uses the starter's permanent actor ID. The
+node belongs to the selected New Game template and closes after completion.
+Campaigns created before this feature have no queued starter nodes.
+
+`scripts/hire_backstories.py` adapts each reviewed Hub conversation into its
+trait and follow-up choices. A campaign can resume at either choice or at the
+ending. The adaptation reuses existing contacts by identity, keeps local cast
+tags per conversation, and guards setup and branch effects with checkpoints.
+It replaces the hire and decline paths with a **Finish** action. The shipped
+Hub conversations handle later recruitment. Menu descriptions use the native
+backstory text when available, otherwise the associated trait text.
 
 Selected combat starters receive new Hub entries in their respective class
 groups. These use the original Backstory ID, a HasCharacter condition against
@@ -62,6 +68,12 @@ choose a **Starting group**. Save persists the roster in
 supported character with class-based groups. Use **Export Hire Everyone to
 Modkit** to build and install the saved roster locally. Export uses the
 [Workshop project and Steam registration checks](../gui/README.md#export-workshop-mods-to-modkit-uploader).
+
+The **New Game event** column shows each Hub character's coverage. **Missing
+event** identifies a newly shipped or changed entry that needs review. Add a
+new character's reviewed trait and follow-up block IDs to `CONVERSATIONS`,
+review its contact/casting actions, and update the authored Hub roster in the
+builder. Save and export run the same coverage checks on the selected roster.
 
 Requires the official database/locale and the installed Cyber Knights Mod
 Uploader, including its parser DLL and schema. From `cmd.exe`:
@@ -91,16 +103,15 @@ applies that SQL to an in-memory copy of Official content, rejects updates and
 deletes, compares every native row unchanged, checks the exact additions and
 localization, validates content links, and checks repeat application. Independent
 policy checks verify selected groups, cloned character fields, origin deployment,
-hired flags, selected starter offers and existing-character guards.
+hired flags, selected starter offers, starter-only activation, guarded contact
+creation, path completion and choice checkpoints.
 
 `review.json` records the current roster, input/output hashes and check results.
 These are content checks. Starting setup, contact casting, recruitment, expiry
 and duplicate suppression in the running game remain [unverified].
 
-Review the generated setup before testing: its AddCharacter, Tag, StoryMatch,
-Recruit and Purge actions write campaign state. For a live test, activate the
-locally installed mod, inspect all three starting pools, start with a Hub
-character, and check that the same character is absent from Hub offers. Recruit
-an unselected original starter and check name, traits, contacts, hire/decline,
-cooldown and reload behavior. Include a Hacker/Wireghost in an origin that uses
-the starting-hacker identity, and a Hub character whose setup casts contacts.
+Review the generated setup before a live test. In both Origins, start with a
+Hub character and check that the safehouse shows their **Finish Backstory**
+event. Save and reload between choices, check the resulting traits and contacts,
+and confirm that finishing closes the event. Include two Hub starters in one
+campaign and hire a different Hub merc later through their ordinary offer.

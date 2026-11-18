@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+from contextlib import closing
 import hashlib
 import json
 from pathlib import Path
@@ -18,6 +19,7 @@ if __name__ == '__main__':
     sys.path.insert(0, str(ROOT / 'gui'))
 from static_data import StaticData, DEFAULT_DB, database_path, quote
 from modkit import commit_files, payload_paths, state, prepare_parser, steam_workshop
+import hire_backstories
 
 MODKIT = Path(r'C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Mod Uploader')
 UPLOADER = MODKIT / 'WorkshopContent/HireEveryone'
@@ -38,7 +40,11 @@ GROUPS = {13: 'Hackers', 19: 'Wireghosts', 12: 'Vanguards', 5: 'AgentEXs',
           2: 'Warmachines', 3: 'Cyberswords', 7: 'Soldiers', 11: 'Snipers',
           14: 'Gunslingers', 15: 'Scourges'}
 KEYS = {'Backstory': 'BackstoryId', 'Block': 'Id',
-        'BlockCondition': 'BlockConditionId', 'StoryNode': 'NodeId'}
+        'BlockCondition': 'BlockConditionId', 'StoryNode': 'NodeId',
+        'Dialog': 'DialogId', 'StoryMatch': 'StoryMatchId', 'Tag': 'JsonId'}
+IDENTITIES = {'Backstory': ('BackstoryId',), 'Block': ('BlockId',), 'StoryNode': ('StoryNodeId',),
+              'Tag': ('JsonId',), 'StoryMatch': ('StoryMatchId',),
+              'Dialog': ('GroupId', 'JsonId'), 'BlockCondition': ('GroupId', 'JsonId')}
 ORIGINS = {
     'Post_Amnesia_TutorialSkipOrEnd': {3: 98, 5: 99},
     'Post_SynDebts_TutorialSkipOrEnd': {3: 3, 5: 2},
@@ -83,6 +89,12 @@ def defaults(backstories):
                     for bid in HUB}}
 
 
+def official_rows(data, tables):
+    data.connection.row_factory = sqlite3.Row
+    return {table: [dict(r) for r in data.connection.execute('SELECT * FROM ' + quote(table))]
+            for table in tables}
+
+
 def model(config_dir, database, project):
     result = {'document': None, 'groups': STARTING_GROUPS, 'projectDir': project, 'error': None,
               'titles': {'starters': 'Shipped Starters', 'hub': 'Shipped Underworld Hub'}}
@@ -93,19 +105,29 @@ def model(config_dir, database, project):
         with StaticData(database) as data:
             if not data.locale:
                 raise ValueError('Place Official en-US.json beside data.db to show character names.')
-            data.connection.row_factory = sqlite3.Row
-            rows = {r['BackstoryId']: r for r in data.connection.execute('SELECT * FROM Backstory')}
-            traits = {r['TagMatch']: r['TraitId'] for r in data.connection.execute('SELECT TraitId, TagMatch FROM Trait')}
+            content = official_rows(data, ('Backstory', 'Trait', *hire_backstories.STORY_TABLES))
+            rows = {r['BackstoryId']: r for r in content['Backstory']}
+            traits = {r['TagMatch']: r['TraitId'] for r in content['Trait']}
             baseline = defaults(rows)
-            for key, ids in (('starters', STARTERS), ('hub', HUB)):
+            entries, _unfinished = hire_backstories.hub_entries(content)
+            stories = hire_backstories.Stories(content, data.locale)
+            for key, ids in (('starters', STARTERS), ('hub', (*HUB, *sorted(set(entries) - set(HUB))))):
                 result[key] = []
                 for bid in ids:
                     row = rows[bid]
                     title = (data.locale.get(f'Backstory.Title.{bid}_Male')
-                             or data.locale[f'Trait.Name.{traits[row["BackstoryTrait"]]}_Male'])
-                    result[key].append({'id': bid, 'name': data.locale.get(f'Backstory.GivenName.{bid}', title),
-                        'backstory': title, 'job': data.locale[f'Job.Name.{row["JobTypeId"]}.Male'],
-                        'defaultSlot': baseline['hub'].get(str(bid), {}).get('slot')})
+                             or data.locale.get(f'Trait.Name.{traits.get(row["BackstoryTrait"])}_Male')
+                             or row['BackstoryTrait'] or f'Backstory {bid}')
+                    item = {'id': bid, 'name': data.locale.get(f'Backstory.GivenName.{bid}', title),
+                        'backstory': title, 'job': data.locale.get(f'Job.Name.{row["JobTypeId"]}.Male', f'Class {row["JobTypeId"]}'),
+                        'defaultSlot': SLOTS.get(row['JobTypeId'])}
+                    if key == 'hub':
+                        item['editable'] = bid in HUB
+                        try:
+                            hire_backstories.check_coverage(stories, row, entries[bid], PREFIX, BASE + 1000)
+                        except (KeyError, ValueError) as exc:
+                            item['backstoryIssue'] = str(exc)
+                    result[key].append(item)
             result['document'] = result['document'] or baseline
     except (KeyError, OSError, ValueError, sqlite3.Error) as exc:
         result['error'] = str(exc)
@@ -123,51 +145,36 @@ def literal(value):
 def build(database, document=None):
     with StaticData(database) as data:
         columns = {t: [c[1] for c in data.schema[t] if not c[5]] for t in KEYS}
-        columns['Backstory'] = [c[1] for c in data.schema['Backstory']]
-        rows = {}
-        for t in ('Backstory', 'Block', 'BlockCondition', 'StoryNode', 'Trait', 'ContactBackstory'):
-            data.connection.row_factory = sqlite3.Row
-            rows[t] = [dict(r) for r in data.connection.execute('SELECT * FROM ' + quote(t))]
+        for table in ('Backstory', 'StoryMatch', 'Tag'):
+            columns[table] = [c[1] for c in data.schema[table]]
+        rows = official_rows(data, (*KEYS, 'Trait', 'ContactBackstory'))
         backstories = {r['BackstoryId']: r for r in rows['Backstory']}
         contacts = {r['ContactBackstoryId']: r for r in rows['ContactBackstory']}
         locale = data.locale
         if not locale:
             raise ValueError('Official/en-US.json is required for character descriptions.')
-        entries = {}
-        disabled = []
-        for block in rows['Block']:
-            if not (block['GroupId'] or '').startswith('B_UHUB_Recruit_'):
-                continue
-            setup = [r for r in rows['BlockCondition'] if r['GroupId'] == block['PostConditionGroup']]
-            main = [r for r in setup if r['ConditionType'] == 'AddCharacter'
-                    and (r['ActorId'] or '').startswith('PCT_') and r['ConditionValue3'] == 1]
-            if not main:
-                raise ValueError('Hub entry has no primary recruit: ' + str(block['BlockId']))
-            # A secondary NPC in the same setup can also carry RecruitSource=UHUB.
-            main = main[0]
-            candidates = [r for r in rows['Backstory'] if r['BackstoryGroup'] == main['ConditionValue2']]
-            if len(candidates) != 1:
-                raise ValueError('Hub backstory group is not singular: ' + str(main['ConditionValue2']))
-            bid = candidates[0]['BackstoryId']
-            if block['PreConditionGroup'] == 'Pre_AlwaysFail':
-                disabled.append(bid)
-                continue
-            if block['PreConditionGroup']:
-                raise ValueError('Review changed Hub precondition: ' + str(block['BlockId']))
-            entries[bid] = block, main, setup
+        entries, disabled = hire_backstories.hub_entries(rows)
         if set(entries) != set(HUB):
             raise ValueError('Available Hub roster changed; review explicit HUB scope: ' + str(sorted(entries)))
+        for block, _main, _setup in entries.values():
+            if block['PreConditionGroup']:
+                raise ValueError('Review changed Hub precondition: ' + str(block['BlockId']))
+        stories = hire_backstories.Stories(rows, locale)
         current_starters = {r['BackstoryId'] for r in rows['Backstory'] if r['NewGame'] in (3, 4, 5)}
         if current_starters != set(STARTERS):
             raise ValueError('Combat starter roster changed: ' + str(sorted(current_starters)))
         document = defaults(backstories) if document is None else validate(document)
 
-        sql, texts, added, roster = [], {}, {t: [] for t in KEYS}, []
+        authored, texts, added, roster = [], {}, {t: [] for t in KEYS}, []
+        reserved = {table: {tuple(row[k] for k in fields) for row in rows[table]}
+                    for table, fields in IDENTITIES.items()}
+        condition_counts = Counter()
+        finish_events = []
         next_block = BASE
 
         def add(table, **values):
             nonlocal next_block
-            if table == 'Block':
+            if table == 'Block' and 'BlockId' not in values:
                 values['BlockId'] = next_block
                 next_block += 1
             cols = columns[table]
@@ -179,38 +186,24 @@ def build(database, document=None):
             row.update(values)
             if table == 'Block':
                 row['EventType'] = values.get('EventType', 'Event')
-            identity = (('BackstoryId',) if table == 'Backstory' else ('BlockId',)
-                        if table == 'Block' else ('StoryNodeId',) if table == 'StoryNode'
-                        else ('GroupId', 'JsonId'))
-            if any(all(r.get(k) == row[k] for k in identity) for r in rows[table]):
+            identity = IDENTITIES[table]
+            row_key = tuple(row[k] for k in identity)
+            if row_key in reserved[table]:
                 raise ValueError(f'{table}: reserved identity already exists: {row}')
+            reserved[table].add(row_key)
             where = ' AND '.join(f'{quote(k)}={literal(row[k])}' for k in identity)
-            sql.append(f'INSERT INTO {quote(table)} ({", ".join(map(quote, cols))}) '
-                       f'SELECT {", ".join(literal(row[c]) for c in cols)} '
-                       f'WHERE NOT EXISTS (SELECT 1 FROM {quote(table)} WHERE {where});')
+            authored.append((table, cols, row, where))
             added[table].append(row)
             return row
 
         def condition(group, kind, seq=None, **fields):
+            condition_counts[group] += 1
             if seq is None:
-                seq = 1 + sum(r['GroupId'] == group for r in added['BlockCondition'])
+                seq = condition_counts[group]
             return add('BlockCondition', GroupId=group, JsonId=seq, ConditionType=kind, **fields)
 
         def has_character(group, actor, exists):
             condition(group, 'HasCharacter', ActorId=actor, OptionId=1 if exists else -1)
-
-        def copy_condition(source, group, old_actor, new_actor):
-            values = {c: source[c] for c in columns['BlockCondition'] if c not in ('GroupId', 'JsonId')}
-            for c, v in values.items():
-                if isinstance(v, str):
-                    values[c] = v.replace(old_actor, new_actor)
-            kind = values.pop('ConditionType')
-            new = condition(group, kind, **values)
-            for suffix in ('Name', 'Desc'):
-                for gender in ('', '_Male', '_Female'):
-                    old_key = f'BlockCondition.{suffix}.{source["GroupId"]}.{source["JsonId"]}{gender}'
-                    if old_key in locale:
-                        texts[f'BlockCondition.{suffix}.{group}.{new["JsonId"]}{gender}'] = locale[old_key]
 
         for index, bid in enumerate(HUB):
             source = backstories[bid]
@@ -229,15 +222,14 @@ def build(database, document=None):
             add('Backstory', **clone)
             # The starter clone alone runs setup; the original Hub template and
             # its recruitment conversation retain their native records.
-            if block['EventId']:
-                condition(post, 'StoryMatch', ConditionKey=block['EventId'])
-            for operation in setup:
-                if operation is not main:
-                    copy_condition(operation, post, main['ActorId'], source['CharStoryId'])
+            finish_events.append((bid, source, block, main['ActorId'], setup, BASE + 1000 + 256 * index))
             if slot == 4:
                 condition(post, 'Tag', ActorId=source['CharStoryId'], ConditionKey='ADD_PersonID_StartingHacker')
-            add('Block', GroupId=init_group, PostConditionGroup=post if any(
-                r['GroupId'] == post for r in added['BlockCondition']) else '',
+            queued = f'{PREFIX}_Finish_{bid}_Queued'
+            add('Block', GroupId=init_group, PostConditionGroup=post if slot == 4 else '',
+                EventType='Group', EventId=hire_backstories.setup_id(PREFIX, bid),
+                StoryNode1='ADD_' + hire_backstories.node_id(PREFIX, bid),
+                PreState1='NOT_' + queued, PostState2='ADD_' + queued,
                 PostState1=block['PreState1'].replace('NOT_', 'ADD_', 1))
             traits = [r for r in rows['Trait'] if r['TagMatch'] == source['BackstoryTrait']]
             if len(traits) != 1:
@@ -254,6 +246,7 @@ def build(database, document=None):
                     texts[f'Backstory.{suffix}.{clone_id}'] = locale[key]
             roster.append({'direction': 'Hub to start', 'source': bid, 'template': clone_id,
                            'slot': slot, 'name': locale[f'Trait.Name.{tid}_Male'],
+                           'starterBackstoryEvent': hire_backstories.node_id(PREFIX, bid),
                            'openingDeployment': {group: starts[slot] for group, starts in ORIGINS.items() if slot in starts}})
 
         for bid in STARTERS:
@@ -339,6 +332,16 @@ def build(database, document=None):
                     condition(group, 'CharAltStart', seq, ActorId=actor, ConditionValue=starts[slot])
                     condition(group, 'CharacterStatus', seq + 1, ActorId=actor, ConditionValue=1, ConditionValue2=1)
 
+        # Append the new nodes after existing Workshop nodes so their SQL row
+        # IDs and the published recruitment BlockIds stay stable on upgrade.
+        for bid, source, offer, temporary, setup, base in finish_events:
+            hire_backstories.emit(stories, bid, source, offer, temporary, setup,
+                                  PREFIX, base, add, condition, texts)
+
+        sql = [f'INSERT INTO {quote(table)} ({", ".join(map(quote, cols))}) '
+               f'SELECT {", ".join(literal(row[c]) for c in cols)} '
+               f'WHERE NOT EXISTS (SELECT 1 FROM {quote(table)} WHERE {where});'
+               for table, cols, row, where in authored]
         source = {'Metadata': {'Name': 'Hire Everyone', 'StartingId': BASE},
                   'RawSQL': sql, 'RawText': {'Generic': texts}}
         return source, added, {'roster': roster, 'excludedUnfinished': sorted(disabled),
@@ -346,8 +349,7 @@ def build(database, document=None):
 
 
 def verify(database, sql_bytes, text_bytes, expected, source_text, document=None):
-    with StaticData(database) as original:
-        memory = sqlite3.connect(':memory:')
+    with StaticData(database) as original, closing(sqlite3.connect(':memory:')) as memory:
         original.connection.backup(memory)
         before = {t: memory.execute('SELECT * FROM ' + quote(t)).fetchall() for t in original.schema}
         # Content changes are strictly additive, including the original roster.
@@ -384,12 +386,15 @@ def verify(database, sql_bytes, text_bytes, expected, source_text, document=None
         conditions = {r['GroupId'] for r in memory.execute('SELECT * FROM BlockCondition')}
         nodes = {r['StoryNodeId'] for r in memory.execute('SELECT * FROM StoryNode')}
         matches = {r[0] for r in memory.execute('SELECT DISTINCT GroupId FROM StoryMatch')}
+        dialogs = {r[0] for r in memory.execute('SELECT DISTINCT GroupId FROM Dialog')}
         for r in expected['Block']:
             for col in ('PreConditionGroup', 'PostConditionGroup', 'PreDialogPostCondition'):
                 if r[col] and r[col] not in conditions:
                     raise ValueError('Missing condition group: ' + r[col])
-            if r['EventType'] in ('Group', 'Choice') and r['EventId'] not in blocks:
+            if r['EventType'] in ('Group', 'GroupFirst', 'TalkOn', 'Choice') and r['EventId'] not in blocks:
                 raise ValueError('Missing block group: ' + r['EventId'])
+            if r['Dialog'] and r['Dialog'] not in dialogs:
+                raise ValueError('Missing dialogue group: ' + r['Dialog'])
             for col in ('StoryNode1', 'StoryNode2', 'StoryNode3'):
                 if r[col] and r[col][4:] not in nodes:
                     raise ValueError('Missing story node: ' + r[col])
@@ -401,7 +406,6 @@ def verify(database, sql_bytes, text_bytes, expected, source_text, document=None
             if r['ConditionType'] == 'StoryMatch' and r['ConditionKey'] not in matches:
                 raise ValueError('Missing casting group: ' + r['ConditionKey'])
         verify_policy(memory, document)
-        memory.close()
     return {'status': 'PASS', 'nativeRowsUnchanged': True, 'repeatApplication': 'PASS',
             'addedRows': {t: len(rs) for t, rs in expected.items()},
             'localizationKeys': len(parsed), 'gameplay': 'NOT RUN: review before a game session'}
@@ -412,6 +416,7 @@ def verify_policy(connection, document=None):
     backstories = {r['BackstoryId']: dict(r) for r in connection.execute('SELECT * FROM Backstory')}
     blocks = [dict(r) for r in connection.execute('SELECT * FROM Block')]
     conditions = [dict(r) for r in connection.execute('SELECT * FROM BlockCondition')]
+    hire_backstories.verify_events(connection, HUB, PREFIX, document or defaults(backstories))
     document = defaults(backstories) if document is None else validate(document)
     roster_actors = {backstories[bid]['CharStoryId'] for bid in HUB + STARTERS}
     for group, starts in ORIGINS.items():
@@ -562,7 +567,7 @@ def selftest(database):
         if name.startswith('wrong'):
             altered['Backstory'][0]['NewGame'] = 5
         else:
-            guard = next(r for r in altered['BlockCondition'] if r['ConditionType'] == 'HasCharacter')
+            guard = next(r for r in altered['BlockCondition'] if r['GroupId'] == f'Pre_{PREFIX}_{STARTERS[0]}_Absent')
             guard['OptionId'] = 1
         with StaticData(database) as original:
             memory = sqlite3.connect(':memory:')
@@ -626,7 +631,8 @@ def main():
         print(json.dumps({'status': 'PASS', 'checks': selftest(args.data)}, indent=2))
         return
     schema = MODKIT / 'CyberKnightsModkit_Data/StreamingAssets/config.json'
-    watched = [args.data, args.data.parent / 'en-US.json', Path(__file__), schema, args.config / FILE]
+    watched = [args.data, args.data.parent / 'en-US.json', Path(__file__), Path(hire_backstories.__file__),
+               schema, args.config / FILE]
     inputs = {p: state(p) for p in watched}
     destinations = [args.out / 'source_data/stories.manifest', args.out / 'source_data/hire-everyone.json',
                     args.out / 'prepared/_data/data.sql', args.out / 'prepared/_data/en-US.json',
