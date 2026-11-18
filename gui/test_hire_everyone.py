@@ -84,13 +84,13 @@ class HireEveryoneTests(unittest.TestCase):
                 self.assertEqual(selected.execute("SELECT BlockId FROM Block WHERE StoryNode1='ADD_SN_Hacker_LeftForDead'").fetchall(), [(91006,)])
                 agent_node = 'SN_Finish_4012_HireEveryone'
                 retry_node = 'SN_Finish_4012_Retry_HireEveryone'
-                prompt_group = 'B_Finish_4012_Prompts_HireEveryone'
+                launch = 'B_Finish_4012_Launch_HireEveryone'
                 self.assertEqual(selected.execute("""SELECT StoryNodeType, ExpirationTurns, ExpirationBlock,
                     ExpirationStoryNode, PauseMode FROM StoryNode WHERE StoryNodeId=?""", (agent_node,)).fetchone(),
-                    ('Root', 4, prompt_group, retry_node, 0))
+                    ('Root', 4, launch, retry_node, 0))
                 self.assertEqual(selected.execute("""SELECT StoryNodeId, ChoiceMeta, EventType, EventId FROM Block
                     WHERE StoryNodeId IN (?,?) ORDER BY ChoiceMeta DESC""", (agent_node, retry_node)).fetchall(),
-                    [(agent_node, 5, 'GroupFirst', prompt_group), (retry_node, 4, 'GroupFirst', prompt_group)])
+                    [(agent_node, 5, 'Group', launch), (retry_node, 4, 'Group', launch)])
                 reply = selected.execute("""SELECT BlockId, EventType, EventId, Dialog, StoryNode1, StoryNode2, PostConditionGroup
                     FROM Block WHERE GroupId = ? AND PreDialogPostCondition IN
                     (SELECT GroupId FROM BlockCondition WHERE ConditionKey = ?)""",
@@ -105,9 +105,34 @@ class HireEveryoneTests(unittest.TestCase):
                                                   (effects, 'Item')).fetchone(), (3606,))
                 locale = json.loads((workshop / '_data/en-US.json').read_bytes())
                 self.assertTrue(locale[f'BlockDesc.{block}_Female'])
+                fabber = 'NCP_Finish_4003_Contact_2009_HireEveryone'
+                fabber_setup = selected.execute("""SELECT b.GroupId, b.BlockId, b.PreConditionGroup, c.ActorId
+                    FROM Block b JOIN BlockCondition c ON c.GroupId=b.PostConditionGroup
+                    WHERE c.ConditionType='AddCharacter' AND c.ConditionValue=2009
+                    AND b.GroupId IN ('B_Finish_4003_Setup_HireEveryone','B_Finish_4003_Launch_HireEveryone')
+                    ORDER BY b.BlockId""").fetchall()
+                self.assertEqual([row[0] for row in fabber_setup],
+                                 ['B_Finish_4003_Setup_HireEveryone', 'B_Finish_4003_Launch_HireEveryone'])
+                for _, _, guard, actor in fabber_setup:
+                    self.assertEqual(actor, fabber)
+                    self.assertIn((fabber, -1), selected.execute("""SELECT ActorId, OptionId FROM BlockCondition
+                        WHERE GroupId=? AND ConditionType='HasCharacter'""", (guard,)).fetchall())
+                self.assertEqual(selected.execute("""SELECT EventId FROM Block
+                    WHERE GroupId='B_Finish_4003_Launch_HireEveryone' ORDER BY BlockId DESC LIMIT 1""").fetchone(),
+                    ('B_Finish_4003_Prompts_HireEveryone',))
+                self.assertEqual(selected.execute("""SELECT b.InterpolateActorId,c.ActorId,c.ConditionValue
+                    FROM Block b JOIN BlockCondition c ON c.GroupId=b.PostConditionGroup
+                    WHERE b.GroupId='B_Finish_4003_Choices_HireEveryone' AND c.ConditionType='CharacterStatus'""").fetchall(),
+                    [(fabber, fabber, 1)])
                 for bid in hire.HUB:
                     if bid == 4004:
                         continue
+                    intro = selected.execute("""SELECT BlockId,ActorId,Dialog FROM Block
+                        WHERE GroupId=? AND EventType='Choice' AND EventId=?""",
+                        (f'B_Finish_{bid}_Prompts_HireEveryone', f'B_Finish_{bid}_Traits_HireEveryone')).fetchone()
+                    self.assertEqual(intro[1], '')
+                    self.assertNotIn(f'BlockDesc.{intro[0]}', locale)
+                    self.assertTrue(locale[f'Dialog.{intro[2]}.567000'].startswith('Before we go any further'))
                     followup, = selected.execute('SELECT Dialog FROM Block WHERE GroupId=?',
                                                  (f'B_Finish_{bid}_Followup_HireEveryone',)).fetchone()
                     lines = [line for key, line in locale.items() if key.startswith(f'Dialog.{followup}.')]

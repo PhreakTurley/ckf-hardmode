@@ -52,13 +52,24 @@ The timeline skips active story nodes whose stored `ExpiresTurn` is `-1`.
 `GameDataManager.BuildStoryNode` at RVA `0xAC0D8F`–`0xAC0E74`.
 
 `scripts/hire_backstories.py` adapts each reviewed Hub conversation into two
-choices. The trait choice leads to the follow-up, with the Face question and
-the trust warning removed. The follow-up choice plays the reply, applies its
+choices. The timeline and roster use the **Finish Backstory** label. The
+conversation opens with the merc's greeting. The trait choice leads to the
+follow-up, with the Face question and the trust warning removed. The follow-up
+choice plays the reply, applies its
 effects, and closes the prompt. An interrupted conversation resumes from
-its saved choice. The adaptation reuses existing contacts by identity and keeps
-cast tags local to each conversation. The shipped Hub conversations handle later
+its saved choice. Starter setup creates fixed contacts by their shipped
+backstory and reuses existing contacts by identity. Opening an unfinished
+conversation also checks for missing setup contacts. Contacts introduced by a
+choice are created on that branch. The shipped Hub conversations handle later
 recruitment. Menu descriptions use the native backstory text when available,
 otherwise the associated trait text.
+
+The shipped Vanguard Hub offer casts the Fabber during offer setup and
+activates the contact on the matching choice. Backstory 2009 refers to
+`PersonID_Recruit_UHUB_Vanguard_Fabber`, which has no row in `Tag`.
+[measured] `Official/data.db`, `BlockCondition` 181 and 193, `StoryMatch`
+290, `ContactBackstory` 2009, and `Tag`. The starter version uses a permanent
+actor ID for both the Fabber's name and the choice effect.
 
 Selected combat starters receive new Hub entries in their respective class
 groups. These use the original Backstory ID, a HasCharacter condition against

@@ -12,7 +12,7 @@ CONVERSATIONS = {
     4013: (91270, 91275), 4014: (91290, 91295), 4015: (91313, 91318),
     4016: (91335, 91340), 305000: (305006, 305011), 305100: (305106, 305111),
 }
-STORY_TABLES = ('Block', 'BlockCondition', 'Dialog', 'StoryMatch', 'ContactBackstory')
+STORY_TABLES = ('Block', 'BlockCondition', 'Dialog', 'StoryMatch', 'ContactBackstory', 'Tag')
 OPERATIONS = {'AddCharacter', 'StoryMatch', 'Tag', 'Trait', 'Obligation', 'Item', 'CharacterStatus', 'PayRate'}
 RECRUITMENT_QUIPS = {'Recruit_Global_FaceThink', 'Recruit_Global_DefineTrust'}
 BLOCKS_PER_BACKSTORY = 48
@@ -94,6 +94,7 @@ class Stories:
         self.matches = groups(rows['StoryMatch'])
         self.contacts = groups(rows['ContactBackstory'], 'BackstoryGroup')
         self.contact_ids = {r['ContactBackstoryId']: r for r in rows['ContactBackstory']}
+        self.tags = {r['TagId'] for r in rows['Tag']}
 
     def plan(self, bid, offer):
         if bid not in CONVERSATIONS:
@@ -162,12 +163,22 @@ def emit(stories, bid, backstory, offer, temporary, setup, base, turns, add, con
     cast_tags = {}
     cast_aliases = {}
     contact_actors = {}
+    fixed_cast = {}
+
+    def bind_contact(role, contact):
+        actor_id = contact['ContactStoryId']
+        cid = contact['ContactBackstoryId']
+        if contact['TagID'] in stories.tags:
+            bindings[role] = 'NTG_' + contact['TagID']
+            contact_actors[role] = actor_id or mod_id(f'NCT_{key}_Contact_{cid}')
+        else:
+            # A backstory can name a tag with no definition (Fabber, 2009).
+            # Give that contact a permanent actor ID for guard and dialogue lookup.
+            bindings[role] = contact_actors[role] = actor_id or mod_id(f'NCP_{key}_Contact_{cid}')
+
     for row in action_rows:
         if row['ConditionType'] == 'AddCharacter':
-            contact = stories.contact(row)
-            identity = 'NTG_' + contact['TagID']
-            bindings[row['ActorId']] = identity
-            contact_actors[row['ActorId']] = contact['ContactStoryId'] or mod_id(f'NCT_{key}_Contact_{contact["ContactBackstoryId"]}')
+            bind_contact(row['ActorId'], stories.contact(row))
     for group in filter(None, match_ids):
         if not stories.matches[group]:
             raise ValueError(f'Backstory {bid}: missing casting group {group}')
@@ -175,9 +186,13 @@ def emit(stories, bid, backstory, offer, temporary, setup, base, turns, add, con
             role = row['ActorId']
             if row['Optional'] == 3:
                 contact = stories.contact_ids.get(row['Backstory'])
-                if not (contact and contact['TagID'] and not row['RelationshipActorId']):
+                if (not contact or not contact['TagID'] or contact['BlockGroup']
+                        or any(row[k] for k in ('PreCond', 'PostStatus', 'RelationshipActorId', 'TagMatchActor',
+                                                 'PostLink', 'PostLink2', 'PostState', 'PostState2', 'PostState3'))):
                     raise ValueError(f'Backstory {bid}: fixed casting role {role} needs review')
-                bindings[role] = 'NTG_' + contact['TagID']
+                bind_contact(role, contact)
+                fixed_cast[row['StoryMatchId']] = contact
+                continue
             elif role not in cast_tags:
                 tag = mod_id(f'{key}_Cast{len(cast_tags) + 1}')
                 cast_tags[role] = tag
@@ -260,15 +275,13 @@ def emit(stories, bid, backstory, offer, temporary, setup, base, turns, add, con
         nonlocal match_no
         rows = stories.matches[source_id]
         dynamic = [r for r in rows if r['Optional'] != 3]
-        batches = ([dynamic] if dynamic else []) + [[r] for r in rows if r['Optional'] == 3]
-        for batch in batches:
+        if dynamic:
             target = mod_id(f'SM_{key}_{match_no - base + 1}')
-            roles = list(dict.fromkeys(r['ActorId'] for r in batch))
-            for r in batch:
+            roles = list(dict.fromkeys(r['ActorId'] for r in dynamic))
+            for r in dynamic:
                 match_no += 1
                 values = {k: rebind(v) for k, v in r.items() if k not in ('StoryMatchId', 'GroupId', 'ActorId')}
                 add('StoryMatch', StoryMatchId=match_no, GroupId=target, ActorId=cast_aliases[r['ActorId']], **values)
-            identity = bindings[roles[0]] if batch[0]['Optional'] == 3 else ''
             effects = [('StoryMatch', {'ConditionKey': target}, None)]
             for role in roles:
                 alias = cast_aliases[role]
@@ -276,7 +289,27 @@ def emit(stories, bid, backstory, offer, temporary, setup, base, turns, add, con
                     effects.append(('Tag', {'ActorId': alias, 'ConditionKey': 'ADD_' + cast_tags[role]}, None))
                 if alias.startswith(('NCT_', 'PCT_')):
                     effects.append(('TempStoryId', {'ActorId': alias, 'OptionId': -1, 'ConditionKey': alias}, None))
+            yield '', effects
+        for row in rows:
+            if row['Optional'] != 3:
+                continue
+            # Native offers may match any eligible contact and use its temporary
+            # actor ID. Our dialogue uses the specific backstory's identity tag.
+            contact = fixed_cast[row['StoryMatchId']]
+            role = row['ActorId']
+            identity = bindings[role]
+            fields = {'ActorId': contact_actors[role], 'ConditionValue': contact['ContactBackstoryId']}
+            effects = contact_creation(fields, None)
+            if row['TagMatch'] in stories.tags:
+                effects.append(('Tag', {'ActorId': identity, 'ConditionKey': 'ADD_' + row['TagMatch']}, None))
             yield identity, effects
+
+    def contact_creation(fields, source):
+        effects = [('AddCharacter', fields, source)]
+        actor_id = fields['ActorId']
+        if actor_id.startswith('NCT_'):
+            effects.append(('TempStoryId', {'ActorId': actor_id, 'OptionId': -1, 'ConditionKey': actor_id}, None))
+        return effects
 
     def operation_batches(rows):
         for source in rows:
@@ -293,10 +326,7 @@ def emit(stories, bid, backstory, offer, temporary, setup, base, turns, add, con
                 name = source['ActorId']
                 identity = bindings[name]
                 values['ActorId'] = contact_actors[name]
-            effects = [(kind, values, source)]
-            if kind == 'AddCharacter' and values['ActorId'].startswith('NCT_'):
-                alias = values['ActorId']
-                effects.append(('TempStoryId', {'ActorId': alias, 'OptionId': -1, 'ConditionKey': alias}, None))
+            effects = contact_creation(values, source) if identity else [(kind, values, source)]
             yield identity, effects
 
     def write_effects(group, effects):
@@ -312,19 +342,23 @@ def emit(stories, bid, backstory, offer, temporary, setup, base, turns, add, con
     # Warmachine Sister's shipped group references Dr. Allgood before his add row.
     setup_batches = list(cast(offer['EventId'])) if offer['EventId'] else []
     setup_batches.extend(operation_batches(sorted(initial, key=lambda r: r['ConditionType'] != 'AddCharacter')))
+    repairs = []
     for identity, effects in setup_batches:
         ordinal = str(block_no + 1)
         before = absent('Setup_' + ordinal, identity) if identity else ''
         post = mod_id(f'Post_{key}_Setup_{ordinal}')
         block(start, PreConditionGroup=before, PostConditionGroup=post)
         write_effects(post, effects)
+        if identity:
+            repairs.append((identity, post))
     # Some shipped starter templates have no supporting cast or setup actions.
     block(start)
 
     # The timeline skips untimed nodes. Expiry opens the same current prompt
     # and leaves an untimed roster entry in case the player closes the dialogue.
+    launch = mod_id(f'B_{key}_Launch') if repairs else prompts
     add('StoryNode', GroupId=node, StoryNodeId=node, StoryNodeType='Root',
-        ExpirationTurns=turns, ExpirationBlock=prompts, ExpirationStoryNode=retry)
+        ExpirationTurns=turns, ExpirationBlock=launch, ExpirationStoryNode=retry)
     add('StoryNode', GroupId=node, StoryNodeId=retry, StoryNodeType='Regular')
     prompt = {'PreState1': 'HAS_Origin_Completed', 'PreState2': 'NOT_' + done}
     branch_ids = [path[0]['BlockId'] for path, _end, _finish in branches]
@@ -366,7 +400,8 @@ def emit(stories, bid, backstory, offer, temporary, setup, base, turns, add, con
     for active_node, meta, name in ((node, 5, 'Entry'), (retry, 4, 'Resume')):
         row = block(mod_id(f'B_{key}_{name}'), StoryNodeId=active_node,
                     ActorId=actor, InterpolateActorId=actor, ChoiceMeta=meta,
-                    EventType='GroupFirst', EventId=prompts, PreConditionGroup=visible_entry, **prompt)
+                    EventType='Group' if repairs else 'GroupFirst', EventId=launch,
+                    PreConditionGroup=visible_entry, **prompt)
         describe(row, 'Finish Backstory: {1}')
 
     greeting = mod_id(f'D_{key}_Intro')
@@ -374,9 +409,8 @@ def emit(stories, bid, backstory, offer, temporary, setup, base, turns, add, con
     texts[f'Dialog.{greeting}.{FIRST_ID}'] = 'Before we go any further, there are a few things you should know about me.'
     for step, dialog_id, target, trait in (('Intro', greeting, choices, 'NOT_'),
                                            ('Followup', dialog(followup['Dialog']), options, 'HAS_')):
-        row = block(prompts, ActorId=actor, InterpolateActorId=actor, EventType='Choice', EventId=target,
-                    Dialog=dialog_id, PreConditionGroup=gate(step, [*no_choice, trait + trained]), **prompt)
-        describe(row, 'Finish Backstory: {1}')
+        block(prompts, EventType='Choice', EventId=target, Dialog=dialog_id,
+              PreConditionGroup=gate(step, [*no_choice, trait + trained]), **prompt)
 
     for path, _closing, _ending in branches:
         source = path[0]
@@ -456,6 +490,14 @@ def emit(stories, bid, backstory, offer, temporary, setup, base, turns, add, con
     next_prompt = copy_block(follow, followup, EventType='Choice', EventId=options, Dialog=dialog(followup['Dialog']))
     describe(next_prompt, 'Tell me what happened next.')
 
+    # Also retry on entry for an existing campaign whose starter setup ran
+    # before the contact was fixed. Keep the existing conversation block IDs.
+    for identity, post in repairs:
+        before = gate(f'Restore_{block_no + 1}', [], identity)
+        block(launch, PreConditionGroup=before, PostConditionGroup=post, **prompt)
+    if repairs:
+        block(launch, EventType='GroupFirst', EventId=prompts, PreConditionGroup=visible_entry, **prompt)
+
 
 def verify_events(connection, scope, document, locale=None):
     blocks = [dict(r) for r in connection.execute('SELECT * FROM Block')]
@@ -469,6 +511,9 @@ def verify_events(connection, scope, document, locale=None):
         key = f'Finish_{bid}'
         retry = mod_id(f'SN_{key}_Retry')
         prompt_group = mod_id(f'B_{key}_Prompts')
+        launch = mod_id(f'B_{key}_Launch')
+        repairs = by_group[launch]
+        entry_target = launch if repairs else prompt_group
         trait_flag = mod_id(f'{key}_Trait')
         done = mod_id(f'{key}_Done')
         actor = templates[bid]['CharStoryId']
@@ -486,9 +531,15 @@ def verify_events(connection, scope, document, locale=None):
             raise ValueError(f'Backstory {bid}: the starter template must own activation exclusively')
         if (node not in nodes or nodes[node]['StoryNodeType'] != 'Root' or nodes[node]['ActorId']
                 or nodes[node]['ExpirationTurns'] != deadline(index) or nodes[node]['PauseMode']
-                or nodes[node]['ExpirationBlock'] != prompt_group or nodes[node]['ExpirationStoryNode'] != retry
+                or nodes[node]['ExpirationBlock'] != entry_target or nodes[node]['ExpirationStoryNode'] != retry
                 or retry not in nodes or nodes[retry]['ExpirationTurns'] or nodes[retry]['ExpirationBlock']):
             raise ValueError(f'Backstory {bid}: missing deadline or roster recovery')
+        if repairs and (repairs[-1]['EventType'] != 'GroupFirst' or repairs[-1]['EventId'] != prompt_group):
+            raise ValueError(f'Backstory {bid}: contact recovery must run before the conversation')
+        initial_contacts = {b['PostConditionGroup'] for b in by_group[setup_id(bid)]
+                            if any(r['ConditionType'] == 'AddCharacter' for r in actions[b['PostConditionGroup']])}
+        if {b['PostConditionGroup'] for b in repairs[:-1]} != initial_contacts:
+            raise ValueError(f'Backstory {bid}: contact recovery must cover each starter contact')
         entries = []
         for active_node, meta in ((node, 5), (retry, 4)):
             exposed = by_node[active_node]
@@ -498,7 +549,7 @@ def verify_events(connection, scope, document, locale=None):
             if (entry['PreState1'] != 'HAS_Origin_Completed' or entry['PreState2'] != 'NOT_' + done
                     or entry['ChoiceMeta'] != meta or entry['ActorId'] != actor
                     or len(by_group[entry['GroupId']]) != 1
-                    or entry['EventType'] != 'GroupFirst' or entry['EventId'] != prompt_group
+                    or entry['EventType'] != ('Group' if repairs else 'GroupFirst') or entry['EventId'] != entry_target
                     or not any(r['ConditionType'] == 'HasCharacter' and r['ActorId'] == actor and r['OptionId'] == 1
                                for r in actions[entry['PreConditionGroup']])):
                 raise ValueError(f'Backstory {bid}: incorrect safehouse entry for {active_node}')
@@ -537,7 +588,7 @@ def verify_events(connection, scope, document, locale=None):
                or r['StoryNode2'] != 'DEL_' + retry or r['PostState1'] != 'ADD_' + done for r in endings):
             raise ValueError(f'Backstory {bid}: the final choice must play its reply and close the prompt')
         if locale is not None:
-            for row in endings + entries + [r for r in prompts if r['EventType'] == 'Choice']:
+            for row in endings + entries:
                 loc = f'BlockDesc.{row["BlockId"]}'
                 keys = [loc + '_Male', loc + '_Female'] if row['InterpolateActorId'] else [loc]
                 if not all(locale.get(k) for k in keys):
@@ -545,6 +596,8 @@ def verify_events(connection, scope, document, locale=None):
         if any(not r['PostState3'].startswith('TRT_') or r['PreState1'] != 'NOT_' + trait_flag
                or r['PostState1'] != 'ADD_' + trait_flag for r in traits):
             raise ValueError(f'Backstory {bid}: trait checkpoint is missing')
+        if any(r['ActorId'] or not r['Dialog'] for r in prompts if r['EventType'] == 'Choice'):
+            raise ValueError(f'Backstory {bid}: the dialogue should open with its first authored line')
         check_availability(bid, key, actor, prompts, replies, actions)
 
 
