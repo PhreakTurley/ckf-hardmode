@@ -14,14 +14,18 @@ import sqlite3
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path[:0] = [str(ROOT / 'scripts'), str(ROOT / 'gui')]
-from static_data import StaticData, DEFAULT_DB, quote
-from modkit import commit_files, state, prepare_parser
+if __name__ == '__main__':
+    sys.path.insert(0, str(ROOT / 'gui'))
+from static_data import StaticData, DEFAULT_DB, database_path, quote
+from modkit import commit_files, payload_paths, state, prepare_parser, steam_workshop
 
 MODKIT = Path(r'C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Mod Uploader')
 UPLOADER = MODKIT / 'WorkshopContent/HireEveryone'
 WORKSHOP = MODKIT.parents[1] / 'workshop/content/1021210/3841540859'
+CONFIG = MODKIT.parent / 'Cyber Knights Flashpoint/BepInEx/config'
 PROJECT = ROOT / 'ckf-hire-everyone'
+FILE = 'ckf.hire-everyone.json'
+SOURCE = 'hire-everyone.json'
 PREFIX = 'HE3841540859'
 BASE = 384154000
 # Authored scope: the available Hub roster, excluding four unfinished entries
@@ -35,10 +39,77 @@ GROUPS = {13: 'Hackers', 19: 'Wireghosts', 12: 'Vanguards', 5: 'AgentEXs',
           14: 'Gunslingers', 15: 'Scourges'}
 KEYS = {'Backstory': 'BackstoryId', 'Block': 'Id',
         'BlockCondition': 'BlockConditionId', 'StoryNode': 'NodeId'}
+ORIGINS = {
+    'Post_Amnesia_TutorialSkipOrEnd': {3: 98, 5: 99},
+    'Post_SynDebts_TutorialSkipOrEnd': {3: 3, 5: 2},
+}
+STARTING_GROUPS = [
+    {'slot': 3, 'name': 'Vanguard / Agent EX', 'deploys': True},
+    {'slot': 4, 'name': 'Hacker / Wireghost', 'deploys': False},
+    {'slot': 5, 'name': 'Other combat classes', 'deploys': True},
+]
 
 
 def encode(value):
     return (json.dumps(value, indent=2, ensure_ascii=False) + '\n').encode('utf-8')
+
+
+def validate(document):
+    if (not isinstance(document, dict) or set(document) != {'format', 'starters', 'hub'}
+            or type(document['format']) is not int or document['format'] != 1):
+        raise ValueError('Hire Everyone needs a format 1 roster.')
+    starters, hub = document['starters'], document['hub']
+    if (not isinstance(starters, dict) or set(starters) != {str(i) for i in STARTERS}
+            or any(type(value) is not bool for value in starters.values())):
+        raise ValueError('Hire Everyone needs one checkbox for each shipped combat starter.')
+    if (not isinstance(hub, dict) or set(hub) != {str(i) for i in HUB}
+            or any(not isinstance(row, dict) or set(row) != {'include', 'slot'}
+                   or type(row['include']) is not bool or type(row['slot']) is not int
+                   or row['slot'] not in (3, 4, 5) for row in hub.values())):
+        raise ValueError('Hire Everyone needs a checkbox and starting group for each Hub recruit.')
+    return document
+
+
+def load(config_dir):
+    path = Path(config_dir) / FILE
+    if path.is_file():
+        return validate(json.loads(path.read_text(encoding='utf-8-sig')))
+    return None
+
+
+def defaults(backstories):
+    return {'format': 1, 'starters': {str(bid): True for bid in STARTERS},
+            'hub': {str(bid): {'include': True, 'slot': SLOTS[backstories[bid]['JobTypeId']]}
+                    for bid in HUB}}
+
+
+def model(config_dir, database, project):
+    result = {'document': None, 'groups': STARTING_GROUPS, 'projectDir': project, 'error': None,
+              'titles': {'starters': 'Shipped Starters', 'hub': 'Shipped Underworld Hub'}}
+    try:
+        result['document'] = load(config_dir)
+        if database is False:
+            raise ValueError('Select Official data.db under Workshop export to load the shipped rosters.')
+        with StaticData(database) as data:
+            if not data.locale:
+                raise ValueError('Place Official en-US.json beside data.db to show character names.')
+            data.connection.row_factory = sqlite3.Row
+            rows = {r['BackstoryId']: r for r in data.connection.execute('SELECT * FROM Backstory')}
+            traits = {r['TagMatch']: r['TraitId'] for r in data.connection.execute('SELECT TraitId, TagMatch FROM Trait')}
+            baseline = defaults(rows)
+            for key, ids in (('starters', STARTERS), ('hub', HUB)):
+                result[key] = []
+                for bid in ids:
+                    row = rows[bid]
+                    title = (data.locale.get(f'Backstory.Title.{bid}_Male')
+                             or data.locale[f'Trait.Name.{traits[row["BackstoryTrait"]]}_Male'])
+                    result[key].append({'id': bid, 'name': data.locale.get(f'Backstory.GivenName.{bid}', title),
+                        'backstory': title, 'job': data.locale[f'Job.Name.{row["JobTypeId"]}.Male'],
+                        'defaultSlot': baseline['hub'].get(str(bid), {}).get('slot')})
+            result['document'] = result['document'] or baseline
+    except (KeyError, OSError, ValueError, sqlite3.Error) as exc:
+        result['error'] = str(exc)
+    return result
 
 
 def literal(value):
@@ -49,7 +120,7 @@ def literal(value):
     return "'" + str(value).replace("'", "''") + "'"
 
 
-def build(database):
+def build(database, document=None):
     with StaticData(database) as data:
         columns = {t: [c[1] for c in data.schema[t] if not c[5]] for t in KEYS}
         columns['Backstory'] = [c[1] for c in data.schema['Backstory']]
@@ -89,6 +160,7 @@ def build(database):
         current_starters = {r['BackstoryId'] for r in rows['Backstory'] if r['NewGame'] in (3, 4, 5)}
         if current_starters != set(STARTERS):
             raise ValueError('Combat starter roster changed: ' + str(sorted(current_starters)))
+        document = defaults(backstories) if document is None else validate(document)
 
         sql, texts, added, roster = [], {}, {t: [] for t in KEYS}, []
         next_block = BASE
@@ -119,8 +191,9 @@ def build(database):
             added[table].append(row)
             return row
 
-        def condition(group, kind, **fields):
-            seq = 1 + sum(r['GroupId'] == group for r in added['BlockCondition'])
+        def condition(group, kind, seq=None, **fields):
+            if seq is None:
+                seq = 1 + sum(r['GroupId'] == group for r in added['BlockCondition'])
             return add('BlockCondition', GroupId=group, JsonId=seq, ConditionType=kind, **fields)
 
         def has_character(group, actor, exists):
@@ -141,13 +214,18 @@ def build(database):
 
         for index, bid in enumerate(HUB):
             source = backstories[bid]
+            selection = document['hub'][str(bid)]
+            if not selection['include']:
+                next_block += 1  # Keep the published block ID of every other character.
+                continue
+            slot = selection['slot']
             block, main, setup = entries[bid]
             clone = dict(source)
             clone_id = BASE + index
             init_group = f'B_{PREFIX}_Start_{bid}'
             post = f'Post_{PREFIX}_Start_{bid}'
             clone.update(BackstoryId=clone_id, BackstoryGroup=1,
-                         NewGame=SLOTS[source['JobTypeId']], BlockGroup=init_group)
+                         NewGame=slot, BlockGroup=init_group)
             add('Backstory', **clone)
             # The starter clone alone runs setup; the original Hub template and
             # its recruitment conversation retain their native records.
@@ -156,7 +234,7 @@ def build(database):
             for operation in setup:
                 if operation is not main:
                     copy_condition(operation, post, main['ActorId'], source['CharStoryId'])
-            if source['JobTypeId'] in (13, 19):
+            if slot == 4:
                 condition(post, 'Tag', ActorId=source['CharStoryId'], ConditionKey='ADD_PersonID_StartingHacker')
             add('Block', GroupId=init_group, PostConditionGroup=post if any(
                 r['GroupId'] == post for r in added['BlockCondition']) else '',
@@ -175,10 +253,14 @@ def build(database):
                 if key in locale:
                     texts[f'Backstory.{suffix}.{clone_id}'] = locale[key]
             roster.append({'direction': 'Hub to start', 'source': bid, 'template': clone_id,
-                           'slot': clone['NewGame'], 'name': locale[f'Trait.Name.{tid}_Male']})
+                           'slot': slot, 'name': locale[f'Trait.Name.{tid}_Male'],
+                           'openingDeployment': {group: starts[slot] for group, starts in ORIGINS.items() if slot in starts}})
 
         for bid in STARTERS:
             source = backstories[bid]
+            if not document['starters'][str(bid)]:
+                next_block += 7 + bool(source['BlockGroup']) + sum(bool(source[key]) for key in ('ContactLink1', 'ContactLink2'))
+                continue
             key = f'{PREFIX}_{bid}'
             actor = 'PCT_' + key
             node, cooldown_node = 'SN_' + key, 'SN_' + key + '_Cooldown'
@@ -243,13 +325,27 @@ def build(database):
             roster.append({'direction': 'Starter to Hub', 'source': bid,
                            'group': GROUPS[source['JobTypeId']], 'name': name})
 
+        # Append deployment conditions after the published setup and recruit
+        # conditions so their auto-assigned SQLite row IDs stay stable on upgrade.
+        for index, bid in enumerate(HUB):
+            selection = document['hub'][str(bid)]
+            if not selection['include']:
+                continue
+            slot = selection['slot']
+            actor = backstories[bid]['CharStoryId']
+            for group, starts in ORIGINS.items():
+                if slot in starts:
+                    seq = 1000 + 2 * index
+                    condition(group, 'CharAltStart', seq, ActorId=actor, ConditionValue=starts[slot])
+                    condition(group, 'CharacterStatus', seq + 1, ActorId=actor, ConditionValue=1, ConditionValue2=1)
+
         source = {'Metadata': {'Name': 'Hire Everyone', 'StartingId': BASE},
                   'RawSQL': sql, 'RawText': {'Generic': texts}}
         return source, added, {'roster': roster, 'excludedUnfinished': sorted(disabled),
                                'startingSlots': dict(Counter(r['slot'] for r in roster if 'slot' in r))}
 
 
-def verify(database, sql_bytes, text_bytes, expected, source_text):
+def verify(database, sql_bytes, text_bytes, expected, source_text, document=None):
     with StaticData(database) as original:
         memory = sqlite3.connect(':memory:')
         original.connection.backup(memory)
@@ -304,22 +400,45 @@ def verify(database, sql_bytes, text_bytes, expected, source_text):
         for r in expected['BlockCondition']:
             if r['ConditionType'] == 'StoryMatch' and r['ConditionKey'] not in matches:
                 raise ValueError('Missing casting group: ' + r['ConditionKey'])
-        verify_policy(memory)
+        verify_policy(memory, document)
         memory.close()
     return {'status': 'PASS', 'nativeRowsUnchanged': True, 'repeatApplication': 'PASS',
             'addedRows': {t: len(rs) for t, rs in expected.items()},
             'localizationKeys': len(parsed), 'gameplay': 'NOT RUN: review before a game session'}
 
 
-def verify_policy(connection):
+def verify_policy(connection, document=None):
     """Check the requested roster and guards independently of generated rows."""
     backstories = {r['BackstoryId']: dict(r) for r in connection.execute('SELECT * FROM Backstory')}
     blocks = [dict(r) for r in connection.execute('SELECT * FROM Block')]
     conditions = [dict(r) for r in connection.execute('SELECT * FROM BlockCondition')]
+    document = defaults(backstories) if document is None else validate(document)
+    roster_actors = {backstories[bid]['CharStoryId'] for bid in HUB + STARTERS}
+    for group, starts in ORIGINS.items():
+        origin = 'OriginStory_' + group.split('_')[1]
+        if not any(b['GroupId'] == origin and b['PostConditionGroup'] == group for b in blocks):
+            raise ValueError('Shipped origin no longer calls its deployment group: ' + origin)
+        actors = {backstories[bid]['CharStoryId']: starts[backstories[bid]['NewGame']]
+                  for bid in STARTERS if backstories[bid]['NewGame'] in starts}
+        for bid in HUB:
+            entry = document['hub'][str(bid)]
+            if entry['include'] and entry['slot'] in starts:
+                actors[backstories[bid]['CharStoryId']] = starts[entry['slot']]
+        actual = Counter((r['ActorId'], r['ConditionType'], r['ConditionValue'], r['ConditionValue2'])
+                         for r in conditions if r['GroupId'] == group and r['ActorId'] in roster_actors)
+        wanted = Counter(row for actor, start in actors.items()
+                         for row in ((actor, 'CharAltStart', start, 0), (actor, 'CharacterStatus', 1, 1)))
+        if actual != wanted:
+            raise ValueError('Origin deployment does not match the shipped and selected groups: ' + group)
     for index, source_id in enumerate(HUB):
         native = backstories[source_id]
-        clone = backstories[BASE + index]
-        wanted_slot = 4 if native['JobTypeId'] in (13, 19) else 3 if native['JobTypeId'] in (12, 5) else 5
+        clone = backstories.get(BASE + index)
+        selection = document['hub'][str(source_id)]
+        if not selection['include']:
+            if clone is not None:
+                raise ValueError('Excluded Hub character has a starting template: ' + str(source_id))
+            continue
+        wanted_slot = selection['slot']
         wanted = dict(native, BackstoryId=BASE + index, BackstoryGroup=1,
                       NewGame=wanted_slot, BlockGroup=f'B_{PREFIX}_Start_{source_id}')
         if clone != wanted:
@@ -335,6 +454,11 @@ def verify_policy(connection):
         init = [b for b in blocks if b['GroupId'] == clone['BlockGroup']]
         if len(init) != 1 or init[0]['PostState1'] != flag:
             raise ValueError('Starting Hub character lacks its native hired guard: ' + str(source_id))
+        hacker_tags = [r for r in conditions if r['GroupId'] == init[0]['PostConditionGroup']
+                       and r['ConditionType'] == 'Tag' and r['ActorId'] == native['CharStoryId']
+                       and r['ConditionKey'] == 'ADD_PersonID_StartingHacker']
+        if len(hacker_tags) != int(wanted_slot == 4):
+            raise ValueError('Starting hacker tag does not match selected group: ' + str(source_id))
     actual = []
     for b in blocks:
         if b['BlockId'] < BASE or b['EventType'] != 'Recruit':
@@ -353,8 +477,65 @@ def verify_policy(connection):
         guards = [c for c in conditions if c['GroupId'] == b['PreConditionGroup']]
         if len(guards) != 1 or guards[0]['ConditionType'] != 'HasCharacter' or guards[0]['OptionId'] != -1 or guards[0]['ActorId'] != 'PTG_' + native['TagID']:
             raise ValueError('Starter lacks the existing-character guard: ' + str(bid))
-    if sorted(actual) != sorted(STARTERS):
+    if sorted(actual) != sorted(bid for bid in STARTERS if document['starters'][str(bid)]):
         raise ValueError('Starter Hub coverage is incomplete or duplicated')
+
+
+def validate_roster(database, document):
+    source, expected, _summary = build(database, document)
+    texts = source['RawText']['Generic']
+    verify(database, '\n'.join(source['RawSQL']).encode('utf-8'), encode(texts), expected, texts, document)
+
+
+def prepare(database, document, project, contract, inputs):
+    source, expected, summary = build(database, document)
+    source_bytes = encode(source)
+    files, parser_inputs = prepare_parser(source_bytes, project, contract, SOURCE)
+    for path, checked in parser_inputs.items():
+        if path in inputs and inputs[path] != checked:
+            raise ValueError('Parser input changed during preparation: ' + str(path))
+        inputs[path] = checked
+    report = verify(database, files['data.sql'], files['en-US.json'], expected, source['RawText']['Generic'], document)
+    report.update(summary)
+    report['files'] = {n: hashlib.sha256(b).hexdigest() for n, b in files.items()}
+    return source_bytes, files, report
+
+
+def project_outputs(project, workshop):
+    manifest = project / 'source_data/stories.manifest'
+    source = manifest.parent / SOURCE
+    payloads = payload_paths(project, workshop)
+    expected = {p: state(p) for p in (manifest, source, *payloads)}
+    if expected[manifest] is not None:
+        entries = [s.strip() for s in manifest.read_text(encoding='utf-8-sig').splitlines()
+                   if s.strip() and not s.lstrip().startswith('#')]
+        if entries != [SOURCE]:
+            raise ValueError('The selected project contains another mod manifest; choose Hire Everyone.')
+    return manifest, source, payloads, expected
+
+
+def send(config_dir, project_dir, database=None, expect=None):
+    if not str(project_dir).strip():
+        raise ValueError('Choose the initialized Hire Everyone Modkit folder.')
+    project, config = Path(project_dir).resolve(), Path(config_dir).resolve()
+    if project == config or config in project.parents or not (project / 'upload_content').is_dir():
+        raise ValueError('Choose the initialized Hire Everyone Modkit folder outside the live config directory.')
+    workshop, inputs = steam_workshop.local_install_target(project, state)
+    database = database_path(database)
+    tuning = config / FILE
+    contract = project.parent / 'config.json'
+    inputs.update({p: state(p) for p in (database, database.parent / 'en-US.json', tuning, contract)})
+    if expect is not None:
+        for key, path in ((FILE, tuning), ('@official-data.db', database)):
+            if expect.get(key) != (inputs[path][2] if inputs[path] else None):
+                raise ValueError('Hire Everyone inputs changed on disk; reload before sending.')
+    manifest, source, payloads, expected = project_outputs(project, workshop)
+    source_bytes, files, report = prepare(database, load(config), project, contract, inputs)
+    outputs = {manifest: (SOURCE + '\n').encode(), source: source_bytes}
+    outputs.update({p: files[p.name] for p in payloads})
+    written = commit_files(outputs, expected, inputs)
+    return {'ok': True, 'written': written, 'installedDir': str(workshop), 'files': report['files'],
+            'next': 'Hire Everyone prepared and installed locally. Start or restart Cyber Knights to test.'}
 
 
 def selftest(database):
@@ -400,6 +581,36 @@ def selftest(database):
                 raise AssertionError(name)
             finally:
                 memory.close()
+    with StaticData(database) as original:
+        original.connection.row_factory = sqlite3.Row
+        selection = defaults({r['BackstoryId']: r for r in original.connection.execute('SELECT * FROM Backstory')})
+    selection['starters']['14'] = False
+    selection['hub']['4000']['slot'] = 3
+    selection['hub']['4003']['slot'] = 5
+    selection['hub']['4004']['slot'] = 4
+    selection['hub']['4005']['include'] = False
+    alternate, rows, _summary = build(database, selection)
+    texts = alternate['RawText']['Generic']
+    verify(database, '\n'.join(alternate['RawSQL']).encode(), encode(texts), rows, texts, selection)
+    original_block_ids = {r['BlockId']: r['GroupId'] for r in expected['Block']}
+    if any(original_block_ids.get(r['BlockId']) != r['GroupId'] for r in rows['Block']):
+        raise AssertionError('Roster exclusions renumbered previously exported blocks')
+    passed.append('group changes and exclusions in both origins, starter filtering and stable IDs')
+    with StaticData(database) as original:
+        with sqlite3.connect(':memory:') as memory:
+            original.connection.backup(memory)
+            memory.executescript('\n'.join(alternate['RawSQL']))
+            memory.execute("DELETE FROM BlockCondition WHERE GroupId='Post_Amnesia_TutorialSkipOrEnd' "
+                           "AND ActorId='PCP_UHUB_Hacker' AND ConditionType='CharAltStart'")
+            memory.row_factory = sqlite3.Row
+            try:
+                verify_policy(memory, selection)
+            except ValueError as exc:
+                if 'Origin deployment' not in str(exc):
+                    raise
+                passed.append('missing origin deployment row refused')
+            else:
+                raise AssertionError('Missing origin deployment row passed')
     return passed
 
 
@@ -407,6 +618,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--data', type=Path, default=DEFAULT_DB)
     parser.add_argument('--out', type=Path, default=PROJECT)
+    parser.add_argument('--config', type=Path, default=CONFIG)
     parser.add_argument('--install', action='store_true')
     parser.add_argument('--selftest', action='store_true')
     args = parser.parse_args()
@@ -414,7 +626,7 @@ def main():
         print(json.dumps({'status': 'PASS', 'checks': selftest(args.data)}, indent=2))
         return
     schema = MODKIT / 'CyberKnightsModkit_Data/StreamingAssets/config.json'
-    watched = [args.data, args.data.parent / 'en-US.json', Path(__file__), schema]
+    watched = [args.data, args.data.parent / 'en-US.json', Path(__file__), schema, args.config / FILE]
     inputs = {p: state(p) for p in watched}
     destinations = [args.out / 'source_data/stories.manifest', args.out / 'source_data/hire-everyone.json',
                     args.out / 'prepared/_data/data.sql', args.out / 'prepared/_data/en-US.json',
@@ -428,14 +640,8 @@ def main():
         destinations += [folder / name for folder in (UPLOADER / 'upload_content/_data', WORKSHOP / '_data')
                          for name in ('data.sql', 'en-US.json')]
     expected_states = {p: state(p) for p in destinations}
-    source, expected, summary = build(args.data)
-    source_bytes = encode(source)
-    files, parser_inputs = prepare_parser(source_bytes, UPLOADER, schema, 'hire-everyone.json')
-    inputs.update(parser_inputs)
-    report = verify(args.data, files['data.sql'], files['en-US.json'], expected, source['RawText']['Generic'])
-    report.update(summary)
+    source_bytes, files, report = prepare(args.data, load(args.config), UPLOADER, schema, inputs)
     report['inputs'] = {str(p): s[2] if s is not None else None for p, s in inputs.items()}
-    report['files'] = {n: hashlib.sha256(b).hexdigest() for n, b in files.items()}
     outputs = {args.out / 'source_data/stories.manifest': b'hire-everyone.json\n',
                args.out / 'source_data/hire-everyone.json': source_bytes,
                args.out / 'review.json': encode(report)}

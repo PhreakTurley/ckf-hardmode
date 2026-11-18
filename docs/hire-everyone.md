@@ -14,27 +14,33 @@ preparation until reviewed. Content and localization come from the official
 database and locale through the [static reader](static-data.md).
 
 Hub characters receive separate starting-only Backstory templates. Their
-original templates and Hub recruitment blocks are untouched. The new templates
-use BackstoryGroup 1 and these NewGame slots, as specified by David:
+new templates use BackstoryGroup 1. The shipped class sets the default starting
+group. The Editor can assign any of the three groups to an included Hub recruit.
 
-| Classes | Slot |
-|---|---|
-| Hacker, Wireghost | 4 |
-| Vanguard, Agent EX | 3 |
-| Other combat classes | 5 |
+| Starting group | NewGame slot | Opening mission setup |
+|---|---|---|
+| Vanguard / Agent EX | 3 | Uses the shipped stealth group's deployment rows |
+| Hacker / Wireghost | 4 | Uses `PersonID_StartingHacker` for story casting |
+| Other combat classes | 5 | Uses the shipped combat group's deployment rows |
+
+The official origin groups `Post_Amnesia_TutorialSkipOrEnd` and
+`Post_SynDebts_TutorialSkipOrEnd` give shipped slot 3 and 5 actors a
+`CharAltStart` and a `CharacterStatus` row. The exporter adds the matching
+pair for each included Hub recruit, using the chosen group in both origins.
+The shipped slot 4 actors have no deployment pair. [measured]
+`Official/data.db`, `BlockCondition` 717–734 and 849–866.
 
 The clones preserve native class, cosmetics, implants, base trait fields,
 identity and tags. Their new initialization blocks copy the native recruitment
 setup without creating the main character again, translate its temporary actor
 reference to the permanent identity, and invoke the existing casting group when
-one is referenced. They set the native recruitment's hired flag. Hacker and
-Wireghost initialization also adds `PersonID_StartingHacker`, the tag present
-on the native starting hackers. Menu descriptions use the native backstory text
-when available, otherwise the associated backstory trait's localized text.
+one is referenced. They set the native recruitment's hired flag. Menu descriptions
+use the native backstory text when available, otherwise the associated backstory
+trait's localized text.
 The builder does not translate choices in recruitment conversations into
 additional starting variants.
 
-The existing combat starters receive new Hub entries in their respective class
+Selected combat starters receive new Hub entries in their respective class
 groups. These use the original Backstory ID, a HasCharacter condition against
 the character's identity tag, distinct hired/cooldown states, and new recruitment
 nodes. The offer exposes recruit, delay and decline choices, using the native
@@ -48,6 +54,14 @@ The four unfinished native Hub entries gated by `Pre_AlwaysFail` are outside the
 available roster and are not enabled by this mod.
 
 ## Prepare and install
+
+In the Editor, open **Hire Everyone Mod**. Use **Include in Underworld Hub**
+for shipped combat starters. For Hub recruits, use **Include at New Game** and
+choose a **Starting group**. Save persists the roster in
+`BepInEx/config/ckf.hire-everyone.json`. The default roster includes every
+supported character with class-based groups. Use **Export Hire Everyone to
+Modkit** to build and install the saved roster locally. Export uses the
+[Workshop project and Steam registration checks](../gui/README.md#export-workshop-mods-to-modkit-uploader).
 
 Requires the official database/locale and the installed Cyber Knights Mod
 Uploader, including its parser DLL and schema. From `cmd.exe`:
@@ -76,9 +90,8 @@ The installed Data Parser produces the delivered SQL and locale. The verifier
 applies that SQL to an in-memory copy of Official content, rejects updates and
 deletes, compares every native row unchanged, checks the exact additions and
 localization, validates content links, and checks repeat application. Independent
-policy checks verify class slots, cloned character fields, original Hub entries,
-new starter coverage and existing-character guards. Selftests also require
-native writes, a wrong slot and a removed duplicate guard to fail.
+policy checks verify selected groups, cloned character fields, origin deployment,
+hired flags, selected starter offers and existing-character guards.
 
 `review.json` records the current roster, input/output hashes and check results.
 These are content checks. Starting setup, contact casting, recruitment, expiry

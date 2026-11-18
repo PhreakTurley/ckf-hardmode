@@ -132,7 +132,7 @@ independent destinations, invalid turn ranges, no-op byte preservation and
 installed-parser output; `python gui/test_contact_limit_breaks_ui.py` exercises
 all three controls and the independent save payload.
 
-## Export all four Workshop mods to Modkit Uploader
+## Export Workshop mods to Modkit Uploader
 
 Open **Workshop export** above the editor. Set **Player Balance
 source repository** to a checkout of `ckf-talent-balance` containing
@@ -140,14 +140,14 @@ source repository** to a checkout of `ckf-talent-balance` containing
 folder** to the initialized `WorkshopContent/<ModName>` folder beside its
 `<ModName>.workshop.json`, then click **Save folders**. The paths persist as
 `talentProjectDir` and `modkitProjectDir` in the editor's settings file.
-Set the other three destinations in **Enemy Armors**, **Party Size Mod** and
-**Faster Contact Limit Breaks** using their dedicated controls. Each mod must
-have its own initialized Modkit folder and installed Workshop item.
+Set the other destinations in **Enemy Armors**, **Party Size Mod**,
+**Faster Contact Limit Breaks** and [**Hire Everyone Mod**](../docs/hire-everyone.md)
+using their dedicated controls. Each mod must have its own initialized Modkit
+folder and installed Workshop item. The combined export includes Hire Everyone
+when its Modkit folder is configured.
 
 1. Edit values and click **Save** in the editor.
-2. Click **Export all four mods to Modkit**. It updates Player Balance, Enemy
-   Difficulty, Party Size and Faster Contact Limit Breaks using their saved
-   folders. Each export prepares its upload payload and installed Workshop
+2. Click **Export Workshop mods to Modkit**. Each export prepares its upload payload and installed Workshop
    payload with the existing guarded writer. The result lists each mod's
    success or failure; a failed mod leaves successful exports in place and
    independent mods are still attempted. A changed config or destination

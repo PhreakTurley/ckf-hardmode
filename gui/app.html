@@ -154,6 +154,11 @@ table.grid td.axis{position:sticky;left:0;background:var(--panel2);
   padding:3px 7px;font-weight:600;z-index:1}
 table.grid td{font-size:13px}
 table.grid td.ro{padding:3px 7px}
+table.hire-roster th,table.hire-roster td{padding:7px 10px}
+.hire-roster th[scope=row]{position:static;font-weight:600;background:inherit;vertical-align:middle}
+.hire-roster th small,.hire-roster td small{display:block;margin-top:3px;color:var(--dim);font-weight:400}
+.hire-roster.grid td input[type=checkbox]{width:auto;margin:0;accent-color:var(--accent)}
+.hire-roster select{max-width:100%}
 table.grid td input{border:0;border-radius:0;background:transparent;width:11ch;font-variant-numeric:tabular-nums;
   padding:3px 7px}
 table.grid td.unset input{background:var(--unsetbg)}
@@ -387,10 +392,10 @@ dialog form{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
   </div>
   <div class="ctl">
     <button id="modkit-paths">Save folders</button>
-    <button id="send-talents" class="primary">Export all four mods to Modkit</button>
+    <button id="send-talents" class="primary">Export Workshop mods to Modkit</button>
     <span id="modkit-status" class="small" role="status" aria-live="polite" style="white-space:pre-line"></span>
   </div>
-  <p class="doc">Save, then export Player Balance, Enemy Difficulty, Party Size and Faster Contact Limit Breaks to their saved Modkit and installed Workshop folders. Start or restart Cyber Knights to test.</p>
+  <p class="doc">Save, then export to the configured Modkit and installed Workshop folders. Set the Hire Everyone folder on its page. Start or restart Cyber Knights to test.</p>
 </details>
 
 <main>
@@ -1405,6 +1410,7 @@ function buildWorking() {
   w.contactTurns = {};
   for (const key of ['minimum', 'maximum', 'readyThreshold']) w.contactTurns[key] = (MODEL.contactBreaks || {}).document ? String(MODEL.contactBreaks.document[key]) : '';
   w.partyMaximum = (MODEL.partySize || {}).document ? String(MODEL.partySize.document.maximum) : '';
+  w.hireEveryone = JSON.parse(JSON.stringify((MODEL.hireEveryone || {}).document || null));
   w.enemyRules = JSON.parse(JSON.stringify((MODEL.enemyRules || {}).values || {}));
   w.enemyArmor = JSON.parse(JSON.stringify((MODEL.enemyArmor || {}).values || {}));
   w.player = JSON.parse(JSON.stringify((MODEL.playerBalance || {}).document || {}));
@@ -1457,6 +1463,7 @@ function dirtyPaths() {
   for (const k of Object.keys(player.implantMultipliers)) out.push('All cyberware:' + k);
   if (partyChanged()) out.push('Party Size Mod: maximum');
   if (contactChanged()) out.push('Faster Contact Limit Breaks: turns');
+  if (hireChanged()) out.push('Hire Everyone roster');
   return out;
 }
 
@@ -1519,6 +1526,7 @@ function buildEdits() {
   }
   if (partyChanged()) edits.partySize = {format:1, maximum:Number(W.partyMaximum)};
   if (contactChanged()) edits.contactBreaks = {format:1, minimum:Number(W.contactTurns.minimum), maximum:Number(W.contactTurns.maximum), readyThreshold:Number(W.contactTurns.readyThreshold)};
+  if (hireChanged()) edits.hireEveryone = W.hireEveryone;
   const rules=enemyRuleChanges();
   if (rules.cells.length) edits.enemyRules=rules;
   const enemy=enemyArmorChanges();
@@ -4393,6 +4401,82 @@ function renderContact(panel) {
   card.appendChild(send);card.appendChild(status);
 }
 
+function hireChanged() {
+  return !CKF.deepEqual(W.hireEveryone, (MODEL.hireEveryone || {}).document || null);
+}
+
+function renderHireEveryone(panel) {
+  const model = MODEL.hireEveryone || {};
+  const card = el('div', {class:'card'}, [el('h3', {text:'Hire Everyone Mod'})]);
+  panel.appendChild(card);
+  if (model.error) card.appendChild(banner('err', 'Hire Everyone roster unavailable', [model.error]));
+  if (W.hireEveryone && !model.error) {
+    for (const [key, title, includeLabel] of [
+      ['starters', model.titles.starters, 'Include in Underworld Hub'],
+      ['hub', model.titles.hub, 'Include at New Game'],
+    ]) {
+      card.appendChild(el('h4', {text:title}));
+      const isHub = key === 'hub';
+      const columns = ['Character', 'Class', includeLabel];
+      if (isHub) columns.push('Starting group');
+      const table = el('table', {class:'grid hire-roster', 'aria-label':title}, [
+        el('thead', {}, [el('tr', {}, columns.map(text => el('th', {scope:'col', text:text})))])]);
+      const body = el('tbody');
+      for (const row of model[key]) {
+        const draft = W.hireEveryone[key];
+        const selected = isHub ? draft[row.id] : null;
+        const include = el('input', {type:'checkbox', checked:isHub ? selected.include : draft[row.id],
+          'aria-label':includeLabel + ' for ' + row.name, 'data-hire-include':row.id});
+        const name = el('th', {scope:'row'}, [el('span', {text:row.name}),
+          [row.name, row.job].includes(row.backstory) ? null : el('small', {text:row.backstory})]);
+        const cells = [name, el('td', {text:row.job}), el('td', {}, [include])];
+        if (isHub) {
+          const deployment = el('small');
+          const group = el('select', {'aria-label':'Starting group for ' + row.name, 'data-hire-group':row.id},
+            model.groups.map(g => el('option', {value:g.slot, selected:g.slot===selected.slot,
+              text:g.name + (g.slot===row.defaultSlot ? ' (default)' : '')})));
+          group.value = String(selected.slot);
+          const showDeployment = function () {
+            group.disabled = !selected.include;
+            const choice = model.groups.find(g => g.slot===selected.slot);
+            deployment.textContent = !selected.include ? 'Outside starting roster'
+              : choice.deploys ? 'Deploys in both Origin openers' : 'Starts at the safehouse';
+          };
+          group.addEventListener('change', function () {
+            selected.slot = Number(group.value); showDeployment(); updateDirty();
+          });
+          include.addEventListener('change', function () {
+            selected.include = include.checked; showDeployment(); updateDirty();
+          });
+          showDeployment();
+          cells.push(el('td', {}, [group, deployment]));
+        } else {
+          include.addEventListener('change', function () {draft[row.id] = include.checked; updateDirty();});
+        }
+        body.appendChild(el('tr', {}, cells));
+      }
+      table.appendChild(body);
+      card.appendChild(el('div', {class:'grid-wrap'}, [table]));
+    }
+  }
+  card.appendChild(el('p', {class:'doc', text:'Save roster changes, then export to prepare the Workshop package and install it locally.'}));
+  const folder = el('input', {id:'hire-project', type:'text', value:model.projectDir || '', spellcheck:'false'});
+  card.appendChild(el('div', {class:'field'}, [el('label', {class:'lab', for:'hire-project', text:'Modkit mod folder'}), folder]));
+  const status = el('p', {class:'small', role:'status', 'aria-live':'polite'});
+  card.appendChild(el('button', {id:'send-hire', text:'Export Hire Everyone to Modkit', onclick:async function () {
+    setWorkingRequest(true);
+    try {
+      await api('/api/settings', {hireEveryoneProjectDir:folder.value.trim()});
+      model.projectDir = folder.value.trim();
+      const result = await api('/api/hire-export', {fingerprints:MODEL.fingerprints});
+      status.textContent = result.ok ? result.next : 'Export failed: ' + result.error;
+    } catch (e) {status.textContent = 'Export failed: ' + String(e);}
+    finally {setWorkingRequest(false);}
+  }}));
+  folder.addEventListener('input', updateDirty);
+  card.appendChild(status);
+}
+
 function renderEnemyArmor(panel) {
   const model=MODEL.enemyArmor || {};
   if (!model.page || model.error) {
@@ -4492,6 +4576,7 @@ function renderPanelContents() {
   }
   if (SEL === 'party-size') {renderParty(p);return;}
   if (SEL === 'contact-breaks') {renderContact(p);return;}
+  if (SEL === 'hire-everyone') {renderHireEveryone(p);return;}
   const playerPage = ((MODEL.playerBalance || {}).pages || []).find(function (page) {return SEL === 'pb:' + page.id;});
   if (playerPage || (MODEL.deferredCatalogs && SEL && SEL.startsWith('pb:'))) {
     const page=playerPage && playerPage.grids ? playerPage
@@ -4585,6 +4670,9 @@ function updateDirty() {
   if (partySend) partySend.disabled = !!d.length || !(MODEL.partySize || {}).document || !!(MODEL.partySize || {}).error;
   const contactSend=$('#panel').querySelector('#send-contact');
   if (contactSend) contactSend.disabled=!!d.length || !(MODEL.contactBreaks || {}).document || !!(MODEL.contactBreaks || {}).error;
+  const hireSend=$('#panel').querySelector('#send-hire');
+  if (hireSend) hireSend.disabled=WORKING_REQUEST || RELOAD_REQUIRED || !!d.length || !W.hireEveryone
+    || !!MODEL.hireEveryone.error || !$('#panel').querySelector('#hire-project').value.trim();
 }
 
 function render() {
@@ -4766,7 +4854,7 @@ for (const id of ['talent-project', 'modkit-project'])
 
 $('#send-talents').addEventListener('click', async function () {
   $('#send-talents').disabled = true;
-  $('#modkit-status').textContent = 'Preparing and installing all four Workshop mods…';
+  $('#modkit-status').textContent = 'Preparing and installing Workshop mods…';
   try {
     const result = await api('/api/workshop-export', { fingerprints: MODEL.fingerprints });
     const lines = (result.mods || []).map(function(mod) {

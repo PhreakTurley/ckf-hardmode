@@ -89,6 +89,7 @@ import re
 import secrets
 import shutil
 import socket
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -136,6 +137,7 @@ import static_data
 import player_balance
 import talent_editor
 import enemy_armor
+import build_hire_everyone
 import enemy_rules
 import modkit
 import party_size
@@ -2899,7 +2901,8 @@ def files_check_schema_reads(schemas):
     `fingerprints` uses the same list, so an overlay edited on disk between the
     browser's read and the save is detected too.
     """
-    rel = {'ckf.hardmode.cfg', player_balance.FILE, party_size.FILE, contact_limit_breaks.FILE}
+    rel = {'ckf.hardmode.cfg', player_balance.FILE, party_size.FILE, contact_limit_breaks.FILE,
+           build_hire_everyone.FILE}
     rel.update(overlay_paths_all(schemas))
     for sch in schemas:
         j = sch.get('targets', {}).get('json')
@@ -5335,6 +5338,8 @@ def load_settings():
                  'Cyber Knights Mod Uploader', 'WorkshopContent', 'IncreasedPartySize'))
     s.setdefault('contactBreaksProjectDir', os.path.join(os.path.dirname(game),
                  'Cyber Knights Mod Uploader', 'WorkshopContent', 'FasterLimitBreaks'))
+    hire_project = Path(game).parent / 'Cyber Knights Mod Uploader/WorkshopContent/HireEveryone'
+    s.setdefault('hireEveryoneProjectDir', str(hire_project) if hire_project.with_suffix('.workshop.json').is_file() else '')
     s.setdefault('enemySourceDir', os.path.dirname(s.get('talentProjectDir') or '') if not FROZEN else '')
     s.setdefault('enemyModkitProjectDir', os.path.join(os.path.dirname(game),
                  'Cyber Knights Mod Uploader', 'WorkshopContent', 'EnemyDifficulty'))
@@ -5583,6 +5588,7 @@ class App:
                                          self.settings.get('partySizeProjectDir', '')),
             'contactBreaks': contact_limit_breaks.model(cd, self.data_source(),
                                          self.settings.get('contactBreaksProjectDir', '')),
+            'hireEveryone': build_hire_everyone.model(cd, source, self.settings.get('hireEveryoneProjectDir', '')),
             'enemyArmor': dict(armor,
                 sectionId=next((s['id'] for s in visible_sections if 'EnemyArmor' in s['subsystems']), None)),
             'talentCatalogError': self.catalog_error,
@@ -5604,7 +5610,7 @@ class App:
         }
 
     def api_workshop_export(self, expect=None):
-        """Update all four saved Workshop projects with per-mod receipts.
+        """Update configured Workshop projects with per-mod receipts.
 
         Each exporter guards and verifies its own transaction. A failed mod
         does not hide successful updates or prevent independent mods running.
@@ -5633,6 +5639,9 @@ class App:
                     ('contacts', 'Faster Contact Limit Breaks', 'contactBreaksProjectDir', lambda: contact_limit_breaks.send(
                         cd, settings.get('contactBreaksProjectDir') or '', database, baseline)),
                 ]
+                if settings.get('hireEveryoneProjectDir'):
+                    jobs.append(('hire', 'Hire Everyone Mod', 'hireEveryoneProjectDir', lambda: build_hire_everyone.send(
+                        cd, settings['hireEveryoneProjectDir'], database, baseline)))
                 destinations, installed, install_inputs = set(), set(), {}
                 # Resolve every installation before any exporter can write.
                 for _key, title, setting, _send in jobs:
@@ -5642,7 +5651,7 @@ class App:
                     project = Path(folder).resolve()
                     workshop, inputs = modkit.steam_workshop.local_install_target(project, modkit.state)
                     if project in destinations or workshop.resolve() in installed:
-                        raise ValueError('Each of the four mods needs a distinct Modkit and Workshop folder.')
+                        raise ValueError('Each mod needs a distinct Modkit and Workshop folder.')
                     if not (project / 'upload_content').is_dir():
                         raise ValueError('Choose an initialized %s Modkit folder.' % title)
                     destinations.add(project)
@@ -5662,7 +5671,7 @@ class App:
                         results.append({'id': key, 'title': title, 'ok': False, 'error': str(exc)})
                 return {'ok': all(result['ok'] for result in results), 'mods': results,
                         'written': [path for result in results for path in result.get('written', [])],
-                        'next': ('Start or restart Cyber Knights to test. All four Modkit payloads are ready for Workshop submission.'
+                        'next': ('Start or restart Cyber Knights to test. Modkit payloads are ready for Workshop submission.'
                                  if all(result['ok'] for result in results) else 'Review the failed exports before Workshop submission.')}
             except Exception as exc:
                 return {'ok': False, 'mods': results, 'error': str(exc)}
@@ -5707,6 +5716,31 @@ class App:
                                        self.data_source(), expect)
             except (OSError, ValueError, subprocess.SubprocessError) as exc:
                 return {'ok': False, 'error': str(exc)}
+
+    def api_hire_export(self, expect=None):
+        with self.lock:
+            try:
+                cd = config_dir_for(self.settings)
+                if os.path.exists(journal_path(cd)):
+                    raise ValueError('A config save is incomplete; reload before exporting.')
+                return build_hire_everyone.send(cd, self.settings.get('hireEveryoneProjectDir', ''),
+                                                self.data_source(), expect)
+            except (OSError, ValueError, subprocess.SubprocessError, sqlite3.Error) as exc:
+                return {'ok': False, 'error': str(exc)}
+
+    def hire_edits(self, cd, edits, proposed):
+        path = Path(cd) / build_hire_everyone.FILE
+        if path.is_file():
+            proposed[build_hire_everyone.FILE] = path.read_bytes()
+        if 'hireEveryone' not in edits:
+            return
+        try:
+            document = build_hire_everyone.validate(edits['hireEveryone'])
+            if document != build_hire_everyone.load(cd):
+                build_hire_everyone.validate_roster(self.data_source(), document)
+                proposed[build_hire_everyone.FILE] = build_hire_everyone.encode(document)
+        except (OSError, ValueError, sqlite3.Error) as exc:
+            raise SaveRefused({'summary': 'Hire Everyone roster was not saved', 'detail': str(exc)})
 
     def party_edits(self, cd, edits, proposed):
         for key, module, lookup, title in (
@@ -5864,6 +5898,7 @@ class App:
                 proposed, more = apply_edits(doc, extras, edits, strip_readme)
                 self.player_edits(cd, edits, proposed)
                 self.party_edits(cd, edits, proposed)
+                self.hire_edits(cd, edits, proposed)
                 self.enemy_armor_edits(cd, edits, proposed)
                 self.enemy_rule_edits(cd, edits, proposed)
                 self.validate_enemy_armor(cd, proposed)
@@ -5911,6 +5946,7 @@ class App:
                 proposed, more = apply_edits(doc, extras, edits, strip_readme)
                 self.player_edits(cd, edits, proposed)
                 self.party_edits(cd, edits, proposed)
+                self.hire_edits(cd, edits, proposed)
                 self.enemy_armor_edits(cd, edits, proposed)
                 self.enemy_rule_edits(cd, edits, proposed)
                 self.validate_enemy_armor(cd, proposed)
@@ -6077,6 +6113,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, self.app.api_contact_export(body.get('fingerprints')))
             if path == '/api/party-export':
                 return self._json(200, self.app.api_party_export(body.get('fingerprints')))
+            if path == '/api/hire-export':
+                return self._json(200, self.app.api_hire_export(body.get('fingerprints')))
             if path == '/api/enemy-prepare':
                 return self._json(200, self.app.api_enemy_prepare(body.get('fingerprints')))
             if path == '/api/talent-export':
@@ -6093,7 +6131,8 @@ class Handler(BaseHTTPRequestHandler):
                         s['configDirOverride'] = str(v) if v else None
                     if 'stripReadme' in body:
                         s['stripReadme'] = bool(body['stripReadme'])
-                    for key in ('talentProjectDir', 'modkitProjectDir', 'officialDataPath', 'partySizeProjectDir', 'contactBreaksProjectDir', 'enemySourceDir', 'enemyModkitProjectDir'):
+                    for key in ('talentProjectDir', 'modkitProjectDir', 'officialDataPath', 'partySizeProjectDir',
+                                'contactBreaksProjectDir', 'enemySourceDir', 'enemyModkitProjectDir', 'hireEveryoneProjectDir'):
                         if key in body:
                             s[key] = str(body[key] or '').strip()
                     save_settings(s)
@@ -10760,6 +10799,13 @@ def selftest(config_arg, frozen_exe=None, legacy_cyberware_help=False):
         # that reported [] while replacing a file would pass on the first half
         # alone.
         cdn = _sandbox(src, os.path.join(td, 'noop'))
+        # This optional roster begins with defaults until a player edits it.
+        # Exercise its no-op writer even when the source has never saved it.
+        hire_file = Path(cdn) / build_hire_everyone.FILE
+        if not hire_file.exists():
+            hire_file.write_bytes(build_hire_everyone.encode({'format': 1,
+                'starters': {str(bid): False for bid in build_hire_everyone.STARTERS},
+                'hub': {str(bid): {'include': False, 'slot': 5} for bid in build_hire_everyone.HUB}}))
         owned = files_check_schema_reads(schemas)
         present = [rel for rel in owned if os.path.exists(os.path.join(cdn, rel))]
         mirrors = sorted({inv['target'] for sch in schemas
@@ -10798,6 +10844,7 @@ def selftest(config_arg, frozen_exe=None, legacy_cyberware_help=False):
                        | ({player_balance.FILE} if _noop.get('playerBalance') is not None else set())
                        | ({party_size.FILE} if _noop.get('partySize') is not None else set())
                        | ({contact_limit_breaks.FILE} if _noop.get('contactBreaks') is not None else set())
+                       | ({build_hire_everyone.FILE} if _noop.get('hireEveryone') is not None else set())
                        | {'ckf.hardmode.cfg'})
                 == sorted(set(owned) - set(mirrors)),
                 (sorted(set(unit_file(u) for u in _noop['json'])
@@ -12330,7 +12377,7 @@ def _edits_for(schemas, model):
         # No-op coverage includes the Workshop file without pretending its
         # catalog is readable when this harness deliberately disables static data.
         edits['playerBalance'] = {'cells': [], 'implantMultipliers': {}}
-    for key in ('partySize', 'contactBreaks'):
+    for key in ('partySize', 'contactBreaks', 'hireEveryone'):
         if model.get(key, {}).get('document') is not None:
             edits[key] = model[key]['document']
     for rel, ent in (model['values'].get('overlays') or {}).items():
@@ -13164,10 +13211,10 @@ setTimeout(function () {
   ck('every Workshop page also has a nav item', nav.find(function (n) {
     return !!n.attrs['data-player-page']; }).length === playerPages.length);
   const ruleItems=nav.find(function (n) {return !!n.attrs['data-rule-mod'];});
-  ck('both standalone rule mods have exactly one nav item',
+  ck('each standalone Workshop mod has exactly one nav item',
      JSON.stringify(ruleItems.map(function(n) {return n.attrs['data-rule-mod'];}).sort())
-       === JSON.stringify(['contactBreaks', 'partySize']));
-  ck('the navigation contains exactly the Hard Mode sections, Workshop pages and standalone rule mods',
+       === JSON.stringify(['contactBreaks', 'hireEveryone', 'partySize']));
+  ck('the navigation contains exactly the Hard Mode sections, Workshop pages and standalone mods',
      nav.find(function (n) {return n._cls().includes('navitem');}).length
        === items.length + playerPages.length + ruleItems.length);
 

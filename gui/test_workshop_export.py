@@ -18,7 +18,8 @@ class WorkshopExportTests(unittest.TestCase):
         self.config.mkdir()
         self.settings = {'configDirOverride': str(self.config), 'talentProjectDir': str(self.root / 'talents'),
                          'enemySourceDir': str(self.root), 'officialDataPath': str(self.root / 'data.db')}
-        self.keys = ('modkitProjectDir', 'enemyModkitProjectDir', 'partySizeProjectDir', 'contactBreaksProjectDir')
+        self.keys = ('modkitProjectDir', 'enemyModkitProjectDir', 'partySizeProjectDir', 'contactBreaksProjectDir',
+                     'hireEveryoneProjectDir')
         ids = []
         for index, key in enumerate(self.keys, 1):
             project = self.root / 'uploader/WorkshopContent' / key
@@ -39,26 +40,35 @@ class WorkshopExportTests(unittest.TestCase):
         self.senders = [patch.object(module, name, return_value={
             'ok': True, 'written': [key], 'installedDir': 'installed-' + key}).start()
             for module, name, key in ((serve.modkit, 'send', 'player'), (serve.enemy_armor, 'prepare', 'enemy'),
-                                      (serve.party_size, 'send', 'party'), (serve.contact_limit_breaks, 'send', 'contacts'))]
+                                      (serve.party_size, 'send', 'party'), (serve.contact_limit_breaks, 'send', 'contacts'),
+                                      (serve.build_hire_everyone, 'send', 'hire'))]
 
-    def test_main_export_updates_all_four_with_their_own_destinations(self):
+    def test_main_export_updates_all_configured_mods_with_their_own_destinations(self):
         result = self.app.api_workshop_export(self.baseline)
         self.assertTrue(result['ok'], result)
-        self.assertEqual([r['id'] for r in result['mods']], ['player', 'enemy', 'party', 'contacts'])
-        self.assertEqual(result['written'], ['player', 'enemy', 'party', 'contacts'])
+        self.assertEqual([r['id'] for r in result['mods']], ['player', 'enemy', 'party', 'contacts', 'hire'])
+        self.assertEqual(result['written'], ['player', 'enemy', 'party', 'contacts', 'hire'])
         for sender, key in zip(self.senders, self.keys):
             sender.assert_called_once()
             self.assertIn(self.settings[key], tuple(str(arg) for arg in sender.call_args.args))
         self.assertEqual(self.senders[2].call_args.args[-1], self.baseline)
         self.assertEqual(self.senders[3].call_args.args[-1], self.baseline)
+        self.assertEqual(self.senders[4].call_args.args[-1], self.baseline)
+
+    def test_existing_projects_can_export_without_a_hire_everyone_project(self):
+        self.settings.pop('hireEveryoneProjectDir')
+        result = self.app.api_workshop_export(self.baseline)
+        self.assertTrue(result['ok'], result)
+        self.assertEqual(result['written'], ['player', 'enemy', 'party', 'contacts'])
+        self.senders[4].assert_not_called()
 
     def test_failure_reports_successful_mods_and_still_attempts_independent_mods(self):
         self.senders[1].side_effect = ValueError('enemy parser refused')
         result = self.app.api_workshop_export(self.baseline)
         self.assertFalse(result['ok'])
-        self.assertEqual([r['ok'] for r in result['mods']], [True, False, True, True])
+        self.assertEqual([r['ok'] for r in result['mods']], [True, False, True, True, True])
         self.assertIn('enemy parser refused', result['mods'][1]['error'])
-        self.assertEqual(result['written'], ['player', 'party', 'contacts'])
+        self.assertEqual(result['written'], ['player', 'party', 'contacts', 'hire'])
         self.assertTrue(all(sender.call_count == 1 for sender in self.senders))
 
     def test_stale_config_and_invalid_schema_refuse_all_exports(self):
@@ -84,7 +94,7 @@ class WorkshopExportTests(unittest.TestCase):
             return {'ok': True, 'written': ['player']}
         self.senders[0].side_effect = changed
         result = self.app.api_workshop_export(self.baseline)
-        self.assertEqual([r['ok'] for r in result['mods']], [True, False, False, False])
+        self.assertEqual([r['ok'] for r in result['mods']], [True, False, False, False, False])
         self.assertTrue(all(not sender.called for sender in self.senders[1:]))
 
     def test_tuning_change_after_an_export_blocks_remaining_writes(self):
@@ -93,7 +103,7 @@ class WorkshopExportTests(unittest.TestCase):
             return {'ok': True, 'written': ['player']}
         self.senders[0].side_effect = changed
         result = self.app.api_workshop_export(self.baseline)
-        self.assertEqual([r['ok'] for r in result['mods']], [True, False, False, False])
+        self.assertEqual([r['ok'] for r in result['mods']], [True, False, False, False, False])
         self.assertTrue(all(not sender.called for sender in self.senders[1:]))
 
 
@@ -142,7 +152,7 @@ setTimeout(async function() {
   const calls=[];let failEnemy=false;
   api=async function(path,body) {
     calls.push({path:path,body:body});
-    return {ok:!failEnemy,mods:['Player Balance','Enemy Difficulty','Party Size Mod','Faster Contact Limit Breaks'].map((title,index)=>
+    return {ok:!failEnemy,mods:['Player Balance','Enemy Difficulty','Party Size Mod','Faster Contact Limit Breaks','Hire Everyone Mod'].map((title,index)=>
       ({title:title,ok:!(failEnemy && index===1),error:'enemy fixture refused'})),next:'Restart the game to test.'};
   };
   const button=$('#send-talents');
@@ -150,7 +160,7 @@ setTimeout(async function() {
   ck('main button calls the combined export with current fingerprints', calls.length===1 && calls[0].path==='/api/workshop-export'
     && CKF.deepEqual(calls[0].body.fingerprints,MODEL.fingerprints));
   const status=$('#modkit-status');
-  ck('success lists all four installed mods', ['Player Balance','Enemy Difficulty','Party Size Mod','Faster Contact Limit Breaks'].every(title=>
+  ck('success lists all installed mods', ['Player Balance','Enemy Difficulty','Party Size Mod','Faster Contact Limit Breaks','Hire Everyone Mod'].every(title=>
     status.textContent.includes(title+': prepared and installed locally.')));
   failEnemy=true;await button.listeners.click[0]();
   ck('partial failure names the failed mod and preserves success receipts', status.textContent.includes('Enemy Difficulty: failed: enemy fixture refused')

@@ -6,6 +6,7 @@ MOD_OWNERS = [
     {'id': 'hard-mode', 'title': 'Hard Mode'},
     {'id': 'party-size', 'title': 'Party Size Mod', 'standalone': 'partySize', 'selection': 'party-size'},
     {'id': 'contact-breaks', 'title': 'Faster Contact Limit Breaks', 'standalone': 'contactBreaks', 'selection': 'contact-breaks'},
+    {'id': 'hire-everyone', 'title': 'Hire Everyone Mod', 'standalone': 'hireEveryone', 'selection': 'hire-everyone'},
 ]
 ROW_OWNERS = {'Player Balance': 'player-balance', 'Enemy Balance': 'enemy-balance', 'Hard Mode': 'hard-mode'}
 OWNER_TITLES = {owner['id']: owner['title'] for owner in MOD_OWNERS}
