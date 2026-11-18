@@ -1,6 +1,7 @@
 """Exercise the Hire Everyone roster through normal Editor save/export paths."""
 from pathlib import Path
 from contextlib import closing
+import json
 import sqlite3
 import shutil
 import sys
@@ -80,6 +81,21 @@ class HireEveryoneTests(unittest.TestCase):
                 self.assertEqual({row[0] for row in nodes}, {hire.hire_backstories.node_id(hire.PREFIX, bid)
                                  for bid in hire.HUB if bid != 4004})
                 self.assertEqual(selected.execute("SELECT BlockId FROM Block WHERE StoryNode1='ADD_SN_Hacker_LeftForDead'").fetchall(), [(91006,)])
+                agent = 'HE3841540859_Finish_4012'
+                self.assertEqual(selected.execute('SELECT StoryNodeType, ActorId FROM StoryNode WHERE StoryNodeId=?',
+                                                  ('SN_' + agent,)).fetchone(), ('Root', ''))
+                reply = selected.execute("""SELECT BlockId, EventType, EventId, Dialog, StoryNode1, PostConditionGroup
+                    FROM Block WHERE GroupId = ? AND PreDialogPostCondition IN
+                    (SELECT GroupId FROM BlockCondition WHERE ConditionKey = ?)""",
+                    ('B_' + agent + '_Choices', 'ADD_' + agent + '_Choice_91258')).fetchall()
+                self.assertEqual(len(reply), 1)
+                block, kind, target, dialog, removal, effects = reply[0]
+                self.assertEqual((kind, target, removal), ('Event', '', 'DEL_SN_' + agent))
+                self.assertTrue(dialog)
+                self.assertEqual(selected.execute('SELECT ConditionValue FROM BlockCondition WHERE GroupId=? AND ConditionType=?',
+                                                  (effects, 'Item')).fetchone(), (3606,))
+                locale = json.loads((workshop / '_data/en-US.json').read_bytes())
+                self.assertTrue(locale[f'BlockDesc.{block}_Female'])
 
 
 UI = r'''

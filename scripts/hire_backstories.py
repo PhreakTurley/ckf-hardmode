@@ -133,12 +133,12 @@ class Stories:
 
 def emit(stories, bid, backstory, offer, temporary, setup, prefix, base, add, condition, texts):
     """Emit one resumable safehouse event and its starter setup."""
-    intro, traits, followup, branches = stories.plan(bid, offer)
+    _intro, traits, followup, branches = stories.plan(bid, offer)
     actor = backstory['CharStoryId']
     key = f'{prefix}_Finish_{bid}'
     node = node_id(prefix, bid)
-    first, choices, follow, options, resume = [f'B_{key}_{name}' for name in
-                                               ('Intro', 'Traits', 'Followup', 'Choices', 'Resume')]
+    choices, follow, options, timeline = [f'B_{key}_{name}' for name in
+                                          ('Traits', 'Followup', 'Choices', 'Timeline')]
     initial = [r for r in setup if r['ActorId'] != temporary or r['ConditionType'] != 'AddCharacter']
     paths = [b for path, _end, _finish in branches for b in path]
     action_rows = initial + [r for b in paths for field in ('PreDialogPostCondition', 'PostConditionGroup')
@@ -193,12 +193,6 @@ def emit(stories, bid, backstory, offer, temporary, setup, prefix, base, add, co
             raise ValueError(f'Backstory {bid}: starter event exceeds its reserved block range')
         return add('Block', BlockId=block_no, GroupId=group, **values)
 
-    def action(group, kind, before='', **fields):
-        row = block(group, PreConditionGroup=before)
-        post = f'Post_{key}_{row["BlockId"]}'
-        row['PostConditionGroup'] = post  # Serialized after all rows are authored.
-        return condition(post, kind, **fields)
-
     def absent(suffix, identity):
         group = f'Pre_{key}_{suffix}'
         condition(group, 'HasCharacter', ActorId=identity, OptionId=-1)
@@ -211,16 +205,20 @@ def emit(stories, bid, backstory, offer, temporary, setup, prefix, base, add, co
 
     copied_dialogs = {}
 
-    def dialog(group):
-        if group and group not in copied_dialogs:
-            target = copied_dialogs[group] = f'D_{key}_{len(copied_dialogs) + 1}'
-            for source in stories.dialogs[group]:
-                values = {k: rebind(v) for k, v in source.items() if k not in ('DialogId', 'GroupId')}
+    def dialog(*parts):
+        if parts not in copied_dialogs:
+            target = copied_dialogs[parts] = f'D_{key}_{len(copied_dialogs) + 1}'
+            lines = [(group, row) for group in parts
+                     for row in sorted(stories.dialogs[group], key=lambda r: r['JsonId'])]
+            if not lines:
+                raise ValueError(f'Backstory {bid}: empty reply {parts}')
+            for number, (group, source) in enumerate(lines, 1):
+                values = {k: rebind(v) for k, v in source.items() if k not in ('DialogId', 'GroupId', 'JsonId')}
                 if any(re.search(r'(?:NCT|PCT)_\w+', values[k] or '') for k in ('ActorId', 'InterpolateActorId')):
                     raise ValueError(f'Backstory {bid}: unresolved temporary actor in Dialog {source["DialogId"]}')
-                add('Dialog', GroupId=target, **values)
-                copy_locale(f'Dialog.{group}.{source["JsonId"]}', f'Dialog.{target}.{source["JsonId"]}')
-        return copied_dialogs.get(group, '')
+                add('Dialog', GroupId=target, JsonId=number, **values)
+                copy_locale(f'Dialog.{group}.{source["JsonId"]}', f'Dialog.{target}.{number}')
+        return copied_dialogs[parts]
 
     def copy_block(group, source, **changes):
         # The two stock intro wrappers track native offer progress. Starter
@@ -233,7 +231,7 @@ def emit(stories, bid, backstory, offer, temporary, setup, prefix, base, add, co
     def native_conditions(group):
         return sorted(stories.conditions[group], key=lambda row: row['JsonId'])
 
-    def cast(group, source_id):
+    def cast(source_id):
         nonlocal match_no
         rows = stories.matches[source_id]
         dynamic = [r for r in rows if r['Optional'] != 3]
@@ -245,64 +243,88 @@ def emit(stories, bid, backstory, offer, temporary, setup, prefix, base, add, co
                 match_no += 1
                 values = {k: rebind(v) for k, v in r.items() if k not in ('StoryMatchId', 'GroupId', 'ActorId')}
                 add('StoryMatch', StoryMatchId=match_no, GroupId=target, ActorId=cast_aliases[r['ActorId']], **values)
-            before = absent('Cast_' + str(match_no), bindings[roles[0]]) if batch[0]['Optional'] == 3 else ''
-            post = action(group, 'StoryMatch', before, ConditionKey=target)['GroupId']
+            identity = bindings[roles[0]] if batch[0]['Optional'] == 3 else ''
+            effects = [('StoryMatch', {'ConditionKey': target}, None)]
             for role in roles:
                 alias = cast_aliases[role]
                 if role in cast_tags:
-                    condition(post, 'Tag', ActorId=alias, ConditionKey='ADD_' + cast_tags[role])
+                    effects.append(('Tag', {'ActorId': alias, 'ConditionKey': 'ADD_' + cast_tags[role]}, None))
                 if alias.startswith(('NCT_', 'PCT_')):
-                    condition(post, 'TempStoryId', ActorId=alias, OptionId=-1, ConditionKey=alias)
+                    effects.append(('TempStoryId', {'ActorId': alias, 'OptionId': -1, 'ConditionKey': alias}, None))
+            yield identity, effects
 
-    def operations(group, rows):
+    def operation_batches(rows):
         for source in rows:
             kind = source['ConditionType']
             if kind not in OPERATIONS:
                 raise ValueError(f'Backstory {bid}: unreviewed {kind} in BlockCondition {source["BlockConditionId"]}')
             if kind == 'StoryMatch':
-                cast(group, source['ConditionKey'])
+                yield from cast(source['ConditionKey'])
                 continue
             values = {k: rebind(v) for k, v in source.items()
                       if k not in ('BlockConditionId', 'GroupId', 'JsonId', 'ConditionType')}
-            before = ''
+            identity = ''
             if kind == 'AddCharacter':
                 name = source['ActorId']
-                before = absent('Contact_' + str(block_no + 1), bindings[name])
+                identity = bindings[name]
                 values['ActorId'] = contact_actors[name]
-            new = action(group, kind, before, **values)
-            for part in ('Name', 'Desc'):
-                copy_locale(f'BlockCondition.{part}.{source["GroupId"]}.{source["JsonId"]}',
-                            f'BlockCondition.{part}.{new["GroupId"]}.{new["JsonId"]}')
+            effects = [(kind, values, source)]
             if kind == 'AddCharacter' and values['ActorId'].startswith('NCT_'):
-                condition(new['GroupId'], 'TempStoryId', ActorId=values['ActorId'], OptionId=-1,
-                          ConditionKey=values['ActorId'])
+                alias = values['ActorId']
+                effects.append(('TempStoryId', {'ActorId': alias, 'OptionId': -1, 'ConditionKey': alias}, None))
+            yield identity, effects
+
+    def write_effects(group, effects):
+        for kind, fields, source in effects:
+            new = condition(group, kind, **fields)
+            if source:
+                for part in ('Name', 'Desc'):
+                    copy_locale(f'BlockCondition.{part}.{source["GroupId"]}.{source["JsonId"]}',
+                                f'BlockCondition.{part}.{new["GroupId"]}.{new["JsonId"]}')
 
     start = setup_id(prefix, bid)
-    if offer['EventId']:
-        cast(start, offer['EventId'])
     # Create fixed contacts before their relationship tags are applied. The
     # Warmachine Sister's shipped group references Dr. Allgood before his add row.
-    operations(start, sorted(initial, key=lambda r: r['ConditionType'] != 'AddCharacter'))
+    setup_batches = list(cast(offer['EventId'])) if offer['EventId'] else []
+    setup_batches.extend(operation_batches(sorted(initial, key=lambda r: r['ConditionType'] != 'AddCharacter')))
+    for identity, effects in setup_batches:
+        ordinal = str(block_no + 1)
+        before = absent('Setup_' + ordinal, identity) if identity else ''
+        post = f'Post_{key}_Setup_{ordinal}'
+        block(start, PreConditionGroup=before, PostConditionGroup=post)
+        write_effects(post, effects)
     # Some shipped starter templates have no supporting cast or setup actions.
     block(start)
 
-    present = f'Pre_{key}_Present'
-    condition(present, 'HasCharacter', ActorId=actor, OptionId=1)
-    add('StoryNode', GroupId=node, StoryNodeId=node, StoryNodeType='Regular', ActorId=actor)
-    link = block(f'B_{key}_Timeline', StoryNodeId=node, EventType='GroupFirst', EventId=resume,
-                 ActorId=actor, InterpolateActorId=actor, ChoiceMeta=5,
-                 PreConditionGroup=present, PreState1='HAS_Origin_Completed', PreState2=f'NOT_{key}_Done')
-    for variant in ('Male', 'Female'):
-        texts[f'BlockDesc.{link["BlockId"]}_{variant}'] = 'Finish Backstory: {1}'
+    # Match the shipped timeline chatter shape (StoryNode 463 / Block 27002).
+    # The active node ID stays the same for campaigns already using this mod.
+    add('StoryNode', GroupId=node, StoryNodeId=node, StoryNodeType='Root')
+    prompt = {'StoryNodeId': node, 'ChoiceMeta': 5, 'PreState1': 'HAS_Origin_Completed',
+              'PreState2': f'NOT_{key}_Done'}
+    branch_ids = [path[0]['BlockId'] for path, _end, _finish in branches]
+    no_applied = [f'NOT_{key}_Applied_{index}' for index in branch_ids]
+    no_choice = no_applied + [f'NOT_{key}_Choice_{index}' for index in branch_ids]
 
-    finish = f'B_{key}_Finish'
+    def gate(suffix, states, identity='', exists=False):
+        group = f'Pre_{key}_{suffix}'
+        condition(group, 'HasCharacter', ActorId=actor, OptionId=1)
+        for state in states:
+            condition(group, 'GameState', ConditionKey=state)
+        if identity:
+            condition(group, 'HasCharacter', ActorId=identity, OptionId=1 if exists else -1)
+        return group
+
+    def describe(row, label):
+        target = f'BlockDesc.{row["BlockId"]}'
+        texts[target] = label
+        if row['InterpolateActorId']:
+            texts[target + '_Male'] = label
+            texts[target + '_Female'] = label
+
     _path, closing, native_finish = branches[0]
     if any(end['BlockId'] != closing['BlockId'] or last['BlockId'] != native_finish['BlockId']
            for _path, end, last in branches):
         raise ValueError(f'Backstory {bid}: branch ending needs review')
-    ending = block(finish, ActorId='PCP_Knight', ChoiceMeta=-1, PostState1=f'ADD_{key}_Done',
-                   StoryNode1='DEL_' + node)
-    texts[f'BlockDesc.{ending["BlockId"]}'] = 'Finish'
     # The Vanguard's combined hire/reject cleanup contains three purge rows.
     # Starter setup can reuse those contacts, so only carry story bonuses.
     retain = [r for r in native_conditions(native_finish['PostConditionGroup'])
@@ -310,73 +332,99 @@ def emit(stories, bid, backstory, offer, temporary, setup, prefix, base, add, co
               and (bid, r['BlockConditionId']) not in {(4004, 169), (4004, 170), (4004, 171)}]
     if any(r['ConditionType'] != 'Boost' for r in retain):
         raise ValueError(f'Backstory {bid}: hiring finalizer needs review')
-    if retain or cast_tags:
-        post = ending['PostConditionGroup'] = f'Post_{key}_Finish'
-        for r in retain:
-            fields = {k: rebind(v) for k, v in r.items()
-                      if k not in ('BlockConditionId', 'GroupId', 'JsonId', 'ConditionType')}
-            condition(post, r['ConditionType'], **fields)
-        for role, tag in cast_tags.items():
-            condition(post, 'Tag', ActorId=bindings[role], ConditionKey='DEL_' + tag)
+    cleanup = [('Boost', {k: rebind(v) for k, v in r.items()
+                          if k not in ('BlockConditionId', 'GroupId', 'JsonId', 'ConditionType')}, r) for r in retain]
+    cleanup.extend(('Tag', {'ActorId': bindings[role], 'ConditionKey': 'DEL_' + tag}, None)
+                   for role, tag in cast_tags.items())
+
+    greeting = f'D_{key}_Intro'
+    add('Dialog', GroupId=greeting, JsonId=1, ActorId=actor, DisplaySide=1)
+    texts[f'Dialog.{greeting}.1'] = 'Before we go any further, there are a few things you should know about me.'
+    for step, dialog_id, target, trait in (('Intro', greeting, choices, 'NOT_'),
+                                           ('Followup', dialog(followup['Dialog']), options, 'HAS_')):
+        row = block(timeline, ActorId=actor, InterpolateActorId=actor, EventType='Choice', EventId=target,
+                    Dialog=dialog_id, PreConditionGroup=gate(step, [*no_choice, trait + key + '_Trait']), **prompt)
+        describe(row, 'Finish Backstory: {1}')
 
     for path, _closing, _ending in branches:
         source = path[0]
         index = source['BlockId']
-        picked, completed = f'{key}_Choice_{index}', f'{key}_Applied_{index}'
-        play, wrap = f'B_{key}_Play_{index}', f'B_{key}_Wrap_{index}'
-        block(resume, EventType='Group', EventId=wrap, PreState1='HAS_' + completed)
-        block(resume, EventType='Group', EventId=play, PreState1='HAS_' + picked)
-        choice = copy_block(options, source, EventType='Group', EventId=play, PostState1='ADD_' + picked)
-        copy_locale(f'BlockDesc.{index}', f'BlockDesc.{choice["BlockId"]}')
+        picked, ready = f'{key}_Choice_{index}', f'{key}_Prepared_{index}'
         pre = native_conditions(source['PreDialogPostCondition'])
         post = native_conditions(source['PostConditionGroup'])
-        if index == 91099:
-            # Cast the transport contact before the two lines that name them.
-            cast_transport = [r for r in post if r['BlockConditionId'] == 174]
-            if len(cast_transport) != 1:
-                raise ValueError('Vanguard Betray transport casting needs review')
-            pre += cast_transport
-            post = [r for r in post if r not in cast_transport]
-        if pre:
-            ready = f'{key}_Prepared_{index}'
-            prepare = f'B_{key}_Prepare_{index}'
-            block(play, EventType='Group', EventId=prepare, PreState1='NOT_' + ready)
-            operations(prepare, pre)
-            block(prepare, PostState1='ADD_' + ready)
-        commit = f'B_{key}_Commit_{index}'
+        if index in (91019, 91099) or len(path) > 1:
+            # In these replies the merged dialogue names the newly cast or
+            # created contact. Resolve just that identity before speaking.
+            create = [r for r in post if r['ConditionType'] in ('AddCharacter', 'StoryMatch')]
+            pre += create
+            post = [r for r in post if r not in create]
         if any(b['PreConditionGroup'] or b['PreState1'] or b['PreState2'] or b['PostState1'] or b['PostState2']
                for b in path):
             raise ValueError(f'Backstory {bid}: branch state needs review at Block {index}')
-        copy_block(play, source, EventType='TalkOn', EventId=commit, Dialog=dialog(source['Dialog']),
-                   PostState3=source['PostState3'])
-        apply = f'B_{key}_Apply_{index}'
-        block(commit, EventType='Group', EventId=apply, PreState1='NOT_' + completed)
-        operations(apply, post)
-        block(apply, EventType='Group', EventId=wrap, PostState1='ADD_' + completed)
-        target = wrap
         for step in path[1:]:
             if step['PreDialogPostCondition'] or step['PostConditionGroup'] or step['PostState3']:
                 raise ValueError(f'Backstory {bid}: extra branch effects need review at Block {step["BlockId"]}')
-            next_group = f'B_{key}_Line_{step["BlockId"]}'
-            copy_block(target, step, EventType='TalkOn', EventId=next_group, Dialog=dialog(step['Dialog']))
-            target = next_group
-        copy_block(target, closing, EventType='Choice', EventId=finish, Dialog=dialog(closing['Dialog']))
+        reply = dialog(*(step['Dialog'] for step in path))
+        before, after = list(operation_batches(pre)), list(operation_batches(post))
+        guarded = {identity for identity, _ in before + after if identity}
+        if len(guarded) > 1:
+            raise ValueError(f'Backstory {bid}: follow-up {index} needs multiple contact guards')
+        identity = next(iter(guarded), '')
+        cases = (False, True) if identity else (False,)
 
-    block(resume, EventType='Group', EventId=follow, PreState1=f'HAS_{key}_Trait')
-    block(resume, EventType='Group', EventId=first)
-    # The original recruitment greeting assumes the merc has yet to join.
-    greeting = block(first, ActorId=actor, EventType='Choice', EventId=choices)
-    texts[f'BlockDesc.{greeting["BlockId"]}'] = 'Before we go any further, there are a few things you should know about me.'
+        def terminal(resuming, prepared, existing, contact):
+            flags = [*no_applied, 'HAS_' + picked] if resuming else [*no_choice, f'HAS_{key}_Trait']
+            if before:
+                flags.append(('HAS_' if prepared else 'NOT_') + ready)
+            ordinal = str(block_no + 1)
+            start_post, end_post = f'Post_{key}_Before_{ordinal}', f'Post_{key}_After_{ordinal}'
+            # `Event` is the choice itself. Its response and the end-of-dialog
+            # actions are handled by the same dialog player invocation.
+            row = copy_block(timeline if resuming else options, source, EventType='Event', Dialog=reply,
+                             PreConditionGroup=gate('Reply_' + ordinal, flags, contact, existing),
+                             PreDialogPostCondition=start_post, PostConditionGroup=end_post,
+                             PostState1=f'ADD_{key}_Done', PostState3=source['PostState3'], StoryNode1='DEL_' + node,
+                             **(prompt if resuming else {}))
+            copy_locale(f'BlockDesc.{index}', f'BlockDesc.{row["BlockId"]}')
+            label = f'BlockDesc.{row["BlockId"]}'
+            if label not in texts and not row['InterpolateActorId']:
+                texts[label] = texts.get(label + '_Male') or texts.get(label + '_Female') or 'Continue the conversation.'
+            if row['InterpolateActorId']:
+                for variant in ('Male', 'Female'):
+                    texts.setdefault(f'{label}_{variant}', texts.get(label) or 'Continue the conversation.')
+            condition(start_post, 'GameState', ConditionKey='ADD_' + picked)
+            if before and not prepared:
+                for required, effects in before:
+                    if not required or not existing:
+                        write_effects(start_post, effects)
+                condition(start_post, 'GameState', ConditionKey='ADD_' + ready)
+            effects_after = [effect for required, effects in after if not required or not existing for effect in effects]
+            effects_after.extend(cleanup)
+            write_effects(end_post, effects_after)
+            if not effects_after:
+                row['PostConditionGroup'] = ''
+
+        for exists in cases:
+            terminal(False, False, exists, identity)
+            terminal(True, False, exists, identity)
+        if before:
+            # A saved reply may already have executed its pre-dialog effects.
+            # The current roster decides whether any post-dialog creation is needed.
+            pending_identity = next((contact for contact, _ in after if contact), '')
+            for exists in ((False, True) if pending_identity else (True,)):
+                terminal(True, True, exists, pending_identity)
+
     for r in traits:
         if r['PreConditionGroup'] or r['PreDialogPostCondition'] or r['PostConditionGroup']:
             raise ValueError(f'Backstory {bid}: trait option effects need review')
         choice = copy_block(choices, r, EventType='TalkOn', EventId=follow, Dialog=dialog(r['Dialog']),
                             PreState1=f'NOT_{key}_Trait', PostState1=f'ADD_{key}_Trait', PostState3=r['PostState3'])
         copy_locale(f'BlockDesc.{r["BlockId"]}', f'BlockDesc.{choice["BlockId"]}')
-    copy_block(follow, followup, EventType='Choice', EventId=options, Dialog=dialog(followup['Dialog']))
+    next_prompt = copy_block(follow, followup, EventType='Choice', EventId=options, Dialog=dialog(followup['Dialog']))
+    describe(next_prompt, 'Tell me what happened next.')
 
 
-def verify_events(connection, scope, prefix, document):
+def verify_events(connection, scope, prefix, document, locale=None):
     blocks = [dict(r) for r in connection.execute('SELECT * FROM Block')]
     by_group = groups(blocks)
     by_node = groups(blocks, 'StoryNodeId')
@@ -400,14 +448,13 @@ def verify_events(connection, scope, prefix, document):
                 or starters[0]['PostState2'] != f'ADD_{key}_Queued'):
             raise ValueError(f'Backstory {bid}: the starter template must own activation exclusively')
         timeline = by_node[node]
-        if (len(timeline) != 1 or node not in nodes or nodes[node]['ExpirationTurns']
-                or nodes[node]['OnAddedBlock'] or nodes[node]['ExpirationBlock']):
+        if (not timeline or node not in nodes or nodes[node]['StoryNodeType'] != 'Root' or nodes[node]['ActorId']
+                or nodes[node]['ExpirationTurns'] or nodes[node]['OnAddedBlock'] or nodes[node]['ExpirationBlock']):
             raise ValueError(f'Backstory {bid}: missing or expiring safehouse prompt')
-        entry = timeline[0]
-        if (entry['PreState1'] != 'HAS_Origin_Completed' or entry['PreState2'] != f'NOT_{key}_Done'
-                or entry['ChoiceMeta'] != 5 or entry['ActorId'] != actor
-                or [(r['ConditionType'], r['ActorId'], r['OptionId']) for r in actions[entry['PreConditionGroup']]]
-                != [('HasCharacter', actor, 1)]):
+        if any(entry['PreState1'] != 'HAS_Origin_Completed' or entry['PreState2'] != f'NOT_{key}_Done'
+               or entry['ChoiceMeta'] != 5 or entry['ActorId'] != actor or not entry['Dialog']
+               or not any(r['ConditionType'] == 'HasCharacter' and r['ActorId'] == actor and r['OptionId'] == 1
+                          for r in actions[entry['PreConditionGroup']]) for entry in timeline):
             raise ValueError(f'Backstory {bid}: safehouse roster guard is missing')
         reached = set()
 
@@ -429,24 +476,73 @@ def verify_events(connection, scope, prefix, document):
                     visit(step['EventId'])
 
         visit(starters[0]['EventId'])
-        visit(entry['EventId'])
-        finish = by_group[f'B_{key}_Finish']
-        if (reached | {entry['GroupId']}) != {r['GroupId'] for r in owned} or len(finish) != 1:
+        visit(f'B_{key}_Timeline')
+        if reached != {r['GroupId'] for r in owned}:
             raise ValueError(f'Backstory {bid}: starter dialogue path is incomplete')
-        if finish[0]['StoryNode1'] != 'DEL_' + node or finish[0]['PostState1'] != f'ADD_{key}_Done':
-            raise ValueError(f'Backstory {bid}: finishing must close the prompt')
-        for suffix in ('Traits', 'Choices'):
-            if len(by_group[f'B_{key}_{suffix}']) != 3:
-                raise ValueError(f'Backstory {bid}: missing a shipped choice in {suffix}')
+        replies = by_group[f'B_{key}_Choices']
+        if len(by_group[f'B_{key}_Traits']) != 3 or not replies:
+            raise ValueError(f'Backstory {bid}: missing a shipped choice')
+        endings = [*replies, *(r for r in timeline if r['EventType'] == 'Event')]
+        if any(r['EventType'] != 'Event' or r['EventId'] or not r['Dialog'] or r['StoryNode1'] != 'DEL_' + node
+               or r['PostState1'] != f'ADD_{key}_Done' for r in endings):
+            raise ValueError(f'Backstory {bid}: the final choice must play its reply and close the prompt')
+        if locale is not None:
+            for row in endings + [r for r in timeline if r['EventType'] == 'Choice']:
+                loc = f'BlockDesc.{row["BlockId"]}'
+                keys = [loc + '_Male', loc + '_Female'] if row['InterpolateActorId'] else [loc]
+                if not all(locale.get(k) for k in keys):
+                    raise ValueError(f'Backstory {bid}: missing visible label for {loc}')
         if any(not r['PostState3'].startswith('TRT_') or r['PreState1'] != f'NOT_{key}_Trait'
                or r['PostState1'] != f'ADD_{key}_Trait' for r in by_group[f'B_{key}_Traits']):
             raise ValueError(f'Backstory {bid}: trait checkpoint is missing')
-        gates = [r['PreState1'] for r in by_group[entry['EventId']]]
-        for choice in by_group[f'B_{key}_Choices']:
-            suffix = choice['EventId'].rsplit('_', 1)[1]
-            applied, picked = f'{key}_Applied_{suffix}', f'{key}_Choice_{suffix}'
-            if (choice['PostState1'] != 'ADD_' + picked or 'HAS_' + picked not in gates
-                    or 'HAS_' + applied not in gates or gates.index('HAS_' + applied) > gates.index('HAS_' + picked)
-                    or [r['PreState1'] for r in by_group[f'B_{key}_Commit_{suffix}']] != ['NOT_' + applied]
-                    or sum(r['PostState1'] == 'ADD_' + applied for r in by_group[f'B_{key}_Apply_{suffix}']) != 1):
-                raise ValueError(f'Backstory {bid}: follow-up cannot resume safely')
+        check_availability(bid, key, actor, timeline, replies, actions)
+
+
+def check_availability(bid, key, actor, timeline, replies, actions):
+    """Check which generated rows can fire for each saved conversation state."""
+    def choice_flag(row):
+        return next(r['ConditionKey'][4:] for r in actions[row['PreDialogPostCondition']]
+                    if r['ConditionType'] == 'GameState' and r['ConditionKey'].startswith(f'ADD_{key}_Choice_'))
+
+    def visible(rows, states, actors):
+        def state_allows(value):
+            if not value:
+                return True
+            op, name = value.split('_', 1)
+            return (name in states) == (op == 'HAS')
+
+        def eligible(row):
+            if not all(state_allows(row[name]) for name in ('PreState1', 'PreState2')):
+                return False
+            for cond in actions[row['PreConditionGroup']]:
+                if cond['ConditionType'] == 'GameState' and not state_allows(cond['ConditionKey']):
+                    return False
+                if cond['ConditionType'] == 'HasCharacter' and ((cond['ActorId'] in actors) != (cond['OptionId'] == 1)):
+                    return False
+            return True
+
+        return [row for row in rows if eligible(row)]
+
+    pending = {choice_flag(row) for row in replies}
+    contacts = {r['ActorId'] for row in replies for r in actions[row['PreConditionGroup']]
+                if r['ConditionType'] == 'HasCharacter' and r['ActorId'] != actor}
+    base = {'Origin_Completed'}
+    second = base | {key + '_Trait'}
+    for present in ({actor}, {actor, *contacts}):
+        first = visible(timeline, base, present)
+        followup = visible(timeline, second, present)
+        if (len(first) != 1 or first[0]['EventId'] != f'B_{key}_Traits' or len(followup) != 1
+                or followup[0]['EventId'] != f'B_{key}_Choices'
+                or len(visible(timeline, set(), present)) or visible(timeline, base, set())
+                or {choice_flag(row) for row in visible(replies, second, present)} != pending
+                or len(visible(replies, second, present)) != 3):
+            raise ValueError(f'Backstory {bid}: expected one safehouse prompt and three eligible follow-up choices')
+        for picked in pending:
+            index = picked.rsplit('_', 1)[1]
+            for states in (second | {picked}, second | {picked, f'{key}_Prepared_{index}'}):
+                resumed = visible(timeline, states, present)
+                if len(resumed) != 1 or resumed[0]['EventType'] != 'Event' or choice_flag(resumed[0]) != picked:
+                    raise ValueError(f'Backstory {bid}: pending follow-up {index} cannot resume directly')
+                if (visible(timeline, states | {f'{key}_Applied_{index}'}, present)
+                        or visible(timeline, states | {f'{key}_Done'}, present)):
+                    raise ValueError(f'Backstory {bid}: completed follow-up {index} offers another prompt')

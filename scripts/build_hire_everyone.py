@@ -405,18 +405,18 @@ def verify(database, sql_bytes, text_bytes, expected, source_text, document=None
         for r in expected['BlockCondition']:
             if r['ConditionType'] == 'StoryMatch' and r['ConditionKey'] not in matches:
                 raise ValueError('Missing casting group: ' + r['ConditionKey'])
-        verify_policy(memory, document)
+        verify_policy(memory, document, parsed)
     return {'status': 'PASS', 'nativeRowsUnchanged': True, 'repeatApplication': 'PASS',
             'addedRows': {t: len(rs) for t, rs in expected.items()},
             'localizationKeys': len(parsed), 'gameplay': 'NOT RUN: review before a game session'}
 
 
-def verify_policy(connection, document=None):
+def verify_policy(connection, document=None, locale=None):
     """Check the requested roster and guards independently of generated rows."""
     backstories = {r['BackstoryId']: dict(r) for r in connection.execute('SELECT * FROM Backstory')}
     blocks = [dict(r) for r in connection.execute('SELECT * FROM Block')]
     conditions = [dict(r) for r in connection.execute('SELECT * FROM BlockCondition')]
-    hire_backstories.verify_events(connection, HUB, PREFIX, document or defaults(backstories))
+    hire_backstories.verify_events(connection, HUB, PREFIX, document or defaults(backstories), locale)
     document = defaults(backstories) if document is None else validate(document)
     roster_actors = {backstories[bid]['CharStoryId'] for bid in HUB + STARTERS}
     for group, starts in ORIGINS.items():

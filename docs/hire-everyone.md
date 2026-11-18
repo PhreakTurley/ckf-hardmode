@@ -38,13 +38,15 @@ the Origin intro. A roster check uses the starter's permanent actor ID. The
 node belongs to the selected New Game template and closes after completion.
 Campaigns created before this feature have no queued starter nodes.
 
-`scripts/hire_backstories.py` adapts each reviewed Hub conversation into its
-trait and follow-up choices. A campaign can resume at either choice or at the
-ending. The adaptation reuses existing contacts by identity, keeps local cast
-tags per conversation, and guards setup and branch effects with checkpoints.
-It replaces the hire and decline paths with a **Finish** action. The shipped
-Hub conversations handle later recruitment. Menu descriptions use the native
-backstory text when available, otherwise the associated trait text.
+`scripts/hire_backstories.py` uses the shipped timeline chatter shape and adapts
+each reviewed Hub conversation into two choices. The trait choice leads to the
+follow-up choice. That choice plays the reply, applies its effects, and closes
+the prompt. An interrupted conversation resumes from its saved choice. Branches
+whose effects were already applied by the earlier exporter are hidden to avoid
+replaying the effects. The adaptation reuses existing contacts by identity and
+keeps cast tags local to each conversation. The shipped Hub conversations handle
+later recruitment. Menu descriptions use the native backstory text when
+available, otherwise the associated trait text.
 
 Selected combat starters receive new Hub entries in their respective class
 groups. These use the original Backstory ID, a HasCharacter condition against
