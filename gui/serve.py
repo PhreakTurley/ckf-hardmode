@@ -13145,7 +13145,7 @@ const renderedNavItems = function () { return nav.find(function (n) {
 const navItems = function () { const items=renderedNavItems();return FIXTURE.sections.map(function(s) {
   return items.find(function(n) {return n.attrs['data-section-id']===s.id;}); }); };
 const titleOf = function (item) { return txt(item.querySelector('b')); };
-const select = function (i) { navItems()[i].fire('click'); };
+const select = function (i) { navItems()[i].querySelector('a').fire('click'); };
 // file#section, the same unit key the server builds. Derived from the schema's
 // own targets, so nothing here names a file or a section.
 const unitOf = function (s) {
@@ -13961,12 +13961,40 @@ setTimeout(function () {
   const secIndexOf = function (sub) {
     return FIXTURE.sections.findIndex(function (sec) {
       return sec.subsystems.indexOf(sub) >= 0; }); };
+  function openOverlaySheets() {
+    for (const fold of panel.find(n=>n._cls().includes('overlay-sheet') && !n.open)) {
+      ck('closed overlay postpones building its grid', !fold.querySelector('table'));
+      fold.open=true;
+      fold.fire('toggle');
+      ck('opening the overlay builds its grid', !!fold.querySelector('table'));
+    }
+  }
+  function laterOverlayPages(scope) {
+    const keys=scope.find(n=>n._cls().includes('pager')).map(n=>n.getAttribute('data-pager'));
+    const blocks=[];
+    for (const key of keys) {
+      const current=()=>panel.find(n=>n.getAttribute('data-pager')===key)[0];
+      const button=(name)=>current().find(n=>n.tagName==='BUTTON' && txt(n)===name)[0];
+      for (const [name,collect] of [['Next',true],['Previous',false]]) {
+        while (current() && !button(name).disabled) {
+          const before=txt(current());
+          button(name).fire('click');
+          const advanced=current() && before!==txt(current());
+          ck('overlay pager moves with '+name, !!advanced, key);
+          if (!advanced) break;
+          if (collect) blocks.push(current().parent);
+        }
+      }
+    }
+    return blocks;
+  }
   let drawnFiles = 0, drawnRows = 0, refJoined = 0;
   for (const s of packSubs) {
     const si = secIndexOf(s.subsystem);
     ck(s.subsystem + ': has a section of its own to draw in', si >= 0, s.subsystem);
     if (si < 0) continue;
     select(si);
+    openOverlaySheets();
     const files = ovOf(s);
     // ONE SLICE, ONE TOGGLE, however many files.
     //
@@ -14043,7 +14071,8 @@ setTimeout(function () {
        === gated2.length,
        [panel.find(function (n) {
           return n.tagName === 'INPUT' && n.type === 'checkbox'; }).length, gated2]);
-    const t2 = txt(panel);
+    const later = laterOverlayPages(panel);
+    const t2 = [txt(panel),...later.map(txt)].join('\n');
     for (const rel of files) {
       ck(s.subsystem + ': the page names ' + rel.split('/').pop(),
          t2.indexOf(rel) >= 0, rel);
@@ -14064,11 +14093,11 @@ setTimeout(function () {
         if (hidden.concat(omitted).some(function (h) {return h.i === i;})) return false;
         return t2.indexOf(String(r.cells[0])) < 0; });
       ck(s.subsystem + '/' + rel.split('/').pop() + ': every visible id is '
-         + 'drawn, so grouping loses no visible row',
+         + 'drawn across the grid pages, so grouping loses no visible row',
          missing.length === 0, missing.slice(0, 3).map(function (r) { return r.cells[0]; }));
       if (hidden.length) {
         const ac = ent.columns.findIndex(function (c) {return c.annotation;});
-        const labels = panel.find(function (n) {return n._cls().includes('node-name');})
+        const labels = [panel,...later].flatMap(block=>block.find(n=>n._cls().includes('node-name')))
           .map(txt).reduce(function (all, name) {return all.concat(name.split(', '));}, []);
         ck(s.subsystem + ': every omitted attribute node is named in its effect grid',
           ac >= 0 && hidden.every(function (h) {
@@ -14229,6 +14258,7 @@ setTimeout(function () {
     const si = secIndexOf(s.subsystem);
     if (si < 0) continue;
     select(si);
+    openOverlaySheets();
     // Scoped to the slice's own card for the same reason as above: a section
     // may present several subsystems, and another one's controls are not this
     // one's to account for.
@@ -14245,8 +14275,9 @@ setTimeout(function () {
         return n.tagName === 'CODE' && n._cls().includes('loc')
                && JSON.stringify(lp(n)) === JSON.stringify(gk); }).length > 0; })[0];
     const mycard = gcard ? mycards[mycards.indexOf(gcard) + 1] || gcard : null;
-    const inputs = (mycard || panel).find(function (n) {
-      return n.tagName === 'INPUT' && n.type !== 'checkbox'; });
+    const inputsIn = block=>block.find(n=>n.tagName==='INPUT' && n.type!=='checkbox').length;
+    const inputs = inputsIn(mycard || panel) + laterOverlayPages(mycard || panel)
+      .reduce((total,block)=>total+inputsIn(block),0);
     let maxCells = 0, minCells = 0, ident = 0, ctrl = 0;
     for (const rel of ovOf(s)) {
       const ent = FIXTURE.values.overlays[rel];
@@ -14274,15 +14305,15 @@ setTimeout(function () {
        maxCells > 0 && ident > 0, [maxCells, ident, ctrl]);
     ck(s.subsystem + ': its overlay grids offer an input on every lever cell '
        + 'of every column that VARIES — at least ' + minCells + ', got '
-       + inputs.length + '. The server sends `editable` and `constant`; '
+       + inputs + ' across all pages. The server sends `editable` and `constant`; '
        + 'app.html must render an input where editable is true and may '
        + 'collapse constants or measured zeroes, and omit declared hidden groups or section fields.',
-       !!mycard && inputs.length >= minCells, [inputs.length, minCells, !!mycard]);
+       !!mycard && inputs >= minCells, [inputs, minCells, !!mycard]);
     ck(s.subsystem + ': and no input anywhere else — at most ' + maxCells
-       + ' (one per editable cell), got ' + inputs.length + '. An input beyond '
+       + ' (one per editable cell), got ' + inputs + '. An input beyond '
        + 'that count is an input on an identity, control or key cell, which '
        + 'this editor never writes.',
-       inputs.length <= maxCells, [inputs.length, maxCells]);
+       inputs <= maxCells, [inputs, maxCells]);
   }
 
   // ---- THREE PROPERTIES OF THE RENDERED PAGE
@@ -14421,7 +14452,7 @@ setTimeout(function () {
        !panel.find(function (n) {return n.tagName === 'INPUT' && /^ships\s/.test(n.placeholder);}).length);
   }
   for (const page of playerPages) {
-    nav.find(function (n) {return n.attrs['data-player-page'] === page.id;})[0].fire('click');
+    nav.find(function (n) {return n.attrs['data-player-page'] === page.id;})[0].querySelector('a').fire('click');
     ck('Workshop page ' + page.id + ' renders its own heading',
        panel.find(function (n) {return n.tagName === 'H2' && txt(n) === page.title;}).length === 1);
   }
@@ -14450,7 +14481,7 @@ setTimeout(function () {
   const gi = FIXTURE.sections.findIndex(function (s) {
     return s.subsystems.indexOf(owner.subsystem) >= 0; });
   ck('the section holding the windowed matrix was found', gi >= 0, owner.subsystem);
-  nav.find(function (n) { return n.attrs['data-section-id'] === FIXTURE.sections[gi].id; })[0].fire('click');
+  nav.find(function (n) { return n.attrs['data-section-id'] === FIXTURE.sections[gi].id; })[0].querySelector('a').fire('click');
   const grids = panel.find(function (n) { return n.tagName === 'TABLE' && n._cls().includes('grid'); });
   const headersOf = function (g) {
     return g.querySelector('thead').find(function (n) { return n.tagName === 'TH'; }).map(txt);
