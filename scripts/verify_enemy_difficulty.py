@@ -106,6 +106,9 @@ def verify(sql_path, data_path=DEFAULT_DB, config_dir=CONFIG, native_integrity=F
                             changes[c] = value
                     source = raw.get("_clone", "").strip()
                     require(t in ("Armor", "MonsterGroupMember") or not source, "MonsterType clone outside armor scope")
+                    if t == "Armor" and not source and identity in original[t]:
+                        require(not changes, f"Unexpected shipped armor overrides: {identity}")
+                        continue
                     converted.append((identity, source, changes, raw.get("_comment", "")))
                     if t == "MonsterType":
                         authored.add(identity)

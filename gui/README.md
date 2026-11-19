@@ -616,7 +616,8 @@ on Enemy Armors to update both distribution paths.
 
 **Enemy Gear → Enemy Armors** shows armor referenced by effective enemy assignments and
 all authored armor rows, including clones. Each row says **Shipped** or
-**Clone**, with the clone's donor ID. **Also used by players** marks rows admitted
+**Clone**, with the clone's donor ID. Shipped rows without saved overrides are
+read-only references. **Also used by players** marks rows admitted
 by the shared player-armor availability policy above; its tooltip lists the
 references. This is a catalog check, not a calculation of campaign
 availability.

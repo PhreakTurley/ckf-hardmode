@@ -140,12 +140,25 @@ class ArmorTests(unittest.TestCase):
         self.assertEqual(clone['cloneOf'], '22000')
         self.assertEqual(clone['baseline']['BallisticArmor'], '45')
 
-    def test_unlisted_shipped_enemy_row_and_extra_column_can_be_authored(self):
+    def test_extra_column_can_be_added_to_existing_legacy_override(self):
         result = armor.apply_edits(self.config, serve.static_data.DEFAULT_DB,
-            [{'id':'22001','column':'PhysicalArmor','value':'37'}])
+            [{'id':'22000','column':'PhysicalArmor','value':'37'}])
         rows = {r['ArmorId']:r for r in csv.DictReader(io.StringIO(result[armor.SHEET].decode()))}
-        self.assertEqual(rows['22001']['PhysicalArmor'], '37')
+        self.assertEqual(rows['22000']['PhysicalArmor'], '37')
         self.assertEqual(rows['990001']['_clone'], '22000')
+
+    def test_shipped_references_are_read_only_with_or_without_empty_saved_row(self):
+        self.path.write_bytes(self.raw + b'18,,,,\r\n')
+        view = armor.validate(self.config, serve.static_data.DEFAULT_DB)
+        rows = {r['id']: r for r in view['page']['grids'][0]['rows']}
+        for rid in ('18', '22001'):
+            with self.subTest(rid=rid):
+                self.assertTrue(rows[rid]['readOnly'])
+                self.assertNotIn(rid, view['values'])
+                with self.assertRaisesRegex(ValueError, 'Not an editable enemy armor cell'):
+                    armor.apply_edits(self.config, serve.static_data.DEFAULT_DB,
+                        [{'id':rid, 'column':'BallisticArmor', 'value':'47'}])
+        self.assertEqual(self.path.read_bytes(), self.raw + b'18,,,,\r\n')
 
     def test_controls_nonintegers_and_unknown_targets_are_refused(self):
         for rid, column, value in [('990001','_clone','22001'), ('990001','PhysicalArmor','NaN'),
@@ -200,6 +213,11 @@ setTimeout(function() {
  const armorRows=()=>find(n=>n.getAttribute('data-player-row')?.startsWith('Armor '));
  ck('all armor rows are in one table without pagination', find(n=>n.tagName==='TABLE').length===1 &&
     armorRows().length===page.grids[0].rows.length && !find(n=>n.tagName==='BUTTON' && n.textContent==='Next').length);
+ const shipped=page.grids[0].rows.find(r=>r.id==='18');
+ const shippedRow=armorRows().find(n=>n.getAttribute('data-player-row')==='Armor 18');
+ ck('shipped armor displays values without edit controls', shipped.readOnly &&
+    shippedRow.find(n=>n.tagName==='TD' && n.title==='Shipped armor reference').length>0 &&
+    !shippedRow.find(n=>n.tagName==='INPUT').length);
  const search=find(n=>n.tagName==='INPUT' && n.getAttribute('type')==='search')[0];
  search.value='Clone';search.fire('input');
  ck('armor search keeps every match in the same table', armorRows().length===page.grids[0].rows.filter(r=>r.cloneOf).length &&

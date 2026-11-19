@@ -41,7 +41,8 @@ class EnemyDifficultyChecks(unittest.TestCase):
             guarded_write(directory.parent / FIXES_FILE, b'{"format":1,"clones":[],"updates":[],"rules":{"82":{"Value":19}}}')
             with StaticData() as db:
                 ids = [r['MonsterTypeId'] for r in db.read('MonsterTypeModel')[1]]
-            guarded_write(directory / 'ArmorModel.csv', b'ArmorId,BallisticArmor\n')
+            armor = directory / 'ArmorModel.csv'
+            guarded_write(armor, b'ArmorId,BallisticArmor,_comment\n18,,\n21999,,reference\n')
             for tag in SPAWN_TAGS:
                 guarded_write(directory / f'MonsterGroupMemberModel.spawn-{tag}.csv',
                               b'MonsterGroupMemberId,InvalidLegacyColumn\n30,999999\n')
@@ -77,6 +78,12 @@ class EnemyDifficultyChecks(unittest.TestCase):
             self.assertTrue(any(statement.startswith('DELETE FROM "MonsterGroupMember"') for statement in payload['RawSQL']))
             self.assertFalse(any('spawn-' in path for path in artifacts['review/SOURCE.json'].decode().splitlines()))
             self.assertEqual(payload['RawText']['Generic'], {})
+            guarded_write(armor, b'ArmorId,BallisticArmor\n18,0\n')
+            with self.assertRaisesRegex(ValueError, 'Armor 18 has shipped-row overrides'):
+                build(config_dir=directory)
+            with self.assertRaisesRegex(AssertionError, 'Unexpected shipped armor overrides: 18'):
+                verify(sql, config_dir=directory)
+            guarded_write(armor, b'ArmorId,BallisticArmor\n')
             # An upstream correction or retune must refuse the old patch,
             # rather than silently applying a stale override.
             stale = {"format": 1, "clones": [], "updates": [{"table": "Weapon", "id": 20007,

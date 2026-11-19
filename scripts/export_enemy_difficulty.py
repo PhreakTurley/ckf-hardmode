@@ -236,6 +236,10 @@ def build(data_path=DEFAULT_DB, config_dir=CONFIG, schema_path=PARSER_SCHEMA):
                 source = int(raw["_clone"]) if raw.get("_clone", "").strip() else None
                 if t == "MonsterType" and source is not None:
                     raise ValueError(f"MonsterType clones are outside armor-only scope: {identity}")
+                if t == "Armor" and source is None and identity in base[t]:
+                    if values:
+                        raise ValueError(f"Armor {identity} has shipped-row overrides. Clear them before exporting EnemyVariety.")
+                    continue
                 rows.append((identity, source, values, f"{path.name}:{line}", raw.get("_comment", "")))
             overlay_rows.setdefault(t, []).extend(rows)
             for identity, source, values, origin, comment in rows:

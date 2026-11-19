@@ -156,10 +156,13 @@ def model(config, database, settings, proposed=None):
                 donor = clones.get(rid)
                 baseline = effective[donor] if donor else stock[rid]
                 fields = {k: by_id.get(rid, {}).get(k, '').strip() for k in declared}
-                result['values'][rid] = fields
-                name = armor_name(stock[donor or rid]['ArmorName'], effective[rid]['PowerLevel']) if rid in by_id else stock[rid]['ArmorName']
+                editable = bool(donor or any(fields.values()))
+                if editable:
+                    result['values'][rid] = fields
+                name = armor_name(stock[donor or rid]['ArmorName'], effective[rid]['PowerLevel']) if editable else stock[rid]['ArmorName']
                 records.append({'id': rid, 'name': name, 'baseline': baseline,
                     'cloneOf': donor, 'origin': 'Clone' if donor else 'Shipped',
+                    'readOnly': not editable, 'readOnlyReason': 'Shipped armor reference' if not editable else '',
                     'unused': rid not in assigned_enemy_ids and not refs.get(rid),
                     'playerUse': bool(refs.get(rid)), 'acquisition': refs.get(rid, []),
                     'targets': {name: {'table': 'Armor', 'id': rid, 'column': name, 'enemyArmor': True}
@@ -206,11 +209,7 @@ def apply_edits(config, database, cells):
                 raise ValueError('Armor values must be numbers; clear a cell to inherit: ' + value)
             if not math.isfinite(number) or number != int(number):
                 raise ValueError('Armor values must be finite integers: ' + value)
-        row = by_id.get(rid)
-        if row is None:
-            row = {'ArmorId': rid}
-            by_id[rid] = row
-            rows.append(row)
+        row = by_id[rid]
         if row.get(column, '') == value:
             continue
         if column not in header:

@@ -2115,7 +2115,7 @@ function playerCell(grid, row, column) {
     base:row.baseline[column.name],multiplier:1,readOnly:!!(MODEL.enemyRules || {}).error,
     readOnlyReason:(MODEL.enemyRules || {}).error};
   if (target.enemyArmor) return {target:target,value:(W.enemyArmor[target.id] || {})[target.column] || '',
-    base:row.baseline[column.name],multiplier:1,readOnly:false};
+    base:row.baseline[column.name],multiplier:1,readOnly:row.readOnly,readOnlyReason:row.readOnlyReason};
   if (target.generated!==undefined) return {target:target,value:'',base:target.generated,multiplier:1,
     readOnly:true,readOnlyReason:target.readOnlyReason};
   if (target.overlay) return {target:target,value:W.overlays[target.overlay].cells[target.row][target.ci] || '',
