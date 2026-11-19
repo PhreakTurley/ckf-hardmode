@@ -19,7 +19,7 @@ CORE_COLUMNS = ('PowerLevel', 'BallisticArmor', 'PhysicalArmor', 'BallisticArmor
 
 def armor_name(label, level):
     """Replace a donor's level suffix with the effective authored level."""
-    family = re.sub(r'\s*(?:\(PL\s*\d+\)|(?:PL|Lvl)\s*\d+)\s*$', '', label, flags=re.I)
+    family = re.sub(r'\s*(?:\(PL\s*[1-9]\d*\)|(?:PL|Lvl)\s*[1-9]\d*)\s*$', '', label, flags=re.I)
     return '%s (PL %s)' % (family, level)
 
 
@@ -128,13 +128,13 @@ def model(config, database, settings, proposed=None):
                 donors = [lv for lv in complete.values()
                           if all(r['MonsterTypeId'] in authored_monsters for r in lv.values())
                           and tuple(lv[p]['ArmorTypeId'] for p in range(1, 11)) == signature]
-                tails = {tuple(monsters[lv[p]['MonsterTypeId']]['ArmorTypeId'] for p in range(11, 21))
-                         for lv in donors}
+                ladders = {tuple(monsters[lv[p]['MonsterTypeId']]['ArmorTypeId'] for p in range(1, 21))
+                           for lv in donors}
                 if not donors:
                     continue
-                if len(tails) != 1:
+                if len(ladders) != 1:
                     raise ValueError('Missing or ambiguous armor ladder for PowerGroup ' + pg)
-                for level, pointer in zip(range(11, 21), next(iter(tails))):
+                for level, pointer in zip(range(1, 21), next(iter(ladders))):
                     monsters[levels[level]['MonsterTypeId']]['ArmorTypeId'] = pointer
             enemy_ids = {r['ArmorTypeId'] for r in monsters.values()}
             result['unresolvedAssignments'] = [
@@ -168,7 +168,7 @@ def model(config, database, settings, proposed=None):
             result['page'] = {'id': 'enemy-armors', 'title': 'Enemy Armors', 'group': 'Enemy Gear', 'enemyArmor': True,
                 'grids': [{'key': 'enemy-armors', 'table': 'Armor', 'title': 'Enemy Armors',
                            'columns': columns, 'advanced': [], 'rows': records, 'dynamicColumns': True,
-                           'scrollWithPage': True, 'unpaginated': True}]}
+                           'unpaginated': True}]}
             result['path'] = str(path.relative_to(config)).replace('\\', '/')
             result['unresolvedShipped'] = sorted({r['armorId'] for r in result['unresolvedAssignments']}, key=int)
     except (ValueError, OSError, static_data.DataError) as exc:

@@ -20,7 +20,8 @@ from pathlib import Path
 import sqlite3
 
 from static_data import StaticData, DEFAULT_DB, quote, integer_text
-from export_enemy_difficulty import CONFIG, PROJECT, FIXES_FILE, ROSTER_ROOT, roster_module
+from export_enemy_difficulty import (CONFIG, PROJECT, FIXES_FILE, ROSTER_ROOT, roster_module,
+                                    FIRST_ARMOR_ID, FIRST_ROSTER_ID, LAST_ENEMY_ID)
 
 
 def require(condition, message):
@@ -71,6 +72,11 @@ def verify(sql_path, data_path=DEFAULT_DB, config_dir=CONFIG, native_integrity=F
 
             original = {t: normalize(t, before[t]) for t in kinds}
             target = {t: {i: dict(r) for i, r in rows.items()} for t, rows in original.items()}
+            armor_donors = {r[0]: dict(zip(kinds["Armor"], r)) for r in before["Armor"]}
+            exact_armor = dict(armor_donors)
+            for table in ("Armor", "MonsterGroupMember"):
+                require(not any(FIRST_ARMOR_ID <= i <= LAST_ENEMY_ID for i in original[table]),
+                        f"Official {table} uses the reserved EnemyVariety ID range")
             authored, expected_names = set(), {}
             inputs = [("Armor", "ArmorModel.csv"), ("MonsterType", "MonsterTypeModel.csv")]
             for t, filename in inputs:
@@ -103,32 +109,33 @@ def verify(sql_path, data_path=DEFAULT_DB, config_dir=CONFIG, native_integrity=F
                     converted.append((identity, source, changes, raw.get("_comment", "")))
                     if t == "MonsterType":
                         authored.add(identity)
-                for identity, source, changes, _ in converted:
-                    if not source:
+                for identity, source, changes, comment in converted:
+                    if t == "MonsterType":
                         require(identity in target[t], f"Authored row missing: {t} {identity}")
                         target[t][identity].update(changes)
-                for identity, source, changes, comment in converted:
-                    if source:
-                        require(identity not in target[t], f"Authored clone collision: {t} {identity}")
-                        require(int(source) in target[t], f"Authored clone source missing: {t} {source}")
-                        target[t][identity] = {**target[t][int(source)], **changes, keys[t][0]: identity}
-                        if t == "Armor":
-                            family = comment.split(" tier PL ")[0].replace("-", " ").title()
-                            label = db.locale.get("ArmorName." + source, family)
-                            label = re.sub(r'\s*(?:\(PL\s*\d+\)|(?:PL|Lvl)\s*\d+)\s*$', '', label, flags=re.I)
-                            expected_names["ArmorName." + str(identity)] = f"{label} (PL {target[t][identity]['PowerLevel']})"
-                if t == "Armor":
-                    for identity, source, _, _ in converted:
-                        if not source:
-                            label = db.locale.get("ArmorName." + str(identity), "Armor " + str(identity))
-                            label = re.sub(r'\s*(?:\(PL\s*\d+\)|(?:PL|Lvl)\s*\d+)\s*$', '', label, flags=re.I)
-                            expected_names["ArmorName." + str(identity)] = f"{label} (PL {target[t][identity]['PowerLevel']})"
+                        continue
+                    require(FIRST_ARMOR_ID <= identity < FIRST_ROSTER_ID, f"Unreserved armor ID: {identity}")
+                    require(source and int(source) in original[t], f"Authored clone source missing: {t} {source}")
+                    target[t][identity] = {**original[t][int(source)], **changes, keys[t][0]: identity}
+                    exact_armor[identity] = {**armor_donors[int(source)], **changes, keys[t][0]: identity}
+                    family = comment.split(" tier PL ")[0].replace("-", " ").title()
+                    label = db.locale.get("ArmorName." + source, family)
+                    label = re.sub(r'\s*(?:\(PL\s*[1-9]\d*\)|(?:PL|Lvl)\s*[1-9]\d*)\s*$', '', label, flags=re.I)
+                    expected_names["ArmorName." + str(identity)] = f"{label} (PL {target[t][identity]['PowerLevel']})"
                 counts["authored_rows"] += len(converted)
 
             with closing(sqlite3.connect(":memory:")) as roster_db:
                 db.connection.backup(roster_db)
                 roster_db.executescript(roster_bytes.decode("utf-8-sig"))
-                target["MonsterGroupMember"] = normalize("MonsterGroupMember", roster_db.execute('SELECT * FROM "MonsterGroupMember"').fetchall())
+                members = normalize("MonsterGroupMember", roster_db.execute('SELECT * FROM "MonsterGroupMember"').fetchall())
+            new_members = members.keys() - original["MonsterGroupMember"].keys()
+            require(len(new_members) <= LAST_ENEMY_ID - FIRST_ROSTER_ID + 1, "EnemyVariety roster exceeds its reserved ID range")
+            target["MonsterGroupMember"] = {
+                identity: row for identity, row in members.items() if identity not in new_members}
+            for index, old_id in enumerate(sorted(new_members)):
+                identity = FIRST_ROSTER_ID + index
+                target["MonsterGroupMember"][identity] = {**members[old_id], "MonsterGroupMemberId": identity}
+            counts["reserved_roster_ids"] = len(new_members)
             counts.update({"independent_roster_" + name: value for name, value in roster_check["checks"].items()})
             require(target["Rule"][82]["ConfigName"] == "Max Enemy Power Level", "Rule82 declaration changed")
             rules = fixes.get("rules", {})
@@ -152,9 +159,9 @@ def verify(sql_path, data_path=DEFAULT_DB, config_dir=CONFIG, native_integrity=F
                 donors = [g for identity, g in groups.items() if identity not in ambiguous and set(g) == set(range(1, 21))
                           and all(r["MonsterTypeId"] in authored for r in g.values())
                           and tuple(g[p]["ArmorTypeId"] for p in range(1, 11)) == signature]
-                tails = {tuple(target["MonsterType"][g[p]["MonsterTypeId"]]["ArmorTypeId"] for p in range(11, 21)) for g in donors}
-                require(len(tails) == 1, f"New armor family ambiguous: PG {pg}")
-                for p, pointer in zip(range(11, 21), next(iter(tails))):
+                ladders = {tuple(target["MonsterType"][g[p]["MonsterTypeId"]]["ArmorTypeId"] for p in range(1, 21)) for g in donors}
+                require(len(ladders) == 1, f"New armor family ambiguous: PG {pg}")
+                for p, pointer in zip(range(1, 21), next(iter(ladders))):
                     target["MonsterType"][levels[p]["MonsterTypeId"]]["ArmorTypeId"] = pointer
                     counts["new_ladder_armor_assignments"] += 1
 
@@ -193,8 +200,7 @@ def verify(sql_path, data_path=DEFAULT_DB, config_dir=CONFIG, native_integrity=F
 
             def authorizer(action, table, column, _db, _trigger):
                 if action == sqlite3.SQLITE_UPDATE:
-                    allowed = ((table == "Armor" and column != "ArmorId")
-                               or (table == "MonsterType" and column == "ArmorTypeId")
+                    allowed = ((table == "MonsterType" and column == "ArmorTypeId")
                                or (table == "Rule" and column == "Value")
                                or (table == "MonsterGroupMember" and column != "MonsterGroupMemberId")
                                or column in permitted_columns.get(table, set()))
@@ -236,6 +242,8 @@ def verify(sql_path, data_path=DEFAULT_DB, config_dir=CONFIG, native_integrity=F
                                    if value != actual[t][identity][c]}
                     require(not differences, f"Row mismatch: {t} {identity}: {differences}")
                     counts["exact_owned_rows"] += 1
+            for row in raw_rows("Armor"):
+                require(tuple(exact_armor[row[0]].values()) == row, f"Raw armor row mismatch: {row[0]}")
             for t in db.schema:
                 if t not in kinds:
                     require(raw_rows(t) == before[t], "Unowned table changed: " + t)

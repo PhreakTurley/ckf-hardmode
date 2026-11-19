@@ -30,7 +30,6 @@ class AttributeBenefitsTests(unittest.TestCase):
             for g in page['grids']:
                 self.assertTrue(g['dynamicColumns'])
                 self.assertTrue(g['advanced'])
-                self.assertTrue(g['scrollWithPage'])
                 key = pb.TABLE_KEYS[g['table']]
                 official = {r[key]:r for r in source.read(g['table'] + 'Model')[1]}
                 for r in g['rows']:

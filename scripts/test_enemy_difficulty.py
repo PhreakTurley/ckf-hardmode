@@ -3,6 +3,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 import csv
+import sqlite3
+from contextlib import closing
 
 from export_enemy_difficulty import PROJECT, build, guarded_write, FIXES_FILE, SPAWN_TAGS
 from static_data import StaticData
@@ -51,6 +53,7 @@ class EnemyDifficultyChecks(unittest.TestCase):
             artifacts, _ = build(config_dir=directory)
             import json
             payload = json.loads(artifacts['source_content/enemy-difficulty.json'])
+            self.assertEqual(payload['Metadata'], {'Name':'EnemyVariety', 'StoryKey':'EnemyVariety', 'StartingId':560000})
             non_roster = [statement for statement in payload['RawSQL'] if 'MonsterGroupMember' not in statement]
             self.assertEqual(non_roster, [
                 'UPDATE "Rule" SET "Value"=19 WHERE "RuleId"=82;',
@@ -92,6 +95,21 @@ class EnemyDifficultyChecks(unittest.TestCase):
         self.assertTrue(result['native_integrity_checks'])
         self.assertTrue(all(status == 'PASS' for status in result['native_integrity_checks'].values()))
 
+    def test_authored_ids_do_not_replace_another_mods_rows(self):
+        sql = (PROJECT / "parser_prepared/_data/data.sql").read_text(encoding="utf-8-sig")
+        with StaticData() as db:
+            for table, key, identity, field in (
+                ("Armor", "ArmorId", 560000, "BallisticArmor"),
+                ("MonsterGroupMember", "MonsterGroupMemberId", 561000, "WeightedRoll"),
+            ):
+                with self.subTest(table=table), closing(sqlite3.connect(":memory:")) as connection:
+                    db.connection.backup(connection)
+                    connection.execute(f"INSERT INTO {table} ({key}, {field}) VALUES (?, -987)", (identity,))
+                    with self.assertRaisesRegex(sqlite3.IntegrityError, f"UNIQUE constraint failed: {table}.{key}"):
+                        connection.executescript(sql)
+                    self.assertEqual(connection.execute(f"SELECT {field} FROM {table} WHERE {key}=?",
+                                                        (identity,)).fetchone(), (-987,))
+
     def test_rejects_corrupted_payloads(self):
         with (PROJECT / "review/column-ledger.csv").open(encoding="utf-8-sig", newline="") as handle:
             ledger = list(csv.DictReader(handle))
@@ -112,7 +130,7 @@ class EnemyDifficultyChecks(unittest.TestCase):
         accuracy_reviewed = any(row["Table"] == "Weapon" and row["Column"] == "Accuracy1"
                                 for row in ledger)
         cases = (
-            ("authored armor changed", f'UPDATE Armor SET BallisticArmor=BallisticArmor+1 WHERE ArmorId={armor};', f'Row mismatch: Armor {armor}'),
+            ("authored armor changed", f'UPDATE Armor SET BallisticArmor=BallisticArmor+1 WHERE ArmorId={armor};', 'Forbidden SQL write: Armor.BallisticArmor'),
             ("wrong enemy ceiling", 'UPDATE Rule SET Value=12 WHERE RuleId=82;', 'Row mismatch: Rule 82'),
             ("mission ceiling changed", 'UPDATE Rule SET Value=20 WHERE RuleId=81;', 'Row mismatch: Rule 81'),
             ("high-level HP backslide", 'UPDATE MonsterType SET HitPoints=1 WHERE MonsterTypeId=24;', 'Forbidden SQL write: MonsterType.HitPoints'),

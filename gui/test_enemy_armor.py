@@ -55,7 +55,7 @@ class ArmorTests(unittest.TestCase):
                     b'22000,,,45,source adjustment\r\n'
                     b'990001,22000,never,,fixture clone\r\n')
         self.path.write_bytes(self.raw)
-        (self.config / armor.MONSTERS).write_bytes(b'MonsterTypeId,ArmorTypeId\n1,990001\n1100,22511\n')
+        (self.config / armor.MONSTERS).write_bytes(b'MonsterTypeId,ArmorTypeId\n1,990001\n1100,22511\n1160,22511\n')
 
     def test_validation_uses_replaced_assignments_and_reports_unmodified_native_defects(self):
         view = armor.validate(self.config, serve.static_data.DEFAULT_DB)
@@ -84,7 +84,7 @@ class ArmorTests(unittest.TestCase):
         self.assertFalse(rows['990001']['unused'])
         self.assertTrue(rows['990002']['unused'])
         self.assertFalse(rows[player_id]['unused'])
-        proposed = {armor.MONSTERS:b'MonsterTypeId,ArmorTypeId\n1,990002\n1100,22511\n'}
+        proposed = {armor.MONSTERS:b'MonsterTypeId,ArmorTypeId\n1,990002\n1100,22511\n1160,22511\n'}
         view = armor.validate(self.config, serve.static_data.DEFAULT_DB, proposed)
         rows = {r['id']:r for r in view['page']['grids'][0]['rows']}
         self.assertTrue(rows['990001']['unused'])
@@ -197,8 +197,14 @@ setTimeout(function() {
  const panel=$('#panel'), find=fn=>panel.find(fn), page=MODEL.enemyArmor.page;
  ck('enemy armor has a dedicated navigation section', MODEL.sections.some(s=>s.id===SEL && s.title==='Enemy Armors'));
  ck('clones have an explicit visible identity', find(n=>n._cls().includes('pb-clone') && /Clone \d+ \(from \d+\)/.test(n.textContent)).length>0);
- ck('shipped armors are labelled separately', find(n=>n._cls().includes('pill') && n.textContent.startsWith('Shipped ')).length>0);
- ck('tables scroll with the page', find(n=>n._cls().includes('grid-wrap')).every(n=>n._cls().includes('page-grid-wrap')));
+ const armorRows=()=>find(n=>n.getAttribute('data-player-row')?.startsWith('Armor '));
+ ck('all armor rows are in one table without pagination', find(n=>n.tagName==='TABLE').length===1 &&
+    armorRows().length===page.grids[0].rows.length && !find(n=>n.tagName==='BUTTON' && n.textContent==='Next').length);
+ const search=find(n=>n.tagName==='INPUT' && n.getAttribute('type')==='search')[0];
+ search.value='Clone';search.fire('input');
+ ck('armor search keeps every match in the same table', armorRows().length===page.grids[0].rows.filter(r=>r.cloneOf).length &&
+    !find(n=>n.tagName==='BUTTON' && n.textContent==='Next').length);
+ search.value='';search.fire('input');
  const unused=page.grids[0].rows.find(r=>r.unused), used=page.grids[0].rows.find(r=>!r.unused);
  ck('unused armor has a visible disclaimer', find(n=>n._cls().includes('pb-unused') && n.textContent==='Unused armor').length>0);
  const unchanged=JSON.stringify(buildEdits());

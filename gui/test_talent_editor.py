@@ -152,7 +152,7 @@ setTimeout(function() {
  const rows=()=>find(n=>n.tagName==='TR' && n.getAttribute('data-player-row')==='JobNode 7021');
  ck('talent and node fields share one row', rows()[0].find(n=>n.tagName==='INPUT' && n.getAttribute('data-player-target')==='JobNode 7021.BuyCost').length===1
    && rows()[0].find(n=>n.tagName==='INPUT' && /^Talent /.test(n.getAttribute('data-player-target')||'')).length>0);
- ck('talent grids scroll with the page', find(n=>n._cls().includes('grid-wrap')).every(n=>n._cls().includes('page-grid-wrap')));
+ ck('talent tables use the shared grid layout', find(n=>n.tagName==='TABLE').every(n=>n.parent._cls().includes('grid-wrap')));
  ck('base talents cannot be removed', !find(n=>n.tagName==='BUTTON' && n.getAttribute('aria-label')==='Remove Job Node 7020').length);
  ck('upgrade removal is available', find(n=>n.tagName==='BUTTON' && n.getAttribute('aria-label')==='Remove Job Node 7021').length===1);
  ck('node icon and attribute effect pointer have choices', ['JobNode 7021.IconPng','JobNode 7500.NodeEffect1Id'].every(target=>

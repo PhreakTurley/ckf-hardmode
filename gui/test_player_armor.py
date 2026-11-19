@@ -34,7 +34,6 @@ class PlayerArmorTests(unittest.TestCase):
             for page in pages:
                 grid = page['grids'][0]
                 self.assertTrue(grid['dynamicColumns'])
-                self.assertTrue(grid['scrollWithPage'])
                 self.assertEqual(grid['defaultSort']['key'], 'column:Cost')
                 self.assertIn('blueprintColumn', grid)
                 for record in grid['rows']:

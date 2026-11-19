@@ -414,24 +414,30 @@ class PlayerBalanceTests(unittest.TestCase):
             self.assertTrue(knight_ids)
             self.assertEqual({r['id'] for r in knight_grid['rows']}, knight_ids)
             for g in grids:
-                if g['table'] == 'Trait':
-                    if g['subsection'] == 'Cyber Knight Traits':
-                        self.assertEqual({r['id'] for r in g['rows']}, knight_ids)
-                    else:
-                        scores = {r['baseline']['TraitScore'] for r in g['rows']}
-                        self.assertEqual(len(scores), 1)
-                        score = float(next(iter(scores)))
-                        self.assertEqual(g['subsection'], 'Trait score ' + (format(score, '+g') if score else '0'))
-                        self.assertFalse(knight_ids & {r['id'] for r in g['rows']})
+                self.assertEqual(g['table'], 'Trait')
+                self.assertTrue(g['joined'])
+                if g['subsection'] == 'Cyber Knight Traits':
+                    self.assertEqual({r['id'] for r in g['rows']}, knight_ids)
                 else:
-                    pointer = 'EffectTypeId' if g['table'] == 'Effect' else 'MatrixEffectTypeId'
-                    for r in g['rows']:
-                        owners = [source.locale.get('Trait.Name.' + t['TraitId'] + '_Male',
-                                                    source.locale.get('Trait.Name.' + t['TraitGroup'] + '_Male', t['TraitName']))
-                                  for t in traits.values() if t[pointer] == r['id']]
-                        self.assertTrue(owners)
-                        self.assertTrue(any(name in r['section'] for name in owners))
-                        self.assertFalse(r['name'].startswith(('Effect.Name.', 'MatrixEffect.Name.')))
+                    scores = {r['baseline']['TraitScore'] for r in g['rows']}
+                    self.assertEqual(len(scores), 1)
+                    score = float(next(iter(scores)))
+                    self.assertEqual(g['subsection'], 'Trait score ' + (format(score, '+g') if score else '0'))
+                    self.assertFalse(knight_ids & {r['id'] for r in g['rows']})
+            for table, group, pointer in [('Effect', 'Effects', 'EffectTypeId'),
+                                          ('MatrixEffect', 'Matrix effects', 'MatrixEffectTypeId')]:
+                official_effects = {r[pb.TABLE_KEYS[table]]: r for r in source.read(table + 'Model')[1]}
+                for row in shown:
+                    trait_id = row['id']
+                    effect_id = traits[trait_id][pointer]
+                    self.assertEqual(row['links'][group], effect_id)
+                    targets = {key: t for key, t in row['targets'].items() if key.startswith(group + '.')}
+                    self.assertEqual(bool(targets), effect_id in official_effects)
+                    for key, target in targets.items():
+                        self.assertEqual((target['table'], target['id']), (table, effect_id))
+                        self.assertEqual(row['baseline'][key], official_effects[effect_id][target['column']])
+                        self.assertEqual(len(target['sharedWith']),
+                                         sum(t[pointer] == effect_id for t in traits.values()) - 1)
             self.assertFalse(any(r['name'].startswith('Trait.Name.') for r in shown))
             leverage_grids = next(p for p in model['pages'] if p['id'] == 'leverage')['grids']
             talents = source.read('TalentModel')[1]

@@ -1002,22 +1002,25 @@ def consumable_links(allrows, doc):
     return links, owners
 
 
-def implant_links(allrows, doc):
-    """Resolve implant effect assignments, retaining unresolved pointers."""
+def effect_links(allrows, doc, base_table, effect_field, matrix_field):
+    """Resolve saved effect assignments and retain table-scoped shared owners."""
     links, owners = {}, {}
-    for implant in allrows['Implant'].values():
-        rid = implant['ImplantTypeId']
+    for row in allrows[base_table].values():
+        rid = row[TABLE_KEYS[base_table]]
         linked = {'ids': {}, 'warnings': []}
-        for heading, table, field in [('Effects', 'Effect', 'ImplantEffectId'),
-                                      ('Matrix effects', 'MatrixEffect', 'MatrixEffectId')]:
-            pointer = str(int(effective(doc, 'Implant', implant, field)))
+        for heading, table, field in [('Effects', 'Effect', effect_field),
+                                      ('Matrix effects', 'MatrixEffect', matrix_field)]:
+            pointer = str(int(effective(doc, base_table, row, field)))
             linked['ids'][heading] = pointer
             target = None if pointer in ('0', '-1', '') else allrows[table].get(pointer)
             linked[heading] = target
             if pointer not in ('0', '-1', '') and target is None:
-                linked['warnings'].append('Implant %s: %s %s was not found' % (rid, table, pointer))
+                linked['warnings'].append('%s %s: %s %s was not found' % (base_table, rid, table, pointer))
             if target:
-                owners.setdefault((table, pointer), {})[rid] = implant['ImplantName']
+                name = row[base_table + 'Name']
+                if base_table == 'Trait':
+                    name = '%s (Trait %s)' % (name, rid)
+                owners.setdefault((table, pointer), {})[rid] = name
         links[rid] = linked
     return links, owners
 
@@ -1141,7 +1144,7 @@ def catalog(config_dir, database, document=None):
             service_fallbacks['Item'] = item_service_fallbacks(source, blueprint_refs['Item'])
             acquisition.update(player_item_references(source, doc, blueprint_refs['Item']))
             item_links, item_owners = consumable_links(allrows, doc)
-            cyberware_links, implant_owners = implant_links(allrows, doc)
+            cyberware_links, implant_owners = effect_links(allrows, doc, 'Implant', 'ImplantEffectId', 'MatrixEffectId')
             intrinsic_links, armor_owners = armor_links(allrows, doc)
             for trait in allrows['Trait'].values():
                 if trait['TraitName'].startswith('Trait.Name.'):
@@ -1264,26 +1267,7 @@ def catalog(config_dir, database, document=None):
                     joined['warning'] = '; '.join(warnings)
                 return joined
 
-            def linked(rows, field, table, title, related=False, owner_name='TraitName'):
-                ids = {r.get(field) for r in rows} - {None, '', '0', '-1'}
-                missing = ids - allrows[table].keys()
-                result_grid = grid(table, [allrows[table][i] for i in ids if i in allrows[table]], title, 'nonzero') if ids else None
-                if missing and result_grid is not None:
-                    result_grid['warning'] = 'Official data has unresolved %s pointers: %s' % (field, ', '.join(sorted(missing)))
-                if related and result_grid:
-                    for record in result_grid['rows']:
-                        owners = sorted((r for r in rows if r.get(field) == record['id']),
-                                        key=lambda r: natural(r[owner_name]))
-                        record['section'] = ', '.join(dict.fromkeys(r[owner_name] for r in owners))
-                        if owner_name == 'TraitName' and record['name'].startswith(('Effect.Name.', 'MatrixEffect.Name.')):
-                            record['name'] = 'Level ' + ', '.join(sorted({r['TraitLevel'] for r in owners}, key=int))
-                    result_grid['rows'].sort(key=lambda r: (natural(r['section']), natural(r['name'])))
-                return result_grid
-
             def page(pid, title, group, grids, **kwargs):
-                for g in grids:
-                    if g and group in ('Weapons', 'Drone weapons', 'Armor', 'Drone armors', 'Consumables', 'Cyberware', 'Cyberware modules'):
-                        g['scrollWithPage'] = True
                 result['pages'].append({'id': pid, 'title': title, 'group': group, 'owner': 'player-balance',
                                         'grids': [g for g in grids if g and (g['rows'] or g.get('warning'))], **kwargs})
 
@@ -1546,7 +1530,7 @@ def catalog(config_dir, database, document=None):
                 rows = [allrows[table][rid] for rid, _name in definitions if rid in allrows[table]]
                 title = attribute + (' · Matrix' if table == 'MatrixEffect' else '')
                 g = grid(table, rows, title, 'nonzero')
-                g.update(dynamicColumns=True, scrollWithPage=True)
+                g['dynamicColumns'] = True
                 names = dict(definitions)
                 for record in g['rows']:
                     record['name'] = names[record['id']]
@@ -1594,6 +1578,7 @@ def catalog(config_dir, database, document=None):
             page('leverage', 'Leverage', 'Character', leverage_grids)
             rows = list(allrows['Trait'].values())
             trait_grids = []
+            trait_links, trait_owners = effect_links(allrows, doc, 'Trait', 'EffectTypeId', 'MatrixEffectTypeId')
             knight_groups = knight_trait_groups(source)
             knight_rows = [r for r in rows if r['TraitGroup'] in knight_groups]
             other_rows = [r for r in rows if r['TraitGroup'] not in knight_groups]
@@ -1602,13 +1587,10 @@ def catalog(config_dir, database, document=None):
                 trait_sections.append(('Trait score %s' % (format(score, '+g') if score else '0'),
                                        [r for r in other_rows if effective(doc, 'Trait', r, 'TraitScore') == score]))
             for heading, subset in trait_sections:
-                for g in (grid('Trait', subset, 'Traits', 'nonzero'),
-                          linked(subset, 'EffectTypeId', 'Effect', 'Effects', related=True),
-                          linked(subset, 'MatrixEffectTypeId', 'MatrixEffect', 'Matrix effects', related=True)):
-                    if g:
-                        g['subsection'] = heading
-                        g['key'] = '%s:%s' % (g['table'], heading)
-                        trait_grids.append(g)
+                g = joined_grid('Trait', subset, 'Traits', 'Trait', trait_links, trait_owners,
+                                [('Effects', 'Effect'), ('Matrix effects', 'MatrixEffect')], policy='nonzero')
+                g.update(key=heading, subsection=heading)
+                trait_grids.append(g)
             page('traits', 'Traits', 'Character', trait_grids, knightTraitEvidence=knight_groups)
             rule_grids = []
             for group in sorted({r['GroupId'] for r in allrows['Rule'].values()}):

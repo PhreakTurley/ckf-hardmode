@@ -493,12 +493,13 @@ shared field updates its other visible cells. Missing positive assignments
 produce a warning and no editable cells for the missing target. Global implant
 multipliers still apply to implant cost, installation time and stress.
 
-Traits have independent score subsections, using saved score adjustments,
-and linked effects group by
-their owning trait names. Missing individual trait labels resolve through the
-official `TraitGroup` locale key; unnamed linked effects display their related
-trait level. Shared effects retain the same table/id identity
-across subsections. Each grid has its own pagination.
+**Character → Traits** groups rows by effective trait score. Each row carries
+its **Trait**, **Effects** and **Matrix effects** fields together. The joins
+follow saved effect assignments and keep each cell's native table, ID and
+column. Shared fields identify their other trait owners and update together
+where visible. Missing assignments show a warning. Missing trait labels use
+the official `TraitGroup` locale key. Each score subsection has its own
+pagination, and table headers follow the page during vertical scrolling.
 
 **Cyber Knight Traits** has its own subsection, outside the score groups.
 `player_balance.py:knight_trait_groups` joins nonzero-`NewGame` backstories
@@ -624,6 +625,7 @@ Rows with no effective enemy assignment and no known player reference show
 **Unused armor**. **Hide unused armor** hides those rows from the table while
 preserving their values and pending edits; it changes only the current view.
 
+The continuous table includes all matching rows while searching or sorting.
 The catalog applies authored monster armor replacements before checking references,
 including the exporter's matching extensions for newly shipped ladders. Missing
 targets identify the enemy, its PL and the missing armor ID; validation, saving
@@ -632,10 +634,9 @@ references do not produce warnings. Names use each row's effective authored PL,
 sort numbers naturally (9 before 10), and column headers follow page scrolling.
 
 Saving writes stat cells to the existing live `ckf.hardmode.d/ArmorModel.csv`
-(or its parked `.disabled` file). Empty cells inherit: shipped rows use Official
-data, while clones use their donor after authored donor adjustments. Clone
-identities and controls remain unchanged. The page shares this authoring source
-with the [Enemy Difficulty exporter](../docs/enemy-difficulty-workshop.md).
+or its parked `.disabled` file. Empty cells on Enemy Variety clones inherit
+from their Official donor. The page shares this authoring source with the
+[Enemy Difficulty exporter](../docs/enemy-difficulty-workshop.md).
 
 After saving, **Prepare Hard Mode + Workshop** prepares one payload for both
 Hard Mode's bundled Enemy Rebalance and the selected Enemy Difficulty Modkit

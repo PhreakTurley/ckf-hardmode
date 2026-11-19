@@ -20,7 +20,7 @@ Hard Mode's deprecated enemy-scaling ownership is documented in
 ## Authoring and outputs
 
 `scripts/export_enemy_difficulty.py:build` reads the current official database,
-the installed Data Parser declaration, and legacy armor inputs under
+the installed Data Parser declaration, and live armor inputs under
 `BepInEx/config/ckf.hardmode.d`:
 
 - all authored fields in `ArmorModel.csv`;
@@ -61,16 +61,25 @@ one active file or parked `.disabled` file must exist. Both copies or a missing
 input refuse the export. The receipt records input paths and hashes; it is not
 a backup of live configuration.
 
-Armor edits become sparse updates. Armor clones inherit unedited fields from
-their source after authored source updates, retain their explicit identities,
-and receive localized names. Names for both authored shipped rows and clones
-replace the source name's level suffix with the effective authored armor PL.
-Every effective enemy armor reference is checked, including unchanged native
-pointers. The BepInEx `_serveOn` control has no SQL equivalent.
+The parser source uses the `EnemyVariety` story key. The mod reserves
+`560000–564999`, with `560000–560999` for new Armor rows and
+`561000–564999` for new MonsterGroupMember rows. The export maps the reviewed
+roster's generated identities into that range and retains its native member
+identities. Reserved IDs occupied in Official data refuse preparation.
+Identical insertions can be replayed, and a different row occupying the same
+authored ID causes a SQL collision.
+
+Enemy armor is exported as authored PL1–20 clones. Each clone inherits
+unspecified fields from its Official donor and receives a localized name
+with its effective PL. The export snapshots donor values so that a change
+to the donor by another mod cannot change the clone's values. Enemy
+assignments point at the authored rows while the shipped armor rows retain
+their original fields and names. Every effective enemy armor reference is
+checked. The BepInEx `_serveOn` control has no SQL equivalent.
 
 For newly shipped complete PL1–20 ladders absent from the authoring sheet, the
 exporter extends only armor pointers. Their native PL1–10 armor signature must
-match authored donors, and every donor must agree on the PL11–20 result.
+match authored donors, and every donor must agree on the full PL1–20 assignment.
 Missing or ambiguous matches refuse preparation. No broad stat floors, weapon
 extensions or talent upgrades are generated. Non-armor corrections and any
 native-pointer replacements must be explicitly declared in the surgical document.

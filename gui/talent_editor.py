@@ -91,7 +91,7 @@ def catalog(overlays, database, attribute_columns, attribute_always, talent_excl
 
                 def grid(title, blocks, records):
                     g = {'key': title, 'table': blocks[0][0] if len(blocks)==1 else 'JobNode', 'title': title, 'joined': True,
-                         'columns': [], 'advanced': [], 'rows': [], 'scrollWithPage': True,
+                         'columns': [], 'advanced': [], 'rows': [],
                          'unpaginated': True, 'dynamicColumns': True, 'talents': True}
                     for table, heading in blocks:
                         sheet = by_sheet.get((table, tag))

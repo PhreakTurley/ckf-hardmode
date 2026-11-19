@@ -504,7 +504,17 @@ setTimeout(async function () {
   W.player=JSON.parse(consumableSnapshot);MODEL.playerBalance.pages=originalPlayerPages;api=originalApi;PLAYER_PREVIEW_STATE.error='';
   SEL='pb:traits';render();
   ck('traits have score subsections', find(function(n) {return n.tagName==='SUMMARY' && n.textContent.startsWith('Trait score ');}).length>1);
-  ck('trait effects display their owners', find(function(n) {return n._cls().includes('pb-section-name');}).length>0);
+  ck('traits and linked effects share a table', find(n=>n.tagName==='TABLE').some(t=>
+    t.find(n=>n.tagName==='TH' && n.textContent==='Trait').length &&
+    t.find(n=>n.tagName==='TH' && ['Effects','Matrix effects'].includes(n.textContent)).length));
+  const linkedTrait=find(n=>n.getAttribute('data-player-target')?.startsWith('Effect '))[0];
+  ck('joined fields keep their native Effect target on the trait row', linkedTrait &&
+    linkedTrait.parent.parent.getAttribute('data-player-row').startsWith('Trait '));
+  const traitBefore=linkedTrait.value,target=linkedTrait.getAttribute('data-player-target');
+  linkedTrait.value=traitBefore==='41'?'42':'41';linkedTrait.fire('input');
+  ck('joined field changes save against the native Effect row', buildEdits().playerBalance.cells.some(c=>
+    c.table+' '+c.id+'.'+c.column===target && c.value===linkedTrait.value));
+  linkedTrait.value=traitBefore;linkedTrait.fire('input');
   const pagedTraits=MODEL.playerBalance.pages.find(p=>p.id==='traits').grids.find(g=>g.rows.length>ROWS_PER_PAGE);
   const traitFold=find(n=>n.tagName==='DETAILS' && n.children[0].textContent===pagedTraits.subsection)[0];
   if (!traitFold.open) {traitFold.open=true;traitFold.fire('toggle');}

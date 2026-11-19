@@ -138,10 +138,10 @@ code.loc span{display:block}
 .retrobox{border:2px solid var(--danger);border-radius:7px;padding:10px 12px;
   background:#241715;margin:8px 0}
 .retrobox h4{margin:0 0 4px;color:#f0a196;font-size:13.75px}
-.grid-wrap{overflow:auto;max-height:72vh;border:1px solid var(--line);border-radius:6px}
-.grid-wrap.page-grid-wrap{max-height:none}
-.page-grid-wrap table.grid thead{position:relative;z-index:5}
-.page-grid-wrap table.grid thead th{position:relative;top:auto}
+.grid-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:6px}
+.grid-wrap table.grid thead{position:relative;z-index:5}
+.grid-wrap table.grid thead th{position:relative;top:auto}
+.grid-wrap table.grid thead th.axis{position:sticky}
 table.grid{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%}
 table.grid th,table.grid td{border-bottom:1px solid var(--line);
   border-right:1px solid var(--line);padding:0;white-space:nowrap}
@@ -281,9 +281,9 @@ table.pb-grid th{min-width:0;max-width:none!important;white-space:nowrap;word-br
 .pb-grid .pb-name{position:sticky;left:54px;min-width:0;max-width:none;
   white-space:nowrap;background:var(--panel);padding:4px 7px;z-index:1}
 .pb-grid th.pb-name{z-index:4;background:var(--panel2)}
-.page-grid-wrap .pb-grid thead th.pb-name,.page-grid-wrap .pb-grid thead th.pb-reset{position:sticky}
+.grid-wrap .pb-grid thead th.pb-name,.grid-wrap .pb-grid thead th.pb-reset{position:sticky}
 .pb-grid thead tr.pb-subheads th{top:24px}
-.page-grid-wrap .pb-grid thead tr.pb-subheads th{top:auto}
+.grid-wrap .pb-grid thead tr.pb-subheads th{top:auto}
 .pb-grid thead tr:first-child{height:24px}
 .pb-grid th.pb-colgroup{text-align:center;color:var(--dim);border-bottom:0}
 .pb-grid .pb-section th{position:static;padding:8px 7px 5px;background:#28344a;color:#c6d9f6;white-space:normal}
@@ -335,7 +335,7 @@ table.grid:not(.pb-grid):not(.class-grid) th{overflow-wrap:anywhere}
   .path-tools{flex:1 1 260px}
   .field,.field.gate{grid-template-columns:minmax(0,1fr);gap:5px}
   .pb-grid .pb-name{position:static}
-  .page-grid-wrap .pb-grid thead th.pb-name{position:relative}
+  .grid-wrap .pb-grid thead th.pb-name{position:relative}
 }
 button:focus-visible,summary:focus-visible,.nm:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 dialog{max-width:min(34rem,calc(100vw - 24px));padding:18px;color:var(--ink);background:var(--panel);
@@ -906,7 +906,7 @@ function pinPageTableHeaders() {
   const header=document.querySelector('body > header');
   const top=header ? Math.max(0,header.getBoundingClientRect().bottom) : 0;
   const positions=[];
-  for (const table of document.querySelectorAll('.page-grid-wrap table.grid')) {
+  for (const table of document.querySelectorAll('.grid-wrap table.grid')) {
     const head=table.querySelector('thead');
     if (!head) continue;
     const rect=table.getBoundingClientRect();
@@ -2628,23 +2628,25 @@ function renderPlayer(panel, page) {
         const token = editor ? (editor.assets[assetId] || {}).token || '' : r.icon || '';
         return (r.name+' '+(r.weaponName || '')+' '+r.id+' '+(grid.category || '')+' '+(grid.subsection || '')+' '+(r.section || '')+' '+token+' '+playerService(grid,r).label
           +' '+(grid.blueprintColumn ? playerBlueprint(grid,r).label : '')+' '+(r.origin || '')+' '+(r.cloneOf || '')
-          +' '+(r.playerUse ? 'Also used by players' : '')+' '+(r.unused ? 'Unused armor' : '')).toLocaleLowerCase().includes(query);
+          +' '+(r.playerUse ? 'Also used by players' : '')+' '+(r.unused ? 'Unused armor' : '')
+          +' '+(grid.table==='Trait' ? Object.entries(r.links || {}).map(([group,id])=>group+' '+id).join(' ') : '')).toLocaleLowerCase().includes(query);
       });
       filtered.push({grid:grid,matches:matches,start:total});
-      total+=matches.length;
+      if (!grid.unpaginated) total+=matches.length;
     }
     const searchPage=Math.min(view.searchPage,Math.max(0,Math.ceil(total/ROWS_PER_PAGE)-1));
     if (query && total>ROWS_PER_PAGE) grids.appendChild(pager('search',total,searchPage,function(number) {
       view.searchPage=number;paint();
     }));
-    if (query && !total) grids.appendChild(el('p',{role:'status',class:'small',text:'No matches. Try another search.'}));
+    if (query && !filtered.some(item=>item.matches.length))
+      grids.appendChild(el('p',{role:'status',class:'small',text:'No matches. Try another search.'}));
     for (const {grid,matches,start} of filtered) {
       const gridKey = grid.key || grid.table;
       const sortId = page.id+':'+gridKey;
       const sort = PLAYER_SORT[sortId] || grid.defaultSort || {key:'',descending:false};
       const number=Math.min(pageNumbers[gridKey] || 0,Math.max(0,Math.ceil(matches.length/ROWS_PER_PAGE)-1));
-      const firstRow=query ? Math.max(0,searchPage*ROWS_PER_PAGE-start) : number*ROWS_PER_PAGE;
-      const lastRow=query ? (searchPage+1)*ROWS_PER_PAGE-start : firstRow+ROWS_PER_PAGE;
+      const firstRow=grid.unpaginated ? 0 : query ? Math.max(0,searchPage*ROWS_PER_PAGE-start) : number*ROWS_PER_PAGE;
+      const lastRow=grid.unpaginated ? matches.length : query ? (searchPage+1)*ROWS_PER_PAGE-start : firstRow+ROWS_PER_PAGE;
       if (query && (lastRow<=0 || firstRow>=matches.length) && !grid.warning) continue;
       if (!matches.length && !grid.warning) continue;
       let target = grids;
@@ -2681,7 +2683,7 @@ function renderPlayer(panel, page) {
       if (!visible) continue;
       const rows=playerSortedRows(grid,matches,sort).slice(firstRow,Math.max(0,lastRow));
       if (grid.title !== page.title) target.appendChild(el('h3', {text:grid.title}));
-      if (['Weapons','Drone weapons','Armor','Drone armors','Cyberware','Cyberware modules','Consumables','Enemy Gear'].includes(page.group)) {
+      if (grid.table==='Trait' || ['Weapons','Drone weapons','Armor','Drone armors','Cyberware','Cyberware modules','Consumables','Enemy Gear'].includes(page.group)) {
         const sortBy = el('select',{'aria-label':'Sort by '+page.title+' · '+grid.title});
         const choices = [{value:'',text:'Catalog order'},{value:'name',text:'Name'}];
         if (grid.serviceColumn) choices.push({value:'service',text:'Service'});
@@ -2703,7 +2705,7 @@ function renderPlayer(panel, page) {
           el('button',{text:'Re-sort',disabled:!sort.key,'aria-label':'Re-sort '+page.title+' · '+grid.title,onclick:changeSort}),
           ...(grid.rows.some(function(r) {return r.section;}) ? [el('span',{class:'small',text:'Within each icon group'})] : [])]));
       }
-      if (!query && matches.length>ROWS_PER_PAGE) target.appendChild(pager(gridKey,matches.length,number,function(next) {
+      if (!query && !grid.unpaginated && matches.length>ROWS_PER_PAGE) target.appendChild(pager(gridKey,matches.length,number,function(next) {
         pageNumbers[gridKey]=next;paint();
       }));
       if (grid.warning) target.appendChild(el('div', {class:'banner warn',text:grid.warning}));
@@ -2924,7 +2926,7 @@ function renderPlayer(panel, page) {
         body.appendChild(tr);
       }
       tbl.appendChild(body);
-      target.appendChild(el('div', {class:'grid-wrap' + (grid.scrollWithPage ? ' page-grid-wrap' : '')}, [tbl]));
+      target.appendChild(el('div', {class:'grid-wrap'}, [tbl]));
     }
     updateRules();
     schedulePinnedHeaders();
@@ -4633,6 +4635,7 @@ function renderPanelContents() {
 
 function renderPanel() {
   renderPanelContents();
+  schedulePinnedHeaders();
   const panel=$('#panel'), notes=[];
   function visit(node) {
     for (const child of Array.from(node.children || [])) {

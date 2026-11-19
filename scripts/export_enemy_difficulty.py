@@ -30,6 +30,8 @@ MODKIT = Path(r"C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Mod 
 PARSER_SCHEMA = MODKIT / "CyberKnightsModkit_Data/StreamingAssets/config.json"
 PROJECT = ROOT / "ckf-enemy-difficulty"
 ROSTER_ROOT = ROOT / "ckf-enemy-scaling"
+STORY_KEY = "EnemyVariety"
+FIRST_ARMOR_ID, FIRST_ROSTER_ID, LAST_ENEMY_ID = 560000, 561000, 564999
 KEYS = {"Armor": "ArmorId", "MonsterType": "MonsterTypeId", "Rule": "RuleId",
         "Weapon": "WeaponId", "MonsterTalent": "MonsterTalentId", "Effect": "EffectId", "MonsterGroupMember": "MonsterGroupMemberId"}
 FIXES_FILE = "ckf.enemy-difficulty.json"
@@ -177,7 +179,22 @@ def build(data_path=DEFAULT_DB, config_dir=CONFIG, schema_path=PARSER_SCHEMA):
             tables[t] = {int(r[key]): {c: number(v, contracts[t][c]) for c, v in r.items()}
                          for r in db.read(t + "Model", labels=False)[1]}
         base = {t: {i: dict(r) for i, r in rows.items()} for t, rows in tables.items()}
+        # Legacy SQL inherited donor values directly from SQLite. Keep the raw
+        # storage for blank fields, including fractional values in INTEGER columns.
+        armor_columns = [c[1] for c in db.schema["Armor"]]
+        armor_donors = {r[0]: dict(zip(armor_columns, r)) for r in db.connection.execute('SELECT * FROM "Armor"')}
+        for table in ("Armor", "MonsterGroupMember"):
+            if any(FIRST_ARMOR_ID <= identity <= LAST_ENEMY_ID for identity in base[table]):
+                raise ValueError(f"Official {table} uses the reserved EnemyVariety ID range")
         statements, locales, ledger, overlay_rows, clone_rows = [], {}, [], {}, {}
+
+        def insert_authored(t, row):
+            # An exact repeat is harmless. A conflicting row under the same
+            # reserved ID makes INSERT fail instead of replacing another mod's row.
+            literals = {c: sql_value(row[c]) for c in contracts[t]}
+            same_row = " AND ".join(quote(c) + " IS " + value for c, value in literals.items())
+            statements.append(f"INSERT INTO {quote(t)} ({','.join(map(quote, literals))}) SELECT "
+                              + ",".join(literals.values()) + f" WHERE NOT EXISTS (SELECT 1 FROM {quote(t)} WHERE {same_row});")
 
         def update(t, identity, values, origin, surgical=False):
             if t == "Rule" and (identity != 82 or set(values) != {"Value"} or values["Value"] != enemy_ceiling):
@@ -221,36 +238,28 @@ def build(data_path=DEFAULT_DB, config_dir=CONFIG, schema_path=PARSER_SCHEMA):
                     raise ValueError(f"MonsterType clones are outside armor-only scope: {identity}")
                 rows.append((identity, source, values, f"{path.name}:{line}", raw.get("_comment", "")))
             overlay_rows.setdefault(t, []).extend(rows)
-            for identity, source, values, origin, _ in rows:
-                if source is None:
+            for identity, source, values, origin, comment in rows:
+                if t == "MonsterType":
                     if identity not in base[t]:
                         raise ValueError(f"Overlay update has no official row: ({t}, {identity})")
                     update(t, identity, values, origin)
-            for identity, source, values, origin, comment in rows:
-                if source is None:
                     continue
-                if t not in ("Armor", "MonsterGroupMember") or source not in base[t] or identity in tables[t]:
+                if t != "Armor" or not FIRST_ARMOR_ID <= identity < FIRST_ROSTER_ID:
+                    raise ValueError(f"Armor {identity} is outside the reserved EnemyVariety range")
+                if source not in base[t] or identity in tables[t]:
                     raise ValueError(f"Invalid authored clone: ({t}, {identity}) from {source}")
-                columns = list(contracts[t])
-                assignments = {**values, KEYS[t]: identity}
-                expressions = [sql_value(assignments[c]) if c in assignments else quote(c) for c in columns]
-                statements.append(f"INSERT OR REPLACE INTO {quote(t)} ({','.join(map(quote, columns))}) SELECT "
-                                  + ",".join(expressions) + f" FROM {quote(t)} WHERE {quote(KEYS[t])}={source};")
-                tables[t][identity] = {**tables[t][source], **assignments}
+                row = {**armor_donors[source], **values, KEYS[t]: identity}
+                # Snapshot shipped donor fields at export. A player rebalance can
+                # change the donor, so copying it at SQL application is order-dependent.
+                insert_authored(t, row)
+                tables[t][identity] = row
                 clone_rows.setdefault(t, []).append((identity, source))
                 ledger.extend({"Table": t, "Id": identity, "Column": c,
-                               "Value": tables[t][identity][c], "Origin": origin} for c in columns)
-                if t == "Armor":
-                    family = comment.split(" tier PL ")[0].replace("-", " ").title()
-                    label = db.locale.get("ArmorName." + str(source), family)
-                    label = re.sub(r'\s*(?:\(PL\s*\d+\)|(?:PL|Lvl)\s*\d+)\s*$', '', label, flags=re.I)
-                    locales["ArmorName." + str(identity)] = f"{label} (PL {tables[t][identity]['PowerLevel']})"
-            if t == "Armor":
-                for identity, source, _, _, _ in rows:
-                    if source is None:
-                        label = db.locale.get("ArmorName." + str(identity), "Armor " + str(identity))
-                        label = re.sub(r'\s*(?:\(PL\s*\d+\)|(?:PL|Lvl)\s*\d+)\s*$', '', label, flags=re.I)
-                        locales["ArmorName." + str(identity)] = f"{label} (PL {tables[t][identity]['PowerLevel']})"
+                               "Value": row[c], "Origin": origin} for c in contracts[t])
+                family = comment.split(" tier PL ")[0].replace("-", " ").title()
+                label = db.locale.get("ArmorName." + str(source), family)
+                label = re.sub(r'\s*(?:\(PL\s*[1-9]\d*\)|(?:PL|Lvl)\s*[1-9]\d*)\s*$', '', label, flags=re.I)
+                locales["ArmorName." + str(identity)] = f"{label} (PL {row['PowerLevel']})"
 
         if base["Rule"][82]["ConfigName"] != "Max Enemy Power Level":
             raise ValueError("Rule82 no longer declares the enemy ceiling")
@@ -274,7 +283,26 @@ def build(data_path=DEFAULT_DB, config_dir=CONFIG, schema_path=PARSER_SCHEMA):
             roster_rows = {int(r["MonsterGroupMemberId"]): {c: number(r[c], contracts["MonsterGroupMember"][c])
                            for c in contracts["MonsterGroupMember"]}
                            for r in roster_db.execute('SELECT * FROM "MonsterGroupMember"')}
-        statements.extend(roster_statements)
+        roster_additions = sorted(roster_rows.keys() - base["MonsterGroupMember"].keys())
+        if len(roster_additions) > LAST_ENEMY_ID - FIRST_ROSTER_ID + 1:
+            raise ValueError("EnemyVariety roster exceeds its reserved ID range")
+        roster_id_map = {old: new for new, old in enumerate(roster_additions, FIRST_ROSTER_ID)}
+        # Keep native replacements in their reviewed order. Only the roster
+        # generator's new rows take identities from EnemyVariety's reservation.
+        insert = re.compile(r'^INSERT OR REPLACE INTO "MonsterGroupMember" \([^)]*\) VALUES \((\d+),')
+        for statement in roster_statements:
+            match = insert.match(statement)
+            if match:
+                old_id = int(match[1])
+                if old_id in roster_id_map:
+                    continue
+            elif statement.startswith("INSERT"):
+                raise ValueError("Cannot identify a roster insert's MonsterGroupMemberId")
+            statements.append(statement)
+        for old_id, new_id in roster_id_map.items():
+            row = roster_rows.pop(old_id)
+            roster_rows[new_id] = {**row, "MonsterGroupMemberId": new_id}
+            insert_authored("MonsterGroupMember", roster_rows[new_id])
         origin = "ckf-enemy-scaling/source_content/policy.json"
         for identity in sorted(set(tables["MonsterGroupMember"]) - set(roster_rows)):
             ledger.append({"Table": "MonsterGroupMember", "Id": identity, "Column": "_delete", "Value": 1, "Origin": origin})
@@ -302,10 +330,10 @@ def build(data_path=DEFAULT_DB, config_dir=CONFIG, schema_path=PARSER_SCHEMA):
             matches = [g for g, lv in groups.items() if set(lv) == set(range(1, 21)) and g not in ambiguous
                        and all(r["MonsterTypeId"] in authored_ids for r in lv.values())
                        and tuple(lv[p]["ArmorTypeId"] for p in range(1, 11)) == signature]
-            outcomes = {tuple(tables["MonsterType"][groups[g][p]["MonsterTypeId"]]["ArmorTypeId"] for p in range(11, 21)) for g in matches}
+            outcomes = {tuple(tables["MonsterType"][groups[g][p]["MonsterTypeId"]]["ArmorTypeId"] for p in range(1, 21)) for g in matches}
             if len(outcomes) != 1:
                 raise ValueError(f"New PowerGroup {pg} has ambiguous/missing authored armor ladder")
-            for pl, pointer in zip(range(11, 21), next(iter(outcomes))):
+            for pl, pointer in zip(range(1, 21), next(iter(outcomes))):
                 update("MonsterType", levels[pl]["MonsterTypeId"], {"ArmorTypeId": pointer}, "new official ladder: matched authored armor")
             extensions.append({"PowerGroupId": pg, "Column": "ArmorTypeId", "MatchingAuthoredGroups": matches})
         # The live Workshop-only document is a sparse, reviewed patch list.
@@ -340,9 +368,11 @@ def build(data_path=DEFAULT_DB, config_dir=CONFIG, schema_path=PARSER_SCHEMA):
                 raise ValueError(f"Unresolved effective armor: MonsterType {identity} ArmorTypeId={row['ArmorTypeId']}")
         statement_bytes = ("-- CKF Enemy Difficulty: armor, PL1-20 rosters, authored Rule82 and reviewed surgical native corrections.\n"
                            + "\n".join(statements) + "\n").encode("utf-8")
-        source_bytes = encode({"Metadata": {"StoryKey": "CKFEnemyDifficulty", "StartingId": 900000},
+        source_bytes = encode({"Metadata": {"Name": STORY_KEY, "StoryKey": STORY_KEY, "StartingId": FIRST_ARMOR_ID},
                                "RawSQL": statements, "RawText": {"Generic": locales}})
         summary = {"format": 4, "enemy_ceiling": enemy_ceiling, "scope": "Enemy armor, PL1-20 Patrol/reinforcement/VIP rosters, authored Rule82 and surgical native corrections",
+                   "story_key": STORY_KEY, "armor_id_range": [FIRST_ARMOR_ID, FIRST_ROSTER_ID - 1],
+                   "roster_id_range": [FIRST_ROSTER_ID, LAST_ENEMY_ID], "new_roster_ids": len(roster_id_map),
                    "official_database": str(db.path), "official_database_sha256": inputs[str(db.path)],
                    "configuration_directory": str(config_dir.resolve()), "parser_schema": str(schema_path.resolve()),
                    "source_inputs": inputs, "exporter_sha256": sha(Path(__file__).read_bytes()),
