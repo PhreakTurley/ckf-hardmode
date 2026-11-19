@@ -44,14 +44,19 @@ class EnemyDifficultyChecks(unittest.TestCase):
                 guarded_write(directory / f'MonsterGroupMemberModel.spawn-{tag}.csv',
                               b'MonsterGroupMemberId,InvalidLegacyColumn\n30,999999\n')
             monster = 'MonsterTypeId,ArmorTypeId,HitPoints,WeaponTypeId,MonsterTalentGroup\n'
-            monster += ''.join(f'{identity},{"22511" if identity == "1100" else ""},1,999999,999999\n' for identity in ids)
+            patched_armor = {"1100", "1160"}  # Hover Tank and Helios Gunboat PL1
+            monster += ''.join(f'{identity},{"22511" if identity in patched_armor else ""},1,999999,999999\n'
+                               for identity in ids)
             guarded_write(directory / 'MonsterTypeModel.csv', monster.encode())
             artifacts, _ = build(config_dir=directory)
             import json
             payload = json.loads(artifacts['source_content/enemy-difficulty.json'])
             non_roster = [statement for statement in payload['RawSQL'] if 'MonsterGroupMember' not in statement]
-            self.assertEqual(len(non_roster), 2)
-            self.assertEqual(non_roster[0], 'UPDATE "Rule" SET "Value"=19 WHERE "RuleId"=82;')
+            self.assertEqual(non_roster, [
+                'UPDATE "Rule" SET "Value"=19 WHERE "RuleId"=82;',
+                'UPDATE "MonsterType" SET "ArmorTypeId"=22511 WHERE "MonsterTypeId"=1100;',
+                'UPDATE "MonsterType" SET "ArmorTypeId"=22511 WHERE "MonsterTypeId"=1160;',
+            ])
             sql = directory.parent / 'data.sql'
             sql.write_bytes(artifacts['prepared/_data/data.sql'])
             sql.with_name('en-US.json').write_bytes(artifacts['prepared/_data/en-US.json'])
@@ -66,7 +71,6 @@ class EnemyDifficultyChecks(unittest.TestCase):
             self.assertFalse(any('WHERE "RuleId"=82' in s for s in stock_payload['RawSQL']))
             sql.write_bytes(stock_artifacts['prepared/_data/data.sql'])
             self.assertEqual(verify(sql, config_dir=directory)['status'], 'PASS')
-            self.assertIn('WHERE "MonsterTypeId"=1100', non_roster[1])
             self.assertTrue(any(statement.startswith('DELETE FROM "MonsterGroupMember"') for statement in payload['RawSQL']))
             self.assertFalse(any('spawn-' in path for path in artifacts['review/SOURCE.json'].decode().splitlines()))
             self.assertEqual(payload['RawText']['Generic'], {})
