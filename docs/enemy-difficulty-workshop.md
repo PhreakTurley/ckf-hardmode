@@ -72,10 +72,10 @@ authored ID causes a SQL collision.
 Enemy armor is exported as authored PL1–20 clones. Each clone inherits
 unspecified fields from its Official donor and receives a localized name
 with its effective PL. The export snapshots donor values so that a change
-to the donor by another mod cannot change the clone's values. Enemy
-assignments point at the authored rows while the shipped armor rows retain
-their original fields and names. Every effective enemy armor reference is
-checked. The BepInEx `_serveOn` control has no SQL equivalent.
+to the donor by another mod cannot change the clone's values. Enemy armor
+assignments can reference an authored clone or a shipped row. Shipped armor
+retains its original fields and names. Every effective enemy armor reference
+is checked. The BepInEx `_serveOn` control has no SQL equivalent.
 
 For newly shipped complete PL1–20 ladders absent from the authoring sheet, the
 exporter extends only armor pointers. Their native PL1–10 armor signature must
