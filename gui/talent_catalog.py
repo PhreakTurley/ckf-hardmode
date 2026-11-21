@@ -35,7 +35,7 @@ EFFECT_TUNING = ATTRIBUTES + (
     'AccuracyAssault', 'AccuracyCloseCombat', 'AccuracyDrone', 'StealthAccuracy',
     'OptimalRange', 'CritRate', 'CritRateStealth', 'CritRateStreak', 'CritMultiStealth',
     'CritMultiBase', 'CritVulnerable', 'PureDamageBallistic', 'PureDamageMelee',
-    'PhysicalDamage', 'BallisticDamage', 'FullAutoDamage', 'DroneDamage',
+    'PhysicalDamage', 'BallisticDamage', 'FullAutoDamage', 'DroneDamage', 'MaxDeployDrone',
     'PhysicalArmor', 'BallisticArmor', 'PureArmor', 'ArmorCrit', 'DmgReduction',
     'Evasion', 'CoverBonus', 'SightRange', 'AttackDetectRangeReduction',
     'DetectRangeReduction', 'RecoilBonus', 'RecoilRate', 'MoveSpeed',
@@ -228,7 +228,9 @@ def render_sheet(raw, table, tag, tables, nodes, parent_ids, owners):
             if not label:
                 label = ', '.join(names) or 'Effect'
         parts = [label]
-        row['_shipped'] = json.dumps({c: stock[c] for c in levers}, separators=(',', ':'))
+        # Older official data and captures predate the drone deployment field.
+        row['_shipped'] = json.dumps({c: stock[c] for c in levers
+                                     if c != 'MaxDeployDrone' or c in stock}, separators=(',', ':'))
         if table == 'EffectModel' and attr:
             row['_attribute_nodes'] = json.dumps([
                 int(n) for n in users if positive(nodes[n], 'NodeEffect1Id') == identity])

@@ -535,8 +535,8 @@ def player_gear_references(source, doc=None, blueprint_refs=None, source_kinds=N
     Blueprint ServiceOptionId does not establish acquisition. ContactService
     12010 carries Srv_BuyBlueprint_Weapons_PL1; Official/en-US.json,
     BlockDesc.91079_Male, explicitly describes selling weapon blueprints.
-    Story equipment: official BlockCondition 2526, Equip for
-    PCP_RetireSleep_Soldier, names Weapon 1028 and 4025 in the first two values.
+    Story equipment: Equip conditions name weapons in the first two values
+    and armor in the third.
     Do not require Lootable on a blueprint explicitly present in mission loot.
     This is a catalog policy, not a campaign reachability or probability test.
     """

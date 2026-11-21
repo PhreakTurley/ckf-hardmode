@@ -113,8 +113,8 @@ class ImplantCatalogTests(unittest.TestCase):
             self.assertEqual(len(rows), len(expected))
             self.assertTrue(all(r['acquisition'] for r in rows))
             self.assertFalse(any(p['id'] == 'other-cyberware-overrides' for p in model['pages']))
-            self.assertTrue({'100', '2301', '1301', '3801', '10000', '10010'} <= expected)
-            self.assertNotIn('10013', expected)
+            self.assertTrue({'100', '2301', '1301', '3801', '10000', '10011'} <= expected)
+            self.assertNotIn('10010', expected)
 
     def test_saved_native_overrides_move_between_other_main_and_hidden(self):
         import serve
@@ -136,22 +136,25 @@ class ImplantCatalogTests(unittest.TestCase):
 
     def test_linked_effect_overrides_remain_editable_until_the_last_reset(self):
         with tempfile.TemporaryDirectory() as config, static_data.StaticData() as source:
+            implant_id, effect_id = '10010', '59002'
+            self.assertNotIn(implant_id, pb.player_implant_references(source)['Implant'])
             doc = pb.apply_edits(pb.empty(), {'cells': [
-                {'table': 'Implant', 'id': '10011', 'column': 'Cost', 'value': '17'},
-                {'table': 'Effect', 'id': '59003', 'column': 'MaxHitPoints', 'value': '9'}]}, source)
+                {'table': 'Implant', 'id': implant_id, 'column': 'Cost', 'value': '17'},
+                {'table': 'Effect', 'id': effect_id, 'column': 'MaxHitPoints', 'value': '9'}]}, source)
             path = Path(config) / pb.FILE
             path.parent.mkdir(parents=True, exist_ok=True)
-            for table, rid, col, present in [('Implant', '10011', 'Cost', True), ('Effect', '59003', 'MaxHitPoints', False)]:
+            for table, rid, col, present in [('Implant', implant_id, 'Cost', True),
+                                             ('Effect', effect_id, 'MaxHitPoints', False)]:
                 doc = pb.apply_edits(doc, {'cells': [{'table': table, 'id': rid, 'column': col, 'value': ''}]}, source)
                 path.write_bytes(pb.encode(doc))
                 model = pb.catalog(config, static_data.DEFAULT_DB)
                 self.assertIsNone(model['error'])
                 rows = [r for p in model['pages'] if p['id'] == 'other-cyberware-overrides'
-                        for g in p['grids'] for r in g['rows'] if r['id'] == '10011']
+                        for g in p['grids'] for r in g['rows'] if r['id'] == implant_id]
                 self.assertEqual(bool(rows), present)
                 if present:
                     self.assertEqual(rows[0]['targets']['Effects.MaxHitPoints']['table'], 'Effect')
-                    self.assertEqual(rows[0]['targets']['Effects.MaxHitPoints']['id'], '59003')
+                    self.assertEqual(rows[0]['targets']['Effects.MaxHitPoints']['id'], effect_id)
                     self.assertEqual(pb.load(config), doc)
 
 
