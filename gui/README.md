@@ -247,7 +247,7 @@ reference to the blueprint regardless of its `Lootable` flag. Blueprint
 `ServiceOptionId` assignments do not establish acquisition; a resale category
 is insufficient evidence that the player can obtain the blueprint. Weapons also
 include cyberweapon talent references, canine/feline weapon
-classes supported by player pet-owning jobs, pet prebuilt equipment, every
+classes supported by player pet-owning jobs, both weapon slots on pet prebuilts, every
 weapon tier in a class named by a pet chassis, and
 the two weapon fields of explicit story `BlockCondition` `Equip` records.
 Armor uses the same checks, plus pet prebuilt armor and the `ArmorType` field
@@ -269,12 +269,13 @@ independently of item drops or blueprint availability.
 
 Every weapon, armor and weapon-mod grid has a read-only **Blueprint** column. It
 shows **Blueprint** when a matching blueprint has `Lootable = 1` or an explicit
-`MissionLoot` blueprint reference, including when `Lootable = 0`; otherwise the
-cell is blank. Hover it to inspect the blueprint and loot-row references.
-The marker uses the same `player_balance.py:blueprint_drop_references` index
-as catalog eligibility. Resale assignments and the explicit Crafted Intrinsic
-inclusion do not set the marker. The column stays visible with uniform values,
-is searchable and sortable, and never enters saved adjustments or SQL exports.
+`MissionLoot` blueprint reference, including when `Lootable = 0`. The marker
+uses the same `player_balance.py:blueprint_drop_references` index as catalog
+eligibility. Pet weapon, armor and implant blueprints with a configured buyer
+show **Resale** when there is no drop reference. Hover the cell for the buyer
+service and any drop references. Resale details appear on normal catalog rows
+and gear retained for saved overrides. The column is searchable and sortable
+and never enters saved adjustments or SQL exports.
 
 **Armor** has **Stealth**, **Light** and **Heavy** pages. **Drone armors** has
 its own heading for **Drone**, **Combat Drone**, **Drone Infantry** and **Heavy Drone**;
@@ -415,7 +416,7 @@ or **Starting Gear / Mission**, according to its inclusive eligibility sources.
 This applies to nonpositive, unknown and above-cap assignments, and to linked
 cyberware service references on weapon rows. Actual attainable service names
 still take precedence; invalid pending assignments remain explicit.
-Cap details and source records remain in tooltips.
+Cap details, configured contact types, and source records appear in tooltips.
 Verification: `python gui/test_service_availability.py` exercises independent
 contact routes, Power Play gates, database changes, and retained overrides;
 `python gui/test_player_service_caps.py` covers the tier boundaries and

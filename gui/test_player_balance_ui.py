@@ -80,6 +80,14 @@ setTimeout(async function () {
   bpModSearch.value='Melee Damage 3';bpModSearch.fire('input');
   ck('explicit blueprint loot marks a mod even when Lootable is zero', blueprintCell('WeaponMod','132').textContent==='Blueprint'
      && blueprintCell('WeaponMod','132').title.includes('MissionLoot 9130'));
+  const droneGrid = MODEL.playerBalance.pages.find(p=>p.id==='weapon-9').grids[0];
+  const resaleRow = droneGrid.rows.find(r=>(r.blueprintResale || []).length);
+  if (resaleRow) {
+    SEL='pb:weapon-9';render();
+    const resaleCell = blueprintCell('Weapon',resaleRow.id);
+    ck('drone blueprint resale is identified separately from drops', resaleCell.textContent==='Resale'
+       && resaleCell.title.includes('Weapon and Mod Blueprints') && !resaleCell.find(n=>n.tagName==='INPUT').length);
+  }
   ck('blueprint view operations never create saved edits', JSON.stringify(playerChanges())===beforeBlueprintView);
   const beforeServiceView=JSON.stringify(playerChanges());
   let unchangedServices=true, assignedServices=0, noUnassigned=true;

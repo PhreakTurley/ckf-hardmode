@@ -82,8 +82,10 @@ GENERIC_GEAR_LOOT_GROUPS = {'Weapon': {'7000', '100000'}, 'Armor': {'6000'}, 'We
 GENERIC_BLUEPRINT_LOOT_GROUPS = {'Weapon': {'50000'}, 'WeaponMod': {'60000', '60001'},
                                  'Armor': {'40001', '40002', '40003', '40005', '40006', '40007', '40009', '40010', '40011'},
                                  'Item': {'2000', '2001', '2002', '2003'}}
-# CoreRPG_v1 Constants.BlueprintClass: Armor=2, PetArmor=10.
+# The pet BlueprintClass values identify the output table.
+PET_BLUEPRINT_OUTPUT_TABLES = {'6': 'Implant', '7': 'Weapon', '10': 'Armor'}
 BLUEPRINT_OUTPUT_TABLES = {'1': 'Weapon', '2': 'Armor', '3': 'Item', '5': 'WeaponMod', '7': 'Weapon', '10': 'Armor'}
+BLUEPRINT_BUYER_FLOW = '4'
 # CoreRPG_v1 Constants.ArmorClass; localized display names remain separate.
 ARMOR_CLASSES = {2: 'Stealth', 1: 'Light', 3: 'Heavy', 4: 'Drone',
                  5: 'Combat Drone', 6: 'Drone Infantry', 7: 'Heavy Drone'}
@@ -462,6 +464,24 @@ def blueprint_drop_references(source, tables=('Weapon', 'WeaponMod')):
     return refs
 
 
+def pet_blueprint_buyers(source):
+    """Configured resale services for pet gear, keyed by output table and id."""
+    options = {}
+    for service in source.read('ContactServiceModel', ('ServiceTypeId', 'ServiceFlow', 'ServiceOptionId'))[1]:
+        option = service['ServiceOptionId']
+        if service['ServiceFlow'] == BLUEPRINT_BUYER_FLOW and int(option or 0) > 0:
+            key = 'ContactService.Name.' + service['ServiceTypeId']
+            options.setdefault(option, []).append(source.locale.get(key, key))
+    result = {table: {} for table in PET_BLUEPRINT_OUTPUT_TABLES.values()}
+    for row in source.read('BlueprintModel', ('BlueprintId', 'OutputId', 'BlueprintClassId', 'ServiceOptionId'))[1]:
+        table = PET_BLUEPRINT_OUTPUT_TABLES.get(row['BlueprintClassId'])
+        buyers = options.get(row['ServiceOptionId'])
+        if table and buyers:
+            detail = 'Blueprint %s · %s' % (row['BlueprintId'], ', '.join(dict.fromkeys(buyers)))
+            result[table].setdefault(row['OutputId'], []).append(detail)
+    return result
+
+
 def contact_services(source):
     """Require a contact/Power Play route, then apply each ladder's tier cap.
 
@@ -584,8 +604,9 @@ def player_gear_references(source, doc=None, blueprint_refs=None, source_kinds=N
                 if row[field] not in ('', '0', '-1') and weapon['WeaponClass'] == row[field]:
                     add('Weapon', weapon['WeaponId'], 'PetChassis ' + row['DroneChassisType'] +
                         '.' + field + ' (weapon class ' + row[field] + ')', 'pet')
-    for row in source.read('DronePrebuiltModel')[1]:
+    for row in source.read('DronePrebuiltModel', ('DroneType', 'Weapon', 'Weapon2', 'Armor'))[1]:
         add('Weapon', row['Weapon'], 'PetPrebuilt ' + row['DroneType'], 'pet')
+        add('Weapon', row['Weapon2'], 'PetPrebuilt ' + row['DroneType'] + '.Weapon2', 'pet')
         add('Armor', row['Armor'], 'PetPrebuilt ' + row['DroneType'] + '.Armor', 'pet')
     for row in source.read('BlockConditionModel', ('BlockConditionId', 'ConditionType', 'ActorId',
                                                   'ConditionValue', 'ConditionValue2', 'ConditionValue3'))[1]:
@@ -949,6 +970,16 @@ def knight_trait_groups(source):
 
 def service_catalog(source):
     """Localized assignments keyed by (flow, option), never option alone."""
+    configured_by = {}
+    slot_fields = tuple(field + str(i) for i in range(1, 8) for field in ('ServiceGroupId', 'ServiceLevel'))
+    for contact in source.read('ContactTypeModel', ('ContactTypeId',) + slot_fields)[1]:
+        key = 'ContactType.Name.' + contact['ContactTypeId']
+        name = source.locale.get(key, key)
+        for i in range(1, 8):
+            level = contact['ServiceLevel' + str(i)]
+            if int(level or 0) > 0:
+                group = contact['ServiceGroupId' + str(i)]
+                configured_by.setdefault(group, []).append((name, level))
     grouped = {table: {} for table in SERVICE_FLOWS}
     for row in contact_services(source):
         for table, flow in SERVICE_FLOWS.items():
@@ -962,6 +993,8 @@ def service_catalog(source):
                 entry['labels'].append(text)
             entry['references'].append({'id': row['ServiceTypeId'], 'flow': flow,
                 'level': row['ServiceLevel'], 'displayLevel': row['DisplayLevel'], 'locale': key,
+                'configuration': [text + ' · ' + contact + ' starts at tier ' + level
+                                  for contact, level in configured_by.get(row['ServiceGroupId'], ())],
                 'attainable': row['attainable'], 'cap': row['cap'], 'acquisition': row['acquisition'],
                 'unattainableReason': row['unattainableReason']})
     return {table: {option: {'label': ', '.join(entry['labels']), 'references': entry['references'],
@@ -970,6 +1003,8 @@ def service_catalog(source):
                                       (option, SERVICE_FLOWS[table], ', '.join(r['id'] for r in entry['references']))
                                       + ''.join('\n' + evidence for evidence in dict.fromkeys(
                                           e for r in entry['references'] for e in r['acquisition']))
+                                      + ''.join('\nConfigured: ' + configuration for configuration in dict.fromkeys(
+                                          detail for r in entry['references'] for detail in r['configuration']))
                                       + ''.join('\n' + r['unattainableReason'] for r in entry['references']
                                                 if not r['attainable'])}
                     for option, entry in options.items()} for table, options in grouped.items()}
@@ -1136,6 +1171,7 @@ def catalog(config_dir, database, document=None):
             assets = {r['WeaponModelId']: r for r in source.read('Weapon3DAssetModel')[1]}
             services = service_catalog(source)
             blueprint_refs = blueprint_drop_references(source, ('Weapon', 'WeaponMod', 'Armor', 'Item'))
+            blueprint_buyers = pet_blueprint_buyers(source)
             source_kinds = {}
             acquisition = player_gear_references(source, doc, blueprint_refs, source_kinds)
             service_fallbacks = gear_service_fallbacks(source, acquisition, source_kinds)
@@ -1204,6 +1240,9 @@ def catalog(config_dir, database, document=None):
                         records[-1]['blueprintDrops'] = blueprint_refs['Item'].get(rid, [])
                         records[-1]['serviceFallback'] = service_fallbacks['Item'].get(rid,
                             {'label': '', 'detail': 'No known player acquisition reference; retained for its overrides.'})
+                    resale = blueprint_buyers.get(table, {}).get(rid)
+                    if resale:
+                        records[-1]['blueprintResale'] = resale
                     if table == 'Rule' and rid in ENEMY_RULES:
                         records[-1]['owner'] = 'Enemy Balance'
                     elif rid in protected.get(table, set()):
@@ -1218,7 +1257,7 @@ def catalog(config_dir, database, document=None):
                     result_grid['defaultSort'] = {'key': 'column:Cost', 'descending': False}
                 if table in ('Weapon', 'WeaponMod', 'Armor'):
                     result_grid['dynamicColumns'] = True
-                if table in ('Weapon', 'WeaponMod', 'Armor', 'Item'):
+                if table in ('Weapon', 'WeaponMod', 'Armor', 'Item') or any(r.get('blueprintResale') for r in records):
                     result_grid['blueprintColumn'] = {'label': 'Blueprint',
                         'empty': 'No blueprint drop reference in the selected database.'}
                 if table in services:

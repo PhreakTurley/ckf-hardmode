@@ -100,6 +100,7 @@ class PlayerBalanceTests(unittest.TestCase):
             before = {t: {r[pb.TABLE_KEYS[t]]: r for r in source.read(t + 'Model')[1]}
                       for t in legacy['tables']}
             all_implants = source.read('ImplantModel')[1]
+            adjusted_implant_costs = {}
             for statement in statements:
                 db.execute(statement)
             for table, rid, col in touched:
@@ -114,9 +115,11 @@ class PlayerBalanceTests(unittest.TestCase):
                 actual = db.execute('SELECT "%s" FROM "%s" WHERE "%s"=?' %
                                     (col, table, pb.TABLE_KEYS[table]), (rid,)).fetchone()[0]
                 self.assertEqual(actual, expected, (table, rid, col))
+                if table == 'Implant' and col == 'Cost':
+                    adjusted_implant_costs[rid] = expected
             for row in all_implants:
                 rid = row['ImplantTypeId']
-                expected = round(float(row['Cost']) * legacy['implantMultipliers']['Cost'])
+                expected = adjusted_implant_costs.get(rid, round(float(row['Cost']) * legacy['implantMultipliers']['Cost']))
                 self.assertEqual(db.execute('SELECT Cost FROM Implant WHERE ImplantTypeId=?', (rid,)).fetchone()[0], expected)
             self.assertNotIn(('Rule', '23', 'Value'), touched)
             self.assertFalse(any(t == 'Effect' and int(i) in pb.HARDMODE_EFFECTS for t, i, c in touched))
@@ -214,6 +217,21 @@ class PlayerBalanceTests(unittest.TestCase):
                               (b.Lootable=1 OR EXISTS (SELECT 1 FROM MissionLoot l
                                  WHERE l.LootTypeId=1 AND l.LootKey=b.BlueprintId))
                         """)}
+            buyer_refs = {}
+            for cls, output, blueprint, service in source.connection.execute("""
+                SELECT b.BlueprintClassId, b.OutputId, b.BlueprintId, s.ServiceTypeId
+                FROM Blueprint b JOIN ContactService s ON s.ServiceOptionId=b.ServiceOptionId
+                WHERE b.BlueprintClassId IN (6,7,10) AND s.ServiceFlow=4 AND b.ServiceOptionId>0
+            """):
+                table = {6: 'Implant', 7: 'Weapon', 10: 'Armor'}[cls]
+                name = 'ContactService.Name.' + str(service)
+                buyer_refs.setdefault((table, str(output)), set()).add((str(blueprint), source.locale.get(name, name)))
+            buyers = pb.pet_blueprint_buyers(source)
+            self.assertEqual({(table, rid) for table, rows in buyers.items() for rid in rows}, set(buyer_refs))
+            for (table, rid), references in buyer_refs.items():
+                for blueprint, service in references:
+                    self.assertTrue(any(text.startswith('Blueprint ' + blueprint + ' · ') and service in text
+                                        for text in buyers[table][rid]))
             actual = pb.blueprint_drop_references(source, ('Weapon', 'WeaponMod', 'Armor', 'Item'))
             self.assertEqual({(table, rid) for table, records in actual.items() for rid in records}, expected)
             self.assertIn('Blueprint 200132 via MissionLoot 9130', actual['WeaponMod']['132'])
@@ -227,12 +245,15 @@ class PlayerBalanceTests(unittest.TestCase):
             self.assertIsNone(model['error'])
             for page in model['pages']:
                 for grid in page['grids']:
-                    if grid['table'] not in ('Weapon', 'WeaponMod', 'Armor', 'Item'):
+                    has_buyer = any((grid['table'], row['id']) in buyer_refs for row in grid['rows'])
+                    if grid['table'] not in ('Weapon', 'WeaponMod', 'Armor', 'Item') and not has_buyer:
                         self.assertNotIn('blueprintColumn', grid)
                         continue
                     self.assertEqual(grid['blueprintColumn']['label'], 'Blueprint')
                     for row in grid['rows']:
-                        self.assertEqual(bool(row['blueprintDrops']), (grid['table'], row['id']) in expected)
+                        key = grid['table'], row['id']
+                        self.assertEqual(bool(row.get('blueprintDrops')), key in expected)
+                        self.assertEqual(bool(row.get('blueprintResale')), key in buyer_refs)
                     self.assertNotIn('Blueprint', [c['name'] for c in grid['columns'] + grid['advanced']])
             self.assertEqual(path.read_bytes(), before)
             statements, touched = pb.sql(model['document'], source)

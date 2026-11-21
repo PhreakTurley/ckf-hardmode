@@ -2217,7 +2217,10 @@ function playerCyberwareService(grid, row) {
 function playerBlueprint(grid, row) {
   const refs = row.blueprintDrops || [];
   const column = grid.blueprintColumn || {};
-  return {label:refs.length ? column.label || '' : '', detail:refs.length ? refs.join('\n') : column.empty || ''};
+  const resale = row.blueprintResale || [];
+  const detail = refs.length ? refs.join('\n') : column.empty || '';
+  return {label:refs.length ? column.label || '' : resale.length ? 'Resale' : '',
+    detail:resale.length ? [detail,'Configured blueprint buyers:',...resale].filter(Boolean).join('\n') : detail};
 }
 
 function playerEffectiveColumnValue(grid, row, column) {
@@ -2301,7 +2304,7 @@ function playerRefreshIconGroups(grid) {
 function playerSortValue(grid, row, key) {
   if (key === 'name') return row.name;
   if (key === 'service') return playerService(grid,row).label;
-  if (key === 'blueprint') return (row.blueprintDrops || []).length ? 1 : 0;
+  if (key === 'blueprint') return (row.blueprintDrops || []).length ? 2 : (row.blueprintResale || []).length ? 1 : 0;
   if (key === 'icon') {
     const editor = grid.iconEditor;
     if (!editor) return row.icon || '';
