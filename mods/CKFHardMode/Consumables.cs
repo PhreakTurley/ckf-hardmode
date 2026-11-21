@@ -2,7 +2,6 @@
 //
 // WHY THIS IS A FOURTH EXPANDER
 //
-// GearClasses.cs expands ONE row into writes across MANY rows of ONE table.
 // Cyberweapons.cs and Implants.cs each expand ONE row into TWO rows in TWO
 // tables. A consumable row is the same shape again with one more table on the
 // end: ONE ROW IS UP TO FOUR ROWS IN UP TO FOUR TABLES.
@@ -45,7 +44,7 @@
 // Column*, Column+ -- and every cell is a plain number. The lever sheets do the
 // opposite: the header is a plain column name and the CELL carries the operator
 // (blank, =N, +N, -N, xN), parsed by MissionRewards.Adjust.Parse. That is the
-// dialect GearClasses.cs, Cyberweapons.cs and Implants.cs all use and this file
+// dialect Cyberweapons.cs and Implants.cs use and this file
 // uses it unchanged. There is no third dialect here.
 //
 // A LOAD THAT EMITS NOTHING SAYS SO IN WORDS. A sheet whose lever cells are
@@ -468,7 +467,7 @@ namespace CKFHardMode
         /// null guard in LoadTable, and 18 rows would build rules against a
         /// table that does not exist. It does not fail loudly; its only symptom
         /// is an orphan warning long afterwards. Exactly the trap
-        /// GearClasses.Owns, Cyberweapons.Owns and Implants.Owns exist for.</summary>
+        /// Cyberweapons.Owns and Implants.Owns exist for.</summary>
         internal static bool Owns(string fileName) =>
             fileName != null && Sheets.ContainsKey(fileName);
 

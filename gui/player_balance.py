@@ -14,7 +14,7 @@ from pathlib import Path
 import re
 
 import static_data
-import gear_classes
+import overlay_values
 import service_availability
 
 FILE = 'ckf.player-balance.json'
@@ -194,10 +194,10 @@ def adjustment(value):
     spec = str(value).strip()
     if spec.startswith('-'):
         spec = '=' + spec
-    op, number, ok = gear_classes.parse_adjust(spec)
+    op, number, ok = overlay_values.parse_adjust(spec)
     if not ok:
         raise ValueError('Use a number, =N, +N, -N or xN: %s' % value)
-    if op == gear_classes.NONE:
+    if op == overlay_values.NONE:
         return None
     if not math.isfinite(number):
         raise ValueError('Adjustment must be finite')

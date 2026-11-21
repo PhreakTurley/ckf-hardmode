@@ -24,7 +24,7 @@ The 4.0 layout has no main rules file. Every rule comes from
 | File in `ckf.hardmode.d/` | Read as |
 |---|---|
 | `<Table>[.anything].csv` / `.tsv` | an overlay: one rule per line ([`overlays.md`](overlays.md)) |
-| a lever sheet (`gear-classes.csv`, `cyberweapons-*.csv`, `implants-slotNN.csv`, `consumables-*.csv`) | expanded into rules by its own expander (`GearClasses`, `Cyberweapons`, `Implants`, `Consumables`) |
+| a lever sheet (`cyberweapons-*.csv`, `implants-slotNN.csv`, `consumables-*.csv`) | expanded into rules by its own expander (`Cyberweapons`, `Implants`, `Consumables`) |
 | one of the ten settings files (`modelrules.json`, `fatigue.json`, … `implants-global.json`) | not rules; `ConfigDoc` reads it (`ConfigDoc.OwnsFile`) |
 | any other `.json` | a rules file in the JSON shape below (e.g. `MissionPowerLevelModel.generated.json`) |
 

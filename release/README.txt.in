@@ -122,7 +122,6 @@ in the order they appear in the file:
                                 let a mission's clock run down
     Fatigue                     mission fatigue -- a three-tier track:
                                 Checked Out, Running Empty, Off-Duty
-    GearClasses                 player weapon classes -- recoil and the rest
 
     ImplantsGlobal              implant multipliers that apply across the board
     ImplantsSlot01 .. Slot11    implant tuning, one switch per implant slot

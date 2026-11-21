@@ -3,7 +3,7 @@
 The per-table CSV format for stating specific rows' values, which is how every
 table edit in `ckf.hardmode.d/` is written. Rule semantics (operation order,
 clone serving) are in [`rule-engine.md`](rule-engine.md); lever sheets
-(`gear-classes.csv` and the like) have their own headers and are described by
+(`consumables-*.csv` and the like) have their own headers and are described by
 their schemas, not here.
 
 Use an overlay when each row should receive an explicit value. Use JSON rules
@@ -185,7 +185,7 @@ The validator also checks the consumable lever sheets (see the script's
 docstring). `--enabled-set` resolves pointers against only the files whose
 slices are on in `ckf.hardmode.cfg`.
 
-The lever converters (`gear_classes.py`, `cyberweapons.py`, `implants.py`,
+The lever converters (`cyberweapons.py`, `implants.py`,
 `consumables.py`) have their own `--check`. In `cyberweapons.py`, P-DIVERGE
 (`check_divergent_shared_edits`) refuses two owners of one shared row that
 give the same column different values.

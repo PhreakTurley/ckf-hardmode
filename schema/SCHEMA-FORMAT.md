@@ -89,7 +89,7 @@ From `talentssawbones.schema.json`:
 The list may hold either kind of file:
 
 - A direct overlay, where the filename names the game table.
-- A lever sheet such as `gear-classes.csv`, `cyberweapons-*.csv` or `implants-slotNN.csv`, where one row is a player concept that an expander turns into writes.
+- A lever sheet such as `cyberweapons-*.csv` or `implants-slotNN.csv`, where one row is a player concept that an expander turns into writes.
 
 Nothing in the schema marks which kind a file is. The schema also declares no overlay columns, because the file's header is the authority. For the column dialect (operator suffixes, `_comment`, `_clone`), see [`../docs/overlays.md`](../docs/overlays.md).
 

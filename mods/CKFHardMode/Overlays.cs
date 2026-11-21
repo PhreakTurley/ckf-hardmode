@@ -187,7 +187,7 @@ namespace CKFHardMode
             }
 
             int lines = 0, clones = 0, bad = 0, read = 0, untouched = 0;
-            var skipped = new List<string>();      // "<file> [Slices] <Key>"
+            var skipped = new List<string>();      // File and skip reason
             var unclaimed = new List<string>();    // no slice names this file
             var settings = new List<string>();     // ConfigDoc reads it, not this
             var lever = new List<string>();        // a lever sheet, expanded not parsed
@@ -195,6 +195,12 @@ namespace CKFHardMode
             foreach (var f in files)
             {
                 var name = Path.GetFileName(f);
+
+                if (string.Equals(name, "gear-classes.csv", StringComparison.OrdinalIgnoreCase))
+                {
+                    skipped.Add(name + " [retired] player weapon classes");
+                    continue;
+                }
 
                 // Cyberware is owned by the player-balance Workshop package.
                 // Ignore legacy files even if an old slice switch is enabled.
@@ -227,38 +233,15 @@ namespace CKFHardMode
                 read++;
                 try
                 {
-                    // A LEVER SHEET IS NOT A TABLE OVERLAY, and it has to be
-                    // recognised BEFORE TableOf runs. TableOf derives the target
-                    // table from the filename up to the first dot, so
-                    // "gear-classes.csv" would become a model called
-                    // "gear-classesModel": every row would build a rule against
-                    // a table that does not exist, and the only symptom would be
-                    // one orphan warning long after the file appeared to load.
-                    //
-                    // The expander owns the whole parse — its first column is a
-                    // player concept, not an id, and its header names levers,
-                    // not game columns.
-                    if (GearClasses.Owns(name))
+                    if (Cyberweapons.Owns(name))
                     {
-                        lever.Add(name);
-                        lines += GearClasses.Expand(f, adopt);
-                    }
-                    else if (Cyberweapons.Owns(name))
-                    {
-                        // The SECOND lever sheet shape, and it needs the same
-                        // guard for the same reason: TableOf takes the filename
-                        // up to the first dot, so "cyberweapons-lasers.csv"
-                        // would become a model called
-                        // "cyberweapons-lasersModel". Unlike gear-classes.csv
-                        // this one expands into TWO tables per row, which
-                        // TableOf could not express even if the name parsed --
-                        // see Cyberweapons.cs.
+                        // Lever sheets have their own target mapping and parser.
                         lever.Add(name);
                         lines += Cyberweapons.Expand(f, adopt);
                     }
                     else if (Implants.Owns(name))
                     {
-                        // The THIRD lever sheet shape, and it needs the same
+                        // The implant sheet needs the same
                         // guard for the same reason: TableOf takes the
                         // filename up to the first dot, so
                         // "implants-slot08.csv" would become a model called
@@ -274,7 +257,7 @@ namespace CKFHardMode
                     }
                     else if (Consumables.Owns(name))
                     {
-                        // The FOURTH lever sheet shape, and it needs the same
+                        // The consumable sheet needs the same
                         // guard for the same reason: TableOf takes the
                         // filename up to the first dot and appends "Model"
                         // because it does not already end in one, so
@@ -342,7 +325,7 @@ namespace CKFHardMode
             Plugin.Log.LogInfo($"Overlays: {files.Count} file(s) in the directory, "
                 + $"{settings.Count} of them settings files ConfigDoc reads, "
                 + $"{read} read here, {lever.Count} of them lever sheet(s) expanded "
-                + $"by their own expander, {skipped.Count} skipped by a disabled slice or Workshop ownership, "
+                + $"by their own expander, {skipped.Count} skipped by a disabled slice, Workshop ownership or retirement, "
                 + $"{unclaimed.Count} claimed by no slice; {lines} row(s) merged"
                 + (clones > 0 ? $", {clones} of them inserts" : "")
                 + $", {untouched} line(s) named a row and set nothing"
@@ -351,7 +334,7 @@ namespace CKFHardMode
                 + ".");
         }
 
-        /// <summary>Files the last Load skipped because their slice is off or Workshop owns them,
+        /// <summary>Files the last Load skipped because their slice is off, Workshop owns them or they are retired,
         /// each as "&lt;file&gt; [Slices] &lt;Key&gt;". ModelRules' rule-count line
         /// names them, because a total that does not say what it left out cannot
         /// tell "skipped" from "found nothing" (AGENTS.md). Empty, never

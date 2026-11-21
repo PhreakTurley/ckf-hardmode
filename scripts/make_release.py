@@ -142,6 +142,8 @@ import sys
 import tempfile
 import zipfile
 
+import static_data
+
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GUI_DIR = os.path.join(REPO, 'gui')
 
@@ -482,7 +484,8 @@ def config_sources(config_dir):
         if canon and (canon == rel or os.path.samefile(
                 path, os.path.join(config_dir, *canon.split('/')))):
             continue
-        if os.path.isfile(path) and name.lower().endswith(OVERLAY_EXTS):
+        if (os.path.isfile(path) and name.lower().endswith(OVERLAY_EXTS)
+                and name.lower() != static_data.RETIRED_GEAR_CLASSES_SHEET):
             out.append((path, CONFIG_IN_ZIP + rel))
         else:
             skipped.append(rel + ('/' if os.path.isdir(path) else ''))
@@ -1589,6 +1592,12 @@ def selftest(config_dir=None):
                 not [d for _, d in got
                      if d.endswith(('BepInEx.cfg', 'ckf.datadump.cfg', CFG_NAME))],
                 got)
+        retired_sheet = OVERLAY_DIR + '/Gear-Classes.csv'
+        with open(os.path.join(cd, *retired_sheet.split('/')), 'w', encoding='utf-8') as file:
+            file.write('WeaponClass,RecoilRate2\n3,x1.8\n')
+        kept, skipped = config_sources(cd)
+        t.check('the retired weapon class sheet stays out of the release',
+                kept == got and skipped == [retired_sheet], (kept, skipped))
 
     for _rel in CONFIG_FILES:
         with tempfile.TemporaryDirectory() as td:
@@ -1859,11 +1868,14 @@ def selftest(config_dir=None):
             # OVERLAY_EXTS, which is what config_sources ships by. Written
             # against OVERLAY_EXTS this case stays green under a mutation that
             # drops '.json' from it [measured] -- both sides move together.
+            # An old installation can still carry the retired sheet, which
+            # Overlays.Load skips before parsing its extension.
             _ships = [r for r in _on_disk
-                      if r.lower().endswith(cs_overlay_exts())]
+                      if r.lower().endswith(cs_overlay_exts())
+                      and r.lower() != OVERLAY_DIR + '/gear-classes.csv']
             _lost = sorted(set(_ships) - _dests)
-            t.check('every shipping-extension file in the live ckf.hardmode.d '
-                    'reaches the zip',
+            t.check('every loadable CSV, TSV and JSON file in the live '
+                    'ckf.hardmode.d reaches the zip',
                     not _lost,
                     '%d of %d on disk did not reach it: %s'
                     % (len(_lost), len(_ships), _lost))

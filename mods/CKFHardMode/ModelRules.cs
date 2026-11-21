@@ -90,25 +90,6 @@ namespace CKFHardMode
         // row by one id, and carrying that as a column name and a long rather
         // than a JsonElement keeps a ten-thousand-line overlay to a few small
         // arrays per line instead of a retained JsonDocument each.
-        // ---- the gear partition ------------------------------------------
-        //
-        // Set ONLY by GearClasses.Expand, never by JSON: there is no
-        // [JsonPropertyName] on either, so no rules file and no overlay can
-        // carry one, and Rule.Unknown will name the spelling if someone tries.
-        // This is a SELECTOR, not a new operation.
-        //
-        // ExcludeIds is the MonsterTypeModel pointer set resolved at load, and
-        // ExcludeIdColumn names the column to test it against. Together with
-        // Where = { WeaponClass: N } they express "class N minus the enemy
-        // set" without a single hand-maintained id range.
-        [JsonIgnore] internal string ExcludeIdColumn { get; set; }
-        [JsonIgnore] internal HashSet<long> ExcludeIds { get; set; }
-
-        /// <summary>The WeaponClass this rule came from, for the log line and
-        /// the runtime census. Zero on every rule that is not a gear-class
-        /// rule.</summary>
-        [JsonIgnore] internal int GearClass { get; set; }
-
         [JsonIgnore] internal string OverlayKeyColumn { get; set; }
         [JsonIgnore] internal long OverlayKeyValue { get; set; }
 
@@ -1137,41 +1118,7 @@ namespace CKFHardMode
         {
             var t = row.GetType();
 
-            // THE GEAR PARTITION, tested before anything else and FAIL-CLOSED.
-            //
-            // A row whose id column cannot be read does NOT match. That is the
-            // safe direction and it is a deliberate choice: the alternative is
-            // that a row we could not classify gets tuned as player gear, which
-            // for a class enemies also carry means buffing the guards — and it
-            // would be silent, because the column reads fine for every other
-            // row. "Could not look" is not "not an enemy" (AGENTS.md).
-            //
-            // Matchable/Numeric already warn once per column per type, so a
-            // wholesale failure here is named rather than inferred from a rule
-            // that quietly stops firing.
-            if (rule.ExcludeIdColumn != null)
-            {
-                var idAcc = Matchable(t, rule.ExcludeIdColumn, "the gear-partition id column");
-                if (idAcc == null || !Numeric(idAcc, t, "the gear-partition id column"))
-                    return false;
-                double idv;
-                if (!idAcc.TryGetNumber(row, out idv)) return false;
-                var id = (long)Math.Round(idv);
-
-                // The census sees every row tested against a gear-class rule,
-                // which is the only sampling moment this instrument has. It
-                // dedupes on id, so the cost after a row's first sighting is
-                // one HashSet lookup.
-                GearClasses.Observe(row, t, id);
-
-                if (rule.ExcludeIds != null && rule.ExcludeIds.Contains(id)) return false;
-            }
-
-            // The overlay selector: one number compare, and the most selective
-            // thing on the rule. Tested after the gear partition above, because
-            // a rule that must not touch enemy gear has to decide that first.
-            // No overlay rule carries an ExcludeIdColumn, so for them the branch
-            // above is one null test.
+            // Try the overlay selector first because it matches a single row.
             if (rule.OverlayKeyColumn != null)
             {
                 var k = Matchable(t, rule.OverlayKeyColumn, "the overlay id column");

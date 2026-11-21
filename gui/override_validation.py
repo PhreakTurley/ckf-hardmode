@@ -60,7 +60,6 @@ def normalize(api, doc, edits, source):
             ri = api.overlay_find_row(entry, cell.get('key'), rel)
             pending[ri, cell.get('column')] = cell
         mapping = api.overlay_column_targets(entry)
-        class_wide = Path(rel).name == 'gear-classes.csv'
         for ri, row in enumerate(entry['rows']):
             raw = dict(zip((c['name'] for c in entry['columns']), row['cells']))
             for ci, column in enumerate(entry['columns']):
@@ -74,8 +73,6 @@ def normalize(api, doc, edits, source):
                 if not value:
                     continue
                 target = mapping.get(name)
-                if target is None and class_wide:
-                    target = ('WeaponModel', 'WeaponClass', name)
                 if target is None:
                     raise ValueError('%s.%s: no declared content-field mapping.' % (rel, name))
                 model, identity, field = target
@@ -92,7 +89,7 @@ def normalize(api, doc, edits, source):
                     n = number(operand)
                     if op == 'set' and 'INT' in declared[field].upper() and not -(2 ** 63) <= n < 2 ** 63:
                         raise ValueError('%s.%s: assignment is outside the declared INTEGER storage range.' % (rel, name))
-                original = rows.get(raw.get(identity)) if not class_wide and not raw.get('_clone') else None
+                original = rows.get(raw.get(identity)) if not raw.get('_clone') else None
                 checked += 1
                 if op != 'set' or original is None or not matches(operand, original[field], numeric):
                     continue

@@ -170,7 +170,6 @@ namespace CKFHardMode
             { "consumables-sploitkits.csv", "ConsumablesSploitkits" },
             { "cyberweapons-claws.csv",     "CyberweaponsClaws" },
             { "cyberweapons-lasers.csv",    "CyberweaponsLasers" },
-            { "gear-classes.csv",           "GearClasses" },
             // Twelve spawn pools, not thirteen. MonsterGroupId 500 (the Corp
             // shared pool) is fielded only by Demo Corp, whose
             // FactionModel.ProcGenSelect is 0, so no generated mission builds

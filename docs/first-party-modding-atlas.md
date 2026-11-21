@@ -117,7 +117,6 @@ The table below identifies candidates to investigate. “Candidate” means the 
 | Rule constants | `RuleModel.csv` | Candidate `Rule` updates; check the schema's `RuleId`/`Group`/`Name`/`Value` mapping. |
 | Limit-break trait effects | `EffectModel.limitbreak.csv` under `LimitBreakTraits` | Candidate `Effect` updates. This is separate from Fatigue's runtime trait grants. |
 | Mission Power Level label | `MissionPowerLevelModel.generated.json` under `ModelRules` | Candidate `MissionPowerLevel` update for the label only. Keep it coupled to `Progression`'s award logic until both are verified together. |
-| Gear-class lever sheet | `GearClasses.Expand`, driven by `gear-classes.csv` and post-overlay `MonsterTypeModel.WeaponTypeId` | Export expanded `Weapon` edits only after reproducing the player/enemy partition from the chosen config and data revision. |
 | Cyberweapon tuning | Workshop-owned `ckf.player-balance.json`; Hard Mode skips legacy sheets | Paired `Weapon` and `Talent` SQL updates through the [Workshop editor](../gui/README.md#workshop-player-catalogs). |
 | Implant global and slot tuning | Workshop-owned `ckf.player-balance.json`; no Hard Mode expansion | Related `Implant` and `Effect` updates followed by unscoped global multipliers; see the same editor reference. |
 | Consumable family levers | `Consumables.Expand` reads six family CSVs | Export related `Item`, `Talent`, `Effect`, `MatrixEffect` edits as each lever requires. |

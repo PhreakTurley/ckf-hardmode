@@ -202,7 +202,7 @@ MASTER_KEY = 'General.Enabled'
 # PRESENTATION TABLES. The page renders from the schema and app.html names
 # nothing. The presentation tables -- SECTION_GROUPS, SECTION_LAST,
 # AXIS_WINDOWS, REFERENCE_GROUPING and HIDDEN_COLUMNS in this block, and
-# GUI_EXCLUDED_ROWS and the derived COST_LABELS and ROW_LABEL_SHEETS further
+# GUI_EXCLUDED_ROWS and the derived COST_LABELS further
 # down -- are the declared exceptions: presentation decisions that no schema key expresses, written
 # down once, with the reason, rather than scattered through the page. None of
 # them changes what is written: every one is display only, and the save path
@@ -243,7 +243,7 @@ SECTION_GROUPS = [
         # different' should find one place rather than three. Each table keeps
         # its own file and its own toggle." (design.md)
         {'id': 'weapons', 'title': 'Player Weapons',
-         'subsystems': ['GearClasses', 'CyberweaponsLasers', 'CyberweaponsClaws', 'StunClub']},
+         'subsystems': ['CyberweaponsLasers', 'CyberweaponsClaws', 'StunClub']},
         {'id': 'consumables', 'title': 'Consumables',
          'subsystems': ['ConsumablesChems', 'ConsumablesDevices',
                         'ConsumablesGrenades', 'ConsumablesMatrix',
@@ -1114,11 +1114,7 @@ def _read_overlay_entry(path, rel, static_source=None):
              'skipped': 0, 'kind': None, 'kindSource': None,
              'fileOrder': False, 'roles': [], 'adjustCells': [],
              'shared': {}, 'sharedSource': SHEET_SOURCE_ERROR, 'labels': {},
-             # What this sheet's KEY CELLS are called, id -> name, from
-             # ROW_LABEL_SHEETS. {} on every sheet that has no name map and on
-             # every entry that never reaches the labelling below, so the key
-             # is always present and an absent map is an empty one.
-             'rowLabels': {}, 'rowGroups': {}, 'groupOrder': [], 'catalogOrder': 100,
+             'rowGroups': {}, 'groupOrder': [], 'catalogOrder': 100,
              'expanderMarks': [], 'sharedBlind': None, 'shipped': {},
              'shippedMissing': 0, 'notes': [], 'excluded': [],
              # THE WRITE SIDE. `editable` is the server's grading
@@ -1211,7 +1207,6 @@ def _read_overlay_entry(path, rel, static_source=None):
     entry['shared'] = overlay_shared_marks(entry)
     entry['sharedSource'] = SHEET_SOURCE_ERROR
     entry['labels'] = overlay_labels(entry)
-    entry['rowLabels'] = ROW_LABEL_SHEETS.get(os.path.basename(rel), {})
     entry['expanderMarks'], entry['sharedBlind'] = expander_shared_marks(entry)
     if static_source is not None:
         entry['staticSource'] = str(getattr(static_source, 'path', 'official database'))
@@ -1323,7 +1318,7 @@ def read_overlays(config_dir, schemas, static_source=None):
 #   direct    Overlays.LoadTable reads it. The filename carries the game table
 #             before its first dot, the first column IS that table's id column,
 #             and the operator lives in the header (Column*, Column+, ...).
-#   expanded  A slice's own expander reads it -- GearClasses.cs, Cyberweapons.cs
+#   expanded  A slice's own expander reads it -- Cyberweapons.cs
 #             and the rest -- and turns one row into several rules. Its filename
 #             carries no game table, its first column need not be an id at all
 #             (cyberweapons-lasers.csv leads with WeaponName), and its cells
@@ -1368,8 +1363,6 @@ def _family_of(rel):
                        'cyberweapons'),
                       (_implants if 'implants' in _sheet_sources else None,
                        'implants'),
-                      (_gear_classes if 'gear_classes' in _sheet_sources else None,
-                       'gear_classes'),
                       (_consumables if 'consumables' in _sheet_sources else None,
                        'consumables')):
         if mod is not None and base in (getattr(mod, 'SHEET_NAMES', ()) or ()):
@@ -1404,17 +1397,6 @@ try:
 except Exception as _e:                        # pragma: no cover - reported
     SHEET_SOURCE_ERROR = '%s: %s' % (type(_e).__name__, _e)
 try:
-    # Each expander declares the identity of its own sheet. gear_classes names
-    # one column; cyberweapons names three. Collecting them rather than
-    # picking one is why a sheet added by a fourth expander does not silently
-    # have its key column graded as an override.
-    import gear_classes as _gear_classes      # noqa: E402  scripts/gear_classes.py
-    SHEET_IDENTITY.append(_gear_classes.CLASS_COLUMN)
-    _sheet_sources.append('gear_classes')
-except Exception as _e:                        # pragma: no cover - reported
-    SHEET_SOURCE_ERROR = ((SHEET_SOURCE_ERROR + '; ') if SHEET_SOURCE_ERROR
-                          else '') + '%s: %s' % (type(_e).__name__, _e)
-try:
     import implants as _implants              # noqa: E402  scripts/implants.py
     SHEET_IDENTITY += list(_implants.IMPLANT_IDENTITY) + list(_implants.EFFECT_IDENTITY)
     _sheet_sources.append('implants')
@@ -1423,11 +1405,6 @@ except Exception as _e:                        # pragma: no cover - reported
     SHEET_SOURCE_ERROR = ((SHEET_SOURCE_ERROR + '; ') if SHEET_SOURCE_ERROR
                           else '') + '%s: %s' % (type(_e).__name__, _e)
 try:
-    # The fourth expander. It declares the same four names the other
-    # three do between them -- SHEET_NAMES, IDENTITY, SHARED_ROWS,
-    # COLLISION_CASES -- so it is consumed the same way and nothing here
-    # re-derives any of them. Its SHARED_ROWS carry a `sheet` key, which is
-    # what keeps its two rows from being looked for on a cyberweapon sheet.
     import consumables as _consumables        # noqa: E402  scripts/consumables.py
     SHEET_IDENTITY += list(_consumables.IDENTITY)
     SHARED_ROWS.update(_consumables.SHARED_ROWS)
@@ -1452,14 +1429,10 @@ SHEET_IDENTITY = sorted(set(SHEET_IDENTITY))
 #
 # So the declaration decides, and the derivation is kept as a CROSS-CHECK: the
 # selftest asserts the two agree on every file, which is what catches an
-# expander that ships a sheet and forgets to declare it. An expander that
-# declares no SHEET_NAMES (gear_classes) has its sheet classified by
-# derivation, and the census says which route each file took rather than
-# leaving that invisible.
+# expander that ships a sheet and forgets to declare it.
 DECLARED_EXPANDED = set()
 for _m in (_cyberweapons if 'cyberweapons' in _sheet_sources else None,
            _implants if 'implants' in _sheet_sources else None,
-           _gear_classes if 'gear_classes' in _sheet_sources else None,
            _consumables if 'consumables' in _sheet_sources else None):
     if _m is not None:
         DECLARED_EXPANDED |= set(getattr(_m, 'SHEET_NAMES', ()) or ())
@@ -1501,68 +1474,6 @@ def _declare_cost_labels():
 
 
 _declare_cost_labels()
-
-
-# WHAT A ROW'S KEY CELL IS CALLED, WHERE THE KEY IS AN ID AND THE NAME IS IN
-# THE GAME'S OWN DATA.
-#
-# A presentation table, in the family declared at the top of this file. Like
-# COST_LABELS above it is DERIVED rather than typed, and app.html still names
-# nothing.
-#
-# gear-classes.csv's first column is `WeaponClass`, an id. Drawn bare the ids
-# are numbers beside the levers, and nothing on the page says which row is the
-# shotgun. The names are not a choice made here. They come from the game's own
-# tables, and two of them agree:
-#
-#   sheets/raw/WeaponModel.csv carries a `WeaponClassName` column, and each
-#   WeaponClass id has EXACTLY ONE distinct name there -- 1 Melee, 2 Pistol,
-#   3 `AR (Assault Rifle)`, 4 Shotgun, 5 E-Rifle, 6 Sniper Rifle, 10 SMG,
-#   11 Revolver, 12 `UAR (Urban Assault Rifle)`, 14 Railgun [measured, dump].
-#
-#   sheets/raw/WeaponClassModModel.csv carries the same ten ids under the
-#   DESIGNER-SIDE spelling -- 3 `Assault Rifle`, 5 `Energy Rifle`,
-#   12 `Bullpup Assault` -- so two independent tables agree on WHICH id is
-#   which weapon and differ only in how it is written [measured, dump].
-#
-# WHY WeaponModel'S SPELLING AND NOT WeaponClassModModel'S. WeaponModel's is
-# the string that has been through localisation; WeaponClassModModel's is the
-# designer's label. The witness is in the six ids this sheet does NOT carry: in
-# WeaponModel, classes 9, 17, 18 and 19 read `Gear.WeaponClass.DroneAR`,
-# `Gear.WeaponClass.CyberWeaponEyes`, `Gear.WeaponClass.DroneSMG` and
-# `Gear.WeaponClass.DroneERifle` -- raw localisation keys that did not resolve
-# -- while the lever ids read as plain English [measured, dump]. So
-# this is the column the game itself puts a player-readable string in. WHAT IS
-# NOT CLAIMED: nobody here has read the UI code that draws it, and the
-# interop assembly is marshalling stubs, so "the string the player sees" is
-# an inference from the data and not something anyone has watched happen
-# [unverified].
-#
-# THERE IS NO CONSTANT TABLE FOR THIS, AND THAT WAS CHECKED. The route the rest
-# of the editor uses to put a name on an id is sheets/raw/_id_constants.csv.
-# None of the classes it declares (ModuleClassId, RewardTypes,
-# EffectSpecialCode and the rest) is WeaponClass [measured, dump]. That route
-# is empty here, which is why the
-# name has to come off the dump's own name column.
-#
-# DERIVED, NOT TYPED. Both the filename and the (id, name) pairs come from
-# scripts/gear_classes.py -- SHEET_NAME and LEVER_CLASSES -- the module that
-# GENERATES the sheet and the same one this file already reads the sheet's
-# identity column from. A class renamed or added there moves this table on the
-# next run; a literal here would go stale in silence. The sheet's own
-# `_comment` column carries the names too, in prose ("Melee. No mode 2: ..."),
-# but reading a label out of a sentence is parsing, not consuming.
-#
-# EMPTY IS A VALUE, NOT AN ABSENCE. `rowLabels` is initialised to {} in
-# _read_overlay_entry, so every overlay entry carries the key -- a sheet with
-# no name map, an entry that errored before its labels were computed, and a
-# build with scripts/ off the path (where 'gear_classes' is not in
-# _sheet_sources and this table is empty) all send an EMPTY MAP rather than no
-# key at all. The page can index it without first testing for it.
-ROW_LABEL_SHEETS = {}
-if 'gear_classes' in _sheet_sources:
-    ROW_LABEL_SHEETS[_gear_classes.SHEET_NAME] = dict(
-        (str(cls), name) for cls, name in _gear_classes.LEVER_CLASSES)
 
 
 def overlay_labels(entry):
@@ -1778,7 +1689,7 @@ def overlay_writable(entry):
     """May the save path edit ANY cell of this sheet? -> (bool, why)
 
     AN INSTRUMENT THAT CANNOT SEE MUST NOT WRITE. overlay_roles grades identity
-    from SHEET_IDENTITY, which is collected from the four expander modules at
+    from SHEET_IDENTITY, which is collected from the expander modules at
     import. When one of those imports fails, SHEET_SOURCE_ERROR is set and
     SHEET_IDENTITY is SHORT -- and a column that is really an identity column
     then grades `lever` and would become editable. The same import feeds
@@ -3618,7 +3529,7 @@ def apply_edits(doc, extras_store, edits, strip_readme=True):
 #
 # What IS available is the grammar of the cell, and it differs by kind:
 #
-#   expanded  The operator is in the CELL. scripts/implants.py, gear_classes.py
+#   expanded  The operator is in the CELL. scripts/implants.py
 #             and cyberweapons.py each carry a parse_adjust with the same
 #             grammar this file's parse_adjust implements -- blank, =N, +N, -N,
 #             xN, *N, or a bare number -- and an expander hands a cell that
@@ -4180,35 +4091,9 @@ def mirror_first(pairs, config_dir):
 # rule at all for a launch that finds both layouts, so a half-finished
 # migration turns the whole mod off.
 #
-# THE INVARIANT (design.md section 13): converting the 3.x fixture produces the
-# same files as the 4.0 layout it was converted into, ONCE THE FOUR DEVIATIONS
-# ARE APPLIED DURING CONVERSION. That last clause is the whole thing, and it is a
-# different statement from "use the expanders' mapping", because two of the
-# four are DELETIONS WITH NO EXPANDER TO REUSE:
-#
-#   D1  the MonsterTypeModel PowerLevel 11+ ChasingSpeed/AggroSpeed x1.1 sweep
-#       -- 1 rule in, NOTHING out. 1,180 rows / 2,360 values revert. No file
-#       consumes it; a converter that routes every rule by model writes it to
-#       an extra file and reconstructs the balance D1 deleted.
-#   D2+D4  the 16 WeaponModel RecoilRate2 x1.8 id ranges -- 16 rules in, the
-#       TEN gear-classes.csv rows out, DERIVED FROM THE PARTITION.
-#       Transcribing the ranges re-applies x1.8 to the 30 drone weapons D2
-#       removes it from and withholds it from the 10 player ARs D4 adds it to.
-#   D3  clampMin ImplantStress 1 on the unscoped ImplantModel rule -- 1 operand
-#       in, NOTHING out. It binds on 0 of 198 rows [measured, dump], and
-#       MIGRATION_IMPLANTS_GLOBAL_DOC says the migrator must not carry it.
-#
-# A CONVERTER WRITTEN TO "PRESERVE EVERY OPERAND OF EVERY RULE" REINTRODUCES D3
-# AND RECONSTRUCTS D1, both silently. Neither is a rule this file forgets to
-# copy; each is a rule this file must decline to copy, on purpose, by name.
-#
-# WHICH MonsterTypeModel THE PARTITION READS. gear-classes.csv's ten rows
-# resolve at load as "class N minus the MonsterTypeModel.WeaponTypeId set", and
-# that set comes from the POST-OVERLAY ckf.hardmode.d/MonsterTypeModel.csv, not
-# from sheets/raw/MonsterTypeModel.csv, which misclassifies eight class-3
-# player ARs as enemy gear [measured].
-# mods/CKFHardMode/GearClasses.cs makes that choice and refuses to emit if the
-# file is unreadable; so does this, and it does NOT fall back to the dump.
+# The migration drops the old MonsterTypeModel speed sweep (D1), the retired
+# WeaponModel recoil ranges, and the unused ImplantStress clamp (D3). D2 and
+# D4 describe the original 4.0 conversion of the old recoil ranges.
 #
 # THE SIX CONSUMABLE TABLES ARE NOT CONVERTED AT ALL. No 3.x rule reaches a
 # consumable-reachable (table, id) pair (design.md section 13). They are
@@ -4220,8 +4105,7 @@ def mirror_first(pairs, config_dir):
 #
 # KEY ON (table, id), NEVER ON AN id ALONE. Nothing here keys on a bare id: the
 # pack router keys on (model, comment prefix), the rule-to-row conversion keys
-# on (model, selector value), and the partition keys on (WeaponClass,
-# WeaponId). 130 ids are both an EffectId and a MatrixEffectId and 221 are both
+# on (model, selector value). 130 ids are both an EffectId and a MatrixEffectId and 221 are both
 # a TalentId and an EffectId, so an id-alone key would merge rows of different
 # tables.
 
@@ -4308,8 +4192,6 @@ _MIGRATION_CFG_HEADER = re.compile(
     rb'^(## Settings file was created by plugin .+ v)'
     rb'([0-9][0-9A-Za-z.+-]*)([ \t]*)$')
 
-MIGRATION_POINTER_FILE = 'MonsterTypeModel.csv'
-MIGRATION_POINTER_COLUMN = 'WeaponTypeId'
 
 # The id column each converted model is selected on. Asserted, never inferred:
 # a model whose rules arrive and whose id column is not here is a refusal.
@@ -4345,7 +4227,7 @@ MIGRATION_RULEMODEL_ROWS = 76
 MIGRATION_DISPOSITION = {
     'RuleModel': ('convert', 'RuleModel.csv'),
     'WeaponModel': ('declared', 'the retired bulk RecoilRate2 ranges are dropped; '
-                                'gear-classes.csv starts blank; the 16 exact laser rules and the one '
+                                'the 16 exact laser rules and the one '
                                 '25000-25015 SpecialRule range are already the two '
                                 'cyberweapons-*.csv sheets\' rows'),
     'TalentModel': ('declared', 'the 5 CW / talent rules are already the two '
@@ -4516,8 +4398,6 @@ MIGRATION_FAULTS = (
                          'rule" converter does with a range selector'),
     ('d3-carried', 'clampMin ImplantStress 1 is carried into '
                    'implants-global.json as a fourth number'),
-    ('shipped-monstertype', 'the partition reads sheets/raw/MonsterTypeModel.csv '
-                            'instead of the post-overlay file'),
 )
 
 
@@ -4649,7 +4529,7 @@ def migration_selector(rule):
 # migration comparison fails if the two differ), and it is the only prose
 # block in this migration that is not derived from something.
 # Everything else here is built from the player's own three files, from the
-# schemas, or from the four expander modules.
+# schemas, or from the expander modules.
 IMPLANTS_GLOBAL_DOC = [
     "The blanket implant multipliers, transcribed from the ONE unscoped",
     "ImplantModel rule in ckf.hardmode.rules.json: Cost *0.5, InstallTime *0.5,",
@@ -4768,12 +4648,9 @@ def migration_dump_dir():
 
 
 def _migration_expanders():
-    """The four expander modules, or a refusal naming the ones that are not
-    importable. A build without scripts/ on the path converts NOTHING here --
-    it does not quietly ship a layout with 19 files missing."""
+    """Load the remaining expander modules before generating migration sheets."""
     missing = []
-    for name, mod in (('scripts/gear_classes.py', _gear_classes if 'gear_classes' in _sheet_sources else None),
-                      ('scripts/cyberweapons.py', _cyberweapons if 'cyberweapons' in _sheet_sources else None),
+    for name, mod in (('scripts/cyberweapons.py', _cyberweapons if 'cyberweapons' in _sheet_sources else None),
                       ('scripts/implants.py', _implants if 'implants' in _sheet_sources else None),
                       ('scripts/consumables.py', _consumables if 'consumables' in _sheet_sources else None)):
         if mod is None:
@@ -4785,85 +4662,7 @@ def _migration_expanders():
             'Import error: %s\n'
             'Refusing rather than emitting a layout without them.'
             % (', '.join(missing), SHEET_SOURCE_ERROR or '(none recorded)'))
-    return _gear_classes, _cyberweapons, _implants, _consumables
-
-
-def migration_pointer_set(config_dir, dump_dir):
-    """The enemy-gear pointer set, from the POST-OVERLAY
-    ckf.hardmode.d/MonsterTypeModel.csv.
-
-    -> (ids, rows_read, path). RAISES if that file is unreadable. It does NOT
-    fall back to sheets/raw/MonsterTypeModel.csv: the shipped dump gives 208
-    distinct WeaponTypeId and class 3 = 25 player / 51 enemy, the post-overlay
-    file gives 405 and 33/43, and only the second reproduces design.md
-    section 5. A migrator that reads the dump misclassifies eight class-3
-    player assault rifles as enemy gear and withholds D4's x1.8 from them.
-    mods/CKFHardMode/GearClasses.cs makes the same choice and refuses the same
-    way.
-    """
-    path = os.path.join(config_dir, MIGRATION_DIR, MIGRATION_POINTER_FILE)
-    if _mfault('shipped-monstertype'):
-        # INJECTED FAULT: the shipped dump, which is the fallback this function
-        # exists to refuse.
-        path = os.path.join(dump_dir, MIGRATION_POINTER_FILE)
-    if not os.path.isfile(path):
-        raise MigrationRefused(
-            '%s is not on disk.\n'
-            'The player/enemy partition gear-classes.csv rests on is "class N '
-            'minus the MonsterTypeModel.WeaponTypeId set", and that set must '
-            'come from the post-overlay file, not from sheets/raw. Refusing '
-            'rather than falling back to the shipped dump, which would '
-            'misclassify eight class-3 player assault rifles as enemy gear.'
-            % path)
-    try:
-        with open(path, newline='', encoding='utf-8-sig') as fh:
-            rows = list(csv.DictReader(fh))
-    except (OSError, UnicodeDecodeError) as e:
-        raise MigrationRefused('%s could not be read: %s: %s'
-                               % (path, type(e).__name__, e))
-    if not rows:
-        raise MigrationRefused('%s has a header and no data rows.' % path)
-    if MIGRATION_POINTER_COLUMN not in rows[0]:
-        raise MigrationRefused(
-            '%s has no %s column, so the player/enemy partition cannot be '
-            'resolved. Refusing rather than treating an unreadable pointer '
-            'file as "no enemies" -- that reading would make every weapon '
-            'player gear.' % (path, MIGRATION_POINTER_COLUMN))
-    ids, blank = set(), 0
-    for r in rows:
-        v = (r[MIGRATION_POINTER_COLUMN] or '').strip()
-        if not v:
-            blank += 1
-            continue
-        try:
-            ids.add(int(v))
-        except ValueError:
-            raise MigrationRefused('%s: %s %r is not an integer.'
-                                   % (path, MIGRATION_POINTER_COLUMN, v))
-    if blank:
-        raise MigrationRefused(
-            '%s: %d row(s) have a blank %s. Every monster row must name a '
-            'weapon for the partition to be complete.'
-            % (path, blank, MIGRATION_POINTER_COLUMN))
-    return ids, len(rows), path
-
-
-def migration_gear_classes(config_dir, dump_dir, gc, measured):
-    """Generate the declared class layout without reinstating retired bulk tuning."""
-    enemy, mrows, ppath = migration_pointer_set(config_dir, dump_dir)
-    weapons = static_data.read_rows(dump_dir, 'WeaponModel', ('WeaponId', 'WeaponClass'))
-    measured.update(pointer_file=ppath, pointer_rows=mrows,
-                    pointer_ids=len(enemy), weapon_rows=len(weapons))
-    header = [gc.CLASS_COLUMN] + list(gc.LEVERS) + ['_comment']
-    rows = [[str(cls)] + [gc.CELLS.get(cls, {}).get(c, '') for c in gc.LEVERS]
-            + [gc.ROW_COMMENTS[cls]] for cls, _name in gc.LEVER_CLASSES]
-    measured['gear_partition'] = {
-        cls: (sum(int(w[gc.CLASS_COLUMN]) == cls and int(w[gc.ID_COLUMN]) not in enemy
-                  for w in weapons),
-              sum(int(w[gc.CLASS_COLUMN]) == cls and int(w[gc.ID_COLUMN]) not in enemy
-                  and float(w.get('RecoilRate2') or 0) != 0 for w in weapons))
-        for cls, _name in gc.LEVER_CLASSES}
-    return _mig_csv(header, rows).encode('utf-8')
+    return _cyberweapons, _implants, _consumables
 
 
 def build_migration(config_dir, dump_dir=None):
@@ -4873,7 +4672,7 @@ def build_migration(config_dir, dump_dir=None):
     what disagreed. None of them returns a partial layout: a migration that
     half-converts leaves ConfigDoc.BothLayouts' refusal state behind.
     """
-    gc, cw, imp, con = _migration_expanders()
+    cw, imp, con = _migration_expanders()
     dump_dir = dump_dir or migration_dump_dir()
     mig = Migration(config_dir)
     d_dir = os.path.join(config_dir, MIGRATION_DIR)
@@ -5130,14 +4929,11 @@ def build_migration(config_dir, dump_dir=None):
                           'written': 'implantStressClampMin' in glob,
                           'operand': '%s %s' % (d3_op, d3_col)}
 
-    # ---- 6. D2 + D4
+    # ---- 6. Record the discarded legacy weapon ranges
     d2d4 = [r for r in rules if r['model'] == 'WeaponModel'
             and migration_selector(r) == 'range'
             and 'RecoilRate2' in (r.get('multiply') or {})]
     mig.measured['D2D4'] = {'ranges_in': len(d2d4)}
-    mig.put('%s/%s' % (MIGRATION_DIR, gc.SHEET_NAME),
-            migration_gear_classes(config_dir, dump_dir, gc, mig.measured),
-            'converted')
 
     # ---- 7. the three enemy-gear overlays, carried across untouched
     for name in MIGRATION_CARRIED:
@@ -5145,8 +4941,7 @@ def build_migration(config_dir, dump_dir=None):
         if not os.path.isfile(p):
             raise MigrationRefused(
                 '%s is not in %s. A 3.x install ships it (design.md section 1: '
-                '"Three such files shipped before this change"), and it is also '
-                'what the gear-class partition is resolved against. Refusing '
+                '"Three such files shipped before this change"). Refusing '
                 'rather than writing a 4.0 layout without it.' % (name, d_dir))
         mig.put('%s/%s' % (MIGRATION_DIR, name), read_bytes(p), 'carried')
 
@@ -5542,7 +5337,7 @@ class App:
         digests = self.current_fingerprints(cd) if os.path.isdir(cd) else {}
         player = self.editor_player_document(cd, digests) if editor else self.player_catalog(cd)
         retired = {'CyberweaponsClaws', 'CyberweaponsLasers', 'ImplantsGlobal',
-                   'GearClasses', 'StunClub', 'PowerLevel', 'RuleModel',
+                   'StunClub', 'PowerLevel', 'RuleModel',
                    'ConsumablesChems', 'ConsumablesDevices', 'ConsumablesGrenades',
                    'ConsumablesMatrix', 'ConsumablesMedical', 'ConsumablesSploitkits'}
         retired.update('ImplantsSlot%02d' % n for n in range(1, 12))
@@ -7938,13 +7733,9 @@ def selftest(config_arg, frozen_exe=None, legacy_cyberware_help=False):
                     (len(e['rows']), raw_count))
             t.check('%s: the page explains deliberately blank adjustments' % rel.split('/')[-1],
                     any('not an omission' in n for n in e['notes']), e['notes'])
-            if os.path.basename(rel) == 'gear-classes.csv':
-                t.check('class-wide levers have no invented representative shipped value',
-                        not e['shipped'] and not e.get('error'), e['shipped'])
-            else:
-                t.check('%s: each blank row retains its shipped baseline' % rel.split('/')[-1],
-                        len(e['shipped']) == len(e['rows']),
-                        (len(e['shipped']), len(e['rows'])))
+            t.check('%s: each blank row retains its shipped baseline' % rel.split('/')[-1],
+                    len(e['shipped']) == len(e['rows']),
+                    (len(e['shipped']), len(e['rows'])))
 
         # ---- the shared row: consumed, not re-derived
         # OVER THE MERGED MAP. SHARED_ROWS includes consumables.py's rows, and
@@ -8748,7 +8539,7 @@ def selftest(config_arg, frozen_exe=None, legacy_cyberware_help=False):
         # a repoint is a legitimate override and refusing it would make a lever
         # column read-only on some rows and not others, for a reason the grid
         # cannot show. What is NOT allowed is writing them while the marking is
-        # unavailable: SHEET_IDENTITY and SHARED_ROWS come from the same four
+        # unavailable: SHEET_IDENTITY and SHARED_ROWS come from the same
         # expander imports, so an import failure both hides the repoint marks
         # AND mis-grades identity columns as levers. overlay_writable refuses
         # every sheet in that state rather than trusting a short list.
@@ -8878,11 +8669,9 @@ def selftest(config_arg, frozen_exe=None, legacy_cyberware_help=False):
                 'blank, so nothing about it is missing',
                 all(mov['values']['overlays'][r]['shipped']
                     for r in _dead_sheets
-                    if mov['values']['overlays'][r]['kind'] == 'expanded'
-                    and os.path.basename(r) != 'gear-classes.csv'),
+                    if mov['values']['overlays'][r]['kind'] == 'expanded'),
                 [r for r in _dead_sheets
                  if mov['values']['overlays'][r]['kind'] == 'expanded'
-                 and os.path.basename(r) != 'gear-classes.csv'
                  and not mov['values']['overlays'][r]['shipped']])
         t.check('and the probe already reports whether ckf.hardmode.d can be '
                 'written, which is now a question about the save path and not '
@@ -10068,8 +9857,8 @@ def selftest(config_arg, frozen_exe=None, legacy_cyberware_help=False):
                         break
             return read_bytes(_s8_p), ok, why
 
-        _s8_slice_keys = sorted(k for k in cfg_fields(schemas)
-                                if k.split('.', 1)[0] == 'Slices')
+        _s8_slice_keys = sorted(k for k in CfgFile(s1_src).keys
+                                if k.startswith('Slices.'))
         s8_nosec, s8_ok, s8_why = _s8_build(without=_s8_slice_keys)
         t.check('the scenario fixtures build from the source, in whichever '
                 'state it arrived', s8_ok, s8_why)
@@ -10758,7 +10547,7 @@ def selftest(config_arg, frozen_exe=None, legacy_cyberware_help=False):
     # schemas (cfg gates, json fields and rulemodel's `"in": "reference"`
     # field). It changes only when a schema gains or loses a documented field,
     # and then this literal moves with it.
-    t.check('there are %d field docs to check' % len(all_docs), len(all_docs) == 90, len(all_docs))
+    t.check('there are %d field docs to check' % len(all_docs), len(all_docs) == 89, len(all_docs))
     emptied, unbalanced, mangled, changed = [], [], [], []
     for sub, path, doc in all_docs:
         flat = ' '.join(doc.split())
@@ -14648,8 +14437,7 @@ def main(argv=None):
                     help='convert the 3.x layout in --config to 4.0 and rename '
                          'the originals to %s. Refuses, writing nothing, if an '
                          'input is missing, if the 4.0 layout is already there, '
-                         'if a backup exists, or if the post-overlay '
-                         'MonsterTypeModel.csv cannot be read'
+                         'or if a backup exists.'
                          % MIGRATION_BACKUP_SUFFIX)
     ap.add_argument('--frozen-exe', metavar='PATH',
                     help='a built CKF-Config-Editor exe. --selftest runs its '

@@ -858,7 +858,7 @@ def apply_op(base, kind, val):
 # knew the column was written -- and it cannot tell a deliberately cleared cell
 # from an accidentally dropped column, so every tuning edit to one of those
 # nine CritMultiBase cells would report a problem. scripts/cyberweapons.py
-# (P-GONE, UNDECLARED CHANGE), scripts/gear_classes.py and the gui/serve.py
+# (P-GONE, UNDECLARED CHANGE) and the gui/serve.py
 # migration block retire their equivalents the same way.
 #
 # WHAT IS NOT RETIRED, AND IT IS EVERYTHING ELSE IN --check. P-COL, P-ROW,
@@ -1632,7 +1632,7 @@ def main(argv=None):
             "This path used to fall back to LiveRules(\".\", rules_path=os.devnull),\n"
             "which read an empty string and died in json.loads with an uncaught\n"
             "JSONDecodeError. It had never run. The other three converters\n"
-            "(cyberweapons.py, gear_classes.py, rules_to_overlays.py) already refuse\n"
+            "(cyberweapons.py, rules_to_overlays.py) already refuse\n"
             "here; this one now says the same thing.\n")
         return 2
     live = LiveRules(config_dir)

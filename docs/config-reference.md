@@ -23,7 +23,6 @@ This document is the single destination for the settings prose. A fact that is n
 | [EnemyArmor](#enemyarmor) | Enemy Armors | — | 0 | 0 | 0 |
 | [EnemyRebalance](#enemyrebalance) | Bundled Enemy Rebalance | — | 1 | 1 | 1 |
 | [Fatigue](#fatigue) | Mission Fatigue | `ckf.hardmode.d/fatigue.json` | 1 | 10 | 1 + 1 per-field gate(s) |
-| [GearClasses](#gearclasses) | Player Weapon Classes | — | 1 | 1 | 1 |
 | [General](#general) | Master Switch | — | 1 | 1 | 1 |
 | [ImplantsGlobal](#implantsglobal) | Implant Global Multipliers | `ckf.hardmode.d/implants-global.json` | 1 | 4 | 1 |
 | [ImplantsSlot01](#implantsslot01) | Implant Slot 01 | — | 1 | 1 | 1 |
@@ -61,7 +60,7 @@ This document is the single destination for the settings prose. A fact that is n
 | [TalentsWraith](#talentswraith) | Wireghost Talent Balance | — | 1 | 1 | 1 |
 | [Progression](#progression) | Team Power Level Award | `ckf.hardmode.d/teampl.json` | 1 | 3 | 1 |
 
-50 subsystems, 49 cfg keys, 90 fields in total.
+49 subsystems, 48 cfg keys, 89 fields in total.
 
 ## Retroactive controls — read before changing these
 
@@ -92,7 +91,6 @@ One row per `Section.Key` in `ckf.hardmode.cfg`. `schema/check_schema.py` report
 | `Slices.Elapse` | `bool` | `false` | [Elapse](#elapse) | Enable Mission Elapse Penalty |
 | `Slices.EnemyRebalance` | `bool` | `true` | [EnemyRebalance](#enemyrebalance) | Enable Bundled Enemy Rebalance |
 | `Slices.Fatigue` | `bool` | `true` | [Fatigue](#fatigue) | Enable Mission Fatigue |
-| `Slices.GearClasses` | `bool` | `false` | [GearClasses](#gearclasses) | Enable Player Weapon Classes |
 | `Slices.ImplantsGlobal` | `bool` | `false` | [ImplantsGlobal](#implantsglobal) | Enable Implant Global Multipliers |
 | `Slices.ImplantsSlot01` | `bool` | `false` | [ImplantsSlot01](#implantsslot01) | Enable Implant Slot 01 |
 | `Slices.ImplantsSlot02` | `bool` | `false` | [ImplantsSlot02](#implantsslot02) | Enable Implant Slot 02 |
@@ -129,7 +127,7 @@ One row per `Section.Key` in `ckf.hardmode.cfg`. `schema/check_schema.py` report
 | `Slices.TalentsWarMachine` | `bool` | `false` | [TalentsWarMachine](#talentswarmachine) | Enable Warmachine Talent Balance |
 | `Slices.TalentsWraith` | `bool` | `false` | [TalentsWraith](#talentswraith) | Enable Wireghost Talent Balance |
 
-49 key(s).
+48 key(s).
 
 ## Every sidecar field
 
@@ -1157,67 +1155,6 @@ On disk this is a JSON **object**, keyed by `powerLevel`; that key is the column
 | `powerLevel` | `int` | `1` to `20` |
 | `chancePercent` | `int` | `0` to `100` |
 | `durationDays` | `int` |  |
-
-### Invariants
-
-None declared.
-
----
-
-## GearClasses
-
-**Player Weapon Classes** &nbsp;·&nbsp; `.cfg` section `[GearClasses]` &nbsp;·&nbsp; declared in `schema/gearclasses.schema.json`
-
-Slice toggle. Off: Slices.VerdictForOverlay skips every file below before it is opened, so none of its rows reach RulePlan. These files are loaded by the row-edit engine, so they also have no effect while [Slices] ModelRules is off (ModelRules.Init returns before Overlays.Load).
-
-Files this toggle gates:
-
-```text
-  gear-classes.csv
-```
-
-One row per player weapon class: ten of the sixteen WeaponClass values. GearClasses.ExcludedClasses leaves out 7 (a single row, so a class lever would be that row), 9, 18 and 19 (drones), and 16 and 17 (tuned item by item in cyberweapons-claws.csv and cyberweapons-lasers.csv).
-
-### What the config GUI shows for this section
-
-The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
-
-Turn this off and the mod skips this page's files, so nothing on this page is applied.
-
-### Files this subsystem writes
-
-| Role | File |
-|---|---|
-| `cfg` | `ckf.hardmode.cfg` |
-| `overlays` | `['ckf.hardmode.d/gear-classes.csv']` |
-
-### Enable chain
-
-Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
-
-```text
-  cfg      [Slices] GearClasses = true        ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
-```
-
-**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
-
-Outside every chain in this document sits `[General] Enabled`, the master switch in `ckf.hardmode.cfg`. Its bail-out in `Plugin.Load()` sits above every subsystem init, so `Enabled = false` stops every subsystem.
-
-### Fields
-
-1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
-
-| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
-|---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.GearClasses` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Player Weapon Classes | On applies this slice's files; off skips them before they are opened. Default false. Lever sheet, not a direct overlay: the first column is WeaponClass, a class id rather than a row id, and there is no game table called "gear-classes". GearClasses.cs expands each row at load into one rule with a WeaponClass selector and an enemy-id exclusion set. The lever columns are WeaponModel column names, which makes the file look like a direct overlay; the row is what differs. The levers are the suffixed columns (BallisticDamage1, not BallisticDamage), because the unsuffixed names are aliases whose writes the game discards. |
-
-**What the config GUI shows for these fields.**
-
-| Field | GUI help |
-|---|---|
-| `Slices.GearClasses` | Turn this off and the mod skips this page's files, so nothing on this page is applied. |
-
-1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
 
 ### Invariants
 

@@ -32,7 +32,6 @@ Then run the existing validators against the live tuning:
 
 ```bat
 python "D:\ckf-data-modding\scripts\validate_rules.py" --game "C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint" --enabled-set --quiet
-python "D:\ckf-data-modding\scripts\gear_classes.py" --check --game "C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint"
 python "D:\ckf-data-modding\scripts\cyberweapons.py" --check --game "C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint"
 python "D:\ckf-data-modding\scripts\implants.py" --check --game "C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint"
 python "D:\ckf-data-modding\scripts\consumables.py" --check --game "C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint"
@@ -40,8 +39,7 @@ python "D:\ckf-data-modding\scripts\consumables.py" --check --game "C:\Program F
 
 The validators use current database identities and columns, without comparing
 against a previous static dump or a frozen row count. Sparse enemy overlays are
-valid; when class levers are active, the validator checks whether those rules
-actually reach weapons in the current effective enemy pointers.
+valid.
 
 After item additions or class/pointer changes, refresh consumable sheets:
 

@@ -3691,7 +3691,7 @@ function overlayInput(ov, rel, ri, ci, opts) {
   const ship = ((ov.shipped || {})[String(ri)] || {})[col.name];
   const lab = (ov.labels || {})[col.name];
   const row=(ov.rows[ri] || {}).key || [];
-  const name=(ov.rowLabels || {})[String(row)] || row.join(' / ');
+  const name=row.join(' / ');
   const inp = el('input', { type: 'text', spellcheck: 'false',
     'aria-label':(lab ? lab.label : col.name)+' · '+name });
   if (opts.width) inp.setAttribute('style', 'width:' + opts.width + 'ch');
@@ -3943,12 +3943,6 @@ function overlayBlock(sch, rel, sectionTitle) {
     }
     for (const r of rows) {
       const tr = el('tr', {});
-      // The row's id, and — where the server sent one — the name that id
-      // stands for beside it. `rowLabels` is read defensively: absent, empty
-      // or missing this key is a clean no-op, because the map is a server
-      // addition that may or may not have landed, and NOTHING HERE MAY SPELL
-      // ONE OF THE NAMES.
-      const rowLab = ((ov.rowLabels || {})[String(r.key)] || '');
       tr.appendChild(el('td', {}, [el('button',{class:'rowbtn row-reset',text:'reset',
         'aria-label':'Reset '+ov.table+' '+r.key,disabled:!canWrite || !nEdit,
         title:'Clear all overrides in this row, including hidden columns. Keep its identity and clone definition. Pending until Save.',
@@ -3958,7 +3952,6 @@ function overlayBlock(sch, rel, sectionTitle) {
         }})]));
       tr.appendChild(el('td', { class: 'ro' + (leadComments.length ? ' technical-key' : '') }, [
         document.createTextNode(String(r.key)),
-        rowLab ? el('span', { class: 'small', text: '  ' + rowLab }) : null,
         r.suffix ? el('span', { class: 'pill na', text: r.suffix }) : null]));
       for (const v of leadComments) {
         const lines = String(r.cells[v.i] || '').split(/\n| \| /);

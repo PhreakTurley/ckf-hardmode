@@ -43,7 +43,7 @@ Major slices include:
 | Rule engine | `ModelRules`, `RuleModel`, `SelfCheck` |
 | Mission systems | `PowerLevel`, `Progression`, `MissionRewards`, `RewardCurve`, `Elapse` |
 | Character systems | `Fatigue`, `LimitBreakTraits`, eleven `Talents*` slices |
-| Equipment | `GearClasses`, six `Consumables*` slices |
+| Equipment | Six `Consumables*` slices |
 | Legacy enemy data | `LegacyEnemyData`, `SpawnWeights` |
 | Game settings | `Difficulty` |
 

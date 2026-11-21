@@ -369,8 +369,9 @@ def main():
                 else:
                     check_range(f'{sidecar}:{path}', val, f.get('range'), problems)
 
+    # Older installs may still carry the retired Player Weapon Classes switch.
     for key in sorted(cfg):
-        if key not in declared_cfg:
+        if key not in declared_cfg and key != 'Slices.GearClasses':
             problems.append(('STALE', f'cfg key {key} = {cfg[key]!r} is on disk but no schema declares it'))
 
     # A top-level key in a shared file that no schema claims as a section.
@@ -583,8 +584,10 @@ def main():
     LEGITIMATELY_UNCLAIMED = ('ArmorModel.csv', 'WeaponModel.csv',
                               'MonsterTypeModel.csv')
     ov_dir = os.path.join(cfgdir, 'ckf.hardmode.d')
+    # The loader ignores the retired Player Weapon Classes sheet.
     on_disk = sorted(n for n in (os.listdir(ov_dir) if os.path.isdir(ov_dir) else [])
-                     if n.lower().endswith(('.csv', '.tsv')))
+                     if n.lower().endswith(('.csv', '.tsv'))
+                     and n.lower() != 'gear-classes.csv')
     unclaimed = [n for n in on_disk
                  if 'ckf.hardmode.d/' + n not in claimed_overlays
                  and n not in LEGITIMATELY_UNCLAIMED]

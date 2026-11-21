@@ -30,11 +30,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # re-transcribed. cyberweapons.py imports the same three names from the same
 # module for the same reason: a fifth copy of Adjust.Parse is a fifth thing to
 # drift.
-import gear_classes as _gear                        # noqa: E402
+import overlay_values as _adjust                        # noqa: E402
 
-parse_adjust = _gear.parse_adjust
-NONE, SET, ADD, MULTIPLY = _gear.NONE, _gear.SET, _gear.ADD, _gear.MULTIPLY
-Problem = _gear.Problem
+parse_adjust = _adjust.parse_adjust
+NONE, SET, ADD, MULTIPLY = _adjust.NONE, _adjust.SET, _adjust.ADD, _adjust.MULTIPLY
+Problem = _adjust.Problem
 
 
 # ---------------------------------------------------------------------------
@@ -2876,12 +2876,12 @@ def selftest(dump, live, tree, out):
        any('not unique' in x for x in p), p[:2])
 
     # ---- F16 the grammar ----------------------------------------------------
-    for s, k, v in _gear.ADJUST_CASES_OK:
+    for s, k, v in _adjust.ADJUST_CASES_OK:
         kind, val, ok = parse_adjust(s)
         ck('F16 adjust accepts %r' % s,
            ok and kind == k and (v is None or abs(val - v) < 1e-12),
            (kind, val, ok))
-    for s in _gear.ADJUST_CASES_BAD:
+    for s in _adjust.ADJUST_CASES_BAD:
         ck('F16 adjust rejects %r' % s, parse_adjust(s)[2] is False)
     ck('F16z blank and unparseable are different answers',
        parse_adjust('')[2] is True and parse_adjust('1.8x')[2] is False)
@@ -3273,8 +3273,7 @@ green run would mean COULD NOT LOOK, not agreement.
 
   python3 scripts/consumables.py --check --game "<game root>"
 
-The other four converters (rules_to_overlays.py, gear_classes.py,
-cyberweapons.py, implants.py) refuse here; this one says the same thing.
+This check requires readable source data and a live config directory.
 """
 
 

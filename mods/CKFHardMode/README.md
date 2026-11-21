@@ -46,7 +46,6 @@ These files are data for the rule engine. General overlays require `ModelRules`;
 
 | Switch | Source | File(s) | What it does |
 |---|---|---|---|
-| `GearClasses` | `GearClasses.cs` | `gear-classes.csv` | Lever sheet with one row per player weapon class. Classes resolve against the post-overlay `WeaponTypeId` set in `MonsterTypeModel.csv`, not the shipped table; if that file is missing or unreadable, the sheet emits no rules and the log says why. |
 | `CyberweaponsClaws`, `CyberweaponsLasers` | `Overlays.Load` | `cyberweapons-claws.csv`, `cyberweapons-lasers.csv` | Legacy files skipped before opening. Cyberware tuning belongs to the Workshop exporter. |
 | `ImplantsGlobal` | `ConfigDoc`, `Overlays.Load` | `implants-global.json` | Legacy settings accepted for compatibility; no global implant rule is emitted. |
 | `ImplantsSlot01` … `ImplantsSlot11` | `Overlays.Load` | `implants-slot01.csv` … `implants-slot11.csv` | Legacy files skipped before opening. See the [Workshop editor](../../gui/README.md#workshop-player-catalogs). |

@@ -625,7 +625,7 @@ namespace CKFHardMode
 
         // ---- adjust expressions ---------------------------------------------
 
-        // INTERNAL, not private, so GearClasses can use the same grammar for
+        // The overlay expanders use the same grammar for
         // its lever cells instead of a fourth copy.
         //
         // gui/serve.py's parse_adjust and app.html's JavaScript twin are both

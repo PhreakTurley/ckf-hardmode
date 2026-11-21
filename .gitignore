@@ -30,8 +30,8 @@
 # the config schema
 !/schema/
 
-# scripts a source build needs: the generators, the release builder, and the
-# four sheet expanders gui/serve.py imports (the editor is incomplete without them)
+# Scripts a source build needs: the generators, the release builder, the
+# editor's sheet expanders and their shared helpers.
 !/scripts/
 /scripts/*
 !/scripts/gen_binds.py
@@ -41,7 +41,7 @@
 !/scripts/build_bundled_rebalances.py
 !/scripts/consumables.py
 !/scripts/cyberweapons.py
-!/scripts/gear_classes.py
+!/scripts/overlay_values.py
 !/scripts/implants.py
 !/scripts/static_data.py
 !/scripts/export_enemy_difficulty.py

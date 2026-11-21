@@ -49,10 +49,8 @@ the dump (`old_effect()`) before the two sides can be compared.
 
 WHAT IS NOT HERE
 
-No player/enemy partition. `gear-classes.csv` needs one because a class
-selector reaches every row of a class; these sheets select by exact
-`WeaponId`/`TalentId`, so they reach the 33 rows they name and nothing else.
-The partition question is still ASKED, once, repo-side: P4 below asserts that
+These sheets select weapons and talents by exact id.
+The repo-side P4 check asserts that
 no `MonsterTypeModel` row points at any of the 33, in either the shipped or
 the post-overlay pointer set. It is repo-side ONLY, because players have no dumps and design.md
 section 10 forbids runtime behaviour that depends on one.
@@ -75,19 +73,18 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 #
 # A TRANSCRIPTION of mods/CKFHardMode/MissionRewards.cs, MissionRewards.Adjust.
 # Parse -- the same grammar gui/serve.py's parse_adjust and
-# scripts/gear_classes.py's parse_adjust transcribe. This is deliberately NOT a
-# fifth case table: ADJUST_CASES_* are imported from gear_classes so that the
+# the shared overlay_values parser. ADJUST_CASES_* come from that module so the
 # two scripts cannot drift, and --selftest checks this parser against them.
 #
 # THREE-STATE, not two. Blank and unparseable are different answers.
 # ---------------------------------------------------------------------------
 
-import gear_classes as _gear                       # noqa: E402
+import overlay_values as _adjust                       # noqa: E402
 
-parse_adjust = _gear.parse_adjust
-NONE, SET, ADD, MULTIPLY = _gear.NONE, _gear.SET, _gear.ADD, _gear.MULTIPLY
-Problem = _gear.Problem
-read_csv_rows = _gear.read_csv_rows
+parse_adjust = _adjust.parse_adjust
+NONE, SET, ADD, MULTIPLY = _adjust.NONE, _adjust.SET, _adjust.ADD, _adjust.MULTIPLY
+Problem = _adjust.Problem
+read_csv_rows = _adjust.read_csv_rows
 
 
 # ---------------------------------------------------------------------------
@@ -1105,11 +1102,8 @@ def check_enemy_carry(overlay_dir, dump_dir, pairs, out=print):
     """P4. No MonsterTypeModel row points at a cyberweapon, in either the
     shipped or the post-overlay pointer set.
 
-    REPO-SIDE ONLY. These sheets select by exact id, so unlike gear-classes.csv
-    they do not need a partition at load, and design.md section 10 forbids
-    runtime behaviour that depends on a dump being present. What this check
-    buys is that the day an enemy is given a Photon Lance, the gate says so
-    before a player finds out.
+    The sheet selects exact ids at runtime. This offline check detects any
+    included cyberweapon that also appears on an enemy.
     """
     problems = []
     counts = {}
@@ -1743,14 +1737,14 @@ def selftest(state, overlay_dir, dump_dir, src_root, weapons, talents,
             f'({RULESET_3X_RETIRED_BY}, {RULESET_3X_RETIRED_ON}) and are '
             f'reported NOT RUN below, each by name. Every other case runs.')
 
-    # The grammar, against the SAME case table gear_classes.py and
+    # The grammar, against the SAME case table overlay_values.py and
     # gui/serve.py use. Not a fifth copy.
-    for s, k, v in _gear.ADJUST_CASES_OK:
+    for s, k, v in _adjust.ADJUST_CASES_OK:
         kind, val, ok = parse_adjust(s)
         ck(f'adjust accepts {s!r}',
            ok and kind == k and (v is None or abs(val - v) < 1e-12),
            f'{(kind, val, ok)}')
-    for s in _gear.ADJUST_CASES_BAD:
+    for s in _adjust.ADJUST_CASES_BAD:
         ck(f'adjust rejects {s!r}', parse_adjust(s)[2] is False)
     ck('blank and unparseable are distinguishable',
        parse_adjust('')[2] is True and parse_adjust('1.8x')[2] is False)

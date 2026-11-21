@@ -19,6 +19,7 @@ ROOT = (Path(sys.executable).resolve().parent if getattr(sys, "frozen", False)
         else Path(__file__).resolve().parents[1])
 DEFAULT_DB = ROOT / 'Official' / 'data.db'
 DEFAULT_PROBES = ROOT / 'sheets' / 'raw'
+RETIRED_GEAR_CLASSES_SHEET = 'gear-classes.csv'
 
 # The runtime still uses Drone* names for these two SQL Pet* tables.
 TABLE_NAMES = {'DroneChassisModel': 'PetChassis',
@@ -290,7 +291,7 @@ def read_csv(path):
 def check(source=None):
     """Check the replacement itself and consumers' declared static targets."""
     # Imported only by the CLI, avoiding a reader/consumer import cycle.
-    import gear_classes, cyberweapons, implants, consumables
+    import cyberweapons, implants, consumables
     required = {
         'MonsterTypeModel': {'MonsterTypeId', 'PowerGroupId', 'PowerLevel', 'WeaponTypeId', 'ArmorTypeId'},
         'MonsterGroupModel': {'MonsterGroupId', 'FactionId', 'FactionClass'},
@@ -303,8 +304,6 @@ def check(source=None):
         'EffectModel': {'EffectId'}, 'TalentModel': {'TalentId', 'Weapon'},
         'MatrixEffectModel': {'MatrixEffectId'}, 'ItemModel': {'ItemTypeId', 'ItemClass', 'TalentId'},
     }
-    for col in gear_classes.LEVERS:
-        required['WeaponModel'].add(col)
     for mapping in (cyberweapons.LASER_MAP, cyberweapons.CLAW_MAP):
         for _sheet, (model, col) in mapping:
             required.setdefault(model, set()).add(col)
