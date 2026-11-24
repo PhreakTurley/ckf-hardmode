@@ -19,6 +19,8 @@ import modkit
 
 JOBS = {'ck': 1, 'wm': 2, 'cs': 3, 'aex': 5, 'sol': 7, 'sn': 11,
         'vg': 12, 'hkr': 13, 'gs': 14, 'sc': 15, 'wg': 19}
+WORKSHOP_JOBS = {'dp': 8}
+EDITOR_JOBS = {**JOBS, **WORKSHOP_JOBS}
 KEYS = {'JobModel': 'JobId', 'JobNodeModel': 'JobNodeId', 'TalentModel': 'TalentId',
         'EffectModel': 'EffectId', 'MatrixEffectModel': 'MatrixEffectId'}
 TALENT_LINKS = ('NodeTalent1Id', 'NodeTalentAdjustmentId', 'NodeTalentTriggerId')

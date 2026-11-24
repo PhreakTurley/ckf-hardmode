@@ -20,7 +20,13 @@ import service_availability
 FILE = 'ckf.player-balance.json'
 TABLE_KEYS = {'Weapon': 'WeaponId', 'WeaponMod': 'WeaponModId', 'Armor': 'ArmorId', 'Implant': 'ImplantTypeId',
               'Talent': 'TalentId', 'JobNode': 'JobNodeId', 'Effect': 'EffectId', 'MatrixEffect': 'MatrixEffectId',
-              'MissionAdvantage': 'AdvantageTypeId', 'Trait': 'TraitId', 'Rule': 'RuleId', 'Item': 'ItemTypeId'}
+              'MissionAdvantage': 'AdvantageTypeId', 'Trait': 'TraitId', 'Rule': 'RuleId', 'Item': 'ItemTypeId',
+              'DroneChassis': 'DroneChassisType', 'DronePrebuilt': 'DroneType'}
+DRONE_LOADOUT_POINTERS = {'DroneChassisId': 'DroneChassis', 'JobTypeId': 'Job',
+                          'Weapon': 'Weapon', 'Weapon2': 'Weapon', 'Armor': 'Armor',
+                          **{'CyberSlot%d' % i: 'Implant' for i in range(1, 6)}, 'EffectTypeId': 'Effect'}
+REQUIRED_DRONE_POINTERS = {'DroneChassisId', 'JobTypeId'}
+DRONE_CHASSIS_METADATA = {'DroneClass', 'PetTypeId', 'Cosmetic', 'GameCharacterType'}
 MOD_CATEGORIES = ('Weapon Mods', 'Crafted Intrinsic', 'Intrinsic')
 MULTIPLIERS = {'Cost': 'Price', 'InstallTime': 'Installation time', 'ImplantStress': 'Implant stress'}
 # Attribute-benefit identities are declared independently of the selected DB.
@@ -72,7 +78,8 @@ TEXT_FIELDS = {'Talent': {'IconPng'}, 'JobNode': {'IconPng'},
                'Effect': {'IconAsset'}, 'MatrixEffect': {'IconAsset'}}
 # ContactService.ServiceFlow scopes the option id: for example the official
 # ContactService rows 1, 4 and 7 use option 1 for different catalogs.
-SERVICE_FLOWS = {'Weapon': '1', 'Armor': '2', 'WeaponMod': '3', 'Item': '7', 'Implant': '8'}
+SERVICE_FLOWS = {'Weapon': '1', 'Armor': '2', 'WeaponMod': '3', 'Item': '7', 'Implant': '8',
+                 'DronePrebuilt': '22'}
 # Generic-pool classification policy. Named MissionLootGroupIds captured in
 # _id_constants.csv: WeaponDeprecated, Weapon, WeaponMod, BlueprintWeapon,
 # BlueprintWeaponMod and BlueprintWeaponModIntrinsic. Other explicit loot
@@ -98,7 +105,10 @@ LABELS = {'ApCost': 'AP cost', 'CritMultiBase': 'Crit damage', 'CritMultiStealth
           'ActionPoints1': 'AP · 1', 'ActionPoints2': 'AP · 2',
           'Accuracy1': 'Accuracy · 1', 'Accuracy2': 'Accuracy · 2',
           'TargetEffectDuration': 'Target duration', 'RechargeTurns': 'Recharge',
-          'MaxCharges': 'Charges', 'EffectTypeId': 'Effect', 'MatrixEffectTypeId': 'Matrix effect'}
+          'MaxCharges': 'Charges', 'EffectTypeId': 'Effect', 'MatrixEffectTypeId': 'Matrix effect',
+          'BaseHP': 'Base HP', 'BaseAP': 'Base AP', 'BaseMP': 'Base MP', 'MaxCyberSlots': 'Max module slots',
+          'DroneChassisId': 'Chassis', 'JobTypeId': 'Job', 'ServiceId': 'Service ID', 'Weapon2': 'Weapon 2',
+          'WeaponType1': 'Weapon class 1', 'WeaponType2': 'Weapon class 2', 'ArmorType': 'Armor class'}
 CLASS_NAMES = {1: 'Melee', 2: 'Pistol', 3: 'Assault Rifle', 4: 'Shotgun',
                5: 'E-Rifle', 6: 'Sniper Rifle', 7: 'Canine Attack Rig', 9: 'Drone assault rifles',
                10: 'SMG', 11: 'Revolver', 12: 'Urban Assault', 14: 'Railgun',
@@ -228,9 +238,11 @@ def identity(source):
 
 
 def declarations(source, table):
-    if table not in TABLE_KEYS or table not in source.schema:
+    sql_table = static_data.sql_name(table + 'Model')
+    if table not in TABLE_KEYS or sql_table not in source.schema:
         raise ValueError('Unsupported/missing content table: %s' % table)
-    return {r[1]: r[2] for r in source.schema[table] if not r[5] and
+    aliases = static_data.COLUMN_NAMES.get(sql_table, {})
+    return {aliases.get(r[1], r[1]): r[2] for r in source.schema[sql_table] if not r[5] and
             (any(t in r[2].upper() for t in ('INT', 'REAL', 'NUM', 'FLOAT', 'DOUBLE'))
              or r[1] in TEXT_FIELDS.get(table, set()))}
 
@@ -271,7 +283,8 @@ def validate(doc, source, config_dir=None):
                       'Talent': {'TargetEffect':'Effect', 'SelfEffect':'Effect', 'MatrixEffect':'MatrixEffect'},
                       'JobNode': {'NodeEffect1Id':'Effect', 'MatrixEffect1Id':'MatrixEffect',
                                   'NodeTalent1Id':'Talent', 'NodeTalentAdjustmentId':'Talent',
-                                  'NodeTalentTriggerId':'Talent', 'NodeTalentTriggerEffect':'Effect'}}
+                                  'NodeTalentTriggerId':'Talent', 'NodeTalentTriggerEffect':'Effect'},
+                      'DronePrebuilt': DRONE_LOADOUT_POINTERS}
     for table, records in doc['tables'].items():
         columns = declarations(source, table)
         rows = {r[TABLE_KEYS[table]]: r for r in source.read(table + 'Model')[1]}
@@ -307,8 +320,12 @@ def validate(doc, source, config_dir=None):
                         talent = next((r for r in source.read('TalentModel')[1] if r['TalentId']==trigger), {})
                         if talent.get('TalentIsMatrixOnly') == '1': target = 'MatrixEffect'
                     if target not in pointer_rows:
-                        pointer_rows[target] = {r[TABLE_KEYS[target]] for r in source.read(target + 'Model')[1]}
+                        key = 'JobId' if target == 'Job' else TABLE_KEYS[target]
+                        pointer_rows[target] = {r[key] for r in source.read(target + 'Model')[1]}
                     pointer = effective(doc, table, rows[rid], col)
+                    if table == 'DronePrebuilt' and (pointer < 0 or (pointer == 0 and col in REQUIRED_DRONE_POINTERS)):
+                        raise ValueError('%s %s.%s: choose %s' % (table, rid, col,
+                            'an existing ' + target if col in REQUIRED_DRONE_POINTERS else 'an existing ' + target + ' or 0'))
                     if pointer > 0 and str(int(pointer)) not in pointer_rows[target]:
                         raise ValueError('%s %s.%s: missing %s %s' % (table, rid, col, target, pointer))
                 if table == 'Item' and col == 'ItemClass' and parsed is not None:
@@ -991,7 +1008,7 @@ def service_catalog(source):
             entry = grouped[table].setdefault(row['ServiceOptionId'], {'labels': [], 'references': []})
             if row['attainable'] and text not in entry['labels']:
                 entry['labels'].append(text)
-            entry['references'].append({'id': row['ServiceTypeId'], 'flow': flow,
+            entry['references'].append({'id': row['ServiceTypeId'], 'flow': flow, 'label': text,
                 'level': row['ServiceLevel'], 'displayLevel': row['DisplayLevel'], 'locale': key,
                 'configuration': [text + ' · ' + contact + ' starts at tier ' + level
                                   for contact, level in configured_by.get(row['ServiceGroupId'], ())],
@@ -1001,6 +1018,8 @@ def service_catalog(source):
                             'attainable': any(r['attainable'] for r in entry['references']),
                             'detail': 'ServiceOptionId %s; ServiceFlow %s; ContactService %s' %
                                       (option, SERVICE_FLOWS[table], ', '.join(r['id'] for r in entry['references']))
+                                      + (''.join('\n' + label for label in dict.fromkeys(r['label'] for r in entry['references']))
+                                         if table == 'DronePrebuilt' else '')
                                       + ''.join('\n' + evidence for evidence in dict.fromkeys(
                                           e for r in entry['references'] for e in r['acquisition']))
                                       + ''.join('\nConfigured: ' + configuration for configuration in dict.fromkeys(
@@ -1197,9 +1216,12 @@ def catalog(config_dir, database, document=None):
                     has_override = any(overrides.get(r[TABLE_KEYS[table]], {}).get(col, '') != '' for r in rows)
                     interesting = policy == 'all' or (len(values) > 1 if policy == 'varying'
                                    else any(v not in ('', '0', '0.0') for v in values))
-                    target = visible if has_override or (interesting and col not in METADATA) else advanced
+                    metadata = col in METADATA or (table == 'DroneChassis' and col in DRONE_CHASSIS_METADATA)
+                    if table == 'DronePrebuilt':
+                        metadata = col == 'ServiceId'
+                    target = visible if has_override or (interesting and not metadata) else advanced
                     target.append({'name': col, 'label': label(col), 'visibilityPolicy': policy,
-                                   'metadata': col in METADATA, 'integer': 'INT' in cols[col].upper(),
+                                   'metadata': metadata, 'integer': 'INT' in cols[col].upper(),
                                    **column_presentation(table, col)})
                 order = GEAR_ORDER if table in ('Weapon', 'WeaponMod') else LEADING_COLUMNS
                 for columns in (visible, advanced):
@@ -1211,7 +1233,8 @@ def catalog(config_dir, database, document=None):
                 namekey = {'Weapon': 'WeaponName', 'Armor': 'ArmorName', 'Implant': 'ImplantName',
                            'WeaponMod': 'ModName',
                            'Trait': 'TraitName', 'Effect': 'EffectName', 'MatrixEffect': 'EffectName',
-                           'Talent': 'TalentName', 'Item': 'ItemName'}.get(table)
+                           'Talent': 'TalentName', 'Item': 'ItemName', 'DroneChassis': 'DroneChassisName',
+                           'DronePrebuilt': 'DroneName'}.get(table)
                 records = []
                 for r in rows:
                     rid = r[TABLE_KEYS[table]]
@@ -1250,18 +1273,20 @@ def catalog(config_dir, database, document=None):
                 raw = {r[TABLE_KEYS[table]]: r for r in rows}
                 records.sort(key=lambda r: (tuple(effective(doc, table, raw[r['id']], c)
                                                   for c in LEADING_COLUMNS), natural(r['name']))
-                             if table in ('Weapon', 'WeaponMod', 'Armor', 'Implant', 'Item') else ((), natural(r['name'])))
+                             if table in ('Weapon', 'WeaponMod', 'Armor', 'Implant', 'Item', 'DronePrebuilt')
+                             else ((), natural(r['name'])))
                 result_grid = {'table': table, 'title': title, 'columns': visible, 'advanced': advanced, 'rows': records,
                                'multipliers': doc.get('implantMultipliers', {}) if table == 'Implant' else {}}
                 if table in ('Weapon', 'WeaponMod', 'Armor', 'Implant', 'Item'):
                     result_grid['defaultSort'] = {'key': 'column:Cost', 'descending': False}
-                if table in ('Weapon', 'WeaponMod', 'Armor'):
+                if table in ('Weapon', 'WeaponMod', 'Armor', 'DroneChassis', 'DronePrebuilt'):
                     result_grid['dynamicColumns'] = True
                 if table in ('Weapon', 'WeaponMod', 'Armor', 'Item') or any(r.get('blueprintResale') for r in records):
                     result_grid['blueprintColumn'] = {'label': 'Blueprint',
                         'empty': 'No blueprint drop reference in the selected database.'}
                 if table in services:
-                    result_grid['serviceColumn'] = {'name': 'ServiceOptionId', 'options': services[table],
+                    result_grid['serviceColumn'] = {'name': 'ServiceId' if table == 'DronePrebuilt' else 'ServiceOptionId',
+                                                    'options': services[table],
                                                     'fallbackNonpositive': True, 'fallbackUnavailable': table in ('Implant', 'Item')}
                 return result_grid
 
@@ -1309,6 +1334,51 @@ def catalog(config_dir, database, document=None):
             def page(pid, title, group, grids, **kwargs):
                 result['pages'].append({'id': pid, 'title': title, 'group': group, 'owner': 'player-balance',
                                         'grids': [g for g in grids if g and (g['rows'] or g.get('warning'))], **kwargs})
+
+            from talent_catalog import WORKSHOP_JOBS
+            jobs = {row['JobId']: row for row in source.read('JobModel')[1]}
+            drone_pilot = jobs.get(str(WORKSHOP_JOBS['dp']), {})
+            drone_type = drone_pilot.get('PetOwnerTypeId')
+            chassis = [r for r in allrows['DroneChassis'].values() if r['PetTypeId'] == drone_type]
+            chassis_ids = {r['DroneChassisType'] for r in chassis}
+            loadouts = [r for r in allrows['DronePrebuilt'].values() if r['DroneChassisId'] in chassis_ids]
+            if chassis:
+                for row in chassis:
+                    rid = row['DroneChassisType']
+                    row['DroneChassisName'] = source.locale.get('PetChassis.Name.' + rid, 'Chassis ' + rid)
+                for row in loadouts:
+                    rid = row['DroneType']
+                    row['DroneName'] = source.locale.get('PetPrebuilt.Name.' + rid, 'Drone ' + rid)
+                chassis_grid = grid('DroneChassis', chassis, 'Chassis', 'nonzero')
+                loadout_grid = grid('DronePrebuilt', loadouts, 'Loadouts', 'nonzero')
+                choices = {
+                    'DroneChassis': (chassis, 'DroneChassisName'),
+                    'Job': ([r for r in jobs.values() if r['PetCharacterTypeId'] == drone_type], 'JobName'),
+                    'Weapon': ([r for r in allrows['Weapon'].values() if int(r['WeaponClass']) in DRONE_CLASSES - {7}], 'WeaponName'),
+                    'Armor': ([r for r in allrows['Armor'].values() if int(r['ArmorClass']) in DRONE_ARMOR_CLASSES], 'ArmorName'),
+                    'Implant': ([r for r in allrows['Implant'].values() if int(r['ImplantSlot']) >= 100], 'ImplantName'),
+                    'Effect': (allrows['Effect'].values(), 'EffectName'),
+                }
+                for column in loadout_grid['columns'] + loadout_grid['advanced']:
+                    name = column['name']
+                    target = DRONE_LOADOUT_POINTERS.get(name)
+                    if target:
+                        rows, name_key = choices[target]
+                        key = 'JobId' if target == 'Job' else TABLE_KEYS[target]
+                        options = [{'value': r[key], 'label': r[key] + ' · ' + r[name_key]} for r in rows]
+                        column['options'] = ([] if name in REQUIRED_DRONE_POINTERS else
+                                             [{'value': '0', 'label': '0 · None'}]) + options
+                    if name.startswith('CyberSlot'):
+                        column['label'] = 'Module ' + name[-1]
+                chassis_names = {r['DroneChassisType']: r['DroneChassisName'] for r in chassis}
+                for record in loadout_grid['rows']:
+                    row = allrows['DronePrebuilt'][record['id']]
+                    chassis_id = str(int(effective(doc, 'DronePrebuilt', row, 'DroneChassisId')))
+                    record['fitment'] = chassis_names.get(chassis_id, 'Chassis ' + chassis_id)
+                    record['fitmentSource'] = 'DroneChassis ' + chassis_id
+                page('drones', 'Player Drones', 'Drones', [loadout_grid, chassis_grid])
+            if drone_pilot.get('Enabled') == '1':
+                page('talents-dp', drone_pilot['JobName'], 'Drones', [], talentTag='dp')
 
             enemy_weapons = _effective_enemy_ids(source, config_dir, 'WeaponTypeId')
             # Workshop SQL changes official rows even when Hard Mode has
@@ -1682,12 +1752,15 @@ def sql(doc, source, config_dir=None):
     statements, touched = [], set()
     for table, records in sorted(doc['tables'].items()):
         columns = declarations(source, table)
+        sql_table = static_data.sql_name(table + 'Model')
+        sql_columns = {model: sql for sql, model in static_data.COLUMN_NAMES.get(sql_table, {}).items()}
         for rid, fields in sorted(records.items(), key=lambda x: int(x[0])):
             assignments = []
             for col, value in sorted(fields.items()):
+                sql_col = static_data.quote(sql_columns.get(col, col))
                 if col in TEXT_FIELDS.get(table, set()):
                     if value:
-                        assignments.append('%s=\'%s\'' % (static_data.quote(col), value.replace("'", "''")))
+                        assignments.append('%s=\'%s\'' % (sql_col, value.replace("'", "''")))
                         touched.add((table, rid, col))
                     continue
                 parsed = adjustment(value)
@@ -1696,18 +1769,18 @@ def sql(doc, source, config_dir=None):
                 op, number = parsed
                 expr = format(number, '.15g')
                 if op != 'set':
-                    operand = static_data.quote(col)
+                    operand = sql_col
                     if 'INT' in columns[col].upper():
                         operand = '(' + rounded(operand) + ')'
                     expr = '%s %s (%s)' % (operand, '*' if op == 'multiply' else '+', expr)
                 if 'INT' in columns[col].upper():
                     expr = rounded(expr)
-                assignments.append('%s=%s' % (static_data.quote(col), expr))
+                assignments.append('%s=%s' % (sql_col, expr))
                 touched.add((table, rid, col))
             if assignments:
                 statements.append('UPDATE %s SET %s WHERE %s=%d;' %
-                                  (static_data.quote(table), ', '.join(assignments),
-                                   static_data.quote(TABLE_KEYS[table]), int(rid)))
+                                  (static_data.quote(sql_table), ', '.join(assignments),
+                                   static_data.quote(sql_columns.get(TABLE_KEYS[table], TABLE_KEYS[table])), int(rid)))
     global_assignments = []
     for col in MULTIPLIERS:
         value = doc.get('implantMultipliers', {}).get(col, 1)
@@ -1782,7 +1855,7 @@ def augment(data, provenance, config_dir, database):
             generic[key] = value
     validate_native_updates(payload)
     data = encode(payload)
-    receipt['scope'] = 'player talents, weapons, armor and intrinsic effects, cyberware, consumables, leverage, traits and rules (excluding Enemy Balance Rule 82 and standalone Rules 83-86)'
+    receipt['scope'] = 'player talents, drones, weapons, armor and intrinsic effects, cyberware, consumables, leverage, traits and rules (excluding Enemy Balance Rule 82 and standalone Rules 83-86)'
     receipt['parser_source']['sha256'] = hashlib.sha256(data).hexdigest()
     receipt['parser_source']['records'] = sum(len(payload.get(table, [])) for table in TABLE_KEYS)
     if 'merged_update_records_by_table' in receipt:

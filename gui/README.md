@@ -169,8 +169,9 @@ The editor does not edit Workshop metadata, subscriptions, activation or saves.
 Steam can replace local test files when it downloads a Workshop update; export
 again to restore the current authoring values.
 
-The export includes all eleven classes even when their BepInEx slice switches
-are off. Keep those talent slices off when testing the Workshop package to
+The export includes the eleven native talent packs even when their BepInEx
+slice switches are off, plus saved Drone Pilot and player drone edits.
+Keep those talent slices off when testing the Workshop package to
 avoid applying both implementations. The handoff uses the standalone exporter
 for native talent field mappings and `player_balance.py` for the additional
 Workshop SQL. Unmoved Hard Mode settings remain in the BepInEx workflow.
@@ -259,6 +260,13 @@ included. A blueprint's existence alone is insufficient. No general character
 template or recruitment rule is inferred. `player_balance.py:player_gear_references`
 owns this inclusive static catalog policy; it does not calculate campaign
 reachability or drop probabilities. Hover a name to inspect its source references.
+
+Under **Player Balance → Drones**, **Player Drones** shows editable chassis and
+prebuilt loadouts with their official names. Loadout references offer named
+suggestions for chassis, jobs, weapons, armor, modules and effects. The Service
+column resolves the loadout's service ID against drone sales. **Drone Pilot**
+uses the joined talent editor when the selected database enables the class.
+Both pages save to Player Balance tuning and export with the Workshop mod.
 
 Shared weapons and armor remain editable and carry an **Also used by enemies** marker.
 Enemy markers include both official and local overlay references, so a Hard Mode

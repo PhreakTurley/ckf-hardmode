@@ -44,7 +44,8 @@ def effective_nodes(doc, source, config_dir=None, overlay_bytes=None):
 
 def plan(doc, source, config_dir=None, overlay_bytes=None):
     nodes = effective_nodes(doc, source, config_dir, overlay_bytes)
-    jobs = {r['JobId']: r for r in source.read('JobModel')[1] if r['JobId'] in set(map(str, tc.JOBS.values()))}
+    editable = set(map(str, tc.EDITOR_JOBS.values()))
+    jobs = {r['JobId']: r for r in source.read('JobModel')[1] if r['JobId'] in editable}
     requested = doc.get('removedJobNodes', [])
     if not isinstance(requested, list) or any(not isinstance(n, str) or n not in nodes for n in requested):
         raise ValueError('Removed job nodes must be existing node ids.')

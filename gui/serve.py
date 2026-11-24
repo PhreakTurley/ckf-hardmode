@@ -5290,6 +5290,10 @@ class App:
                 self.editor_catalog_key = identity
                 self.editor_catalogs = {}
             catalogs = self.editor_catalogs
+            if kind == 'player' and isinstance(key, str) and key.startswith('talents-'):
+                tag = key.removeprefix('talents-')
+                if tag in talent_editor.tc.WORKSHOP_JOBS:
+                    kind, key = 'talent', tag
             if kind in ('index', 'player'):
                 if 'player' not in catalogs:
                     catalogs['player'] = self.player_catalog(cd)
@@ -5305,7 +5309,7 @@ class App:
                     catalogs[kind] = enemy_armor.model(cd, source, {})
                 result = dict(catalogs[kind], sourceDir=self.settings.get('enemySourceDir', ''),
                               modkitDir=self.settings.get('enemyModkitProjectDir', ''))
-            elif kind == 'talent' and isinstance(key, str) and key in talent_editor.tc.JOBS:
+            elif kind == 'talent' and isinstance(key, str) and key in talent_editor.tc.EDITOR_JOBS:
                 cache_key = (kind, key)
                 if cache_key not in catalogs:
                     player = self.editor_player_document(cd, current)

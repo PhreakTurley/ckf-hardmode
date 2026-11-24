@@ -81,6 +81,47 @@ class TreeTests(unittest.TestCase):
 
 
 class FieldTests(unittest.TestCase):
+    def test_drone_catalog_edits_keep_table_and_sql_identities(self):
+        pb = serve.player_balance
+        with tempfile.TemporaryDirectory() as folder, serve.static_data.StaticData() as source:
+            app = serve.App({'configDirOverride': folder, 'officialDataPath': str(source.path)}, 'test')
+            fingerprints = app.current_fingerprints(folder)
+            index = app.api_catalog('index', None, fingerprints)
+            self.assertIsNone(index['error'])
+            self.assertEqual({p['id'] for p in index['pages'] if p['group'] == 'Drones'}, {'drones', 'talents-dp'})
+            drone_page = app.api_catalog('player', 'drones', fingerprints)['page']
+            loadouts, chassis = drone_page['grids']
+            self.assertEqual(loadouts['table'], 'DronePrebuilt')
+            self.assertEqual(chassis['table'], 'DroneChassis')
+            self.assertIn(('1', 'Scanbot Pathfinder'), {(r['id'], r['name']) for r in loadouts['rows']})
+            self.assertEqual(loadouts['serviceColumn']['options']['15']['references'][0]['id'], '7018')
+
+            pilot = app.api_catalog('player', 'talents-dp', fingerprints)['page']
+            chaff = next(r for r in pilot['grids'][0]['rows'] if r['id'] == '8320')
+            self.assertEqual(chaff['baseline']['Talent.PureDamage'], '50')
+            self.assertNotIn('overlay', chaff['targets']['Talent.PureDamage'])
+            cells = [
+                {'table': 'DroneChassis', 'id': '1', 'column': 'BaseHP', 'value': '+11'},
+                {'table': 'DroneChassis', 'id': '1', 'column': 'DroneClass', 'value': '2'},
+                {'table': 'DronePrebuilt', 'id': '1', 'column': 'DroneChassisId', 'value': '2'},
+                {'table': 'Talent', 'id': '8015', 'column': 'PureDamage', 'value': '65'},
+            ]
+            pending = {}
+            app.player_edits(folder, {'playerBalance': {'databaseSha': pb.identity(source)['sha256'],
+                                                        'cells': cells}}, pending)
+            (Path(folder) / pb.FILE).write_bytes(pending[pb.FILE])
+            tuning = pb.load(folder)
+            statements, _ = pb.sql(tuning, source, folder)
+            conn = sqlite3.connect(':memory:')
+            self.addCleanup(conn.close)
+            source.connection.backup(conn)
+            conn.executescript('\n'.join(statements))
+            self.assertEqual(conn.execute('SELECT BaseHP,PetClass FROM PetChassis WHERE PetChassisType=1').fetchone(), (86, 2))
+            self.assertEqual(conn.execute('SELECT PetChassisId FROM PetPrebuilt WHERE PetPrebuiltType=1').fetchone(), (2,))
+            self.assertEqual(conn.execute('SELECT PureDamage FROM Talent WHERE TalentId=8015').fetchone(), (65,))
+            with self.assertRaisesRegex(ValueError, 'missing DroneChassis'):
+                pb.apply_edits(tuning, {'cells': [dict(cells[2], value='999999999')]}, source, folder)
+
     def test_missing_maintainer_database_keeps_unrelated_hardmode_editing_available(self):
         with tempfile.TemporaryDirectory() as folder:
             app = serve.App({'officialDataPath': str(Path(folder) / 'missing.db')}, 'test')
@@ -206,6 +247,20 @@ setTimeout(function() {
  const help = panel.find(n=>n.tagName==='SUMMARY' && n.textContent==='How to edit')[0];
  ck('editing help is a disclosure beside the grid controls', !!help && !help.parent.open
    && help.parent.textContent.includes('Clear a cell to restore its baseline'));
+ SEL='pb:talents-dp';render();
+ const chaff=panel.find(n=>n.getAttribute('data-player-target')==='Talent 8015.PureDamage')[0];
+ ck('Drone Pilot uses the joined talent editor from Player Balance', panel.textContent.includes('Drone Pilot') && !!chaff);
+ chaff.value='65';chaff.fire('input');
+ ck('Drone Pilot edits go to Workshop tuning', buildEdits().playerBalance.cells.some(c=>
+   c.table==='Talent' && c.id==='8015' && c.column==='PureDamage' && c.value==='65'));
+ SEL='pb:drones';render();
+ const hp=panel.find(n=>n.getAttribute('data-player-target')==='DroneChassis 1.BaseHP')[0];
+ const cost=panel.find(n=>n.getAttribute('data-player-target')==='DronePrebuilt 1.Cost')[0];
+ ck('player drone chassis and loadouts use separate editable rows', !!hp && !!cost);
+ hp.value='+11';hp.fire('input');
+ cost.value='350';cost.fire('input');
+ ck('drone edits keep overlapping chassis and loadout ids separate', ['DroneChassis','DronePrebuilt'].every(table=>
+   buildEdits().playerBalance.cells.some(c=>c.table===table && c.id==='1')));
  console.log('Talent UI: '+passed+' passed');process.exit(0);
 },0);
 '''

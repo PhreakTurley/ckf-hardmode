@@ -80,14 +80,20 @@ def catalog(overlays, database, attribute_columns, attribute_always, talent_excl
                         row[col] = str(int(pb.effective(document, 'Talent', row, col)))
             by_sheet = {(ov['table'].removesuffix('Model'), rel.split('.')[-2]): (rel, ov)
                         for rel, ov in overlays.items() if ov.get('catalogOrder', 100) < 100}
-            jobs = tc.JOBS.items() if tag is None else ((tag, tc.JOBS[tag]),)
+            jobs = tc.EDITOR_JOBS.items() if tag is None else ((tag, tc.EDITOR_JOBS[tag]),)
             for tag, job in jobs:
+                job_row = tables['Job'].get(str(job), {})
+                workshop_only = tag in tc.WORKSHOP_JOBS
+                if workshop_only and job_row.get('Enabled') != '1':
+                    continue
                 nodes, parents, owners = tc.catalog({t + 'Model': r for t, r in topology.items()}, job)
                 carry = {rid for rid, r in nodes.items() if int(r['CarryItemClass']) > 0}
                 carry.update(r['SubTree'] for rid, r in nodes.items() if rid in carry and int(r['SubTree']) > 0)
                 attributes = {rid for rid, r in nodes.items() if tc.is_attribute(r, {t + 'Model': v for t, v in tables.items()})} | carry
-                root = tables['Job'][str(job)]['DefaultNode1']
+                root = job_row['DefaultNode1']
                 page = {'id': 'talents-' + tag, 'title': '', 'group': 'Talents', 'grids': [], 'talents': True}
+                if workshop_only:
+                    page.update(title=job_row['JobName'], group='Drones', owner='player-balance')
 
                 def grid(title, blocks, records):
                     g = {'key': title, 'table': blocks[0][0] if len(blocks)==1 else 'JobNode', 'title': title, 'joined': True,

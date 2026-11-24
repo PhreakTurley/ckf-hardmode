@@ -85,8 +85,15 @@ setTimeout(async function () {
   if (resaleRow) {
     SEL='pb:weapon-9';render();
     const resaleCell = blueprintCell('Weapon',resaleRow.id);
-    ck('drone blueprint resale is identified separately from drops', resaleCell.textContent==='Resale'
+    const drops = resaleRow.blueprintDrops || [];
+    ck('drone blueprint cells retain both drop and resale evidence',
+       resaleCell.textContent===(drops.length ? 'Blueprint' : 'Resale')
+       && drops.every(evidence=>resaleCell.title.includes(evidence))
+       && resaleCell.title.includes('Configured blueprint buyers:')
        && resaleCell.title.includes('Weapon and Mod Blueprints') && !resaleCell.find(n=>n.tagName==='INPUT').length);
+    const resaleOnly=playerBlueprint(droneGrid,Object.assign({},resaleRow,{blueprintDrops:[]}));
+    ck('a buyer alone marks the drone blueprint as resale', resaleOnly.label==='Resale'
+       && resaleOnly.detail.includes('Weapon and Mod Blueprints'));
   }
   ck('blueprint view operations never create saved edits', JSON.stringify(playerChanges())===beforeBlueprintView);
   const beforeServiceView=JSON.stringify(playerChanges());
