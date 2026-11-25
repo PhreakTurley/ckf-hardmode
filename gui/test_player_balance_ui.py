@@ -44,6 +44,27 @@ setTimeout(async function () {
      && !normalImplants.some(n=>n.id===r.id)));
   const panel = $('#panel');
   const find = function (fn) {return panel.find(fn);};
+  SEL='pb:implant-100';render();
+  const chassisGroup=$('#index').find(n=>n.getAttribute('aria-label')==='Light chassis')[0];
+  ck('module navigation lists the shipped slot label under its chassis', chassisGroup &&
+    chassisGroup.find(n=>n.getAttribute('data-player-page')==='implant-100')[0].textContent==='Small Directed Array');
+  const dazzle=find(n=>n.getAttribute('data-player-row')==='Implant 10000')[0];
+  const effectSummary=dazzle.find(n=>n.tagName==='SUMMARY' && n.textContent==='Effect details')[0];
+  const dazzleEffect=dazzle.find(n=>n.getAttribute('data-player-target')==='Effect 59400.Evasion')[0];
+  ck('drone module tooltip includes the named active talent and its target effect',
+    effectSummary.getAttribute('title').includes('Dazzle Array (Talent 89001)') &&
+    effectSummary.getAttribute('title').includes('Marker Sights (Effect 59400)'));
+  const originalEvasion=dazzleEffect.value;
+  dazzleEffect.value='=-27';dazzleEffect.fire('input');effectSummary.fire('mouseenter');
+  ck('effect tooltip follows a draft edit using the native table identity',
+    effectSummary.getAttribute('title').includes('Evasion -27') && buildEdits().playerBalance.cells.some(c=>
+      c.table==='Effect' && c.id==='59400' && c.column==='Evasion' && c.value==='=-27'));
+  dazzleEffect.value=originalEvasion;dazzleEffect.fire('input');
+  SEL='pb:implant-2';render();
+  const wired=find(n=>n.getAttribute('data-player-row')==='Implant 504')[0];
+  const wiredTip=wired.find(n=>n.tagName==='SUMMARY' && n.textContent==='Effect details')[0].getAttribute('title');
+  ck('ordinary cyberware tooltips include passive and active self effects',
+    wiredTip.includes('Effect 50046') && wiredTip.includes('Talent 80048') && wiredTip.includes('Effect 50095'));
   const beforeBlueprintView = JSON.stringify(playerChanges());
   SEL='pb:weapon-3';render();
   function blueprintCell(table, id) {

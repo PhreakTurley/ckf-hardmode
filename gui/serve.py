@@ -5299,7 +5299,7 @@ class App:
                     catalogs['player'] = self.player_catalog(cd)
                 player = catalogs['player']
                 if kind == 'index':
-                    result = {'pages': [{k: p[k] for k in ('id', 'title', 'owner', 'group')}
+                    result = {'pages': [{k: p[k] for k in ('id', 'title', 'owner', 'group', 'navSubgroup') if k in p}
                                         for p in player['pages']], 'error': player['error']}
                 else:
                     page = next((p for p in player['pages'] if p['id'] == key), None)

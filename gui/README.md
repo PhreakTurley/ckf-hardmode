@@ -390,6 +390,13 @@ adjustments to omitted fields remain preserved and exportable.
 Missing attack/effect links remain explicit. All editable joined cells retain
 their native table/id/column for saving and export.
 
+**Drone Cyberware Modules** uses the game's localized slot names. The sidebar
+groups slots by the chassis families that list them, and each slot page names
+the matching chassis tiers. Shared slots have one page. Cyberware rows join
+their passive effects, granted talents, and those talents' self, target and
+matrix effects. Hover or open **Effect details** under the item name to see the
+linked records and their current values.
+
 Weapons, weapon mods, consumables and cyberware always show a **Service** column with
 localized names and display levels. `player_balance.py:service_catalog` joins
 `ServiceOptionId` within `ContactService.ServiceFlow` (weapons 1, mods 3,

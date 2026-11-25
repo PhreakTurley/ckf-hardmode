@@ -89,6 +89,8 @@ class FieldTests(unittest.TestCase):
             index = app.api_catalog('index', None, fingerprints)
             self.assertIsNone(index['error'])
             self.assertEqual({p['id'] for p in index['pages'] if p['group'] == 'Drones'}, {'drones', 'talents-dp'})
+            module = next(p for p in index['pages'] if p['id'] == 'implant-103')
+            self.assertEqual((module['title'], module['navSubgroup']), ('BattleTac System', 'Medium & Bipedal chassis'))
             drone_page = app.api_catalog('player', 'drones', fingerprints)['page']
             loadouts, chassis = drone_page['grids']
             self.assertEqual(loadouts['table'], 'DronePrebuilt')
@@ -98,7 +100,9 @@ class FieldTests(unittest.TestCase):
 
             pilot = app.api_catalog('player', 'talents-dp', fingerprints)['page']
             chaff = next(r for r in pilot['grids'][0]['rows'] if r['id'] == '8320')
-            self.assertEqual(chaff['baseline']['Talent.PureDamage'], '50')
+            damage = source.connection.execute('SELECT PureDamage FROM Talent WHERE TalentId=8015').fetchone()[0]
+            self.assertEqual(chaff['baseline']['Talent.PureDamage'], str(damage))
+            self.assertEqual(chaff['targets']['Talent.PureDamage']['id'], '8015')
             self.assertNotIn('overlay', chaff['targets']['Talent.PureDamage'])
             cells = [
                 {'table': 'DroneChassis', 'id': '1', 'column': 'BaseHP', 'value': '+11'},

@@ -300,6 +300,10 @@ table.pb-grid th{min-width:0;max-width:none!important;white-space:nowrap;word-br
 .pb-grid .pb-name small{display:none;color:var(--faint);font-weight:400}
 body.technical .pb-grid .pb-name small{display:block}
 .pb-grid .pb-name small.pb-fit{display:block;color:var(--dim);white-space:normal;line-height:1.4;margin-top:3px}
+.pb-effect-summary{margin-top:3px;color:var(--dim);font-size:12px;font-weight:400}
+.pb-effect-summary summary{cursor:pointer;width:max-content;text-decoration:underline dotted;text-underline-offset:3px}
+.pb-effect-summary summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.pb-effect-summary div{margin:5px 0 2px;white-space:pre-wrap;line-height:1.4;overflow-wrap:anywhere}
 .pb-grid .pb-name .pb-enemy{display:block;color:#f4c17b;font-size:11px;font-weight:600;margin-top:4px}
 .pb-grid .pb-name .pb-enemy-icon{display:inline-block;color:#f4c17b;font-size:13px;margin-left:6px;vertical-align:baseline}
 .pb-grid .pb-name .pb-origin{display:table;margin-top:4px}
@@ -312,6 +316,8 @@ body.technical .pb-grid .pb-name small{display:block}
 .pb-grid td.readonly{color:var(--dim);padding:5px 8px}
 .pb-nav summary{cursor:pointer;padding:9px 12px;font-weight:600;color:var(--dim)}
 .pb-nav .navitem{padding-left:20px}
+.pb-nav-subgroup{padding:7px 12px 2px 20px;color:var(--dim);font-size:12px;font-weight:600}
+.pb-nav-subgroup + div .navitem{padding-left:28px}
 nav .nav-owner{--owner-color:var(--dim);padding:0 0 8px}
 nav .nav-owner + .nav-owner{border-top:2px solid var(--line);margin-top:12px}
 nav .nav-owner[data-mod-owner="player-balance"]{--owner-color:var(--accent)}
@@ -1975,6 +1981,7 @@ function renderIndex() {
   }
   function renderCatalog(owner, host) {
     const groups = {};
+    const subgroups = new Map();
     for (const page of pages.filter(function (p) {return p.owner === owner.id;})) {
       let parent = host;
       if (page.group && page.group !== owner.title) {
@@ -1982,7 +1989,7 @@ function renderIndex() {
           const key = owner.id + ':' + page.group;
           const open = PLAYER_NAV_OPEN[key] === undefined
             ? pages.some(function(p) {return p.owner===owner.id && p.group===page.group && SEL==='pb:'+p.id;})
-              || !['Drones','Drone weapons','Drone armors','Cyberware modules'].includes(page.group)
+              || !['Drones','Drone weapons','Drone armors','Drone Cyberware Modules'].includes(page.group)
             : PLAYER_NAV_OPEN[key];
           const det = el('details', {class:'pb-nav',open:open}, [el('summary', {text:page.group})]);
           det.addEventListener('toggle', function () {PLAYER_NAV_OPEN[key] = det.open;});
@@ -1990,6 +1997,16 @@ function renderIndex() {
           host.appendChild(det);
         }
         parent = groups[page.group];
+      }
+      if (page.navSubgroup) {
+        const key=JSON.stringify([page.group,page.navSubgroup]);
+        if (!subgroups.has(key)) {
+          const entries=el('div',{'aria-label':page.navSubgroup,role:'group'});
+          parent.appendChild(el('div',{class:'pb-nav-subgroup',text:page.navSubgroup}));
+          parent.appendChild(entries);
+          subgroups.set(key,entries);
+        }
+        parent=subgroups.get(key);
       }
       parent.appendChild(el('div', {
         class:'navitem' + (SEL === 'pb:' + page.id ? ' sel' : ''),'data-player-page':page.id,
@@ -2235,6 +2252,23 @@ function playerEffectiveColumnValue(grid, row, column) {
   if (column.integer !== false) value=playerRound(value);
   value*=cell.multiplier;
   return column.integer !== false ? playerRound(value) : value;
+}
+
+function playerEffectDetails(grid, row) {
+  const columns=grid.columns.concat(grid.advanced).filter(function(col) {return !col.metadata;});
+  return row.effectSummary.map(function(ref) {
+    const heading=ref.label || ref.group;
+    const source=ref.table+' '+ref.id;
+    if (ref.missing) return heading+' · '+source+' unavailable';
+    const values=[];
+    for (const col of columns) {
+      if (col.group!==ref.group) continue;
+      const value=playerEffectiveColumnValue(grid,row,col);
+      if (value!==null && value!==0) values.push(col.label+' '+value);
+    }
+    return heading+' · '+(ref.name ? ref.name+' ('+source+')' : source)
+      +(values.length ? '\n'+values.join(', ') : '');
+  }).join('\n\n');
 }
 
 function playerDisplayColumns(grid, showAll) {
@@ -2632,6 +2666,7 @@ function renderPlayer(panel, page) {
         return (r.name+' '+(r.weaponName || '')+' '+r.id+' '+(grid.category || '')+' '+(grid.subsection || '')+' '+(r.section || '')+' '+token+' '+playerService(grid,r).label
           +' '+(grid.blueprintColumn ? playerBlueprint(grid,r).label : '')+' '+(r.origin || '')+' '+(r.cloneOf || '')
           +' '+(r.playerUse ? 'Also used by players' : '')+' '+(r.unused ? 'Unused armor' : '')
+          +' '+(r.effectSummary || []).map(ref=>ref.name+' '+ref.table+' '+ref.id).join(' ')
           +' '+(grid.table==='Trait' ? Object.entries(r.links || {}).map(([group,id])=>group+' '+id).join(' ') : '')).toLocaleLowerCase().includes(query);
       });
       filtered.push({grid:grid,matches:matches,start:total});
@@ -2686,7 +2721,7 @@ function renderPlayer(panel, page) {
       if (!visible) continue;
       const rows=playerSortedRows(grid,matches,sort).slice(firstRow,Math.max(0,lastRow));
       if (grid.title !== page.title) target.appendChild(el('h3', {text:grid.title}));
-      if (!page.talents && (grid.table==='Trait' || ['Drones','Weapons','Drone weapons','Armor','Drone armors','Cyberware','Cyberware modules','Consumables','Enemy Gear'].includes(page.group))) {
+      if (!page.talents && (grid.table==='Trait' || ['Drones','Weapons','Drone weapons','Armor','Drone armors','Cyberware','Drone Cyberware Modules','Consumables','Enemy Gear'].includes(page.group))) {
         const sortBy = el('select',{'aria-label':'Sort by '+page.title+' · '+grid.title});
         const choices = [{value:'',text:'Catalog order'},{value:'name',text:'Name'}];
         if (grid.serviceColumn) choices.push({value:'service',text:'Service'});
@@ -2796,6 +2831,22 @@ function renderPlayer(panel, page) {
         if (row.enemyUse) nameCell.insertBefore(el('span', {class:'pb-enemy-icon',text:'⚔',role:'img','aria-label':'Also used by enemies',title:'Also used by enemies. Changing this gear also affects enemies that use it.'}),nameCell.children[0]);
         if (row.owner) nameCell.appendChild(el('span', {class:'pb-owner',text:'Managed by '+row.owner}));
         if (row.fitment) nameCell.appendChild(el('small', {class:'pb-fit',text:row.fitment,title:row.fitmentSource}));
+        if (row.effectSummary && row.effectSummary.length) {
+          const summary=el('summary',{text:'Effect details'});
+          const content=el('div',{});
+          const details=el('details',{class:'pb-effect-summary'},[summary,content]);
+          function refreshEffects() {
+            const text=playerEffectDetails(grid,row);
+            summary.setAttribute('title',text);
+            content.textContent=text;
+          }
+          refreshEffects();
+          summary.addEventListener('mouseenter',refreshEffects);
+          summary.addEventListener('focus',refreshEffects);
+          details.addEventListener('toggle',refreshEffects);
+          computedViews.push(function() {if (details.open) refreshEffects();});
+          nameCell.appendChild(details);
+        }
         const reset=el('button',{class:'rowbtn row-reset',text:'reset','aria-label':'Reset '+grid.table+' '+row.id,
           disabled:row.readOnly || !(playerRowClears(grid,row).length),
           title:'Clear this row’s overrides, including hidden fields. Keep its identity and clone definition. Pending until Save.',

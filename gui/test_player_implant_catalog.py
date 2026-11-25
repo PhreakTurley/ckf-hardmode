@@ -1,5 +1,7 @@
 """Inclusive implant acquisition and preservation of unreachable overrides."""
 from pathlib import Path
+import shutil
+import sqlite3
 import sys
 import tempfile
 import unittest
@@ -156,6 +158,57 @@ class ImplantCatalogTests(unittest.TestCase):
                     self.assertEqual(rows[0]['targets']['Effects.MaxHitPoints']['table'], 'Effect')
                     self.assertEqual(rows[0]['targets']['Effects.MaxHitPoints']['id'], effect_id)
                     self.assertEqual(pb.load(config), doc)
+
+    def test_official_module_labels_chassis_and_active_links(self):
+        with tempfile.TemporaryDirectory() as config:
+            model = pb.catalog(config, static_data.DEFAULT_DB)
+        self.assertIsNone(model['error'])
+        pages = {p['id']: p for p in model['pages']}
+        modules = {p['id']: p for p in pages.values() if p['group'] == 'Drone Cyberware Modules'}
+        self.assertEqual(set(modules), {'implant-%d' % slot for slot in range(100, 116)})
+        self.assertEqual((modules['implant-100']['navSubgroup'], modules['implant-100']['title']),
+                         ('Light chassis', 'Small Directed Array'))
+        self.assertEqual(modules['implant-103']['navSubgroup'], 'Medium & Bipedal chassis')
+        self.assertEqual(modules['implant-108']['navSubgroup'], 'Heavy & Bipedal chassis')
+        self.assertEqual(modules['implant-110']['description'], 'Slot 110 appears on Light Chassis PL5, Light Chassis PL8.')
+
+        cases = [(100, '10000', 'Talent target effect.Evasion', 'Effect', '59400', '-15'),
+                 (2, '504', 'Talent self effect.ActionPoints', 'Effect', '50095', '10'),
+                 (4, '1905', 'Talent matrix effect.DeckShield', 'MatrixEffect', '70020', '30'),
+                 (3, '1100', 'Talent 2 target effect.ActionPoints', 'Effect', '8300', '20'),
+                 (3, '1100', 'Talent 3.ApCost', 'Talent', '8000', '10')]
+        for slot, rid, column, table, target_id, baseline in cases:
+            with self.subTest(column=column):
+                row = next(r for r in pages['implant-%d' % slot]['grids'][0]['rows'] if r['id'] == rid)
+                target = row['targets'][column]
+                self.assertEqual((target['table'], target['id'], row['baseline'][column]), (table, target_id, baseline))
+                self.assertTrue(any((ref['table'], ref['id']) == (table, target_id) for ref in row['effectSummary']))
+                if slot == 3:
+                    self.assertIn('Pilot Wire 2', target['sharedWith'])
+
+    def test_active_joins_follow_saved_pointers_and_report_missing_rows(self):
+        with tempfile.TemporaryDirectory() as config:
+            database = Path(config, 'data.db')
+            shutil.copyfile(static_data.DEFAULT_DB, database)
+            db = sqlite3.connect(database)
+            try:
+                db.execute('UPDATE Talent SET SelfEffect=999999 WHERE TalentId=89001')
+                db.commit()
+            finally:
+                db.close()
+            with static_data.StaticData(database) as source:
+                doc = pb.apply_edits(pb.empty(), {'cells': [
+                    {'table': 'Talent', 'id': '89001', 'column': 'TargetEffect', 'value': '59402'}]}, source)
+            Path(config, pb.FILE).write_bytes(pb.encode(doc))
+            model = pb.catalog(config, database)
+        self.assertIsNone(model['error'])
+        grid = next(p for p in model['pages'] if p['id'] == 'implant-100')['grids'][0]
+        row = next(r for r in grid['rows'] if r['id'] == '10000')
+        self.assertEqual(row['links']['Talent target effect'], '59402')
+        self.assertIn(('Effect', '59402'), {(r['table'], r['id']) for r in row['targets'].values()})
+        self.assertFalse(grid['joinsComplete'])
+        self.assertIn('Implant 10000: Effect 999999 was not found', grid['warning'])
+        self.assertTrue(next(r for r in row['effectSummary'] if r['id'] == '999999')['missing'])
 
 
 if __name__ == '__main__':

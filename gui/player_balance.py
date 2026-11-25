@@ -22,11 +22,17 @@ TABLE_KEYS = {'Weapon': 'WeaponId', 'WeaponMod': 'WeaponModId', 'Armor': 'ArmorI
               'Talent': 'TalentId', 'JobNode': 'JobNodeId', 'Effect': 'EffectId', 'MatrixEffect': 'MatrixEffectId',
               'MissionAdvantage': 'AdvantageTypeId', 'Trait': 'TraitId', 'Rule': 'RuleId', 'Item': 'ItemTypeId',
               'DroneChassis': 'DroneChassisType', 'DronePrebuilt': 'DroneType'}
+DRONE_MODULE_FIELDS = tuple('CyberSlot%d' % i for i in range(1, 6))
 DRONE_LOADOUT_POINTERS = {'DroneChassisId': 'DroneChassis', 'JobTypeId': 'Job',
                           'Weapon': 'Weapon', 'Weapon2': 'Weapon', 'Armor': 'Armor',
-                          **{'CyberSlot%d' % i: 'Implant' for i in range(1, 6)}, 'EffectTypeId': 'Effect'}
+                          **dict.fromkeys(DRONE_MODULE_FIELDS, 'Implant'), 'EffectTypeId': 'Effect'}
 REQUIRED_DRONE_POINTERS = {'DroneChassisId', 'JobTypeId'}
 DRONE_CHASSIS_METADATA = {'DroneClass', 'PetTypeId', 'Cosmetic', 'GameCharacterType'}
+IMPLANT_TALENT_FIELDS = ('ImplantTalentId', 'ImplantTalentId2', 'ImplantTalentId3')
+TALENT_EFFECT_FIELDS = (('self effect', 'Effect', 'SelfEffect'),
+                        ('target effect', 'Effect', 'TargetEffect'),
+                        ('matrix effect', 'MatrixEffect', 'MatrixEffect'))
+IMPLANT_EFFECT_BLOCKS = (('Effects', 'Effect'), ('Matrix effects', 'MatrixEffect'))
 MOD_CATEGORIES = ('Weapon Mods', 'Crafted Intrinsic', 'Intrinsic')
 MULTIPLIERS = {'Cost': 'Price', 'InstallTime': 'Installation time', 'ImplantStress': 'Implant stress'}
 # Attribute-benefit identities are declared independently of the selected DB.
@@ -60,7 +66,7 @@ METADATA = {'Locked', 'FactionId', 'ServiceOptionId', 'Asset3DTypeId', 'ModClass
             'AlternateAdjustment', 'AltOverride', 'AlternateCharge', 'Counter'}
 METADATA.update({'EffectTypeId', 'MatrixEffectTypeId', 'ImplantEffectId', 'ImplantTraitGroup',
                  'MatrixEffectId', 'EffectTriggerType', 'TriggerEffectId', 'WoundTraitId',
-                 'ImplantTalentId', 'ArmorEffectId', 'TargetEffect',
+                 *IMPLANT_TALENT_FIELDS, 'ArmorEffectId', 'TargetEffect',
                  'SelfEffect', 'MatrixEffect', 'Token'})
 METADATA.update({'ItemClass', 'LeverageClass', 'TalentId'})
 ITEM_CLASSES = {1: 'Medical', 2: 'Grenades', 3: 'Devices', 4: 'Chems', 6: 'Sploitkits', 7: 'Matrix'}
@@ -119,6 +125,14 @@ DRONE_CLASSES = {7, 9, 18, 19, 20}
 SLOT_NAMES = {1: 'Skin', 2: 'Spinal', 3: 'Deep Brain', 4: 'Fast Brain', 5: 'Skeletal',
               6: 'Arms', 7: 'Legs', 8: 'Ocular', 9: 'Heart', 10: 'Lungs', 11: 'Quantum Rider'}
 SLOT_ORDER = [8, 6, 1, 5, 3, 4, 2, 9, 10, 7]
+# Constants.ImplantSlot in CoreRPG_v1.dll supplies the locale key suffixes.
+DRONE_SLOT_LOCALES = {
+    100: 'DroneLightCombatTarget', 101: 'DroneLightFieldGen', 102: 'DroneLightMedical',
+    103: 'DroneMidCombatTarget', 104: 'DroneHeavyBattle', 105: 'DroneMidFieldGen',
+    106: 'DroneMidMedical', 107: 'DroneMidTech', 108: 'DroneHeavyFieldGen', 109: 'DroneHeavyTech',
+    110: 'DroneChassisLight', 111: 'DroneChassisMid', 112: 'DroneHeavyChassisInner',
+    113: 'DroneHeavyChassisOutter', 114: 'DroneWalkChassisUpper', 115: 'DroneWalkChassisLower',
+}
 # Explicit presentation order, independent of SQL's physical column order.
 WEAPON_GROUPS = [
     ('Damage 1', ['PhysicalDamage1', 'BallisticDamage1', 'PureDamage1']),
@@ -683,9 +697,8 @@ def player_implant_references(source, doc=None, source_kinds=None):
                 if row['ImplantClass'] == job['ReqCyberClass1Id']:
                     add(row['ImplantTypeId'], 'Job %s.ReqCyberClass1Id %s (inclusive class policy)' %
                         (job['JobId'], job['ReqCyberClass1Id']), 'starting')
-    for row in source.read('DronePrebuiltModel', ('DroneType', 'CyberSlot1', 'CyberSlot2',
-                                                'CyberSlot3', 'CyberSlot4', 'CyberSlot5'))[1]:
-        for field in ('CyberSlot1', 'CyberSlot2', 'CyberSlot3', 'CyberSlot4', 'CyberSlot5'):
+    for row in source.read('DronePrebuiltModel', ('DroneType', *DRONE_MODULE_FIELDS))[1]:
+        for field in DRONE_MODULE_FIELDS:
             add(row[field], 'PetPrebuilt %s.%s' % (row['DroneType'], field), 'starting')
     activations = [r['BlockConditionId'] for r in source.read('BlockConditionModel',
                    ('BlockConditionId', 'ConditionType'))[1] if r['ConditionType'] == 'ActivateCyber']
@@ -1062,21 +1075,60 @@ def effect_links(allrows, doc, base_table, effect_field, matrix_field):
     for row in allrows[base_table].values():
         rid = row[TABLE_KEYS[base_table]]
         linked = {'ids': {}, 'warnings': []}
+        name = row[base_table + 'Name']
+        if base_table == 'Trait':
+            name = '%s (Trait %s)' % (name, rid)
         for heading, table, field in [('Effects', 'Effect', effect_field),
                                       ('Matrix effects', 'MatrixEffect', matrix_field)]:
             pointer = str(int(effective(doc, base_table, row, field)))
-            linked['ids'][heading] = pointer
-            target = None if pointer in ('0', '-1', '') else allrows[table].get(pointer)
-            linked[heading] = target
-            if pointer not in ('0', '-1', '') and target is None:
-                linked['warnings'].append('%s %s: %s %s was not found' % (base_table, rid, table, pointer))
-            if target:
-                name = row[base_table + 'Name']
-                if base_table == 'Trait':
-                    name = '%s (Trait %s)' % (name, rid)
-                owners.setdefault((table, pointer), {})[rid] = name
+            follow_catalog_link(allrows, linked, owners, (base_table, rid, name), heading, table, pointer)
         links[rid] = linked
     return links, owners
+
+
+def follow_catalog_link(allrows, linked, owners, owner, heading, table, pointer):
+    base_table, rid, name = owner
+    linked['ids'][heading] = pointer
+    linked[heading] = None
+    if pointer in ('0', '-1', ''):
+        return None
+    target = linked[heading] = allrows[table].get(pointer)
+    if target is None:
+        linked['warnings'].append('%s %s: %s %s was not found' % (base_table, rid, table, pointer))
+    else:
+        owners.setdefault((table, pointer), {})[rid] = name
+    return target
+
+
+def implant_links(allrows, doc):
+    links, owners = effect_links(allrows, doc, 'Implant', 'ImplantEffectId', 'MatrixEffectId')
+    blocks = list(IMPLANT_EFFECT_BLOCKS)
+    for index, field in enumerate(IMPLANT_TALENT_FIELDS, 1):
+        prefix = 'Talent' if index == 1 else 'Talent %d' % index
+        effect_blocks = [(prefix + ' ' + suffix, table, column) for suffix, table, column in TALENT_EFFECT_FIELDS]
+        blocks.append((prefix, 'Talent'))
+        blocks.extend((heading, table) for heading, table, _ in effect_blocks)
+        for rid, row in allrows['Implant'].items():
+            linked = links[rid]
+            owner = ('Implant', rid, row['ImplantName'])
+            pointer = str(int(effective(doc, 'Implant', row, field)))
+            talent = follow_catalog_link(allrows, linked, owners, owner, prefix, 'Talent', pointer)
+            for heading, table, column in effect_blocks:
+                pointer = str(int(effective(doc, 'Talent', talent, column))) if talent else '0'
+                follow_catalog_link(allrows, linked, owners, owner, heading, table, pointer)
+    return links, owners, blocks
+
+
+def drone_module_slots(chassis, doc):
+    """Chassis CyberSlot fields contain slot types, not the loadouts' implant IDs."""
+    slots = {}
+    for row in chassis:
+        cls = int(row['DroneClass'])
+        for field in DRONE_MODULE_FIELDS:
+            slot = int(effective(doc, 'DroneChassis', row, field))
+            if slot >= 100:
+                slots.setdefault(slot, {}).setdefault(cls, set()).add(row['DroneChassisName'])
+    return slots
 
 
 def armor_links(allrows, doc):
@@ -1199,7 +1251,7 @@ def catalog(config_dir, database, document=None):
             service_fallbacks['Item'] = item_service_fallbacks(source, blueprint_refs['Item'])
             acquisition.update(player_item_references(source, doc, blueprint_refs['Item']))
             item_links, item_owners = consumable_links(allrows, doc)
-            cyberware_links, implant_owners = effect_links(allrows, doc, 'Implant', 'ImplantEffectId', 'MatrixEffectId')
+            cyberware_links, implant_owners, implant_blocks = implant_links(allrows, doc)
             intrinsic_links, armor_owners = armor_links(allrows, doc)
             for trait in allrows['Trait'].values():
                 if trait['TraitName'].startswith('Trait.Name.'):
@@ -1607,20 +1659,58 @@ def catalog(config_dir, database, document=None):
                      description='These items have no known player acquisition reference. '
                                  'They remain here while the item or its linked talent/effects have overrides. '
                                  'Clear those overrides and save to remove them from this page.')
+            def implant_grid(rows, title):
+                g = joined_grid('Implant', rows, title, 'Implant', cyberware_links, implant_owners, implant_blocks)
+                for record in g['rows']:
+                    link = cyberware_links[record['id']]
+                    record['effectSummary'] = []
+                    for heading, table in implant_blocks:
+                        rid = link['ids'][heading]
+                        if rid in ('', '0', '-1'):
+                            continue
+                        target = link[heading]
+                        name_key = 'TalentName' if table == 'Talent' else 'EffectName'
+                        title = {'Effects': 'Passive effect', 'Matrix effects': 'Passive matrix effect'}.get(heading, heading)
+                        if table == 'Talent' and target and effective(doc, table, target, 'TalentIsActive'):
+                            title = 'Active ' + heading.lower()
+                        record['effectSummary'].append({'group': heading, 'table': table, 'id': rid,
+                            'label': title, 'name': target.get(name_key, '') if target else '', 'missing': target is None})
+                return g
+
             page('implant-global', 'All cyberware', 'Cyberware', [], multipliers=MULTIPLIERS)
             player_implants = [r for r in allrows['Implant'].values() if r['ImplantTypeId'] in acquisition['Implant']]
-            for slot in sorted({int(r['ImplantSlot']) for r in player_implants},
+            by_slot = {}
+            for row in player_implants:
+                by_slot.setdefault(int(row['ImplantSlot']), []).append(row)
+            for slot in sorted((s for s in by_slot if s < 100),
                                key=lambda s: (SLOT_ORDER.index(s) if s in SLOT_ORDER else len(SLOT_ORDER), s)):
-                rows = [r for r in player_implants if int(r['ImplantSlot']) == slot]
-                title = SLOT_NAMES.get(slot, 'Module slot %s' % slot)
-                page('implant-%s' % slot, title, 'Cyberware modules' if slot >= 100 else 'Cyberware',
-                     [joined_grid('Implant', rows, title, 'Implant', cyberware_links, implant_owners,
-                                  [('Effects', 'Effect'), ('Matrix effects', 'MatrixEffect')])])
+                title = SLOT_NAMES.get(slot, 'Slot %s' % slot)
+                page('implant-%s' % slot, title, 'Cyberware', [implant_grid(by_slot[slot], title)])
+
+            module_slots = drone_module_slots(chassis, doc)
+            def chassis_order(slot):
+                classes = module_slots.get(slot, {})
+                return (len(classes) != 1, not classes, tuple(sorted(classes)), slot)
+
+            for slot in sorted((s for s in by_slot if s >= 100), key=chassis_order):
+                classes = module_slots.get(slot, {})
+                tiers = [name for cls in sorted(classes) for name in sorted(classes[cls], key=natural)]
+                families = []
+                for cls in sorted(classes):
+                    match = re.fullmatch(r'(.+) Chassis PL\d+', min(classes[cls]))
+                    families.append(match[1] if match else 'Class %s' % cls)
+                title = source.locale.get('Pet.Cyber.ImplantSlot.' + DRONE_SLOT_LOCALES.get(slot, '')) or 'Module slot %s' % slot
+                subgroup = ' & '.join(families) + ' chassis' if families else 'Unmapped slots'
+                description = ('Slot %s appears on %s.' % (slot, ', '.join(tiers)) if tiers
+                               else 'Slot %s has no matching chassis slot in this catalog.' % slot)
+                page('implant-%s' % slot, title, 'Drone Cyberware Modules', [implant_grid(by_slot[slot], title)],
+                     navSubgroup=subgroup, description=description)
+
             def implant_has_overrides(row):
                 rid = row['ImplantTypeId']
                 linked = cyberware_links[rid]
                 targets = [('Implant', rid)] + [(table, linked['ids'][heading])
-                    for heading, table in (('Effects', 'Effect'), ('Matrix effects', 'MatrixEffect'))
+                    for heading, table in implant_blocks
                     if linked[heading] is not None]
                 return any(adjustment(value) is not None for table, target in targets
                            for value in doc['tables'].get(table, {}).get(target, {}).values())
@@ -1628,8 +1718,7 @@ def catalog(config_dir, database, document=None):
                               if r['ImplantTypeId'] not in acquisition['Implant'] and implant_has_overrides(r)]
             if other_implants:
                 page('other-cyberware-overrides', 'Other cyberware overrides', 'Cyberware',
-                     [joined_grid('Implant', other_implants, 'Other cyberware', 'Implant', cyberware_links,
-                                  implant_owners, [('Effects', 'Effect'), ('Matrix effects', 'MatrixEffect')])],
+                     [implant_grid(other_implants, 'Other cyberware')],
                      description='These implants have no known player acquisition reference under the inclusive filter. '
                                  'They remain here while the implant or its linked effects have overrides. '
                                  'Clear those overrides and save to remove them from this page.')
