@@ -394,8 +394,9 @@ their native table/id/column for saving and export.
 groups slots by the chassis families that list them, and each slot page names
 the matching chassis tiers. Shared slots have one page. Cyberware rows join
 their passive effects, granted talents, and those talents' self, target and
-matrix effects. Hover or open **Effect details** under the item name to see the
-linked records and their current values.
+matrix effects. For active cyberware, **Effect details** fills the game's
+localized talent descriptions with current editor values. Passive-only rows
+show the linked effects and their current values.
 
 Weapons, weapon mods, consumables and cyberware always show a **Service** column with
 localized names and display levels. `player_balance.py:service_catalog` joins

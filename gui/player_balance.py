@@ -16,6 +16,7 @@ import re
 import static_data
 import overlay_values
 import service_availability
+import talent_tooltips
 
 FILE = 'ckf.player-balance.json'
 TABLE_KEYS = {'Weapon': 'WeaponId', 'WeaponMod': 'WeaponModId', 'Armor': 'ArmorId', 'Implant': 'ImplantTypeId',
@@ -1659,11 +1660,15 @@ def catalog(config_dir, database, document=None):
                      description='These items have no known player acquisition reference. '
                                  'They remain here while the item or its linked talent/effects have overrides. '
                                  'Clear those overrides and save to remove them from this page.')
+            tooltip_locale = talent_tooltips.presentation(source.locale)
+
             def implant_grid(rows, title):
                 g = joined_grid('Implant', rows, title, 'Implant', cyberware_links, implant_owners, implant_blocks)
+                g['talentTooltipLocale'] = tooltip_locale
                 for record in g['rows']:
                     link = cyberware_links[record['id']]
                     record['effectSummary'] = []
+                    record['talentTooltips'] = []
                     for heading, table in implant_blocks:
                         rid = link['ids'][heading]
                         if rid in ('', '0', '-1'):
@@ -1673,6 +1678,22 @@ def catalog(config_dir, database, document=None):
                         title = {'Effects': 'Passive effect', 'Matrix effects': 'Passive matrix effect'}.get(heading, heading)
                         if table == 'Talent' and target and effective(doc, table, target, 'TalentIsActive'):
                             title = 'Active ' + heading.lower()
+                            weapon = allrows['Weapon'].get(str(int(effective(doc, table, target, 'Weapon'))))
+                            weapon_preview = None
+                            if weapon:
+                                columns = ('Accuracy1', 'PureDamage1', 'BallisticDamage1', 'PhysicalDamage1',
+                                           'CritMultiBase', 'CritMultiStealth')
+                                weapon_preview = {'id': weapon['WeaponId'], 'columns': list(columns),
+                                                  'baseline': {c: weapon[c] for c in columns if c in weapon}}
+                            name = target['TalentName']
+                            if not name or name == 'Talent.Name.' + rid:
+                                name = record['name']
+                            tokens = effective(doc, table, target, 'TokenDuration') > 0 and not effective(doc, table, target, 'TokenCount')
+                            record['talentTooltips'].append(talent_tooltips.talent_preview(
+                                source.locale, name, heading, target.get('TalentStringKey'),
+                                bool(effective(doc, table, target, 'TalentIsMatrixOnly')),
+                                link['ids'][heading + ' target effect'] not in ('0', '-1'),
+                                link['ids'][heading + ' self effect'] not in ('0', '-1'), tokens, weapon_preview))
                         record['effectSummary'].append({'group': heading, 'table': table, 'id': rid,
                             'label': title, 'name': target.get(name_key, '') if target else '', 'missing': target is None})
                 return g

@@ -51,20 +51,38 @@ setTimeout(async function () {
   const dazzle=find(n=>n.getAttribute('data-player-row')==='Implant 10000')[0];
   const effectSummary=dazzle.find(n=>n.tagName==='SUMMARY' && n.textContent==='Effect details')[0];
   const dazzleEffect=dazzle.find(n=>n.getAttribute('data-player-target')==='Effect 59400.Evasion')[0];
-  ck('drone module tooltip includes the named active talent and its target effect',
-    effectSummary.getAttribute('title').includes('Dazzle Array (Talent 89001)') &&
-    effectSummary.getAttribute('title').includes('Marker Sights (Effect 59400)'));
+  ck('drone module tooltip fills the shipped sentence with localized effect text',
+    effectSummary.getAttribute('title')===
+    'Debuff an enemy within 25m with -15% Evasion until end of next Turn. Cancels enemy Overwatch.');
   const originalEvasion=dazzleEffect.value;
   dazzleEffect.value='=-27';dazzleEffect.fire('input');effectSummary.fire('mouseenter');
   ck('effect tooltip follows a draft edit using the native table identity',
-    effectSummary.getAttribute('title').includes('Evasion -27') && buildEdits().playerBalance.cells.some(c=>
+    effectSummary.getAttribute('title').includes('-27% Evasion') && buildEdits().playerBalance.cells.some(c=>
       c.table==='Effect' && c.id==='59400' && c.column==='Evasion' && c.value==='=-27'));
   dazzleEffect.value=originalEvasion;dazzleEffect.fire('input');
+  const dazzleDuration=dazzle.find(n=>n.getAttribute('data-player-target')==='Talent 89001.TargetEffectDuration')[0];
+  const originalDuration=dazzleDuration.value;
+  dazzleDuration.value='3';dazzleDuration.fire('input');effectSummary.fire('mouseenter');
+  ck('duration edits switch the native tooltip plural form',effectSummary.getAttribute('title').includes('for next 2 Turns'));
+  dazzleDuration.value=originalDuration;dazzleDuration.fire('input');
   SEL='pb:implant-2';render();
   const wired=find(n=>n.getAttribute('data-player-row')==='Implant 504')[0];
   const wiredTip=wired.find(n=>n.tagName==='SUMMARY' && n.textContent==='Effect details')[0].getAttribute('title');
-  ck('ordinary cyberware tooltips include passive and active self effects',
-    wiredTip.includes('Effect 50046') && wiredTip.includes('Talent 80048') && wiredTip.includes('Effect 50095'));
+  ck('ordinary cyberware shows its active self-effect description',wiredTip==='Buff yourself with +1 Action Point immediately.');
+  function implantTip(page, id) {
+    const grid=MODEL.playerBalance.pages.find(p=>p.id==='implant-'+page).grids[0];
+    return playerEffectDetails(grid,grid.rows.find(r=>r.id===String(id)));
+  }
+  ck('healing and Matrix tooltips use localized effect phrases',
+    implantTip(102,10006)==='Immediately Heal 160 HP for yourself or a teammate within 3m. Healing cancels Bleeding Out.' &&
+    ['+25 Matrix AP','frees 75% of Cyberdeck IO max','+30 Deck Shield'].every(s=>implantTip(4,1905).includes(s)));
+  ck('multiple granted talents get their own descriptions',
+    ['Deploy Drone','Full-Pilot','Reclaim Drone'].every(s=>implantTip(3,1100).includes(s)));
+  ck('a missing game template gives an explicitly labelled effect preview',
+    implantTip(107,10144).includes('Shipped effect preview'));
+  ck('tooltips omit optional clauses whose effects are absent',
+    !implantTip(101,10015).includes('Immediately  on use') &&
+    implantTip(107,10141)==='Immediately Heal 75 HP to one of your drones within 3m.');
   const beforeBlueprintView = JSON.stringify(playerChanges());
   SEL='pb:weapon-3';render();
   function blueprintCell(table, id) {

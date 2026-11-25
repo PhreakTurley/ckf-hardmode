@@ -2254,7 +2254,94 @@ function playerEffectiveColumnValue(grid, row, column) {
   return column.integer !== false ? playerRound(value) : value;
 }
 
+function tooltipVariant(template, count) {
+  if (template && typeof template==='object')
+    return template[count===0 ? 'zero' : count===1 ? 'one' : 'other'] || template.other || '';
+  return template || '';
+}
+
+function tooltipText(template, count, args) {
+  return tooltipVariant(template,count).replace(/\{(\d+)(?::[^}]+)?\}/g, function(_, index) {return args[index] ?? '';});
+}
+
+function tooltipModifier(templates, value, absolute=false) {
+  if (!templates || !value) return '';
+  const template=value<0 && templates[1] ? templates[1] : templates[0];
+  const display=absolute ? Math.abs(value) : value;
+  const text=tooltipText(template,Math.abs(value),[display]);
+  return text.replace(/\+-(?=\d)/g,'-');
+}
+
+function playerTalentTooltip(tooltip, locale, read) {
+  const missing='Game description unavailable for '+tooltip.name+'.';
+  const template=tooltip.text || tooltip.fallback;
+  if (!template) return missing;
+  const talent=key=>read(tooltip.group,locale.fields[key]);
+  function effect(group, healing=false) {
+    const value=field=>read(group,field);
+    const [healType,healAmount]=locale.healingColumns.map(value);
+    const overTime=healType===10 || healType===14;
+    const heal=tooltipModifier(locale.healingRules[healType],healAmount,healType===2 || overTime || healType===15);
+    if (healing) return overTime ? '' : heal;
+    const rules=tooltip.matrix ? locale.matrixRules : locale.effectRules;
+    const descriptions=[];
+    if (!tooltip.matrix && overTime && heal) descriptions.push(heal);
+    for (const [field,templates] of Object.entries(rules)) {
+      const stat=value(field);
+      const absolute=locale.absolute.includes(field) || (stat<0 && locale.absoluteDebuffs.includes(field));
+      const description=tooltipModifier(templates,stat/(tooltip.matrix ? 1 : locale.units[field] || 1),absolute);
+      if (description) descriptions.push(description);
+    }
+    if (!tooltip.matrix) {
+      const [code,slow,mitigate,stun]=locale.specialColumns.map(value);
+      const text=locale.specialText;
+      if (code===27 && text['SpecialCodes.InvisibleWhileNotMoving']) descriptions.push(text['SpecialCodes.InvisibleWhileNotMoving']);
+      if (slow) descriptions.push(tooltipText(text['MoveSpeed.Debuff'],slow,[slow]));
+      if (mitigate) descriptions.push(tooltipText(text['SpecialCodes.MoveSpeedMitigation'],mitigate,[mitigate]));
+      if (stun) descriptions.push(stun===100 ? text.Stunned : stun===-100 ? text.StunImmune
+        : tooltipText(stun<0 ? text.StunResist : text.StunChance,Math.abs(stun),[Math.abs(stun)]));
+    }
+    return descriptions.filter(Boolean).join(', ');
+  }
+  const duration=Math.max(0,read(tooltip.group,tooltip.durationColumn)-1);
+  const range=talent('range'), aoe=talent('aoe'), pure=talent('pure');
+  const weapon=tooltip.weapon;
+  const weaponValues=weapon ? weapon.columns.map(function (name) {
+    return playerEffectiveColumnValue({table:'Weapon'},weapon,{name:name}) ?? 0;
+  }) : [];
+  const [accuracy,weaponPure,weaponBallistic,weaponPhysical,crit,stealthCrit]=weaponValues;
+  const weaponCrit=crit>0 ? tooltipModifier(locale.effectRules[locale.weaponCritColumn],crit)
+    : stealthCrit>0 ? tooltipModifier(locale.effectRules[locale.weaponStealthCritColumn],stealthCrit) : '';
+  let sentence=tooltipVariant(template,duration);
+  if (weaponCrit && sentence.includes('{21} Attacks')) sentence=sentence.replace('{21} Attacks','{21}. Attacks');
+  const args={
+    0:duration, 1:effect(tooltip.mainEffect), 2:Math.max(0,Math.floor(talent('ap')/10)),
+    3:tooltip.matrix ? playerRound(pure*.75) : range+'m', 4:tooltip.matrix ? pure : aoe+'m',
+    7:effect(tooltip.mainEffect,true), 8:locale.modes[Math.abs(talent('mode'))], 9:tooltip.name,
+    10:pure || weaponPure || 0, 11:talent('ballistic') || weaponBallistic || 0,
+    12:talent('physical') || weaponPhysical || 0, 14:talent('tokenDuration'),
+    18:accuracy===undefined ? '' : accuracy+'%', 19:effect(tooltip.selfEffect),
+    20:effect(tooltip.selfEffect,true), 21:weaponCrit,
+  };
+  if (!args[1]) sentence=sentence.replace(/ and buff with \{1\}[^.]*\./,'.');
+  if (!args[20]) sentence=sentence.replace(' Immediately {20} on use.','');
+  const text=tooltipText(sentence,duration,args).replace(/ +([.,!?])/g,'$1').replace(/\.\s*\./g,'.');
+  const limit=talent('teamLimit')>0 ? locale.limits[0] : talent('turnLimit')===1 ? locale.limits[1] : '';
+  return [tooltip.text ? '' : missing+' Shipped effect preview',text,tooltipText(limit,0,[])].filter(Boolean).join('\n');
+}
+
 function playerEffectDetails(grid, row) {
+  if (row.talentTooltips && row.talentTooltips.length) {
+    const byName=new Map(grid.columns.concat(grid.advanced).map(col=>[col.name,col]));
+    const read=function(group, field) {
+      const column=byName.get(group+'.'+field);
+      return column ? playerEffectiveColumnValue(grid,row,column) ?? 0 : 0;
+    };
+    return row.talentTooltips.map(function(tooltip) {
+      const text=playerTalentTooltip(tooltip,grid.talentTooltipLocale,read);
+      return row.talentTooltips.length>1 && tooltip.text ? tooltip.name+'\n'+text : text;
+    }).join('\n\n');
+  }
   const columns=grid.columns.concat(grid.advanced).filter(function(col) {return !col.metadata;});
   return row.effectSummary.map(function(ref) {
     const heading=ref.label || ref.group;
