@@ -32,12 +32,15 @@ FILE = 'ckf.hire-everyone.json'
 SOURCE = 'hire-everyone.json'
 LINKED_SETUP_OFFSET = 192
 BACKSTORY_BLOCK_OFFSET = 256
-# Authored scope: the available Hub roster, excluding four unfinished entries
-# whose shipped blocks have Pre_AlwaysFail. New official entries require review.
-HUB = (4000, 4003, 4004, 4005, 4006, 4008, 4009, 4011, 4012,
-       4013, 4014, 4015, 4016, 305000, 305100)
+# The original roster's order controls its published IDs. Further starters
+# have explicit setup block IDs so existing starter-to-Hub blocks keep theirs.
+ORIGINAL_HUB = (4000, 4003, 4004, 4005, 4006, 4008, 4009, 4011, 4012,
+                4013, 4014, 4015, 4016, 305000, 305100)
+RACER = 305800
+HUB = (*ORIGINAL_HUB, RACER)
+RACER_SETUP_BLOCK = BASE + LINKED_SETUP_OFFSET - 1
 STARTERS = (14, 18, 19, 20, 22, 23, 24, 25, 28, 33, 35, 38)
-SLOTS = {13: 4, 19: 4, 12: 3, 5: 3, 2: 5, 3: 5, 7: 5, 11: 5, 14: 5, 15: 5}
+SLOTS = {13: 4, 19: 4, 12: 3, 5: 3, 8: 3, 2: 5, 3: 5, 7: 5, 11: 5, 14: 5, 15: 5}
 GROUPS = {13: 'Hackers', 19: 'Wireghosts', 12: 'Vanguards', 5: 'AgentEXs',
           2: 'Warmachines', 3: 'Cyberswords', 7: 'Soldiers', 11: 'Snipers',
           14: 'Gunslingers', 15: 'Scourges'}
@@ -83,7 +86,11 @@ def validate(document):
 def load(config_dir):
     path = Path(config_dir) / FILE
     if path.is_file():
-        return validate(json.loads(path.read_text(encoding='utf-8-sig')))
+        document = json.loads(path.read_text(encoding='utf-8-sig'))
+        hub = document.get('hub') if isinstance(document, dict) else None
+        if isinstance(hub, dict) and set(hub) == {str(bid) for bid in ORIGINAL_HUB}:
+            hub[str(RACER)] = {'include': True, 'slot': SLOTS[8]}
+        return validate(document)
     return None
 
 
@@ -159,11 +166,9 @@ def build(database, document=None):
         if not locale:
             raise ValueError('Official/en-US.json is required for character descriptions.')
         entries, disabled = hire_backstories.hub_entries(rows)
-        if set(entries) != set(HUB):
-            raise ValueError('Available Hub roster changed; review explicit HUB scope: ' + str(sorted(entries)))
-        for block, _main, _setup in entries.values():
-            if block['PreConditionGroup']:
-                raise ValueError('Review changed Hub precondition: ' + str(block['BlockId']))
+        missing = set(HUB) - entries.keys()
+        if missing:
+            raise ValueError('Authored Hub recruits missing from the shipped roster: ' + str(sorted(missing)))
         stories = hire_backstories.Stories(rows, locale)
         current_starters = {r['BackstoryId'] for r in rows['Backstory'] if r['NewGame'] in (3, 4, 5)}
         if current_starters != set(STARTERS):
@@ -181,7 +186,7 @@ def build(database, document=None):
         def add(table, **values):
             nonlocal next_block
             if table == 'Block' and 'BlockId' not in values:
-                if next_block >= BASE + LINKED_SETUP_OFFSET:
+                if next_block >= RACER_SETUP_BLOCK:
                     raise ValueError('Starter and Hub blocks exceed their reserved portion of the ID range.')
                 values['BlockId'] = next_block
                 next_block += 1
@@ -225,10 +230,13 @@ def build(database, document=None):
             source = backstories[bid]
             selection = document['hub'][str(bid)]
             if not selection['include']:
-                next_block += 1  # Keep the published block ID of every other character.
+                if bid in ORIGINAL_HUB:
+                    next_block += 1  # Keep the published block ID of every other character.
                 continue
             slot = selection['slot']
             block, main, setup = entries[bid]
+            if block['PreConditionGroup']:
+                raise ValueError('Review changed Hub precondition: ' + str(block['BlockId']))
             clone = dict(source)
             clone_id = BASE + index
             init_group = mod_id(f'B_Start_{bid}')
@@ -243,11 +251,12 @@ def build(database, document=None):
             if slot == 4:
                 condition(post, 'Tag', ActorId=source['CharStoryId'], ConditionKey='ADD_PersonID_StartingHacker')
             queued = mod_id(f'Finish_{bid}_Queued')
+            start_id = {'BlockId': RACER_SETUP_BLOCK} if bid == RACER else {}
             add('Block', GroupId=init_group, PostConditionGroup=post if slot == 4 else '',
                 EventType='Group', EventId=hire_backstories.setup_id(bid),
                 StoryNode1='ADD_' + hire_backstories.node_id(bid),
                 PreState1='NOT_' + queued, PostState2='ADD_' + queued,
-                PostState1=block['PreState1'].replace('NOT_', 'ADD_', 1))
+                PostState1=block['PreState1'].replace('NOT_', 'ADD_', 1), **start_id)
             traits = [r for r in rows['Trait'] if r['TagMatch'] == source['BackstoryTrait']]
             if len(traits) != 1:
                 raise ValueError('Backstory trait must resolve uniquely: ' + str(bid))
@@ -394,6 +403,7 @@ def build(database, document=None):
         source = {'Metadata': {'Name': 'Hire Everyone', 'StartingId': BASE},
                   'RawSQL': sql, 'RawText': {'Generic': texts}}
         return source, added, {'roster': roster, 'excludedUnfinished': sorted(disabled),
+                               'outsideStartingScope': sorted(entries.keys() - set(HUB)),
                                'startingSlots': dict(Counter(r['slot'] for r in roster if 'slot' in r))}
 
 

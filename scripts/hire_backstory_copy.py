@@ -95,6 +95,12 @@ EDITS = {
     'Dialog.D_Recruit_Warmachine_Cult_Tag1.2': (('supplies, otherwise its', "supplies. Otherwise, it's"),),
     'Dialog.D_Recruit_Warmachine_Cult_Tag1.3': (('said its highly', "said it's highly"),),
     'Dialog.D_Recruit_Warmachine_Cult_Tag2.2': (('spinal chord, there', 'spinal cord. There'),),
+    'Dialog.D_Recruit_DronePilot_Racer_PreTag.5': (
+        ("Don't make it sound so bad. Yeah, the", 'The'),
+        ("is after me, but I've got more to offer than that.", "is after me, but there's more to the story."),),
+    'Dialog.D_Recruit_DronePilot_Racer_Tag3.1': (("that's paints", 'that paints'),),
+    'Dialog.D_Recruit_DronePilot_Racer_Tag3.2': (
+        ('Bring me onto the squad, and give me some time to trust you,', 'Give me some time to trust you,'),),
 }
 
 

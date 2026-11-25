@@ -12,10 +12,15 @@ CONVERSATIONS = {
     4009: (91212, 91217), 4011: (91231, 91236), 4012: (91251, 91256),
     4013: (91270, 91275), 4014: (91290, 91295), 4015: (91313, 91318),
     4016: (91335, 91340), 305000: (305006, 305011), 305100: (305106, 305111),
+    305800: (305806, 305811),
 }
 STORY_TABLES = ('Block', 'BlockCondition', 'Dialog', 'StoryMatch', 'ContactBackstory', 'Tag')
 OPERATIONS = {'AddCharacter', 'StoryMatch', 'Tag', 'Trait', 'Obligation', 'Item', 'CharacterStatus', 'PayRate'}
 RECRUITMENT_QUIPS = {'Recruit_Global_FaceThink', 'Recruit_Global_DefineTrust'}
+# The Racer's follow-up spells out two lines of the Face's recruitment question.
+RECRUITMENT_DIALOGS = {13279, 13280}
+# The Racer's Fabber branch uses this action immediately after contact creation.
+REVIEWED_CONTACT_META = (305800, 2647, 'NCT_Recruit_DronePilot_Racer_Fabber', 2)
 CONTACT_FALLBACKS = {4004: 8, 4005: 8, 4006: 9, 4008: 9, 4009: 8, 4012: 9, 305100: 9}
 # These backstories reference undefined identity tags. Their permanent actor
 # IDs and these authored tags also resolve contacts from earlier exports.
@@ -277,7 +282,7 @@ def emit(stories, bid, backstory, offer, temporary, setup, base, turns, add, con
                     loc = f'Dialog.{group}.{row["JsonId"]}'
                     variants = [stories.locale.get(loc + suffix, '').strip().casefold()
                                 for suffix in ('', '_Male', '_Female')]
-                    return (row['QuipType'] in RECRUITMENT_QUIPS
+                    return (row['DialogId'] in RECRUITMENT_DIALOGS or row['QuipType'] in RECRUITMENT_QUIPS
                             or 'what do you think, {1}?' in variants
                             or any('if you want in this company, trust is our baseline' in line for line in variants))
 
@@ -355,7 +360,10 @@ def emit(stories, bid, backstory, offer, temporary, setup, base, turns, add, con
     def operation_batches(rows):
         for source in rows:
             kind = source['ConditionType']
-            if kind not in OPERATIONS:
+            actor_id = source['ActorId']
+            if kind not in OPERATIONS and not (
+                    kind == 'ContactMeta' and actor_id in contact_actors
+                    and (bid, source['BlockConditionId'], actor_id, source['OptionId']) == REVIEWED_CONTACT_META):
                 raise ValueError(f'Backstory {bid}: unreviewed {kind} in BlockCondition {source["BlockConditionId"]}')
             if kind == 'StoryMatch':
                 yield from cast(source['ConditionKey'])

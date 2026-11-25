@@ -4500,8 +4500,9 @@ function renderHireEveryone(panel) {
           });
           showDeployment();
           cells.push(el('td', {}, [group, deployment]));
-          cells.push(el('td', {'data-hire-story':row.id, class:row.backstoryIssue ? 'hire-story-missing' : 'small',
-            title:row.backstoryIssue, text:row.backstoryIssue ? 'Missing event' : 'Finish Backstory'}));
+          cells.push(el('td', {'data-hire-story':row.id, class:row.editable && row.backstoryIssue ? 'hire-story-missing' : 'small',
+            title:row.backstoryIssue, text:!row.editable ? 'Outside mod scope'
+              : row.backstoryIssue ? 'Missing event' : 'Finish Backstory'}));
         } else {
           include.addEventListener('change', function () {draft[row.id] = include.checked; updateDirty();});
         }

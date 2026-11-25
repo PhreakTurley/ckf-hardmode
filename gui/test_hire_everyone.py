@@ -27,7 +27,8 @@ class HireEveryoneTests(unittest.TestCase):
                     UPDATE next_merc SET BackstoryId=4888, BackstoryGroup=4888;
                     INSERT INTO Backstory SELECT * FROM next_merc;
                     CREATE TEMP TABLE next_offer AS SELECT * FROM Block WHERE BlockId=91006;
-                    UPDATE next_offer SET Id=384899901, BlockId=384899901, PostConditionGroup='Post_NewHub';
+                    UPDATE next_offer SET Id=384899901, BlockId=384899901, PostConditionGroup='Post_NewHub',
+                        PreConditionGroup='Pre_NewHubNeedsReview';
                     INSERT INTO Block SELECT * FROM next_offer;
                     CREATE TEMP TABLE next_setup AS SELECT * FROM BlockCondition WHERE BlockConditionId=81;
                     UPDATE next_setup SET BlockConditionId=384899901, GroupId='Post_NewHub', ConditionValue2=4888;
@@ -35,9 +36,24 @@ class HireEveryoneTests(unittest.TestCase):
                 """)
             result = hire.model(root, database, '')
             self.assertIsNone(result['error'], result)
-            self.assertEqual({r['id'] for r in result['hub'] if r.get('backstoryIssue')}, {4888})
+            self.assertEqual({r['id'] for r in result['hub'] if r.get('backstoryIssue')}, {4888, 305900})
             self.assertFalse(next(r for r in result['hub'] if r['id'] == 4888)['editable'])
             self.assertNotIn('4888', result['document']['hub'])
+            _, _, report = hire.build(database, result['document'])
+            self.assertEqual(report['outsideStartingScope'], [4888, 305900])
+
+    def test_original_saved_choices_load_with_racer_in_slot_three(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            original = {'format': 1, 'starters': {str(bid): False for bid in hire.STARTERS},
+                        'hub': {str(bid): {'include': False, 'slot': 4} for bid in hire.ORIGINAL_HUB}}
+            path = root / hire.FILE
+            path.write_bytes(hire.encode(original))
+            result = hire.model(root, hire.DEFAULT_DB, '')
+            self.assertIsNone(result['error'], result)
+            self.assertEqual(result['document']['hub'].pop('305800'), {'include': True, 'slot': 3})
+            self.assertEqual(result['document'], original)
+            self.assertEqual(json.loads(path.read_bytes()), original)
 
     def test_save_and_export_selected_groups(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -55,6 +71,8 @@ class HireEveryoneTests(unittest.TestCase):
             loaded = app.api_model(editor=True)
             document = loaded['hireEveryone']['document']
             self.assertEqual(document['hub']['4000'], {'include': True, 'slot': 4})
+            self.assertEqual(document['hub']['305800'], {'include': True, 'slot': 3})
+            self.assertNotIn('305900', document['hub'])
             document['starters']['14'] = False
             document['hub']['4000']['slot'] = 5
             document['hub']['4003']['slot'] = 4
@@ -81,6 +99,26 @@ class HireEveryoneTests(unittest.TestCase):
                     WHERE StoryNodeId LIKE 'SN_Finish_%_HireEveryone' AND StoryNodeType='Root'""").fetchall()
                 self.assertEqual({row[0] for row in nodes}, {hire.hire_backstories.node_id(bid)
                                  for bid in hire.HUB if bid != 4004})
+                self.assertEqual(selected.execute("""SELECT GroupId, ConditionValue FROM BlockCondition
+                    WHERE ActorId='PCP_DronePilot_Racer' AND ConditionType='CharAltStart'
+                    ORDER BY GroupId""").fetchall(),
+                    [('Post_Amnesia_TutorialSkipOrEnd', 98), ('Post_SynDebts_TutorialSkipOrEnd', 3)])
+                self.assertEqual(selected.execute("""SELECT BackstoryId, NewGame FROM Backstory
+                    WHERE CharStoryId='PCP_DronePilot_Deserter'""").fetchall(), [(305900, 0)])
+                racer_replies = selected.execute("""SELECT b.PreDialogPostCondition, p.ActorId, p.OptionId
+                    FROM Block b JOIN BlockCondition p ON p.GroupId=b.PreConditionGroup
+                    JOIN BlockCondition c ON c.GroupId=b.PreDialogPostCondition
+                    WHERE b.GroupId='B_Finish_305800_Choices_HireEveryone' AND p.ConditionType='Tag'
+                        AND c.ConditionType='ContactMeta' AND c.ActorId=p.ActorId AND c.OptionId=2
+                    ORDER BY p.OptionId""").fetchall()
+                identity = 'NTG_PersonID_Recruit_DronePilot_Racer_Fabber'
+                self.assertEqual([(actor, option) for _, actor, option in racer_replies], [(identity, -1), (identity, 1)])
+                for group, _, presence in racer_replies:
+                    operations = selected.execute("""SELECT ConditionType, ConditionValue FROM BlockCondition
+                        WHERE GroupId=? AND ConditionType IN ('AddCharacter', 'ContactMeta') ORDER BY JsonId""",
+                        (group,)).fetchall()
+                    self.assertEqual(operations, ([('AddCharacter', 305801)] if presence == -1 else [])
+                                     + [('ContactMeta', 0)])
                 self.assertEqual(selected.execute("SELECT BlockId FROM Block WHERE StoryNode1='ADD_SN_Hacker_LeftForDead'").fetchall(), [(91006,)])
                 agent_node = 'SN_Finish_4012_HireEveryone'
                 retry_node = 'SN_Finish_4012_Retry_HireEveryone'
@@ -209,6 +247,9 @@ class HireEveryoneTests(unittest.TestCase):
                                     or 'Recruit_Global_Define2' in quips)
                     self.assertFalse(any(line.startswith('What do you think, {1}?') or 'trust is our baseline' in line
                                          for line in lines))
+                    if bid == 305800:
+                        self.assertTrue(any("there's more to the story" in line for line in lines))
+                        self.assertFalse(any('crooked bookies' in line for line in lines))
                     if bid == 4012:
                         self.assertTrue(locale[f'Dialog.{followup}.567001_Female'].startswith("I've got one more question"))
                         self.assertTrue(locale[f'Dialog.{followup}.567002'].startswith("Further define this merc's Backstory"))
@@ -224,8 +265,10 @@ setTimeout(async function () {
     && panel.textContent.includes('Shipped Underworld Hub')
     && panel.find(n=>n.getAttribute('data-hire-include')).length===MODEL.hireEveryone.starters.length+MODEL.hireEveryone.hub.length);
   ck('the shipped Hacker defaults to the Hacker/Wireghost group', control('group',4000).value==='4');
-  ck('reviewed and missing New Game events are labeled separately', control('story',4000).textContent==='Finish Backstory'
-    && control('story',4888).textContent==='Missing event' && control('include',4888).disabled);
+  ck('Racer defaults to the Vanguard / Agent EX group', control('group',305800).value==='3'
+    && control('include',305800).checked && control('story',305800).textContent==='Finish Backstory');
+  ck('Grounded Overwatch and unreviewed Hub candidates are outside scope', [305900,4888].every(id =>
+    control('story',id).textContent==='Outside mod scope' && control('include',id).disabled));
   const group=control('group',4000);
   group.value='5'; group.fire('change');
   const hub=control('include',4003);

@@ -7,11 +7,13 @@ or submit anything to Steam.
 
 ## Scope and authoring
 
-The explicit `HUB` and `STARTERS` declarations own the included characters.
-The builder checks them against the available Hub recruitment blocks and the
-combat starter rows in the current `Official/data.db`; a changed roster refuses
-preparation until reviewed. Content and localization come from the official
-database and locale through the [static reader](static-data.md).
+The explicit `HUB` and `STARTERS` declarations own the authored characters.
+The builder checks that the authored Hub recruits still exist and that the
+shipped combat starter roster matches `STARTERS`. Additional Hub candidates
+appear as **Outside mod scope** and can stay outside the starting roster.
+Underway Racer is authored. Grounded Overwatch is outside the mod's roster.
+Content and localization come from the official database and locale through
+the [static reader](static-data.md).
 
 The export reserves numeric content IDs `567000–567999` and appends
 `_HireEveryone` to new string IDs. It keeps shipped references, including the
@@ -25,7 +27,7 @@ group. The Editor can assign any of the three groups to an included Hub recruit.
 
 | Starting group | NewGame slot | Opening mission setup |
 |---|---|---|
-| Vanguard / Agent EX | 3 | Uses the shipped stealth group's deployment rows |
+| Vanguard / Agent EX | 3 | Uses the shipped stealth group's deployment rows. Default for Drone Pilots. |
 | Hacker / Wireghost | 4 | Uses `PersonID_StartingHacker` for story casting |
 | Other combat classes | 5 | Uses the shipped combat group's deployment rows |
 
@@ -100,6 +102,11 @@ activates the contact on the matching choice. Backstory 2009 refers to
 290, `ContactBackstory` 2009, and `Tag`. The starter version uses a permanent
 actor ID for both the Fabber's name and the choice effect.
 
+Underway Racer's Fabber choice uses the shipped contact backstory and applies
+its `ContactMeta` action to the contact's identity before the reply. Contact
+creation is guarded by the same identity. [measured] `Official/data.db`,
+`Block` 305812, `BlockCondition` 2646–2649 and `ContactBackstory` 305801.
+
 Selected combat starters receive new Hub entries in their respective class
 groups. These use the original Backstory ID, a HasCharacter condition against
 the character's identity tag, distinct hired/cooldown states, and new recruitment
@@ -124,10 +131,11 @@ Modkit** to build and install the saved roster locally. Export uses the
 [Workshop project and Steam registration checks](../gui/README.md#export-workshop-mods-to-modkit-uploader).
 
 The **New Game event** column shows each Hub character's coverage. **Missing
-event** identifies a newly shipped or changed entry that needs review. Add a
-new character's reviewed trait and follow-up block IDs to `CONVERSATIONS`,
-review its contact/casting actions, and update the authored Hub roster in the
-builder. Save and export run the same coverage checks on the selected roster.
+event** identifies an authored entry whose shipped content needs review.
+To support a character outside the mod's scope, add their reviewed trait and
+follow-up block IDs to `CONVERSATIONS`, review their contact and casting
+actions, and update the authored Hub roster. Save and export run the same
+coverage checks on the selected roster.
 
 Requires the official database/locale and the installed Cyber Knights Mod
 Uploader, including its parser DLL and schema. From `cmd.exe`:
