@@ -41,8 +41,9 @@ The shipped slot 4 actors have no deployment pair. [measured]
 The Vanguard and Agent EX opening tips in both origins check for a character
 with the relevant class tag. In the first Null Deal safehouse conversation,
 the quantum-rider line uses the stealth casting tag to find its speaker.
-The exporter changes only `ActorId` in `Pre_HasVanguard`, `Pre_HasAgentEX`,
-and line 7 of `D_Amnesia_Intro`.
+The first Syndicate Debts safehouse conversation uses the combat casting tag
+for the question about the crew's next move. The exporter casts line 5 of
+`D_SynDebts_Intro` and removes its duplicate at line 6.
 
 When the export places Underway Racer in slot 3, a reload block also restores
 `JobMem_Stealth` to existing Racer starters that lack both casting tags. It
@@ -182,7 +183,7 @@ mtime/hash guards and readback verification use `gui/modkit.py:commit_files`.
 
 The installed Data Parser produces the delivered SQL and locale. The verifier
 applies that SQL to an in-memory copy of Official content and checks the
-three reviewed origin casting edits, the exact additions, and the localization.
+reviewed origin casting edits, the exact additions, and the localization.
 It rejects other updates and deletes, validates content links, and checks
 repeat application. Independent
 policy checks verify selected groups, cloned character fields, origin deployment,

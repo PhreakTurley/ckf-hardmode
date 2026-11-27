@@ -131,6 +131,9 @@ class HireEveryoneTests(unittest.TestCase):
                 self.assertEqual(selected.execute("""SELECT ActorId, InterpolateActorId FROM Dialog
                     WHERE GroupId='D_Amnesia_Intro' AND JsonId=7""").fetchall(),
                     [('PTG_JobMem_Stealth', 'CUR_HACK')])
+                self.assertEqual(selected.execute("""SELECT JsonId, ActorId FROM Dialog
+                    WHERE GroupId='D_SynDebts_Intro' AND JsonId IN (5,6)""").fetchall(),
+                    [(5, 'PTG_JobMem_Combat')])
                 deployed = selected.execute("""SELECT GroupId, ConditionValue FROM BlockCondition
                     WHERE ActorId = 'PCP_UHUB_Hacker' AND ConditionType = 'CharAltStart' ORDER BY GroupId""").fetchall()
                 self.assertEqual(deployed, [('Post_Amnesia_TutorialSkipOrEnd', 99), ('Post_SynDebts_TutorialSkipOrEnd', 2)])

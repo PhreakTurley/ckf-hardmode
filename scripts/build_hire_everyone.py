@@ -63,6 +63,8 @@ ORIGIN_CASTING = (
     ('BlockCondition', 'Pre_HasVanguard', 1, 'PCP_Emille', 'PTG_JobMem_Vanguard'),
     ('BlockCondition', 'Pre_HasAgentEX', 1, 'PCP_Soren', 'PTG_JobMem_AgentEX'),
     ('Dialog', 'D_Amnesia_Intro', 7, 'PCP_Emille', 'PTG_JobMem_Stealth'),
+    ('Dialog', 'D_SynDebts_Intro', 5, 'PTG_JobMem_Soldier', 'PTG_JobMem_Combat'),
+    ('Dialog', 'D_SynDebts_Intro', 6, 'PTG_JobMem_Gunslinger', None),
 )
 STARTING_GROUPS = [
     {'slot': 3, 'name': 'Vanguard / Agent EX', 'deploys': True},
@@ -165,10 +167,14 @@ def literal(value):
 def origin_casting_sql():
     statements = []
     for table, group, sequence, original, replacement in ORIGIN_CASTING:
-        guard = ('"ConditionType"=\'HasCharacter\' AND "OptionId"=1' if table == 'BlockCondition'
-                 else '"InterpolateActorId"=\'CUR_HACK\'')
-        statements.append(f'UPDATE {quote(table)} SET "ActorId"={literal(replacement)} '
-                          f'WHERE "GroupId"={literal(group)} AND "JsonId"={sequence} '
+        if table == 'BlockCondition':
+            guard = '"ConditionType"=\'HasCharacter\' AND "OptionId"=1'
+        else:
+            target = 'CUR_HACK' if group == 'D_Amnesia_Intro' else ''
+            guard = f'"InterpolateActorId"={literal(target)} AND "State"=\'\''
+        action = (f'DELETE FROM {quote(table)}' if replacement is None
+                  else f'UPDATE {quote(table)} SET "ActorId"={literal(replacement)}')
+        statements.append(f'{action} WHERE "GroupId"={literal(group)} AND "JsonId"={sequence} '
                           f'AND "ActorId"={literal(original)} AND {guard};')
     return statements
 
@@ -518,10 +524,15 @@ def verify_namespace(rows):
 def verify(database, sql_bytes, text_bytes, expected, source_text, document=None):
     verify_namespace(expected)
     casting = origin_casting_sql()
-    additions, *updates = sql_bytes.decode('utf-8-sig').rstrip('\r\n').rsplit('\n', len(casting))
-    if [line.removesuffix('\r') for line in updates] != casting:
-        raise ValueError('Packaged origin casting updates differ from the reviewed statements')
+    additions, *edits = sql_bytes.decode('utf-8-sig').rstrip('\r\n').rsplit('\n', len(casting))
+    if [line.removesuffix('\r') for line in edits] != casting:
+        raise ValueError('Packaged origin casting edits differ from the reviewed statements')
     with StaticData(database) as original, closing(sqlite3.connect(':memory:')) as memory:
+        intro = 'Dialog.D_SynDebts_Intro.'
+        if not original.locale.get(intro + '5') or any(
+                original.locale.get(intro + '5' + suffix) != original.locale.get(intro + '6' + suffix)
+                for suffix in ('', '_Male', '_Female')):
+            raise ValueError('Review the two shipped Syndicate Debts combat replies before merging them')
         original.connection.backup(memory)
         memory.execute('SAVEPOINT expected_casting')
         for statement, (table, group, sequence, _, _) in zip(casting, ORIGIN_CASTING):
@@ -544,7 +555,7 @@ def verify(database, sql_bytes, text_bytes, expected, source_text, document=None
                 memory.executescript(additions)
             finally:
                 memory.set_authorizer(None)
-            memory.executescript('\n'.join(updates))
+            memory.executescript('\n'.join(edits))
 
         apply()
         memory.row_factory = sqlite3.Row
@@ -595,7 +606,7 @@ def verify(database, sql_bytes, text_bytes, expected, source_text, document=None
             if r['ConditionType'] == 'StoryMatch' and r['ConditionKey'] not in matches:
                 raise ValueError('Missing casting group: ' + r['ConditionKey'])
         verify_policy(memory, document, parsed)
-    return {'status': 'PASS', 'otherNativeRowsUnchanged': True, 'originCastingUpdates': len(casting),
+    return {'status': 'PASS', 'otherNativeRowsUnchanged': True, 'originCastingEdits': len(casting),
             'repeatApplication': 'PASS',
             'addedRows': {t: len(rs) for t, rs in expected.items()},
             'localizationKeys': len(parsed), 'gameplay': 'NOT RUN: review before a game session'}
