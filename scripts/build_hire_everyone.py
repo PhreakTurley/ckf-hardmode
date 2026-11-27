@@ -176,6 +176,11 @@ def origin_casting_sql():
                   else f'UPDATE {quote(table)} SET "ActorId"={literal(replacement)}')
         statements.append(f'{action} WHERE "GroupId"={literal(group)} AND "JsonId"={sequence} '
                           f'AND "ActorId"={literal(original)} AND {guard};')
+    statements.append(
+        "UPDATE StoryMatch SET TagReq1='JobMem_Stealth' WHERE GroupId='Match_ForwardOpStart' "
+        "AND ActorId='PCT_SynDebts_StarterRaid' AND Status=1 AND Optional=0 "
+        "AND TagReq1='PersonID_PC_Emile';"
+    )
     return statements
 
 
@@ -535,9 +540,9 @@ def verify(database, sql_bytes, text_bytes, expected, source_text, document=None
             raise ValueError('Review the two shipped Syndicate Debts combat replies before merging them')
         original.connection.backup(memory)
         memory.execute('SAVEPOINT expected_casting')
-        for statement, (table, group, sequence, _, _) in zip(casting, ORIGIN_CASTING):
+        for statement in casting:
             if memory.execute(statement).rowcount != 1:
-                raise ValueError(f'Review shipped casting row {table} {group}/{sequence}')
+                raise ValueError(f'Expected one shipped casting row for {statement}')
         before = {t: memory.execute('SELECT * FROM ' + quote(t)).fetchall() for t in original.schema}
         memory.execute('ROLLBACK TO expected_casting')
         memory.execute('RELEASE expected_casting')

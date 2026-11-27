@@ -44,6 +44,7 @@ the quantum-rider line uses the stealth casting tag to find its speaker.
 The first Syndicate Debts safehouse conversation uses the combat casting tag
 for the question about the crew's next move. The exporter casts line 5 of
 `D_SynDebts_Intro` and removes its duplicate at line 6.
+The alternate Forward Op vignette matches an active merc with `JobMem_Stealth`.
 
 When the export places Underway Racer in slot 3, a reload block also restores
 `JobMem_Stealth` to existing Racer starters that lack both casting tags. It
