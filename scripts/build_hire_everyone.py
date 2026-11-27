@@ -40,6 +40,8 @@ RACER = 305800
 HUB = (*ORIGINAL_HUB, RACER)
 RACER_SETUP_BLOCK = BASE + LINKED_SETUP_OFFSET - 1
 RACER_STEALTH_RELOAD_BLOCK = BASE + 253
+STEALTH_CONTACT_RELOAD_BLOCK = BASE + 132
+STEALTH_CONTACTS = ((14, 5002), (33, 5014))
 STARTERS = (14, 18, 19, 20, 22, 23, 24, 25, 28, 33, 35, 38)
 SLOTS = {13: 4, 19: 4, 12: 3, 5: 3, 8: 3, 2: 5, 3: 5, 7: 5, 11: 5, 14: 5, 15: 5}
 GROUPS = {13: 'Hackers', 19: 'Wireghosts', 12: 'Vanguards', 5: 'AgentEXs',
@@ -155,6 +157,58 @@ def literal(value):
     return "'" + str(value).replace("'", "''") + "'"
 
 
+def emit_stealth_contact_repair(stories, backstories, document, add, condition):
+    absent = mod_id('Pre_StealthContactsAbsent')
+    contacts = []
+    for bid, cid in STEALTH_CONTACTS:
+        starter, contact = backstories[bid], stories.contact_ids[cid]
+        original_actor, seller = starter['CharStoryId'], contact['ContactStoryId']
+        if starter['NewGame'] != 3 or starter['ContactLink1'] != cid or contact['Status'] != 1 or not seller:
+            raise ValueError(f'Review the shipped stealth starter and contact pair {bid}/{cid}')
+        identity, tag = hire_backstories.contact_identity(contact, seller, stories.tags)
+        hire_backstories.contact_presence(condition, absent, identity, tag, False)
+        if seller != identity:
+            hire_backstories.contact_presence(condition, absent, seller, tag, False)
+        relationships = [r for b in stories.blocks[starter['BlockGroup']]
+                         for r in stories.conditions[b['PostConditionGroup']]
+                         if r['ConditionType'] == 'Tag' and r['ConditionKey'].startswith('ADD_RelTag_')
+                         and {r['ActorId'], r['ActorId2']} == {original_actor, seller}]
+        if len(relationships) != 2 or {r['ActorId'] for r in relationships} != {original_actor, seller}:
+            raise ValueError(f'Review the shipped stealth contact relationship {bid}/{cid}')
+        contacts.append((cid, seller, original_actor, relationships))
+
+    entry, starters = mod_id('B_StealthContactEntry'), mod_id('B_StealthContactStarters')
+    add('Block', BlockId=STEALTH_CONTACT_RELOAD_BLOCK, GroupId=mod_id('B_Reload_StealthContact'),
+        EventType='ReloadGroup', EventId=entry, PreConditionGroup=absent)
+    add('Block', BlockId=STEALTH_CONTACT_RELOAD_BLOCK + 1, GroupId=entry,
+        EventType='GroupFirst', EventId=starters)
+    # A stock merc recruited later has a Hub hired flag. An alternate starter
+    # has the initialization flag from its New Game template.
+    stock = [(bid, 'NOT_' + mod_id(f'Hub_{bid}_Hired')) for bid, _ in STEALTH_CONTACTS]
+    alternates = [(bid, 'HAS_' + mod_id(f'Finish_{bid}_Queued')) for bid in HUB]
+    for index, (bid, state) in enumerate(stock + alternates):
+        if bid in HUB and document['hub'][str(bid)] != {'include': True, 'slot': 3}:
+            continue
+        block_id = STEALTH_CONTACT_RELOAD_BLOCK + 2 + 3 * index
+        actor = backstories[bid]['CharStoryId']
+        roster = mod_id(f'Pre_StealthContactStarter_{bid}')
+        choices = mod_id(f'B_StealthContactChoices_{bid}')
+        condition(roster, 'HasCharacter', ActorId=actor, OptionId=1)
+        add('Block', BlockId=block_id, GroupId=starters, PreState1=state,
+            PreConditionGroup=roster, EventType='RandomOne', EventId=choices)
+        for offset, (cid, seller, original_actor, relationships) in enumerate(contacts, 1):
+            post = mod_id(f'Post_StealthContact_{bid}_{cid}')
+            add('Block', BlockId=block_id + offset, GroupId=choices, Weight=1,
+                PreConditionGroup=absent, PostConditionGroup=post)
+            condition(post, 'AddCharacter', ActorId=seller, ConditionValue=cid)
+            for relation in relationships:
+                fields = {key: relation[key] for key in ('ActorId', 'ActorId2', 'ConditionKey', 'OptionId')}
+                for key in ('ActorId', 'ActorId2'):
+                    if fields[key] == original_actor:
+                        fields[key] = actor
+                condition(post, 'Tag', **fields)
+
+
 def build(database, document=None):
     with StaticData(database) as data:
         columns = {t: [c[1] for c in data.schema[t] if not c[5]] for t in KEYS}
@@ -187,7 +241,7 @@ def build(database, document=None):
         def add(table, **values):
             nonlocal next_block
             if table == 'Block' and 'BlockId' not in values:
-                if next_block >= RACER_SETUP_BLOCK:
+                if next_block >= STEALTH_CONTACT_RELOAD_BLOCK:
                     raise ValueError('Starter and Hub blocks exceed their reserved portion of the ID range.')
                 values['BlockId'] = next_block
                 next_block += 1
@@ -411,6 +465,7 @@ def build(database, document=None):
         for bid, source, offer, temporary, setup, base, turns in finish_events:
             hire_backstories.emit(stories, bid, source, offer, temporary, setup,
                                   base, turns, add, condition, texts)
+        emit_stealth_contact_repair(stories, backstories, document, add, condition)
 
         sql = [f'INSERT INTO {quote(table)} ({", ".join(map(quote, cols))}) '
                f'SELECT {", ".join(literal(row[c]) for c in cols)} '
@@ -487,7 +542,8 @@ def verify(database, sql_bytes, text_bytes, expected, source_text, document=None
             for col in ('PreConditionGroup', 'PostConditionGroup', 'PreDialogPostCondition'):
                 if r[col] and r[col] not in conditions:
                     raise ValueError('Missing condition group: ' + r[col])
-            if r['EventType'] in ('Group', 'GroupFirst', 'TalkOn', 'Choice') and r['EventId'] not in blocks:
+            routes = r['EventType'] in ('Group', 'GroupFirst', 'TalkOn', 'Choice', 'RandomOne')
+            if (routes or (r['EventType'] == 'ReloadGroup' and r['EventId'])) and r['EventId'] not in blocks:
                 raise ValueError('Missing block group: ' + r['EventId'])
             if r['Dialog'] and r['Dialog'] not in dialogs:
                 raise ValueError('Missing dialogue group: ' + r['Dialog'])
@@ -568,10 +624,14 @@ def verify_policy(connection, document=None, locale=None):
         if actual_tags != wanted_tags:
             raise ValueError('Starting casting tags do not match selected group: ' + str(source_id))
     racer = document['hub'][str(RACER)]
-    reloads = [b for b in blocks if BASE <= b['BlockId'] <= LAST_ID and b['EventType'] == 'ReloadGroup']
-    if len(reloads) != int(racer['include'] and racer['slot'] == 3):
+    reloads = {b['BlockId']: b for b in blocks
+               if BASE <= b['BlockId'] <= LAST_ID and b['EventType'] == 'ReloadGroup'}
+    if reloads.pop(STEALTH_CONTACT_RELOAD_BLOCK, None) is None:
+        raise ValueError('Missing stealth contact reload')
+    wanted_reloads = {RACER_STEALTH_RELOAD_BLOCK} if racer['include'] and racer['slot'] == 3 else set()
+    if reloads.keys() != wanted_reloads:
         raise ValueError('Racer stealth reload does not match the selected roster')
-    for repair in reloads:
+    for repair in reloads.values():
         actor = backstories[RACER]['CharStoryId']
         checks = [(r['ConditionType'], r['ActorId'], r['ConditionKey'], r['OptionId'])
                   for r in conditions if r['GroupId'] == repair['PreConditionGroup']]
@@ -742,8 +802,11 @@ def selftest(database):
     with StaticData(database) as original:
         original.connection.row_factory = sqlite3.Row
         selection = defaults({r['BackstoryId']: r for r in original.connection.execute('SELECT * FROM Backstory')})
-    selection['starters']['14'] = False
     selection['hub']['4000']['slot'] = 3
+    # Start with the moved-in stealth candidate, then remove other coverage.
+    # Adding a slot-3 candidate legitimately introduces its reserved blocks.
+    _, covered_rows, _summary = build(database, selection)
+    selection['starters']['14'] = False
     selection['hub']['4003']['slot'] = 5
     selection['hub']['4004']['slot'] = 4
     selection['hub']['4005']['include'] = False
@@ -751,7 +814,7 @@ def selftest(database):
     alternate, rows, _summary = build(database, selection)
     texts = alternate['RawText']['Generic']
     verify(database, '\n'.join(alternate['RawSQL']).encode(), encode(texts), rows, texts, selection)
-    original_block_ids = {r['BlockId']: r['GroupId'] for r in expected['Block']}
+    original_block_ids = {r['BlockId']: r['GroupId'] for r in covered_rows['Block']}
     if any(original_block_ids.get(r['BlockId']) != r['GroupId'] for r in rows['Block']):
         raise AssertionError('Roster exclusions renumbered previously exported blocks')
     passed.append('group changes and exclusions in both origins, starter filtering and stable IDs')

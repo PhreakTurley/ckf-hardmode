@@ -14,6 +14,36 @@ from test_party_size import registered_project
 
 
 class HireEveryoneTests(unittest.TestCase):
+    def assert_stealth_contact_repair(self, connection):
+        reload_group, absent = connection.execute("""SELECT EventId, PreConditionGroup FROM Block
+            WHERE BlockId=? AND EventType='ReloadGroup'""", (hire.STEALTH_CONTACT_RELOAD_BLOCK,)).fetchone()
+        self.assertCountEqual(connection.execute("""SELECT ActorId, ConditionKey, OptionId
+            FROM BlockCondition WHERE GroupId=? AND ConditionType='Tag'""", (absent,)).fetchall(),
+            [(actor, tag, -1) for seller, tag in [('NCP_Potato', 'PersonID_NPC_Potato'),
+                                                 ('NCP_Dancehall', 'PersonID_NCP_Dancehall')]
+             for actor in (seller, 'NTG_' + tag)])
+        dispatcher, = connection.execute("SELECT EventId FROM Block WHERE GroupId=? AND EventType='GroupFirst'",
+                                         (reload_group,)).fetchone()
+        branches = connection.execute("""SELECT c.ActorId, b.PreState1, b.EventId FROM Block b
+            JOIN BlockCondition c ON c.GroupId=b.PreConditionGroup
+            WHERE b.GroupId=? AND b.EventType='RandomOne' AND c.ConditionType='HasCharacter'
+                AND c.OptionId=1 ORDER BY b.BlockId""", (dispatcher,)).fetchall()
+        self.assertEqual([(actor, state) for actor, state, _ in branches],
+            [('PCP_Emille', 'NOT_Hub_14_Hired_HireEveryone'), ('PCP_Soren', 'NOT_Hub_33_Hired_HireEveryone'),
+             ('PCP_UHUB_Agent_Escaped', 'HAS_Finish_4012_Queued_HireEveryone'),
+             ('PCP_DronePilot_Racer', 'HAS_Finish_305800_Queued_HireEveryone')])
+        for actor, _, group in branches:
+            choices = connection.execute("""SELECT PostConditionGroup FROM Block WHERE GroupId=?
+                AND Weight=1 AND PreConditionGroup=? ORDER BY BlockId""", (group, absent)).fetchall()
+            self.assertEqual(len(choices), 2)
+            for (post,), (cid, seller, seller_relationship) in zip(choices,
+                    [(5002, 'NCP_Potato', 'Protective'), (5014, 'NCP_Dancehall', 'Friend')]):
+                actions = connection.execute("""SELECT ConditionType, ActorId, ActorId2, ConditionKey, ConditionValue
+                    FROM BlockCondition WHERE GroupId=? ORDER BY JsonId""", (post,)).fetchall()
+                self.assertEqual(actions[0], ('AddCharacter', seller, '', '', cid))
+                self.assertCountEqual(actions[1:], [('Tag', actor, seller, 'ADD_RelTag_Friend', 0),
+                    ('Tag', seller, actor, 'ADD_RelTag_' + seller_relationship, 0)])
+
     def test_new_hub_entry_is_visible_and_marked_for_review(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -92,6 +122,7 @@ class HireEveryoneTests(unittest.TestCase):
             with hire.StaticData(hire.DEFAULT_DB) as official, closing(sqlite3.connect(':memory:')) as selected:
                 official.connection.backup(selected)
                 selected.executescript(prepared.read_text(encoding='utf-8-sig'))
+                self.assert_stealth_contact_repair(selected)
                 deployed = selected.execute("""SELECT GroupId, ConditionValue FROM BlockCondition
                     WHERE ActorId = 'PCP_UHUB_Hacker' AND ConditionType = 'CharAltStart' ORDER BY GroupId""").fetchall()
                 self.assertEqual(deployed, [('Post_Amnesia_TutorialSkipOrEnd', 99), ('Post_SynDebts_TutorialSkipOrEnd', 2)])

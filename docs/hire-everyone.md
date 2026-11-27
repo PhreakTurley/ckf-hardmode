@@ -41,8 +41,15 @@ The shipped slot 4 actors have no deployment pair. [measured]
 When the export places Underway Racer in slot 3, a reload block also restores
 `JobMem_Stealth` to existing Racer starters that lack both casting tags. It
 checks the saved starter setup flag and Racer's presence in the roster before
-applying the same tag action used at New Game. Export with the campaign's
-original Racer slot when repairing an older save.
+applying the same tag action used at New Game.
+
+On safehouse load, a separate reload block checks for Potato and Dancehall.
+If both are absent, it gives the starting stealth merc one of them at random
+and applies that contact's shipped relationship tags in both directions. The
+block uses the campaign's starter flags and the exported slot assignments to
+find the merc. Use the campaign's original starting groups when exporting the
+repair for an older save. The relationship sources are `Official/data.db`,
+`BlockCondition` 497–498 and 530–531. [measured]
 
 The clones preserve native class, cosmetics, implants, base trait fields,
 identity and tags. Their initialization sets the native hired flag, runs the
