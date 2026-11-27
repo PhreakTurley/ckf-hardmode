@@ -11,7 +11,7 @@ The explicit `HUB` and `STARTERS` declarations own the authored characters.
 The builder checks that the authored Hub recruits still exist and that the
 shipped combat starter roster matches `STARTERS`. Additional Hub candidates
 appear as **Outside mod scope** and can stay outside the starting roster.
-Underway Racer is authored. Grounded Overwatch is outside the mod's roster.
+Underway Racer is authored.
 Content and localization come from the official database and locale through
 the [static reader](static-data.md).
 
@@ -27,7 +27,7 @@ group. The Editor can assign any of the three groups to an included Hub recruit.
 
 | Starting group | NewGame slot | Opening mission setup |
 |---|---|---|
-| Vanguard / Agent EX | 3 | Uses the shipped stealth group's deployment rows. Default for Drone Pilots. |
+| Vanguard / Agent EX | 3 | Uses the shipped stealth group's deployment rows. Underway Racer starts here by default and receives `JobMem_Stealth` for story casting. |
 | Hacker / Wireghost | 4 | Uses `PersonID_StartingHacker` for story casting |
 | Other combat classes | 5 | Uses the shipped combat group's deployment rows |
 
@@ -105,7 +105,8 @@ actor ID for both the Fabber's name and the choice effect.
 Underway Racer's Fabber choice uses the shipped contact backstory and applies
 its `ContactMeta` action to the contact's identity before the reply. Contact
 creation is guarded by the same identity. [measured] `Official/data.db`,
-`Block` 305812, `BlockCondition` 2646–2649 and `ContactBackstory` 305801.
+`Block` 305812, `BlockCondition` group `Post_Recruit_DronePilot_Racer_Tag1`
+and `ContactBackstory` 305801.
 
 Selected combat starters receive new Hub entries in their respective class
 groups. These use the original Backstory ID, a HasCharacter condition against

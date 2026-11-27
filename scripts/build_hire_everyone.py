@@ -220,7 +220,7 @@ def build(database, document=None):
 
         def linked_setup_block(group, **fields):
             nonlocal next_linked_setup_block
-            if next_linked_setup_block > BASE + BACKSTORY_BLOCK_OFFSET:
+            if next_linked_setup_block >= hire_backstories.RACER_DEBT_SETUP.start:
                 raise ValueError('Linked contact setup exceeds its reserved IDs.')
             row = add('Block', GroupId=group, BlockId=next_linked_setup_block, **fields)
             next_linked_setup_block += 1
@@ -248,11 +248,16 @@ def build(database, document=None):
             # its recruitment conversation retain their native records.
             base = BASE + BACKSTORY_BLOCK_OFFSET + hire_backstories.BLOCKS_PER_BACKSTORY * index
             finish_events.append((bid, source, block, main['ActorId'], setup, base, hire_backstories.deadline(index)))
+            casting_tag = ''
             if slot == 4:
-                condition(post, 'Tag', ActorId=source['CharStoryId'], ConditionKey='ADD_PersonID_StartingHacker')
+                casting_tag = 'PersonID_StartingHacker'
+            elif slot == 3 and bid == RACER:
+                casting_tag = 'JobMem_Stealth'
+            if casting_tag:
+                condition(post, 'Tag', ActorId=source['CharStoryId'], ConditionKey='ADD_' + casting_tag)
             queued = mod_id(f'Finish_{bid}_Queued')
             start_id = {'BlockId': RACER_SETUP_BLOCK} if bid == RACER else {}
-            add('Block', GroupId=init_group, PostConditionGroup=post if slot == 4 else '',
+            add('Block', GroupId=init_group, PostConditionGroup=post if casting_tag else '',
                 EventType='Group', EventId=hire_backstories.setup_id(bid),
                 StoryNode1='ADD_' + hire_backstories.node_id(bid),
                 PreState1='NOT_' + queued, PostState2='ADD_' + queued,
@@ -542,11 +547,15 @@ def verify_policy(connection, document=None, locale=None):
         init = [b for b in blocks if b['GroupId'] == clone['BlockGroup']]
         if len(init) != 1 or init[0]['PostState1'] != flag:
             raise ValueError('Starting Hub character lacks its native hired guard: ' + str(source_id))
-        hacker_tags = [r for r in conditions if r['GroupId'] == init[0]['PostConditionGroup']
-                       and r['ConditionType'] == 'Tag' and r['ActorId'] == native['CharStoryId']
-                       and r['ConditionKey'] == 'ADD_PersonID_StartingHacker']
-        if len(hacker_tags) != int(wanted_slot == 4):
-            raise ValueError('Starting hacker tag does not match selected group: ' + str(source_id))
+        wanted_tags = []
+        if wanted_slot == 4:
+            wanted_tags.append((native['CharStoryId'], 'ADD_PersonID_StartingHacker'))
+        if wanted_slot == 3 and source_id == RACER:
+            wanted_tags.append((native['CharStoryId'], 'ADD_JobMem_Stealth'))
+        actual_tags = [(r['ActorId'], r['ConditionKey']) for r in conditions
+                       if r['GroupId'] == init[0]['PostConditionGroup'] and r['ConditionType'] == 'Tag']
+        if actual_tags != wanted_tags:
+            raise ValueError('Starting casting tags do not match selected group: ' + str(source_id))
     actual = []
     for b in blocks:
         if not BASE <= b['BlockId'] <= LAST_ID or b['EventType'] != 'Recruit':
@@ -712,6 +721,7 @@ def selftest(database):
     selection['hub']['4003']['slot'] = 5
     selection['hub']['4004']['slot'] = 4
     selection['hub']['4005']['include'] = False
+    selection['hub'][str(RACER)]['slot'] = 5
     alternate, rows, _summary = build(database, selection)
     texts = alternate['RawText']['Generic']
     verify(database, '\n'.join(alternate['RawSQL']).encode(), encode(texts), rows, texts, selection)

@@ -20,7 +20,12 @@ RECRUITMENT_QUIPS = {'Recruit_Global_FaceThink', 'Recruit_Global_DefineTrust'}
 # The Racer's follow-up spells out two lines of the Face's recruitment question.
 RECRUITMENT_DIALOGS = {13279, 13280}
 # The Racer's Fabber branch uses this action immediately after contact creation.
-REVIEWED_CONTACT_META = (305800, 2647, 'NCT_Recruit_DronePilot_Racer_Fabber', 2)
+RACER_FABBER_CONTACT_META = {
+    'GroupId': 'Post_Recruit_DronePilot_Racer_Tag1', 'JsonId': 2,
+    'ConditionType': 'ContactMeta', 'ActorId': 'NCT_Recruit_DronePilot_Racer_Fabber',
+    'ActorId2': '', 'ConditionValue': 0, 'ConditionValue2': 0, 'ConditionValue3': 0,
+    'ConditionCount': 0, 'OptionId': 2, 'ConditionKey': '', 'ConditionKey2': '',
+}
 CONTACT_FALLBACKS = {4004: 8, 4005: 8, 4006: 9, 4008: 9, 4009: 8, 4012: 9, 305100: 9}
 # These backstories reference undefined identity tags. Their permanent actor
 # IDs and these authored tags also resolve contacts from earlier exports.
@@ -31,6 +36,10 @@ NAMED_SURVIVORS = {91276: 'NCP_Recruit_Sniper_BestShot_Raven',
                    91278: 'NCP_Recruit_Sniper_BestShot_Ryka'}
 BLOCKS_PER_BACKSTORY = 48
 FIRST_ID, LAST_ID = 567000, 567999
+# Keep the existing Racer dialogue IDs when the shipped debt contact is present.
+RACER_DEBT_SETUP = range(FIRST_ID + 248, FIRST_ID + 251)
+RACER_DEBT_RESTORE, RACER_DEBT_PROMPT = FIRST_ID + 251, FIRST_ID + 252
+RACER_DEBT_ACTOR = 'NTG_PersonID_Recruit_DronePilot_Racer_Debt'
 
 
 def mod_id(name):
@@ -249,12 +258,14 @@ def emit(stories, bid, backstory, offer, temporary, setup, base, turns, add, con
     block_no = base
     match_no = base
 
-    def block(group, **values):
+    def block(group, *, block_id=None, **values):
         nonlocal block_no
-        block_no += 1
-        if block_no > base + BLOCKS_PER_BACKSTORY:
-            raise ValueError(f'Backstory {bid}: starter event exceeds its reserved block range')
-        return add('Block', BlockId=block_no, GroupId=group, **values)
+        if block_id is None:
+            block_no += 1
+            if block_no > min(base + BLOCKS_PER_BACKSTORY, LAST_ID):
+                raise ValueError(f'Backstory {bid}: starter event exceeds its reserved block range')
+            block_id = block_no
+        return add('Block', BlockId=block_id, GroupId=group, **values)
 
     def absent(suffix, identity):
         group = mod_id(f'Pre_{key}_{suffix}')
@@ -362,8 +373,8 @@ def emit(stories, bid, backstory, offer, temporary, setup, base, turns, add, con
             kind = source['ConditionType']
             actor_id = source['ActorId']
             if kind not in OPERATIONS and not (
-                    kind == 'ContactMeta' and actor_id in contact_actors
-                    and (bid, source['BlockConditionId'], actor_id, source['OptionId']) == REVIEWED_CONTACT_META):
+                    bid == 305800 and actor_id in contact_actors
+                    and all(source[key] == value for key, value in RACER_FABBER_CONTACT_META.items())):
                 raise ValueError(f'Backstory {bid}: unreviewed {kind} in BlockCondition {source["BlockConditionId"]}')
             if kind == 'StoryMatch':
                 yield from cast(source['ConditionKey'])
@@ -393,18 +404,24 @@ def emit(stories, bid, backstory, offer, temporary, setup, base, turns, add, con
     setup_batches.extend(operation_batches(sorted(initial, key=lambda r: r['ConditionType'] != 'AddCharacter')))
     repairs = []
     cast_retries = []
+    debt_setup_ids = iter(RACER_DEBT_SETUP)
     for identity, effects in setup_batches:
-        ordinal = str(block_no + 1)
+        kind, fields, _ = effects[0]
+        block_id = None
+        if bid == 305800 and RACER_DEBT_ACTOR in (identity, fields.get('ActorId'), fields.get('ActorId2')):
+            block_id = next(debt_setup_ids, None)
+            if block_id is None:
+                raise ValueError('Review additional Underway Racer debt setup actions')
+        ordinal = str(block_id or block_no + 1)
         before = absent('Setup_' + ordinal, identity) if identity else ''
         post = mod_id(f'Post_{key}_Setup_{ordinal}')
-        kind, fields, _ = effects[0]
         casting = fallback_cast.get(fields['ConditionKey']) if kind == 'StoryMatch' else None
         if casting:
             resolve = mod_id(f'B_{key}_Resolve_{ordinal}')
             cast_retries.append((resolve, post, *casting))
             block(start, EventType='Group', EventId=resolve)
         else:
-            block(start, PreConditionGroup=before, PostConditionGroup=post)
+            block(start, block_id=block_id, PreConditionGroup=before, PostConditionGroup=post)
         write_effects(post, effects)
         if identity:
             repairs.append((identity, post))
@@ -575,13 +592,16 @@ def emit(stories, bid, backstory, offer, temporary, setup, base, turns, add, con
 
     # Also retry on entry for an existing campaign whose starter setup ran
     # before the contact was fixed. Keep the existing conversation block IDs.
+    racer_debt_launch = bid == 305800 and not cast_retries and [actor for actor, _ in repairs] == [RACER_DEBT_ACTOR]
     for identity, post in repairs:
-        before = gate(f'Restore_{block_no + 1}', [], identity)
-        block(launch, PreConditionGroup=before, PostConditionGroup=post, **prompt)
+        block_id = RACER_DEBT_RESTORE if racer_debt_launch else None
+        before = gate(f'Restore_{block_id or block_no + 1}', [], identity)
+        block(launch, block_id=block_id, PreConditionGroup=before, PostConditionGroup=post, **prompt)
     for resolve, _post, _identity, _fallback, _tag in cast_retries:
         block(launch, EventType='Group', EventId=resolve, PreConditionGroup=visible_entry, **prompt)
     if prepare_contacts:
-        block(launch, EventType='GroupFirst', EventId=prompts, PreConditionGroup=visible_entry, **prompt)
+        block(launch, block_id=RACER_DEBT_PROMPT if racer_debt_launch else None,
+              EventType='GroupFirst', EventId=prompts, PreConditionGroup=visible_entry, **prompt)
     for terminal, exists, identity, repair in deferred_replies:
         if identity or exists:
             terminal(True, True, exists, identity, repair)

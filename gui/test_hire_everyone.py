@@ -20,6 +20,9 @@ class HireEveryoneTests(unittest.TestCase):
             database = root / 'data.db'
             shutil.copy2(hire.DEFAULT_DB.parent / 'en-US.json', root / 'en-US.json')
             with hire.StaticData() as original, closing(sqlite3.connect(database)) as fixture:
+                native_rows = hire.official_rows(original, ('Backstory', 'Block', 'BlockCondition'))
+                native_offers, _ = hire.hire_backstories.hub_entries(native_rows)
+                outside_scope = set(native_offers) - set(hire.HUB) | {4888}
                 original.connection.backup(fixture)
                 # Teach the fixture about one additional regular Hub offer.
                 fixture.executescript("""
@@ -36,11 +39,11 @@ class HireEveryoneTests(unittest.TestCase):
                 """)
             result = hire.model(root, database, '')
             self.assertIsNone(result['error'], result)
-            self.assertEqual({r['id'] for r in result['hub'] if r.get('backstoryIssue')}, {4888, 305900})
+            self.assertEqual({r['id'] for r in result['hub'] if r.get('backstoryIssue')}, outside_scope)
             self.assertFalse(next(r for r in result['hub'] if r['id'] == 4888)['editable'])
             self.assertNotIn('4888', result['document']['hub'])
             _, _, report = hire.build(database, result['document'])
-            self.assertEqual(report['outsideStartingScope'], [4888, 305900])
+            self.assertEqual(report['outsideStartingScope'], sorted(outside_scope))
 
     def test_original_saved_choices_load_with_racer_in_slot_three(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -103,8 +106,15 @@ class HireEveryoneTests(unittest.TestCase):
                     WHERE ActorId='PCP_DronePilot_Racer' AND ConditionType='CharAltStart'
                     ORDER BY GroupId""").fetchall(),
                     [('Post_Amnesia_TutorialSkipOrEnd', 98), ('Post_SynDebts_TutorialSkipOrEnd', 3)])
-                self.assertEqual(selected.execute("""SELECT BackstoryId, NewGame FROM Backstory
-                    WHERE CharStoryId='PCP_DronePilot_Deserter'""").fetchall(), [(305900, 0)])
+                self.assertEqual(selected.execute("""SELECT c.ActorId, c.ConditionKey
+                    FROM Backstory s JOIN Block b ON b.GroupId=s.BlockGroup
+                    JOIN BlockCondition c ON c.GroupId=b.PostConditionGroup
+                    WHERE s.CharStoryId='PCP_DronePilot_Racer' AND s.NewGame=3
+                    AND c.ConditionType='Tag'""").fetchall(),
+                    [('PCP_DronePilot_Racer', 'ADD_JobMem_Stealth')])
+                deserter = """SELECT BackstoryId, NewGame FROM Backstory
+                    WHERE CharStoryId='PCP_DronePilot_Deserter'"""
+                self.assertEqual(selected.execute(deserter).fetchall(), official.connection.execute(deserter).fetchall())
                 racer_replies = selected.execute("""SELECT b.PreDialogPostCondition, p.ActorId, p.OptionId
                     FROM Block b JOIN BlockCondition p ON p.GroupId=b.PreConditionGroup
                     JOIN BlockCondition c ON c.GroupId=b.PreDialogPostCondition
@@ -267,8 +277,9 @@ setTimeout(async function () {
   ck('the shipped Hacker defaults to the Hacker/Wireghost group', control('group',4000).value==='4');
   ck('Racer defaults to the Vanguard / Agent EX group', control('group',305800).value==='3'
     && control('include',305800).checked && control('story',305800).textContent==='Finish Backstory');
-  ck('Grounded Overwatch and unreviewed Hub candidates are outside scope', [305900,4888].every(id =>
-    control('story',id).textContent==='Outside mod scope' && control('include',id).disabled));
+  ck('unreviewed Hub candidates are outside scope', control('story',4888).textContent==='Outside mod scope'
+    && MODEL.hireEveryone.hub.filter(r=>!r.editable).every(r =>
+      control('story',r.id).textContent==='Outside mod scope' && control('include',r.id).disabled));
   const group=control('group',4000);
   group.value='5'; group.fire('change');
   const hub=control('include',4003);
