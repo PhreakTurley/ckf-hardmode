@@ -18,6 +18,7 @@ namespace CKFHardMode
         private sealed record Pack(string Slice, string Folder, string Id, string WorkshopId);
         private static readonly Pack[] Packs = {
             new("PlayerRebalance", "player", "18446744073709551001", "3814427009"),
+            new("HireEveryone", "hire", "18446744073709551003", "3841540859"),
             new("EnemyRebalance", "enemy", "18446744073709551002", "3829942905")
         };
         private static readonly List<Pack> enabled = new();
@@ -92,7 +93,8 @@ namespace CKFHardMode
                     var data = steamConstructor.Invoke(new object[] { fileId, (uint)5, folder, (ulong)0, (uint)0 });
                     var item = Activator.CreateInstance(itemType);
                     Set(item, "Id", pack.Id);
-                    Set(item, "Sort", int.MaxValue - Array.IndexOf(Packs, pack));
+                    // The native loader processes Sort in ascending order.
+                    Set(item, "Sort", int.MaxValue - (Packs.Length - 1) + Array.IndexOf(Packs, pack));
                     Set(item, "ItemData", data);
                     Set(item, "IsSteamValid", true);
                     Set(item, "IsActive", true);

@@ -8,7 +8,7 @@ does not duplicate that reference.
 
 The plugin changes how the game plays. Reading the game (table dumps, member dumps, method traces) is done by CKF Data Dump (`mods/CKFDataDump/`, not published), a separate plugin with its own GUID and config. Neither plugin depends on the other.
 
-The public plugin version is `4.2.0` (`Plugin.PluginVersion` and
+The public plugin version is `4.3.0` (`Plugin.PluginVersion` and
 `CKFHardMode.csproj`). The independent settings-layout stamp is `4.1.0`
 (`Defaults.DocVersion` and each settings file's `_version`).
 

@@ -1,6 +1,6 @@
 # CKF Hard Mode
 
-CKF Hard Mode is a configurable BepInEx 6 IL2CPP plugin for *Cyber Knights: Flashpoint*. The download combines Player Rebalance and Enemy Rebalance with wider custom-difficulty sliders, mission fatigue, and the related limit-break effect changes. Older Hard Mode systems remain available but are disabled by default.
+CKF Hard Mode is a configurable BepInEx 6 IL2CPP plugin for *Cyber Knights: Flashpoint*. The download enables Player Rebalance, Enemy Difficulty, Hire Everyone, and Slider Widening. Other Hard Mode systems are available as opt-in features.
 
 The code and much of the prose were produced with language models. David made the design and tuning decisions.
 
@@ -8,15 +8,15 @@ This project is not affiliated with Trese Brothers Games. Trese Brothers cannot 
 
 ## Install the mod
 
-Download the current archive from the repository's [Releases page](https://github.com/PhreakTurley/ckf-hardmode/releases/latest). Extract it into the folder that contains `CyberKnights.exe`, then follow the included `README.txt`.
+Download `CKF-Hard-Mode-4.3.0.zip`, extract it into the folder containing `CyberKnights.exe`, and launch the game. The ZIP includes BepInEx and all four enabled features. [Download from Releases](https://github.com/PhreakTurley/ckf-hardmode/releases/latest)
 
-The plugin identifies itself as version `4.2.0`. Version `1.0.0` was the first public release. References to versions `2.x` through `3.0.0` describe private development builds.
+If you already use the separate Player Rebalance, Enemy Difficulty, or Hire Everyone Workshop mods, disable those copies in the game's Mods menu and restart. Start a new campaign to use the Hire Everyone starting roster.
 
-Disable the separate Player Rebalance and Enemy Rebalance Workshop mods before enabling their bundled equivalents. Neither Workshop subscription is required. See [bundled rebalances](docs/bundled-rebalances.md) for package preparation and compatibility.
+The plugin identifies itself as version `4.3.0`. Version `1.0.0` was the first public release. References to versions `2.x` through `3.0.0` describe private development builds.
 
 ## Back up your save
 
-Fatigue writes to the active save. The optional mission-elapse penalty also writes when enabled. Back up this directory before your first run:
+Back up your saves before upgrading or trying optional systems such as Mission Fatigue or Elapse, which write to the active save. The save folder is below.
 
 ```text
 %USERPROFILE%\AppData\LocalLow\TreseBrothersGames\CyberKnights\
@@ -39,13 +39,13 @@ Major slices include:
 
 | Area | Switches |
 |---|---|
-| Bundled content | `PlayerRebalance`, `EnemyRebalance` |
+| Bundled content | `PlayerRebalance`, `EnemyRebalance` (Enemy Difficulty), `HireEveryone` |
 | Rule engine | `ModelRules`, `RuleModel`, `SelfCheck` |
 | Mission systems | `PowerLevel`, `Progression`, `MissionRewards`, `RewardCurve`, `Elapse` |
 | Character systems | `Fatigue`, `LimitBreakTraits`, eleven `Talents*` slices |
 | Equipment | Six `Consumables*` slices |
 | Legacy enemy data | `LegacyEnemyData`, `SpawnWeights` |
-| Game settings | `Difficulty` |
+| Game settings | `Difficulty` (Slider Widening) |
 
 `ModelRules` gates the legacy table overlays and lever sheets. `LimitBreakTraits` has a restricted path that applies only its effect overlay while `ModelRules` is off. The bundled native rebalances are independent of that engine.
 

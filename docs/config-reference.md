@@ -21,9 +21,10 @@ This document is the single destination for the settings prose. A fact that is n
 | [Difficulty](#difficulty) | Custom Difficulty Slider Range | `ckf.hardmode.d/difficulty.json` | 1 | 2 | 1 |
 | [Elapse](#elapse) | Mission Elapse Penalty | `ckf.hardmode.d/elapse.json` | 1 | 13 | 1 + 2 per-field gate(s) |
 | [EnemyArmor](#enemyarmor) | Enemy Armors | — | 0 | 0 | 0 |
-| [EnemyRebalance](#enemyrebalance) | Bundled Enemy Rebalance | — | 1 | 1 | 1 |
+| [EnemyRebalance](#enemyrebalance) | Bundled Enemy Difficulty | — | 1 | 1 | 1 |
 | [Fatigue](#fatigue) | Mission Fatigue | `ckf.hardmode.d/fatigue.json` | 1 | 10 | 1 + 1 per-field gate(s) |
 | [General](#general) | Master Switch | — | 1 | 1 | 1 |
+| [HireEveryone](#hireeveryone) | Bundled Hire Everyone | — | 1 | 1 | 1 |
 | [ImplantsGlobal](#implantsglobal) | Implant Global Multipliers | `ckf.hardmode.d/implants-global.json` | 1 | 4 | 1 |
 | [ImplantsSlot01](#implantsslot01) | Implant Slot 01 | — | 1 | 1 | 1 |
 | [ImplantsSlot02](#implantsslot02) | Implant Slot 02 | — | 1 | 1 | 1 |
@@ -60,7 +61,7 @@ This document is the single destination for the settings prose. A fact that is n
 | [TalentsWraith](#talentswraith) | Wireghost Talent Balance | — | 1 | 1 | 1 |
 | [Progression](#progression) | Team Power Level Award | `ckf.hardmode.d/teampl.json` | 1 | 3 | 1 |
 
-49 subsystems, 48 cfg keys, 89 fields in total.
+50 subsystems, 49 cfg keys, 90 fields in total.
 
 ## Retroactive controls — read before changing these
 
@@ -89,8 +90,9 @@ One row per `Section.Key` in `ckf.hardmode.cfg`. `schema/check_schema.py` report
 | `Slices.CyberweaponsLasers` | `bool` | `false` | [CyberweaponsLasers](#cyberweaponslasers) | Enable Eye Laser Cyberweapons |
 | `Slices.Difficulty` | `bool` | `true` | [Difficulty](#difficulty) | Enable Custom Difficulty Slider Range |
 | `Slices.Elapse` | `bool` | `false` | [Elapse](#elapse) | Enable Mission Elapse Penalty |
-| `Slices.EnemyRebalance` | `bool` | `true` | [EnemyRebalance](#enemyrebalance) | Enable Bundled Enemy Rebalance |
-| `Slices.Fatigue` | `bool` | `true` | [Fatigue](#fatigue) | Enable Mission Fatigue |
+| `Slices.EnemyRebalance` | `bool` | `true` | [EnemyRebalance](#enemyrebalance) | Enable Bundled Enemy Difficulty |
+| `Slices.Fatigue` | `bool` | `false` | [Fatigue](#fatigue) | Enable Mission Fatigue |
+| `Slices.HireEveryone` | `bool` | `true` | [HireEveryone](#hireeveryone) | Enable Bundled Hire Everyone |
 | `Slices.ImplantsGlobal` | `bool` | `false` | [ImplantsGlobal](#implantsglobal) | Enable Implant Global Multipliers |
 | `Slices.ImplantsSlot01` | `bool` | `false` | [ImplantsSlot01](#implantsslot01) | Enable Implant Slot 01 |
 | `Slices.ImplantsSlot02` | `bool` | `false` | [ImplantsSlot02](#implantsslot02) | Enable Implant Slot 02 |
@@ -104,7 +106,7 @@ One row per `Section.Key` in `ckf.hardmode.cfg`. `schema/check_schema.py` report
 | `Slices.ImplantsSlot10` | `bool` | `false` | [ImplantsSlot10](#implantsslot10) | Enable Implant Slot 10 |
 | `Slices.ImplantsSlot11` | `bool` | `false` | [ImplantsSlot11](#implantsslot11) | Enable Implant Slot 11 |
 | `Slices.LegacyEnemyData` | `bool` | `false` | [LegacyEnemyData](#legacyenemydata) | Enable Legacy Enemy Overlays |
-| `Slices.LimitBreakTraits` | `bool` | `true` | [LimitBreakTraits](#limitbreaktraits) | Enable Limit Break Traits |
+| `Slices.LimitBreakTraits` | `bool` | `false` | [LimitBreakTraits](#limitbreaktraits) | Enable Limit Break Traits |
 | `Slices.MissionRewards` | `bool` | `false` | [MissionRewards](#missionrewards) | Enable Per-Mission-Type Reward Overrides |
 | `Slices.ModelRules` | `bool` | `false` | [ModelRules](#modelrules) | Enable Declarative Row Edits |
 | `Slices.PlayerRebalance` | `bool` | `true` | [PlayerRebalance](#playerrebalance) | Enable Bundled Player Rebalance |
@@ -127,7 +129,7 @@ One row per `Section.Key` in `ckf.hardmode.cfg`. `schema/check_schema.py` report
 | `Slices.TalentsWarMachine` | `bool` | `false` | [TalentsWarMachine](#talentswarmachine) | Enable Warmachine Talent Balance |
 | `Slices.TalentsWraith` | `bool` | `false` | [TalentsWraith](#talentswraith) | Enable Wireghost Talent Balance |
 
-48 key(s).
+49 key(s).
 
 ## Every sidecar field
 
@@ -993,15 +995,15 @@ None declared.
 
 ## EnemyRebalance
 
-**Bundled Enemy Rebalance** &nbsp;·&nbsp; `.cfg` section `[EnemyRebalance]` &nbsp;·&nbsp; declared in `schema/enemyrebalance.schema.json`
+**Bundled Enemy Difficulty** &nbsp;·&nbsp; `.cfg` section `[EnemyRebalance]` &nbsp;·&nbsp; declared in `schema/enemyrebalance.schema.json`
 
-Supplies the verified Enemy Rebalance SQL and locale payload under BepInEx/config/ckf.hardmode.rebalances/enemy to the native mod loader. Independent of ModelRules. Disable the separate Enemy Rebalance Workshop item before using this slice. Uses the Workshop armor, roster, ceiling and surgical-correction exporter; see docs/bundled-rebalances.md.
+Supplies the verified Enemy Difficulty SQL and locale payload under BepInEx/config/ckf.hardmode.rebalances/enemy to the native mod loader. Independent of ModelRules. Disable the separate Enemy Difficulty Workshop item before using this slice. Uses the Workshop armor, roster, ceiling and surgical-correction exporter; see docs/bundled-rebalances.md.
 
 ### What the config GUI shows for this section
 
 The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
 
-Applies the bundled Enemy Rebalance package. Disable the separate Enemy Rebalance Workshop mod before enabling this switch.
+Applies the bundled Enemy Difficulty package. Disable the separate Enemy Difficulty Workshop mod before enabling this switch.
 
 ### Files this subsystem writes
 
@@ -1027,7 +1029,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.EnemyRebalance` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Bundled Enemy Rebalance | BundledRebalances.Init checks this gate before reading the package and AfterList supplies its active native mod entry. Independent of ModelRules. |
+| `Slices.EnemyRebalance` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Bundled Enemy Difficulty | BundledRebalances.Init checks this gate before reading the package and AfterList supplies its active native mod entry. Independent of ModelRules. |
 
 **What the config GUI shows for these fields.**
 
@@ -1109,7 +1111,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.Fatigue` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Mission Fatigue | Slice toggle. It lives in ckf.hardmode.cfg because a gate cannot live inside the file it gates, and the .cfg is parsed before anything else loads. Slices.Init binds every [Slices] key above the [General] Enabled bail-out, so BepInEx writes the line even when the mod is off. A key that cannot be read is reported at Error and treated as on. Off: the subsystem logs why and does nothing this launch. The retired "enabled" key inside the subsystem's JSON file is still parsed (RetiredEnabled) so that Slices.ReportRetiredGate can report it: a Warning, or an Error when it is false and this key is not. Nothing branches on it. |
+| `Slices.Fatigue` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Mission Fatigue | Slice toggle. It lives in ckf.hardmode.cfg because a gate cannot live inside the file it gates, and the .cfg is parsed before anything else loads. Slices.Init binds every [Slices] key above the [General] Enabled bail-out, so BepInEx writes the line even when the mod is off. A key that cannot be read is reported at Error and treated as on. Off: the subsystem logs why and does nothing this launch. The retired "enabled" key inside the subsystem's JSON file is still parsed (RetiredEnabled) so that Slices.ReportRetiredGate can report it: a Warning, or an Error when it is false and this key is not. Nothing branches on it. |
 | `byPowerLevel` | json | `table` | `curve` | _none declared_ | REFUSED while fatigue is enabled. A mission whose PowerLevel cannot be read is NOT this case - it takes the lowest anchor of each curve, and is warned about once. |  |  | keyed by `powerLevel`, sorted by `powerLevel` | Odds and duration by power level | Anchor points that scale chancePercent, durationDays, minAffected and maxAffected with the mission's PowerLevel - the effective level, the one [PowerLevel] lifts past the stock ceiling of 10, read from GameMissionModel.PowerLevel and NOT from PowerLevelUnscaled (Fatigue.ReadPowerLevel). Elapse's identically shaped byPowerLevel tables key on PowerLevelUnscaled instead; the two subsystems read different columns. Values between anchors interpolate; below the lowest and above the highest the nearest anchor holds, because a curve is a statement about the levels it names rather than an extrapolation past them (Fatigue.Curve). Two anchors describe all twenty levels, listing all twenty works identically, and a single anchor is a flat value written as a curve. ONE CURVE SERVES ALL THREE TIERS: the chance that grants tier 1 is the chance that moves a merc to tier 2 or tier 3, and the duration written on a tier-3 row is the duration written on a tier-1 row. This table is the only place these four numbers live, so nothing stands behind a field no anchor names: Fatigue returns 'no value' and the roll or the write that needed it does not happen and is logged, except minAffected, whose absence means no floor and is a warning rather than an error (Fatigue.ChanceFor, Fatigue.DaysFor, Fatigue.MinAffectedFor, Fatigue.MaxAffectedFor). Per-anchor validation: chancePercent 0-100, durationDays at least 1 because a zero-turn ExpiresTurn is how the game marks a trait PERMANENT, counts not negative, and a PL 1-20 sweep rejecting a ceiling that drops below the floor at any level (Fatigue.CheckLevels, Fatigue.Validate). NOTE ON SHAPE: this block is a JSON object whose KEYS are the power levels, and each value is one anchor; 'powerLevel' below is that key, not a member of the anchor object. A key outside 1-20 is warned about and still used. |
 | `knight.byPowerLevel` | json | `table` | `curve` | _none declared_ | The Cyber Knight rolls on the general byPowerLevel curve and takes its duration, exactly like any other merc. |  |  | optional, keyed by `powerLevel`, sorted by `powerLevel` | Cyber Knight odds and duration by power level | The Cyber Knight's own curve, shaped like byPowerLevel and keyed on the same effective PowerLevel. Where it names a value the Knight uses it; where it does not, the general curve is used (Fatigue.ChanceFor, Fatigue.DaysFor). It carries chancePercent and durationDays only: the Knight sits inside the general minAffected and maxAffected clamp (David's rule), so a floor or a ceiling here would have nothing to act on. Optional. |
 | `tier1.traitId` | json | `int` | `form` | `2007` |  |  |  |  | Tier 1 trait id | The trait granted to a merc carrying none of the three who fails the roll. 2007 Checked Out is the default. All three tiers must name a different id, none may be 0 or negative, and none may land in the range this project reserves for RowClone's constructed rows (Fatigue.Validate). The id is written straight into GameCharacterTraitModel.TraitTypeId with no lookup, and it is NOT checked against the content database - see the note in Fatigue.Validate for what that does and does not catch. |
@@ -1203,6 +1205,58 @@ Every link is AND-ed with the ones before it. The first link that reads false st
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
 | `General.Enabled` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable CKF Hard Mode | Turn off to run the game unmodified without removing the plugin. |
+
+### Invariants
+
+None declared.
+
+---
+
+## HireEveryone
+
+**Bundled Hire Everyone** &nbsp;·&nbsp; `.cfg` section `[HireEveryone]` &nbsp;·&nbsp; declared in `schema/hireeveryone.schema.json`
+
+Supplies the verified Hire Everyone SQL and locale payload to the native mod loader. Independent of ModelRules. Disable the separate Hire Everyone Workshop item before using this slice.
+
+### What the config GUI shows for this section
+
+The `uiDoc` array: the same subsystem written for someone playing the game rather than maintaining the mod. It carries no citations, run numbers or evidence tags by design — the prose above is the record, and this is the reader-facing summary of it. The GUI renders `uiDoc` where a subsystem has one and falls back to `doc` where it does not.
+
+Enables the bundled starting roster and Underworld Hub recruits. Start a new campaign to use the starting roster.
+
+### Files this subsystem writes
+
+| Role | File |
+|---|---|
+| `cfg` | `ckf.hardmode.cfg` |
+
+### Enable chain
+
+Every link is AND-ed with the ones before it. The first link that reads false stops everything to its right, and nothing further down the chain is consulted.
+
+```text
+  cfg      [Slices] HireEveryone = true       ckf.hardmode.cfg — a BepInEx bind, read before anything else on disk
+```
+
+**One gate only.** This subsystem reads nothing but the master switch, so there is no second gate.
+
+Outside every chain in this document sits `[General] Enabled`, the master switch in `ckf.hardmode.cfg`. Its bail-out in `Plugin.Load()` sits above every subsystem init, so `Enabled = false` stops every subsystem.
+
+### Fields
+
+1 field(s). `Absent` is deliberately a column of its own: it says what an omitted value means when that differs from the default, and the two are not interchangeable. The `optional` flag is a third, separate thing again: it says the omission is allowed at all. A field may carry both, either or neither.
+
+| Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `Slices.HireEveryone` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Bundled Hire Everyone | BundledRebalances.Init verifies the installed payload and AfterList supplies it to the native mod list. |
+
+**What the config GUI shows for these fields.**
+
+| Field | GUI help |
+|---|---|
+| `Slices.HireEveryone` | Disable the separate Hire Everyone Workshop mod before enabling this switch. |
+
+1 of 1 fields carry a `uiDoc`; the rest show their `doc` with the citations and evidence tags stripped.
 
 ### Invariants
 
@@ -2036,7 +2090,7 @@ Outside every chain in this document sits `[General] Enabled`, the master switch
 
 | Path | In | Type | UI | Default | Absent | Range | Gated by | Flags | Label | Documentation |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `Slices.LimitBreakTraits` | cfg | `bool` | `form` | `true` |  |  |  |  | Enable Limit Break Traits | On applies this slice's file; off skips it before it is opened. Default true. |
+| `Slices.LimitBreakTraits` | cfg | `bool` | `form` | `false` |  |  |  |  | Enable Limit Break Traits | On applies this slice's file; off skips it before it is opened. Default false. |
 
 **What the config GUI shows for these fields.**
 

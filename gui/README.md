@@ -8,7 +8,7 @@ Per-key meanings are in
 [`../docs/config-reference.md`](../docs/config-reference.md); the schema format
 is in [`../schema/SCHEMA-FORMAT.md`](../schema/SCHEMA-FORMAT.md).
 
-The plugin version is `4.2.0`; the ten settings documents carry layout stamp `4.1.0`.
+The plugin version is `4.3.0`; the ten settings documents carry layout stamp `4.1.0`.
 The plugin version and settings-layout stamp are independent even when their
 values happen to agree. The editor writes the live files and keeps no backup.
 

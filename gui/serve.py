@@ -231,8 +231,8 @@ MASTER_KEY = 'General.Enabled'
 # whose enable gate IS MASTER_KEY, and `sections_for` derives it. It therefore
 # lands in `ungrouped` and is pinned above every group.
 SECTION_GROUPS = [
-    {'id': 'bundled-rebalances', 'title': 'Bundled Rebalances',
-     'sections': ['PlayerRebalance', 'EnemyRebalance']},
+    {'id': 'bundled-rebalances', 'title': 'Bundled Mods',
+     'sections': ['PlayerRebalance', 'HireEveryone', 'EnemyRebalance']},
     # design.md: "Cyberware sits under Player Gear, not Talent
     # Balance. Its 11 slot tables describe items a player buys and installs,
     # which is the same kind of decision as buying a weapon or carrying a
@@ -4180,7 +4180,7 @@ MIGRATION_DOC_VERSION = '4.1.0'
 # selftest block. The release path still catches a bad stamp, because
 # make_release.build runs --selftest over a snapshot whose .cfg carries the real
 # plugin version.
-MIGRATION_PLUGIN_VERSION = '4.2.0'
+MIGRATION_PLUGIN_VERSION = '4.3.0'
 
 # The BepInEx header line, as BepInEx itself writes it: the plugin name, then
 # " v" and the version. Anchored to the WHOLE first line, so a line that only
@@ -10551,7 +10551,7 @@ def selftest(config_arg, frozen_exe=None, legacy_cyberware_help=False):
     # schemas (cfg gates, json fields and rulemodel's `"in": "reference"`
     # field). It changes only when a schema gains or loses a documented field,
     # and then this literal moves with it.
-    t.check('there are %d field docs to check' % len(all_docs), len(all_docs) == 89, len(all_docs))
+    t.check('there are %d field docs to check' % len(all_docs), len(all_docs) == 90, len(all_docs))
     emptied, unbalanced, mangled, changed = [], [], [], []
     for sub, path, doc in all_docs:
         flat = ' '.join(doc.split())

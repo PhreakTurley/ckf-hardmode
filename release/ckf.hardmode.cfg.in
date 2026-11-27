@@ -54,8 +54,12 @@ Elapse = false
 EnemyRebalance = true
 
 # Setting type: Boolean
+# Default value: false
+Fatigue = false
+
+# Setting type: Boolean
 # Default value: true
-Fatigue = true
+HireEveryone = true
 
 # Setting type: Boolean
 # Default value: false
@@ -110,8 +114,8 @@ ImplantsSlot11 = false
 LegacyEnemyData = false
 
 # Setting type: Boolean
-# Default value: true
-LimitBreakTraits = true
+# Default value: false
+LimitBreakTraits = false
 
 # Setting type: Boolean
 # Default value: false

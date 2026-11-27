@@ -6,7 +6,7 @@ For explanations of the build system and version model, see [Workflow](workflow.
 
 All command blocks below use `cmd.exe` syntax. Replace `X.Y.Z`, `OLD.VERSION`, `FULL_COMMIT_SHA`, and `RELEASE NOTES` before running a command that contains them.
 
-Prepare and verify the native rebalance packages using [bundled rebalances](bundled-rebalances.md) before following this checklist.
+Prepare and verify the installed native payloads using [bundled mods](bundled-rebalances.md) before building the archive.
 
 ## 1. Validate the live tuning
 
@@ -67,7 +67,7 @@ Require a successful build with zero errors. With the game directory present, th
 
 ```bat
 cd /d "D:\ckf-data-modding"
-python scripts\make_release.py
+python scripts\make_release.py --config "D:\ckf-data-modding\dist\task-tmp\release-config"
 ```
 
 The archive is written to:
@@ -84,7 +84,7 @@ Run the release-builder self-test and calculate the archive digest:
 
 ```bat
 cd /d "D:\ckf-data-modding"
-python scripts\make_release.py --selftest --config "C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint\BepInEx\config"
+python scripts\make_release.py --selftest --config "D:\ckf-data-modding\dist\task-tmp\release-config"
 certutil -hashfile "D:\ckf-data-modding\dist\CKF-Hard-Mode-X.Y.Z.zip" SHA256
 ```
 

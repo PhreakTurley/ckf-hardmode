@@ -50,9 +50,9 @@
   "fields": [
     {
       "path": "Slices.LimitBreakTraits", "in": "cfg", "type": "bool",
-      "default": true, "ui": "form",
+      "default": false, "ui": "form",
       "label": "Enable Limit Break Traits",
-      "doc": "On applies this slice's file; off skips it before it is opened. Default true.",
+      "doc": "On applies this slice's file; off skips it before it is opened. Default false.",
       "uiDoc": "Turn this off and the mod skips this page's file, so nothing on this page is applied."
     }
   ]

@@ -216,10 +216,16 @@ CONFIG_FILES = (
     # the self-check input, at the top of BepInEx/config -- the sweep does not
     # reach outside ckf.hardmode.d, so this name is the only thing shipping it
     'ckf.hardmode.selfcheck.csv',
+    'ckf.contact-limit-breaks.json',
+    'ckf.enemy-difficulty.json',
+    'ckf.party-size.json',
     'ckf.player-balance.json',
     'ckf.hardmode.rebalances/player/_data/data.sql',
     'ckf.hardmode.rebalances/player/_data/en-US.json',
     'ckf.hardmode.rebalances/player/receipt.json',
+    'ckf.hardmode.rebalances/hire/_data/data.sql',
+    'ckf.hardmode.rebalances/hire/_data/en-US.json',
+    'ckf.hardmode.rebalances/hire/receipt.json',
     'ckf.hardmode.rebalances/enemy/_data/data.sql',
     'ckf.hardmode.rebalances/enemy/_data/en-US.json',
     'ckf.hardmode.rebalances/enemy/receipt.json',
@@ -554,8 +560,8 @@ def check_json(config_dir):
 
 
 def check_bundled_payloads(config_dir):
-    """Verify the snapshot's exact native SQL/locale bytes against both receipts."""
-    for pack in ('player', 'enemy'):
+    """Verify the snapshot's exact native SQL/locale bytes against the receipts."""
+    for pack in ('player', 'hire', 'enemy'):
         folder = os.path.join(config_dir, 'ckf.hardmode.rebalances', pack)
         receipt = json.loads(read_text(os.path.join(folder, 'receipt.json')))
         if receipt.get('format') != 1 or receipt.get('verification', {}).get('status') != 'PASS':

@@ -1,70 +1,57 @@
 # Prepare the combined Hard Mode download
 
-`BundledRebalances.Init` reads the `PlayerRebalance` and `EnemyRebalance`
-switches independently of `ModelRules`. For each enabled package it checks the
-SQL and locale hashes in `receipt.json`. Its `GetSortedModsList` postfix adds
-an active, process-local native mod entry pointing at that package. The game's
-native mod loader owns SQL and locale loading; this plugin opens no database.
+`BundledRebalances.Init` reads the `PlayerRebalance`, `HireEveryone`, and
+`EnemyRebalance` switches independently of `ModelRules`. For each enabled package
+it checks the SQL and locale hashes in `receipt.json`. Its
+`GetSortedModsList` postfix adds an active, process-local entry for the game's
+native mod loader.
 
 `BeforeWriteList` removes the synthetic entries from the argument passed to
 `WriteToModsListFile`, preserving the caller's list and the player's real mod
-selections. An active Player Rebalance or Enemy Rebalance Workshop item causes
-the bundled handoff to refuse both packages, rather than apply overlapping
-copies. Disable the corresponding Workshop items before enabling the bundled
-versions. Other mods retain their normal order; bundled entries are appended
-in player, enemy order.
+selections. An active Workshop copy of any enabled bundled mod blocks the
+bundled handoff. Disable the corresponding Workshop copies before using the
+bundle. The game's loader applies the bundled entries after other mods, in
+Player Rebalance, Hire Everyone, Enemy Difficulty order.
 
-The release enables the two native packages, slider widening, fatigue and the
-limit-break effect overlay through schema defaults. Other Hard Mode slices
-default to off. `LimitBreakTraits` can run through `ModelRules.Init`'s restricted
-path with `ModelRules` off: only `EffectModel.limitbreak.csv` is opened as an
-overlay, with no general rules file, other overlay, clones or writable-column
-probe. The existing progression/general-engine consistency gate remains in
-place. The old enemy overlays have their own `LegacyEnemyData` switch.
+The release enables the three native packages and Slider Widening. Mission
+Fatigue, Limit Break Traits, the legacy enemy overlays, and the other slices
+are opt-in through the configuration editor.
 
 ## Payload preparation
 
-The single generated package location is the live game's config directory:
+The archive places the packages under the game's config directory.
 
 ```text
 BepInEx/config/ckf.hardmode.rebalances/
     player/receipt.json
     player/_data/data.sql
     player/_data/en-US.json
+    hire/receipt.json
+    hire/_data/data.sql
+    hire/_data/en-US.json
     enemy/receipt.json
     enemy/_data/data.sql
     enemy/_data/en-US.json
 ```
 
-These are build outputs, not a second tuning source. Edit the live authoring
-files using the [balance editor](../gui/README.md#workshop-player-catalogs),
-then regenerate. The editor's [Enemy Armors preparation action](../gui/README.md#enemy-armors)
-regenerates the enemy package and the Enemy Difficulty Modkit payload together.
-The authoring and parser toolchain is a maintainer requirement;
-ordinary installation requires neither the Mod Uploader nor Workshop
-subscriptions.
+Use the [balance editor](../gui/README.md#workshop-player-catalogs) to author
+and install the individual Workshop mods locally. For an exact installed-setup
+release, stage the installed SQL and English locale files with the live Hard
+Mode tuning. Use a new output directory under the ignored `dist/` tree.
 
 From `cmd.exe`:
 
 ```bat
 cd /d "D:\ckf-data-modding"
-python ckf-enemy-scaling\scripts\build_overlays.py
-python scripts\build_bundled_rebalances.py --config "C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint\BepInEx\config"
-python scripts\build_bundled_rebalances.py --config "C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint\BepInEx\config" --check
+python scripts\build_bundled_rebalances.py --config "C:\Program Files (x86)\Steam\steamapps\common\Cyber Knights Flashpoint\BepInEx\config" --capture-installed "C:\Program Files (x86)\Steam\steamapps\workshop\content\1021210" --out "D:\ckf-data-modding\dist\task-tmp\release-config"
 ```
 
-The builder composes the existing talent exporter and player authoring document,
-and the [enemy exporter](enemy-difficulty-workshop.md). It runs the installed
-Data Parser into fresh temporary paths, then runs each package's independent
-verifier against Official data. It also compares the complete combined database
-in both application orders and refuses order-dependent results. Only the
-developer-provided Official database and in-memory copies are opened.
-
-Live input fingerprints are checked before replacement. Output commits use
-unique staging names, modification-time/content guards and byte readback.
-`--check` regenerates and verifies without replacing the installed packages.
-The release builder requires all six files and checks their receipts again
-inside the configuration snapshot before packaging them.
+The staging command uses each package's verifier against Official data, checks
+the three packages together in the installed order, and records hashes for the
+exact SQL and locale bytes. It reads the live inputs without replacing them.
+Pass the staged directory to `make_release.py --config`. The release builder
+checks all three receipts again before packaging. Remove the staging directory
+after verifying the ZIP.
 
 ## Verification boundary
 

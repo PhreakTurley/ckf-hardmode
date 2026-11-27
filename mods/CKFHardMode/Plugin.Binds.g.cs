@@ -99,7 +99,7 @@ namespace CKFHardMode
             internal override Type ValueType { get { return typeof(T); } }
         }
 
-        /// <summary>Every key in ckf.hardmode.cfg, 48 of them.</summary>
+        /// <summary>Every key in ckf.hardmode.cfg, 49 of them.</summary>
         internal static readonly Def[] All =
         {
             new Def<bool>("General", "Enabled",               true),
@@ -115,7 +115,8 @@ namespace CKFHardMode
             new Def<bool>("Slices",  "Difficulty",            true),
             new Def<bool>("Slices",  "Elapse",                false),
             new Def<bool>("Slices",  "EnemyRebalance",        true),
-            new Def<bool>("Slices",  "Fatigue",               true),
+            new Def<bool>("Slices",  "Fatigue",               false),
+            new Def<bool>("Slices",  "HireEveryone",          true),
             new Def<bool>("Slices",  "ImplantsGlobal",        false),
             new Def<bool>("Slices",  "ImplantsSlot01",        false),
             new Def<bool>("Slices",  "ImplantsSlot02",        false),
@@ -129,7 +130,7 @@ namespace CKFHardMode
             new Def<bool>("Slices",  "ImplantsSlot10",        false),
             new Def<bool>("Slices",  "ImplantsSlot11",        false),
             new Def<bool>("Slices",  "LegacyEnemyData",       false),
-            new Def<bool>("Slices",  "LimitBreakTraits",      true),
+            new Def<bool>("Slices",  "LimitBreakTraits",      false),
             new Def<bool>("Slices",  "MissionRewards",        false),
             new Def<bool>("Slices",  "ModelRules",            false),
             new Def<bool>("Slices",  "PlayerRebalance",       true),

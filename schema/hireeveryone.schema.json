@@ -1,0 +1,20 @@
+{
+  "subsystem": "HireEveryone",
+  "title": "Bundled Hire Everyone",
+  "targets": {"cfg": "ckf.hardmode.cfg"},
+  "enable": {"cfg": "Slices.HireEveryone"},
+  "doc": ["Supplies the verified Hire Everyone SQL and locale payload to the native mod loader. Independent of ModelRules. Disable the separate Hire Everyone Workshop item before using this slice."],
+  "uiDoc": ["Enables the bundled starting roster and Underworld Hub recruits. Start a new campaign to use the starting roster."],
+  "fields": [
+    {
+      "path": "Slices.HireEveryone",
+      "in": "cfg",
+      "type": "bool",
+      "default": true,
+      "ui": "form",
+      "label": "Enable Bundled Hire Everyone",
+      "doc": "BundledRebalances.Init verifies the installed payload and AfterList supplies it to the native mod list.",
+      "uiDoc": "Disable the separate Hire Everyone Workshop mod before enabling this switch."
+    }
+  ]
+}

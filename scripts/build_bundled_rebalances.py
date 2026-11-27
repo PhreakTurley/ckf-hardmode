@@ -3,8 +3,10 @@
 Maintainer-only inputs are the live tuning, player/roster exporter checkouts,
 Official data.db, and the installed Mod Uploader parser. No save is opened.
 Generated packages live only in the game's BepInEx/config directory.
+Installed packages can also be verified and staged without regenerating them.
 """
 import argparse
+from contextlib import closing
 import hashlib
 import importlib.util
 import json
@@ -20,6 +22,8 @@ from export_enemy_difficulty import build as enemy_build, guarded_write, encode
 from verify_enemy_difficulty import verify as verify_enemy
 import player_balance
 import modkit as guarded_handoff
+import make_release as release
+from static_data import quote
 
 
 def prepare_enemy(config, database, modkit, uploader):
@@ -201,6 +205,104 @@ def build(config, database, player_project, modkit, check=False):
                       'files': {rel: digest(data) for rel, data in contents.items()}}, indent=2))
 
 
+PACKS = (('player', '3814427009'), ('hire', '3841540859'), ('enemy', '3829942905'))
+FILES = ('data.sql', 'en-US.json')
+BUNDLE_DIR = 'ckf.hardmode.rebalances'
+
+
+def input_paths(config, workshop):
+    tuning = [rel for rel in release.CONFIG_FILES if not rel.startswith(BUNDLE_DIR + '/')]
+    tuning.append(release.CFG_NAME)
+    tuning.extend(
+        p.relative_to(config).as_posix()
+        for p in (config / release.OVERLAY_DIR).iterdir()
+        if p.is_file() and p.name.lower().endswith(release.OVERLAY_EXTS)
+    )
+    paths = {rel: config / rel for rel in tuning}
+    for pack, item in PACKS:
+        for name in FILES:
+            paths[f'{BUNDLE_DIR}/{pack}/_data/{name}'] = workshop / item / '_data' / name
+    return paths
+
+
+def verify_combined(database, payloads):
+    locales = {}
+    for pack, _item in PACKS:
+        for key, value in json.loads(payloads[pack]['en-US.json']).items():
+            if key in locales and locales[key] != value:
+                raise ValueError(f'Conflicting native locale entry: {key}')
+            locales[key] = value
+    with closing(sqlite3.connect(database.as_uri() + '?mode=ro', uri=True)) as source:
+        with closing(sqlite3.connect(':memory:')) as memory:
+            source.backup(memory)
+            tables = [row[0] for row in memory.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")]
+            ordered_sql = [payloads[pack]['data.sql'].decode('utf-8-sig') for pack, _item in PACKS]
+            for sql in ordered_sql:
+                memory.executescript(sql)
+            before = {table: memory.execute('SELECT * FROM ' + quote(table)).fetchall()
+                      for table in tables}
+            for sql in ordered_sql:
+                memory.executescript(sql)
+            for table, rows in before.items():
+                if memory.execute('SELECT * FROM ' + quote(table)).fetchall() != rows:
+                    raise ValueError(f'Combined payload changes {table} on repeat application')
+
+
+def stage_installed(config, workshop, output, database, player_project, modkit):
+    import build_hire_everyone as hire
+
+    if output.exists():
+        raise ValueError(f'Choose a new release staging directory: {output}')
+    output.parent.mkdir(parents=True, exist_ok=True)
+    journal = config / release._serve().JOURNAL_NAME
+    hire_config = config / hire.FILE
+    if journal.exists():
+        raise ValueError(f'Finish the editor save before staging: {journal}')
+    inputs = input_paths(config, workshop)
+    before = {path: guarded_handoff.state(path)
+              for path in (*inputs.values(), hire_config, database)}
+    with tempfile.TemporaryDirectory(prefix='installed-release-', dir=output.parent) as temporary:
+        snapshot = Path(temporary) / 'config'
+        for relative, path in inputs.items():
+            target = snapshot / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            data = path.read_bytes()
+            if digest(data) != before[path][2]:
+                raise ValueError(f'Input changed while copying: {path}')
+            target.write_bytes(data)
+
+        native = snapshot / BUNDLE_DIR
+        payloads = {pack: {name: (native / pack / '_data' / name).read_bytes() for name in FILES}
+                    for pack, _item in PACKS}
+        verify_player = module('installed_player_verify',
+            player_project / 'scripts/verify_player_balance.py').verify
+        parser_config = modkit / 'WorkshopContent/config.json'
+        document = hire.load(config)
+        source, expected, _summary = hire.build(database, document)
+        reports = {
+            'player': verify_player(native / 'player/_data/data.sql', snapshot, ROOT, database, parser_config),
+            'hire': hire.verify(database, payloads['hire']['data.sql'], payloads['hire']['en-US.json'],
+                                expected, source['RawText']['Generic'], document),
+            'enemy': verify_enemy(native / 'enemy/_data/data.sql', database,
+                                  snapshot / release.OVERLAY_DIR),
+        }
+        check_combination(database, {pack: payloads[pack]['data.sql'] for pack in ('player', 'enemy')})
+        verify_combined(database, payloads)
+        if journal.exists() or inputs != input_paths(config, workshop) or any(
+                guarded_handoff.state(path) != state for path, state in before.items()):
+            raise ValueError('Release inputs changed during verification')
+        for pack, item in PACKS:
+            receipt = {'format': 1, 'package': pack, 'workshopItem': item,
+                       'files': {name: digest(data) for name, data in payloads[pack].items()},
+                       'verification': reports[pack]}
+            (native / pack / 'receipt.json').write_bytes(encode(receipt))
+            print(f'{pack}: {receipt["files"]}')
+        release.check_bundled_payloads(snapshot)
+        snapshot.rename(output)
+    print(f'Installed payloads verified in player, hire, enemy order and staged at {output}')
+
+
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--config', type=Path, required=True)
@@ -210,8 +312,18 @@ if __name__ == '__main__':
     ap.add_argument('--check', action='store_true')
     ap.add_argument('--enemy-only', action='store_true')
     ap.add_argument('--uploader-project', type=Path)
+    ap.add_argument('--capture-installed', type=Path, metavar='WORKSHOP_DIR',
+                    help='stage the exact installed Workshop payloads instead of rebuilding them')
+    ap.add_argument('--out', type=Path, help='new config staging directory for --capture-installed')
     args = ap.parse_args()
-    if args.enemy_only:
+    if args.capture_installed is not None:
+        if args.out is None or args.enemy_only or args.check or args.uploader_project is not None:
+            ap.error('--capture-installed requires --out and cannot use --enemy-only, --check or --uploader-project')
+        stage_installed(args.config.resolve(), args.capture_installed.resolve(),
+                        args.out.resolve(), args.data.resolve(), args.player_project, args.modkit)
+    elif args.out is not None:
+        ap.error('--out requires --capture-installed')
+    elif args.enemy_only:
         if args.check or args.uploader_project is None:
             ap.error('--enemy-only requires --uploader-project and does not accept --check')
         result = prepare_enemy(args.config, args.data, args.modkit, args.uploader_project)

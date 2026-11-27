@@ -4,12 +4,12 @@ for Cyber Knights: Flashpoint
 
 WHAT IT IS
 
-A combined download of Player Rebalance and Enemy Rebalance, with wider
-custom-difficulty sliders, mission fatigue and the related limit-break trait
-effect changes. Older Hard Mode systems remain available but default to off.
+A combined download with Player Rebalance, Enemy Difficulty, Hire Everyone,
+and Slider Widening enabled. Other Hard Mode features are opt-in.
 
-Disable the separate Player Rebalance and Enemy Rebalance Workshop mods
-before using their bundled equivalents. Neither subscription is required.
+If you use the separate Workshop copies of Player Rebalance, Enemy Difficulty,
+or Hire Everyone, disable them in the game's Mods menu and restart. Start a new
+campaign to use the Hire Everyone starting roster.
 
 It is built in slices. Each part of the mod is one file and one on/off switch,
 so you can keep the parts you want and turn off the parts you don't.
@@ -25,9 +25,7 @@ INSTALL
    and CKF-Config-Editor.exe sit next to CyberKnights.exe, with BepInEx and
    dotnet folders beside them.
 
-That is the whole install. The config files come out of the zip with everything
-else, so there is nothing to run first. Nothing is installed into Windows,
-nothing runs in the background, and nothing has to be run as administrator.
+3. Launch the game. The ZIP includes BepInEx, the mod and its configuration.
 
 
 UPGRADING FROM AN EARLIER VERSION -- READ THIS FIRST
@@ -96,14 +94,15 @@ The first key, under [General], is the master switch:
 Set it to false and the mod does nothing at all, without uninstalling it.
 
 Under it, [Slices] has one switch per part of the mod. Set one to
-false and that part alone stops applying. The enabled release features are
-PlayerRebalance, EnemyRebalance, Difficulty, Fatigue and LimitBreakTraits.
+false and that part alone stops applying. The enabled release switches are
+PlayerRebalance, EnemyRebalance, HireEveryone and Difficulty.
 
 The legacy switches are retained for optional use. They are,
 in the order they appear in the file:
 
     PlayerRebalance             bundled native player rebalance
-    EnemyRebalance              bundled native enemy rebalance
+    EnemyRebalance              bundled Enemy Difficulty
+    HireEveryone                bundled Hire Everyone
     LegacyEnemyData             older enemy overlays; OFF by default
 
     ConsumablesChems            chem consumables
@@ -213,8 +212,8 @@ UPGRADING above.
 
 BACK UP YOUR SAVES
 
-The fatigue and elapsed-time systems write to your save file. Before you play
-with this installed, copy your saves somewhere else. They are in:
+Back up your saves before upgrading or enabling Mission Fatigue or Elapse.
+Those optional systems write to the active save. The save folder is below.
 
     %USERPROFILE%\AppData\LocalLow\TreseBrothersGames\CyberKnights\
 
