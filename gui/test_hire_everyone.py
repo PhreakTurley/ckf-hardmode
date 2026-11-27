@@ -112,6 +112,16 @@ class HireEveryoneTests(unittest.TestCase):
                     WHERE s.CharStoryId='PCP_DronePilot_Racer' AND s.NewGame=3
                     AND c.ConditionType='Tag'""").fetchall(),
                     [('PCP_DronePilot_Racer', 'ADD_JobMem_Stealth')])
+                self.assertEqual(selected.execute("""SELECT r.PreState1, c.ConditionType, c.ActorId,
+                    c.ConditionKey, c.OptionId, p.ConditionType, p.ActorId, p.ConditionKey
+                    FROM Block r JOIN BlockCondition c ON c.GroupId=r.PreConditionGroup
+                    JOIN BlockCondition p ON p.GroupId=r.PostConditionGroup
+                    WHERE r.EventType='ReloadGroup' AND r.BlockId=? ORDER BY c.JsonId""",
+                    (hire.RACER_STEALTH_RELOAD_BLOCK,)).fetchall(),
+                    [('HAS_Finish_305800_Queued_HireEveryone', kind, 'PCP_DronePilot_Racer', key, option,
+                      'Tag', 'PCP_DronePilot_Racer', 'ADD_JobMem_Stealth')
+                     for kind, key, option in [('HasCharacter', '', 1), ('Tag', 'JobMem_Stealth', -1),
+                                               ('Tag', 'PersonID_StartingHacker', -1)]])
                 deserter = """SELECT BackstoryId, NewGame FROM Backstory
                     WHERE CharStoryId='PCP_DronePilot_Deserter'"""
                 self.assertEqual(selected.execute(deserter).fetchall(), official.connection.execute(deserter).fetchall())

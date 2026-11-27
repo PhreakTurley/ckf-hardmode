@@ -39,6 +39,7 @@ ORIGINAL_HUB = (4000, 4003, 4004, 4005, 4006, 4008, 4009, 4011, 4012,
 RACER = 305800
 HUB = (*ORIGINAL_HUB, RACER)
 RACER_SETUP_BLOCK = BASE + LINKED_SETUP_OFFSET - 1
+RACER_STEALTH_RELOAD_BLOCK = BASE + 253
 STARTERS = (14, 18, 19, 20, 22, 23, 24, 25, 28, 33, 35, 38)
 SLOTS = {13: 4, 19: 4, 12: 3, 5: 3, 8: 3, 2: 5, 3: 5, 7: 5, 11: 5, 14: 5, 15: 5}
 GROUPS = {13: 'Hackers', 19: 'Wireghosts', 12: 'Vanguards', 5: 'AgentEXs',
@@ -256,6 +257,16 @@ def build(database, document=None):
             if casting_tag:
                 condition(post, 'Tag', ActorId=source['CharStoryId'], ConditionKey='ADD_' + casting_tag)
             queued = mod_id(f'Finish_{bid}_Queued')
+            if bid == RACER and slot == 3:
+                # The queued flag also exists in campaigns from before the casting tag.
+                actor = source['CharStoryId']
+                repair = mod_id('Pre_Reload_RacerStealth')
+                has_character(repair, actor, True)
+                for tag in ('JobMem_Stealth', 'PersonID_StartingHacker'):
+                    condition(repair, 'Tag', ActorId=actor, ConditionKey=tag, OptionId=-1)
+                add('Block', BlockId=RACER_STEALTH_RELOAD_BLOCK, GroupId=mod_id('B_Reload_RacerStealth'),
+                    EventType='ReloadGroup', PreState1='HAS_' + queued,
+                    PreConditionGroup=repair, PostConditionGroup=post)
             start_id = {'BlockId': RACER_SETUP_BLOCK} if bid == RACER else {}
             add('Block', GroupId=init_group, PostConditionGroup=post if casting_tag else '',
                 EventType='Group', EventId=hire_backstories.setup_id(bid),
@@ -556,6 +567,21 @@ def verify_policy(connection, document=None, locale=None):
                        if r['GroupId'] == init[0]['PostConditionGroup'] and r['ConditionType'] == 'Tag']
         if actual_tags != wanted_tags:
             raise ValueError('Starting casting tags do not match selected group: ' + str(source_id))
+    racer = document['hub'][str(RACER)]
+    reloads = [b for b in blocks if BASE <= b['BlockId'] <= LAST_ID and b['EventType'] == 'ReloadGroup']
+    if len(reloads) != int(racer['include'] and racer['slot'] == 3):
+        raise ValueError('Racer stealth reload does not match the selected roster')
+    for repair in reloads:
+        actor = backstories[RACER]['CharStoryId']
+        checks = [(r['ConditionType'], r['ActorId'], r['ConditionKey'], r['OptionId'])
+                  for r in conditions if r['GroupId'] == repair['PreConditionGroup']]
+        actions = [(r['ConditionType'], r['ActorId'], r['ConditionKey'], r['OptionId'])
+                   for r in conditions if r['GroupId'] == repair['PostConditionGroup']]
+        if (repair['PreState1'] != 'HAS_' + mod_id(f'Finish_{RACER}_Queued')
+                or checks != [('HasCharacter', actor, '', 1), ('Tag', actor, 'JobMem_Stealth', -1),
+                              ('Tag', actor, 'PersonID_StartingHacker', -1)]
+                or actions != [('Tag', actor, 'ADD_JobMem_Stealth', 0)]):
+            raise ValueError('Racer stealth reload must only repair a starting Racer missing the stealth tag')
     actual = []
     for b in blocks:
         if not BASE <= b['BlockId'] <= LAST_ID or b['EventType'] != 'Recruit':

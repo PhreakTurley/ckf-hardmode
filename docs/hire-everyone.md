@@ -38,6 +38,12 @@ pair for each included Hub recruit, using the chosen group in both origins.
 The shipped slot 4 actors have no deployment pair. [measured]
 `Official/data.db`, `BlockCondition` 717–734 and 849–866.
 
+When the export places Underway Racer in slot 3, a reload block also restores
+`JobMem_Stealth` to existing Racer starters that lack both casting tags. It
+checks the saved starter setup flag and Racer's presence in the roster before
+applying the same tag action used at New Game. Export with the campaign's
+original Racer slot when repairing an older save.
+
 The clones preserve native class, cosmetics, implants, base trait fields,
 identity and tags. Their initialization sets the native hired flag, runs the
 starter's supporting cast and relationship setup, and queues their **Finish
