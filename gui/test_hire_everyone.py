@@ -123,6 +123,14 @@ class HireEveryoneTests(unittest.TestCase):
                 official.connection.backup(selected)
                 selected.executescript(prepared.read_text(encoding='utf-8-sig'))
                 self.assert_stealth_contact_repair(selected)
+                self.assertEqual(selected.execute("""SELECT GroupId, ConditionType, ActorId, OptionId
+                    FROM BlockCondition WHERE GroupId IN ('Pre_HasVanguard','Pre_HasAgentEX')
+                    ORDER BY GroupId""").fetchall(),
+                    [('Pre_HasAgentEX', 'HasCharacter', 'PTG_JobMem_AgentEX', 1),
+                     ('Pre_HasVanguard', 'HasCharacter', 'PTG_JobMem_Vanguard', 1)])
+                self.assertEqual(selected.execute("""SELECT ActorId, InterpolateActorId FROM Dialog
+                    WHERE GroupId='D_Amnesia_Intro' AND JsonId=7""").fetchall(),
+                    [('PTG_JobMem_Stealth', 'CUR_HACK')])
                 deployed = selected.execute("""SELECT GroupId, ConditionValue FROM BlockCondition
                     WHERE ActorId = 'PCP_UHUB_Hacker' AND ConditionType = 'CharAltStart' ORDER BY GroupId""").fetchall()
                 self.assertEqual(deployed, [('Post_Amnesia_TutorialSkipOrEnd', 99), ('Post_SynDebts_TutorialSkipOrEnd', 2)])

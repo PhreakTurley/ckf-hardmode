@@ -1,4 +1,4 @@
-"""Build the additive Hire Everyone Workshop data mod from Official content.
+"""Build the Hire Everyone Workshop data mod from Official content.
 
 Only content SQL is prepared/installed. No game process or campaign is opened.
 The installed Modkit parser and an independent in-memory SQL check run first.
@@ -59,6 +59,11 @@ ORIGINS = {
     'Post_Amnesia_TutorialSkipOrEnd': {3: 98, 5: 99},
     'Post_SynDebts_TutorialSkipOrEnd': {3: 3, 5: 2},
 }
+ORIGIN_CASTING = (
+    ('BlockCondition', 'Pre_HasVanguard', 1, 'PCP_Emille', 'PTG_JobMem_Vanguard'),
+    ('BlockCondition', 'Pre_HasAgentEX', 1, 'PCP_Soren', 'PTG_JobMem_AgentEX'),
+    ('Dialog', 'D_Amnesia_Intro', 7, 'PCP_Emille', 'PTG_JobMem_Stealth'),
+)
 STARTING_GROUPS = [
     {'slot': 3, 'name': 'Vanguard / Agent EX', 'deploys': True},
     {'slot': 4, 'name': 'Hacker / Wireghost', 'deploys': False},
@@ -155,6 +160,17 @@ def literal(value):
     if isinstance(value, (int, float)):
         return str(value)
     return "'" + str(value).replace("'", "''") + "'"
+
+
+def origin_casting_sql():
+    statements = []
+    for table, group, sequence, original, replacement in ORIGIN_CASTING:
+        guard = ('"ConditionType"=\'HasCharacter\' AND "OptionId"=1' if table == 'BlockCondition'
+                 else '"InterpolateActorId"=\'CUR_HACK\'')
+        statements.append(f'UPDATE {quote(table)} SET "ActorId"={literal(replacement)} '
+                          f'WHERE "GroupId"={literal(group)} AND "JsonId"={sequence} '
+                          f'AND "ActorId"={literal(original)} AND {guard};')
+    return statements
 
 
 def emit_stealth_contact_repair(stories, backstories, document, add, condition):
@@ -471,6 +487,7 @@ def build(database, document=None):
                f'SELECT {", ".join(literal(row[c]) for c in cols)} '
                f'WHERE NOT EXISTS (SELECT 1 FROM {quote(table)} WHERE {where});'
                for table, cols, row, where in authored]
+        sql.extend(origin_casting_sql())
         source = {'Metadata': {'Name': 'Hire Everyone', 'StartingId': BASE},
                   'RawSQL': sql, 'RawText': {'Generic': texts}}
         return source, added, {'roster': roster, 'excludedUnfinished': sorted(disabled),
@@ -500,18 +517,36 @@ def verify_namespace(rows):
 
 def verify(database, sql_bytes, text_bytes, expected, source_text, document=None):
     verify_namespace(expected)
+    casting = origin_casting_sql()
+    additions, *updates = sql_bytes.decode('utf-8-sig').rstrip('\r\n').rsplit('\n', len(casting))
+    if [line.removesuffix('\r') for line in updates] != casting:
+        raise ValueError('Packaged origin casting updates differ from the reviewed statements')
     with StaticData(database) as original, closing(sqlite3.connect(':memory:')) as memory:
         original.connection.backup(memory)
+        memory.execute('SAVEPOINT expected_casting')
+        for statement, (table, group, sequence, _, _) in zip(casting, ORIGIN_CASTING):
+            if memory.execute(statement).rowcount != 1:
+                raise ValueError(f'Review shipped casting row {table} {group}/{sequence}')
         before = {t: memory.execute('SELECT * FROM ' + quote(t)).fetchall() for t in original.schema}
-        # Content changes are strictly additive, including the original roster.
+        memory.execute('ROLLBACK TO expected_casting')
+        memory.execute('RELEASE expected_casting')
+
         def authorizer(action, table, column, db, trigger):
             if action in (sqlite3.SQLITE_UPDATE, sqlite3.SQLITE_DELETE):
                 return sqlite3.SQLITE_DENY
             if action == sqlite3.SQLITE_INSERT and table not in KEYS:
                 return sqlite3.SQLITE_DENY
             return sqlite3.SQLITE_OK
-        memory.set_authorizer(authorizer)
-        memory.executescript(sql_bytes.decode('utf-8-sig'))
+
+        def apply():
+            memory.set_authorizer(authorizer)
+            try:
+                memory.executescript(additions)
+            finally:
+                memory.set_authorizer(None)
+            memory.executescript('\n'.join(updates))
+
+        apply()
         memory.row_factory = sqlite3.Row
         after = {}
         for table in original.schema:
@@ -528,7 +563,7 @@ def verify(database, sql_bytes, text_bytes, expected, source_text, document=None
         parsed = json.loads(text_bytes.decode('utf-8-sig'))
         if parsed != source_text:
             raise ValueError('Parser localization differs from reviewed source.')
-        memory.executescript(sql_bytes.decode('utf-8-sig'))
+        apply()
         for table in original.schema:
             if [tuple(r) for r in memory.execute('SELECT * FROM ' + quote(table))] != after[table]:
                 raise ValueError('Repeat application changed content: ' + table)
@@ -560,7 +595,8 @@ def verify(database, sql_bytes, text_bytes, expected, source_text, document=None
             if r['ConditionType'] == 'StoryMatch' and r['ConditionKey'] not in matches:
                 raise ValueError('Missing casting group: ' + r['ConditionKey'])
         verify_policy(memory, document, parsed)
-    return {'status': 'PASS', 'nativeRowsUnchanged': True, 'repeatApplication': 'PASS',
+    return {'status': 'PASS', 'otherNativeRowsUnchanged': True, 'originCastingUpdates': len(casting),
+            'repeatApplication': 'PASS',
             'addedRows': {t: len(rs) for t, rs in expected.items()},
             'localizationKeys': len(parsed), 'gameplay': 'NOT RUN: review before a game session'}
 
@@ -757,13 +793,14 @@ def selftest(database):
     sql_bytes = ('\n'.join(source['RawSQL']) + '\n').encode('utf-8')
     text_bytes = encode(source['RawText']['Generic'])
     verify(database, sql_bytes, text_bytes, expected, source['RawText']['Generic'])
-    passed = ['additive scope, pointers, slots, duplicate guards, and repeat application']
+    passed = ['origin casting, additive scope, pointers, slots, duplicate guards, and repeat application']
     for name, operation in [
         ('native UPDATE refused', 'UPDATE Backstory SET NewGame=0 WHERE BackstoryId=22;'),
+        ('unreviewed dialogue UPDATE refused', 'UPDATE Dialog SET ActorId=\'PCP_Face\' WHERE DialogId=3380;'),
         ('native DELETE refused', 'DELETE FROM Backstory WHERE BackstoryId=22;'),
         ('unrelated INSERT refused', 'INSERT INTO Rule (RuleId) VALUES (567000);')]:
         try:
-            verify(database, sql_bytes + operation.encode(), text_bytes, expected, source['RawText']['Generic'])
+            verify(database, operation.encode() + b'\n' + sql_bytes, text_bytes, expected, source['RawText']['Generic'])
         except (ValueError, sqlite3.DatabaseError):
             passed.append(name)
         else:

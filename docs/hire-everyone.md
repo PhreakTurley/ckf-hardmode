@@ -38,6 +38,12 @@ pair for each included Hub recruit, using the chosen group in both origins.
 The shipped slot 4 actors have no deployment pair. [measured]
 `Official/data.db`, `BlockCondition` 717–734 and 849–866.
 
+The Vanguard and Agent EX opening tips in both origins check for a character
+with the relevant class tag. In the first Null Deal safehouse conversation,
+the quantum-rider line uses the stealth casting tag to find its speaker.
+The exporter changes only `ActorId` in `Pre_HasVanguard`, `Pre_HasAgentEX`,
+and line 7 of `D_Amnesia_Intro`.
+
 When the export places Underway Racer in slot 3, a reload block also restores
 `JobMem_Stealth` to existing Racer starters that lack both casting tags. It
 checks the saved starter setup flag and Racer's presence in the roster before
@@ -175,9 +181,10 @@ mtime/hash guards and readback verification use `gui/modkit.py:commit_files`.
 ## Validation and first game test
 
 The installed Data Parser produces the delivered SQL and locale. The verifier
-applies that SQL to an in-memory copy of Official content, rejects updates and
-deletes, compares every native row unchanged, checks the exact additions and
-localization, validates content links, and checks repeat application. Independent
+applies that SQL to an in-memory copy of Official content and checks the
+three reviewed origin casting edits, the exact additions, and the localization.
+It rejects other updates and deletes, validates content links, and checks
+repeat application. Independent
 policy checks verify selected groups, cloned character fields, origin deployment,
 hired flags, selected starter offers, starter-only activation, guarded contact
 creation, path completion and choice checkpoints.
